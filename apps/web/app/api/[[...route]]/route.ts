@@ -2,7 +2,9 @@ import { createHttpApp, supabaseTokenVerifier } from '@expensewise/api';
 import { handle } from 'hono/vercel';
 
 // The whole versioned API lives in @expensewise/api; Next.js only hands it requests under /api.
-const supabaseUrl = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+// One source for the project URL: it is public, so a server-only copy (such as a Sensitive
+// SUPABASE_URL, which nobody can read back) could silently point verification elsewhere.
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 
 const handler = handle(
   createHttpApp({
