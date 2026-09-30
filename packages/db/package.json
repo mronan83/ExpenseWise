@@ -13,7 +13,9 @@
     "generate": "drizzle-kit generate",
     "migrate": "tsx src/migrate.ts",
     "test:integration": "vitest run",
-    "contract:check": "bash scripts/check-schema-drift.sh"
+    "contract:check": "bash scripts/check-schema-drift.sh",
+    "test": "vitest run --config vitest.unit.config.ts",
+    "roles:set-passwords": "tsx src/set-role-passwords.ts"
   },
   "dependencies": {
     "@expensewise/domain": "workspace:*",

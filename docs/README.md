@@ -18,6 +18,7 @@ ExpenseWise is a receipt-first, automation-first expense, receipt, mileage and t
 | [06 Delivery lifecycle](06-delivery-lifecycle.md) | §7 | Operating model, RACI, environments, gates G1–G6, test strategy, Ready and Done, release and operations, SLOs |
 | [07 Roadmap](07-roadmap.md) | §8 | Phases P0–P4 in weeks, scope and exit criteria |
 | [08 Risk register](08-risk-register.md) | §10 | Risks R1–R8 with likelihood, impact and mitigation |
+| [Runbook: environment setup](runbooks/environment-setup.md) | – | Connecting Vercel, Supabase and GitHub; rebuilding after a restore |
 | [ADR index](adr/README.md) | §9 | Decisions D-01 to D-12 as ADR-0001 to ADR-0012, D-13 (after v0.3) as ADR-0013, and how to add an ADR |
 
 ## Decision status

@@ -2,10 +2,11 @@ import { randomBytes } from 'node:crypto';
 import pg from 'pg';
 import type { TestProject } from 'vitest/node';
 import { runMigrations } from '../src/migrate.ts';
+import { setRolePasswords } from '../src/role-passwords.ts';
 
 // Test-only credentials for the roles migration 0001 creates as NOLOGIN.
-const APP_PASSWORD = 'expensewise-app-test';
-const RELAY_PASSWORD = 'expensewise-relay-test';
+const APP_PASSWORD = 'expensewise-app-test-password';
+const RELAY_PASSWORD = 'expensewise-relay-test-password';
 
 declare module 'vitest' {
   export interface ProvidedContext {
@@ -65,10 +66,17 @@ export default async function setup(project: TestProject) {
     'ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role',
   ]);
   await runMigrations(ownerUrl);
-  await run(ownerUrl, [
-    `ALTER ROLE expensewise_app WITH LOGIN PASSWORD '${APP_PASSWORD}'`,
-    `ALTER ROLE expensewise_relay WITH LOGIN PASSWORD '${RELAY_PASSWORD}'`,
-  ]);
+  // The same path deployed environments use: SCRAM verifiers, never plain passwords.
+  const owner = new pg.Client({ connectionString: ownerUrl });
+  await owner.connect();
+  try {
+    await setRolePasswords(owner, {
+      expensewise_app: APP_PASSWORD,
+      expensewise_relay: RELAY_PASSWORD,
+    });
+  } finally {
+    await owner.end();
+  }
 
   project.provide('ownerUrl', ownerUrl);
   project.provide('appUrl', withCredentials(ownerUrl, 'expensewise_app', APP_PASSWORD));

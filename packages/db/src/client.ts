@@ -2,6 +2,7 @@ import { isUuid } from '@expensewise/domain';
 import { sql } from 'drizzle-orm';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
+import { connectionConfig } from './connection.ts';
 import * as schema from './schema.ts';
 
 export type Database = NodePgDatabase<typeof schema>;
@@ -13,7 +14,7 @@ export interface DatabaseOptions {
    * should use 1–3; the pg default of 10 per instance exhausts the pooler quickly.
    */
   readonly max?: number;
-  /** TLS settings, e.g. `{ ca }` with Supabase's root certificate in deployed environments. */
+  /** TLS override. Supabase hosts get verified TLS automatically (see connectionConfig). */
   readonly ssl?: pg.PoolConfig['ssl'];
 }
 
@@ -21,7 +22,11 @@ export function createDatabase(
   connectionString: string,
   options: DatabaseOptions = {},
 ): { db: Database; pool: pg.Pool } {
-  const pool = new pg.Pool({ connectionString, max: options.max, ssl: options.ssl });
+  const pool = new pg.Pool({
+    ...connectionConfig(connectionString),
+    max: options.max,
+    ...(options.ssl === undefined ? {} : { ssl: options.ssl }),
+  });
   return { db: drizzle(pool, { schema }), pool };
 }
 
