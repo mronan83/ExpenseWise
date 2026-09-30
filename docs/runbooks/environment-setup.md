@@ -16,7 +16,7 @@ The `postgres` role has BYPASSRLS. Its connection string lives only in GitHub se
 
 ## 1. Supabase project settings
 
-1. **Integrations → Data API:** turn **Enable Data API** off. We never use PostgREST (ADR-0013).
+1. **Integrations → Data API:** it may stay enabled. ExpenseWise never calls it, and migration 0002 leaves its roles no privileges on our tables. Don't create tables by hand in the dashboard's `public` schema; they may be exposed to it.
 2. **Settings → JWT Keys:** confirm the current key is asymmetric (ES256 or RS256). New projects default to this.
 3. **Settings → API Keys:** note the publishable key (`sb_publishable_…`) and the secret key (`sb_secret_…`).
 4. **Connect → Session pooler:** copy the connection string for the `postgres` role (port 5432). Remove any `sslmode` parameter; our code verifies TLS against Supabase's root CA.

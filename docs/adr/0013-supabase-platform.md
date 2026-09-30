@@ -38,7 +38,7 @@ The architecture sets the constraints. The API is the only path to data (AP1), P
 
 ### Hardening
 
-- **Data API.** The Data API is disabled in the dashboard.
+- **Data API.** The product owner keeps the Data API enabled. It still has no path to our data: migration 0002 removes every privilege its roles would get, and integration tests prove it. Two cautions follow. Tables created by hand in the dashboard's `public` schema may be exposed to it. And turning it off later costs nothing, because ExpenseWise never calls it.
 - **Grants.** Migration 0002 revokes every grant and default privilege from `anon`, `authenticated` and `service_role`. Tests recreate Supabase's defaults and prove the revocation.
 - **Migration role.** The Supabase `postgres` role has BYPASSRLS, so it is used only for migrations. The integration's `POSTGRES_URL` must never be the runtime connection.
 - **Runtime role.** The API connects as `expensewise_app` through the shared pooler in transaction mode: username `expensewise_app.<ref>`, port 6543, IPv4, which Vercel needs. It refuses to start tenant work if its role is a superuser or has BYPASSRLS.
