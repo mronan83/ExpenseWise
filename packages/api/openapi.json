@@ -1,0 +1,62 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ExpenseWise API",
+    "version": "1.0.0",
+    "description": "The API behind the ExpenseWise web and iOS apps. Money is always integer minor units plus an ISO 4217 code. Errors are RFC 9457 problem documents."
+  },
+  "servers": [
+    {
+      "url": "/api"
+    }
+  ],
+  "components": {
+    "schemas": {
+      "Health": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "version": {
+            "type": "string",
+            "example": "3f9c2ab",
+            "description": "Deployed commit, or \"dev\"."
+          }
+        },
+        "required": [
+          "status",
+          "version"
+        ]
+      }
+    },
+    "parameters": {}
+  },
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "tags": [
+          "Platform"
+        ],
+        "summary": "Liveness check",
+        "description": "Returns 200 while the API can serve requests. Does not touch the database.",
+        "responses": {
+          "200": {
+            "description": "The API is up.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "webhooks": {}
+}
