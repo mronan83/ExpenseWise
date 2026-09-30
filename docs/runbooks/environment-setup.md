@@ -31,9 +31,8 @@ The `postgres` role has BYPASSRLS. Its connection string lives only in GitHub se
 
 ## 3. Vercel project
 
-1. **Settings → Build and Deployment:** set Root Directory to `apps/web` (keep "Include files outside the root directory" on), Framework Preset to Next.js, and Node.js Version to 22.x.
+1. **Settings → Build and Deployment:** set Root Directory to `apps/web` (keep "Include files outside the root directory" on), Framework Preset to Next.js, and Node.js Version to 22.x. Vercel picks up the pinned pnpm version from `package.json` by itself.
 2. **Settings → Environment Variables**, for Production and Preview:
-   - `ENABLE_EXPERIMENTAL_COREPACK` = `1`, so Vercel uses the pnpm version pinned in `package.json`.
    - `NEXT_PUBLIC_SUPABASE_URL` = `https://<project-ref>.supabase.co`
    - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` = `sb_publishable_…`
    - `SUPABASE_SECRET_KEY` = `sb_secret_…` (mark it Sensitive)
