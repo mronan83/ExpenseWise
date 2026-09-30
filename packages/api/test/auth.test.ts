@@ -7,6 +7,7 @@ const PROJECT = 'https://test-project.supabase.co';
 const USER = '6f1d2c3e-8a4b-4f5e-9c7d-0a1b2c3d4e5f';
 
 let verifyToken: TokenVerifier;
+let projectKeys: ReturnType<typeof createLocalJWKSet>;
 let sign: (
   claims?: JWTPayload,
   opts?: { expiresIn?: string; issuer?: string; audience?: string },
@@ -17,10 +18,8 @@ beforeAll(async () => {
   const project = await generateKeyPair('ES256');
   const stranger = await generateKeyPair('ES256');
   const jwk = { ...(await exportJWK(project.publicKey)), kid: 'project-key', alg: 'ES256' };
-  verifyToken = supabaseTokenVerifier({
-    projectUrl: PROJECT,
-    keys: createLocalJWKSet({ keys: [jwk] }),
-  });
+  projectKeys = createLocalJWKSet({ keys: [jwk] });
+  verifyToken = supabaseTokenVerifier({ projectUrl: PROJECT, keys: projectKeys });
 
   const build = (
     claims: JWTPayload,
@@ -104,6 +103,15 @@ describe('GET /v1/me', () => {
     expect(res.status).toBe(401);
     expect(await res.json()).toMatchObject({ code: 'expired_token' });
   });
+
+  it.each([`${PROJECT}/`, `${PROJECT}${'/'.repeat(50_000)}`])(
+    'ignores trailing slashes in the project URL (%#)',
+    async (projectUrl) => {
+      const verifier = supabaseTokenVerifier({ projectUrl, keys: projectKeys });
+      const res = await call(await sign(), verifier);
+      expect(res.status).toBe(200);
+    },
+  );
 
   it('answers 503 when sign-in is not configured', async () => {
     const res = await call(await sign(), 'unconfigured');

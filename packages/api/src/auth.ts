@@ -26,6 +26,13 @@ export class AuthError extends Error {
 
 export type AuthVariables = { identity: Identity };
 
+// A loop, not /\/+$/: that pattern backtracks quadratically on a long run of '/'.
+function withoutTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url[end - 1] === '/') end--;
+  return url.slice(0, end);
+}
+
 /**
  * Verifies Supabase Auth access tokens against the project's published signing keys (JWKS),
  * so this backend never holds a signing secret (ADR-0013). Only asymmetric algorithms are
@@ -39,7 +46,7 @@ export function supabaseTokenVerifier(options: {
   /** Override the key source in tests. Defaults to the project's JWKS endpoint. */
   keys?: JWTVerifyGetKey;
 }): TokenVerifier {
-  const issuer = `${options.projectUrl.replace(/\/+$/, '')}/auth/v1`;
+  const issuer = `${withoutTrailingSlashes(options.projectUrl)}/auth/v1`;
   const keys = options.keys ?? createRemoteJWKSet(new URL(`${issuer}/.well-known/jwks.json`));
 
   return async (token) => {
