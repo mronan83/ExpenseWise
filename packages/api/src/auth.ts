@@ -29,7 +29,9 @@ export type AuthVariables = { identity: Identity };
 /**
  * Verifies Supabase Auth access tokens against the project's published signing keys (JWKS),
  * so this backend never holds a signing secret (ADR-0013). Only asymmetric algorithms are
- * accepted, and only tokens for signed-in users: anon and service keys are rejected.
+ * accepted, and only tokens for signed-in users: anon keys, service keys and anonymous
+ * sign-ins are rejected. A signed-out token stays valid until it expires (about an hour),
+ * so sensitive actions should also check that its session_id still exists.
  */
 export function supabaseTokenVerifier(options: {
   /** e.g. https://abcd1234.supabase.co */
@@ -48,7 +50,12 @@ export function supabaseTokenVerifier(options: {
         algorithms: ['ES256', 'RS256'],
         requiredClaims: ['sub', 'exp'],
       });
-      if (payload.role !== 'authenticated' || typeof payload.sub !== 'string') {
+      // Supabase anonymous sign-ins also carry role "authenticated"; is_anonymous tells them apart.
+      if (
+        payload.role !== 'authenticated' ||
+        payload.is_anonymous === true ||
+        typeof payload.sub !== 'string'
+      ) {
         throw new AuthError('invalid_token', 'The token is not a signed-in user session');
       }
       return {

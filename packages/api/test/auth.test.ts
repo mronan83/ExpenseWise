@@ -79,6 +79,7 @@ describe('GET /v1/me', () => {
     ['a token for another audience', () => sign({}, { audience: 'service' })],
     ['an anonymous-role token', () => sign({ role: 'anon' })],
     ['a service-role token', () => sign({ role: 'service_role' })],
+    ['an anonymous sign-in', () => sign({ is_anonymous: true })],
     ['garbage', () => Promise.resolve('not.a.jwt')],
   ])('rejects %s', async (_, makeToken) => {
     const res = await call(await makeToken());
