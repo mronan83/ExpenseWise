@@ -2,7 +2,7 @@
 
 Consolidate identity, the database and file storage on Supabase, and keep Vercel for hosting and Inngest for workflows.
 
-- **Status:** Accepted (product owner rejected Clerk; consolidation recommended, no objection)
+- **Status:** Accepted (decided by product owner after a cost and capability comparison)
 - **Date:** 2026-09-30
 - **Deciders:** Product owner; Claude (principal architect)
 - **Decision register:** D-13 (decided after blueprint v0.3)
@@ -68,8 +68,8 @@ The architecture sets the constraints. The API is the only path to data (AP1), P
 
 | Option | Why not chosen |
 | --- | --- |
-| Clerk | Rejected by the product owner. |
-| Supabase Auth only, keeping Neon and R2 | Two databases, and identity split from data. |
+| Clerk + Neon + R2 (the original ADR-0003 and ADR-0005 stack) | Compared on cost and capability, then declined by the product owner. Clerk's free plan has no MFA or passkeys, so our step-up MFA requirement means Pro at $25/month. Its organizations offer only Admin and Member roles and up to 20 members, so our five roles would need the $100/month B2B add-on, or roles kept in our own database anyway, which makes Clerk's organizations redundant. Neon's real advantages are point-in-time restore within 7 days on its usage-based Launch plan, free database branches per pull request and scale-to-zero pricing. At under 100 users both stacks cost about $25–40/month once live. |
+| Supabase Auth only, keeping Neon and R2 | Two databases, and identity split from data. An auth-only Supabase project still needs Pro so that sign-in never pauses. |
 | Self-hosted Auth.js or Better Auth | More security surface to own. |
 
 ## Consequences
@@ -88,6 +88,7 @@ The architecture sets the constraints. The API is the only path to data (AP1), P
 - **Sign-out.** Signed-out access tokens stay valid until they expire (about 1 hour), so sensitive actions check `session_id`.
 - **Step-up.** Approving someone else's spend and admin actions require aal2 (step-up MFA). A one-person organization's self-attestation does not.
 - **Concentration.** More eggs in one vendor basket (R9).
+- **Restore granularity.** Pro's daily backups can lose up to a day of data. Point-in-time recovery costs $100/month and up, and is bought when the product is sold.
 
 ## Exit path / reversibility
 

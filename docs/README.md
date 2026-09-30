@@ -36,7 +36,7 @@ ExpenseWise is a receipt-first, automation-first expense, receipt, mileage and t
 | D-10 | Residency and compliance | [ADR-0010](adr/0010-residency-and-compliance.md) | Accepted (decided by product owner) |
 | D-11 | Travel data sources | [ADR-0011](adr/0011-travel-data-sources.md) | Accepted (recommended; no objection) |
 | D-12 | Eval set composition | [ADR-0012](adr/0012-eval-set-composition.md) | Proposed (awaiting product owner: permission to search the owner's Gmail for past receipts) |
-| D-13 | Supabase platform | [ADR-0013](adr/0013-supabase-platform.md) | Accepted (product owner rejected Clerk; consolidation recommended, no objection) |
+| D-13 | Supabase platform | [ADR-0013](adr/0013-supabase-platform.md) | Accepted (decided by product owner after a cost and capability comparison) |
 
 ## Visual version
 
