@@ -51,6 +51,19 @@ export default async function setup(project: TestProject) {
   await run(baseUrl, [`CREATE DATABASE ${database}`]);
 
   const ownerUrl = withDatabase(baseUrl, database);
+  // Recreate what Supabase does before we ever migrate: Data API roles, with default
+  // privileges that hand them every new table in public. Migration 0002 must undo this.
+  await run(ownerUrl, [
+    `DO $$ BEGIN
+       IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN CREATE ROLE anon NOLOGIN; END IF;
+       IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN CREATE ROLE authenticated NOLOGIN; END IF;
+       IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN CREATE ROLE service_role NOLOGIN; END IF;
+     END $$`,
+    'GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role',
+    'ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role',
+    'ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role',
+    'ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role',
+  ]);
   await runMigrations(ownerUrl);
   await run(ownerUrl, [
     `ALTER ROLE expensewise_app WITH LOGIN PASSWORD '${APP_PASSWORD}'`,
