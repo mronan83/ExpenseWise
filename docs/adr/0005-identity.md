@@ -2,7 +2,7 @@
 
 Use Clerk for organizations, roles, MFA, passkeys and its iOS SDK, and add enterprise SSO in Phase 3.
 
-- **Status:** Accepted (recommended; no objection)
+- **Status:** Superseded by [ADR-0013](0013-supabase-platform.md) (previously Accepted (recommended; no objection))
 - **Date:** 2026-09-30
 - **Deciders:** Product owner; Claude (principal architect)
 - **Decision register:** D-05

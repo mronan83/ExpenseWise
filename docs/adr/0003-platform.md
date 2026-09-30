@@ -2,7 +2,7 @@
 
 Run on Vercel, Neon Postgres, Cloudflare R2 and Inngest, with portability designed in.
 
-- **Status:** Accepted (recommended; no objection)
+- **Status:** Accepted (recommended; no objection); Amended by [ADR-0013](0013-supabase-platform.md)
 - **Date:** 2026-09-30
 - **Deciders:** Product owner; Claude (principal architect)
 - **Decision register:** D-03

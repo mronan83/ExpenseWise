@@ -50,6 +50,7 @@ The architecture sets the constraints. The API is the only path to data (AP1), P
 - Buckets are private. The API creates signed upload and download URLs with the server-side secret key (`sb_secret_…`), using the path layout `orgs/{orgId}/receipts/{receiptId}`.
 - Signed upload URLs can't limit size or type per URL, so an outbox job validates each upload.
 - Deleting the object is the only reliable cut-off for a cached signed URL.
+- Database backups don't include stored files. A nightly job copies the bucket to a second provider through the S3-compatible endpoint (Phase 1), because receipt images are the audit evidence.
 
 ### Environments and cost
 
@@ -85,7 +86,7 @@ The architecture sets the constraints. The API is the only path to data (AP1), P
 - **SSO and SCIM.** SAML SSO needs Pro, and there is no SCIM for end users.
 - **MFA.** Phone MFA is a paid add-on; TOTP MFA is available.
 - **Sign-out.** Signed-out access tokens stay valid until they expire (about 1 hour), so sensitive actions check `session_id`.
-- **Step-up.** Approvals and admin actions require aal2 (step-up MFA).
+- **Step-up.** Approving someone else's spend and admin actions require aal2 (step-up MFA). A one-person organization's self-attestation does not.
 - **Concentration.** More eggs in one vendor basket (R9).
 
 ## Exit path / reversibility

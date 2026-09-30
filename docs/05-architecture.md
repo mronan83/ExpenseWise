@@ -30,7 +30,7 @@ flowchart LR
     end
     EW["ExpenseWise<br/>Web app (PWA), iOS app (P3)<br/>API, workflows, Postgres<br/>capture → extract → review →<br/>report → approve → export"]
     subgraph P1S["External services: Phase 1"]
-        IDP["Identity provider<br/>Clerk, enterprise SSO in P3"]
+        IDP["Identity provider<br/>Supabase Auth · SAML SSO on Pro"]
         LLM["Claude API<br/>reads receipts into fields"]
         MAPS["Maps routing<br/>route → distance"]
         MAIL["Email<br/>inbound receipts, alerts"]
@@ -45,7 +45,7 @@ flowchart LR
     EMP -->|"captures, submits"| EW
     APR -->|"approves"| EW
     FIN -->|"configures, exports"| EW
-    EW -->|"sign-in, orgs"| IDP
+    EW -->|"sign-in"| IDP
     EW -->|"image → JSON"| LLM
     EW -->|"addresses → miles"| MAPS
     EW <-->|"receipts in, alerts out"| MAIL
@@ -77,9 +77,9 @@ flowchart TB
         M7["Settlement"]
         M8["Insights"]
     end
-    PG[("PostgreSQL on Neon<br/>row-level security<br/>branch per PR, PITR")]
+    PG[("Supabase Postgres<br/>row-level security<br/>Supavisor pooler")]
     WF["Workflows: Inngest<br/>durable steps, retries<br/>schedules, fan-out"]
-    OBJ[("Object storage: R2<br/>private, presigned<br/>7-year lifecycle")]
+    OBJ[("Object storage: Supabase Storage<br/>private, presigned<br/>7-year lifecycle")]
     ADP["Adapters<br/>retries, idempotency keys"]
     CL["Claude API<br/>extraction"]
     MAPS["Maps routing<br/>mileage"]
@@ -87,7 +87,7 @@ flowchart TB
     PLAID["Plaid (P2)<br/>bank feeds"]
     LEDGER["QBO, Xero (P2)<br/>ledger sync"]
     subgraph XC["Cross-cutting"]
-        XCL["Auth: Clerk<br/>Flags: PostHog<br/>Errors: Sentry<br/>Traces: OTel<br/>Audit log<br/>Secrets vault<br/>CI: Actions"]
+        XCL["Auth · Supabase<br/>Flags: PostHog<br/>Errors: Sentry<br/>Traces: OTel<br/>Audit log<br/>Secrets vault<br/>CI: Actions"]
     end
     WEB -->|"HTTPS, JSON, /api/v1"| API
     IOS -.->|"HTTPS, JSON, /api/v1"| API
@@ -123,7 +123,7 @@ sequenceDiagram
     rect rgba(128, 128, 128, 0.12)
     Note over C,AI: Synchronous, about 1 s
     C->>API: 1 · request upload URL
-    API-->>C: presigned PUT · 5 min
+    API-->>C: signed upload URL · one path · 2 h
     C->>OS: 2 · PUT image bytes
     C->>API: 3 · POST /api/v1/receipts
     API->>DB: 4 · insert receipt + outbox row (one tx)
@@ -339,10 +339,10 @@ See [ADR-0008](adr/0008-money-and-data-conventions.md).
 | Web | Next.js + React | Mature, PWA-capable, first-class preview deployments | React Router, SvelteKit |
 | UI | Tailwind + shadcn/ui | Accessible Radix primitives we own as source | MUI, Chakra |
 | API | Hono in route handlers, zod-openapi | Contract-first; generates TypeScript and Swift clients | tRPC (TypeScript-only clients, which rules out Swift); NestJS |
-| Database | PostgreSQL on Neon + Drizzle | Relational integrity for money, row-level security, a database branch per pull request | Supabase, RDS / Aurora |
-| Files | Cloudflare R2 (S3 API) | Presigned uploads, lifecycle rules, no egress fees | AWS S3, Vercel Blob |
+| Database | Supabase Postgres + Drizzle | Relational integrity for money, row-level security; auth users live in the same database | Neon (previous choice), RDS / Aurora |
+| Files | Supabase Storage (S3-compatible endpoint) | Private buckets and signed upload and download URLs, with the same vendor as auth and data | Cloudflare R2 (previous choice), AWS S3, Vercel Blob |
 | Workflows | Inngest | Durable steps, retries, schedules and idempotency on serverless | Trigger.dev, Temporal (heavier), SQS + Lambda |
-| Identity | Clerk | Organizations, roles, MFA, passkeys, iOS SDK | Auth.js / Better Auth, WorkOS |
+| Identity | Supabase Auth | Users live in the project's own Postgres; TOTP MFA; SAML SSO on Pro; supabase-swift SDK for iOS | Clerk (rejected by the product owner), Auth.js / Better Auth, WorkOS |
 | Extraction | Claude API, vision + structured outputs | Reads messy receipts; returns schema-valid JSON | Textract AnalyzeExpense, Veryfi, Mindee |
 | Maps | Google Routes API | Route distance for mileage | Mapbox Directions |
 | Email | Postmark inbound, Resend outbound | Parsed inbound webhooks; simple transactional sending | Amazon SES |
@@ -350,15 +350,17 @@ See [ADR-0008](adr/0008-money-and-data-conventions.md).
 | Observability | Sentry + OpenTelemetry | Errors, traces and workflow timings | Datadog |
 | Hosting and CI | Vercel + GitHub Actions | Preview per pull request, instant rollback, rolling releases | AWS ECS / Fargate + CodePipeline |
 
-Portability is designed in: standard Postgres, the S3 API and containerizable Node. Leaving any vendor is a migration, not a rewrite, and each ADR records its exit path. See [ADR-0002](adr/0002-architecture-style.md), [ADR-0003](adr/0003-platform.md) and [ADR-0005](adr/0005-identity.md).
+Portability is designed in: standard Postgres, the S3 API and containerizable Node. Leaving any vendor is a migration, not a rewrite, and each ADR records its exit path. See [ADR-0002](adr/0002-architecture-style.md), [ADR-0003](adr/0003-platform.md) and [ADR-0013](adr/0013-supabase-platform.md).
 
 ## 6.9 Security, privacy and compliance
 
 | Area | Control |
 | --- | --- |
 | Tenant isolation | `org_id` on every row, Postgres row-level security, and cross-tenant read and write tests in CI (gate G3). |
-| Receipt images | Private bucket, 5-minute presigned uploads and short-lived signed reads. Location metadata is read for trip matching, then stripped from stored copies. |
-| Access control | Roles: Member, Approver, Finance admin, Owner and Auditor (read-only). In an organization with two or more members, no one approves their own spend (separation of duties). A one-person organization may approve its own reports, and the audit event records a self-attestation. The domain function `canApprove()` returns the basis: `separation_of_duties` or `solo_self_attestation`. Admin actions need step-up MFA. |
+| Data API lockdown | The Supabase Data API is disabled in the dashboard. The API is the only path to data; we do not use supabase-js or PostgREST for data. Migration 0002 revokes every grant and default privilege from `anon`, `authenticated` and `service_role`, and tests recreate Supabase's defaults to prove it ([ADR-0013](adr/0013-supabase-platform.md)). |
+| Database roles | The Supabase `postgres` role has BYPASSRLS, so it is used only for migrations; the integration's `POSTGRES_URL` is never the runtime connection. The API connects as `expensewise_app` through the shared pooler in transaction mode, and refuses to start tenant work if its role is a superuser or has BYPASSRLS. |
+| Receipt images | Private bucket. Each signed upload URL is good for one path (`orgs/{orgId}/receipts/{receiptId}`) and expires after Supabase's fixed 2 hours; an outbox job validates every upload. Reads use short-lived signed URLs. Location metadata is read for trip matching, then stripped from stored copies. |
+| Access control | Roles: Member, Approver, Finance admin, Owner and Auditor (read-only). In an organization with two or more members, no one approves their own spend (separation of duties). A one-person organization may approve its own reports, and the audit event records a self-attestation. The domain function `canApprove()` returns the basis: `separation_of_duties` or `solo_self_attestation`. Approving someone else's spend and admin actions need step-up MFA (`aal2`); a one-person organization's self-attestation does not. |
 | Data protection | TLS everywhere and encryption at rest. We store only card last four. Secrets live in the platform vault, with secret scanning on every push. |
 | Retention and privacy | 7-year default retention, configurable, with legal hold. Deletion requests are honored except where records must be kept. Every subprocessor signs a data processing agreement. |
 | Standards path | OWASP ASVS Level 2 is the build standard from day one. A SOC 2 Type I audit comes when the product is sold to businesses; a business customer's security review is the usual trigger ([D-10](adr/0010-residency-and-compliance.md)). |
@@ -367,7 +369,7 @@ Portability is designed in: standard Postgres, the S3 API and containerizable No
 
 - **Contract first.** OpenAPI is the source of truth, the Swift client is generated from it, and CI blocks breaking changes that lack a new version.
 - **Offline-safe writes.** Client-generated UUIDv7 IDs and idempotency keys mean a receipt captured on a plane syncs exactly once.
-- **Browser-free auth.** Short-lived access tokens with refresh, through the identity provider's iOS SDK.
+- **Browser-free auth.** Short-lived access tokens with refresh, through the supabase-swift SDK, with native Sign in with Apple.
 - **One notification service.** APNs push goes through the same service that sends email today.
 - **Old app versions live for months.** Each API version therefore carries a 6-month deprecation window, and CI runs contract tests against the oldest supported version.
 

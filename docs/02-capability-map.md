@@ -23,7 +23,7 @@ Phase 0 (Foundations) builds the platform under all of these. Weeks, scope and e
 | Governance | Control without friction | Roles and permissions<br>Single-step approval<br>Audit trail | Policy engine<br>Multi-step routing and delegation<br>Auto-submit and auto-approve rules | – | Budgets |
 | Settlement | Close the loop with money and the ledger | CSV and PDF export | QuickBooks and Xero sync | Reimbursement payouts | ERP connectors<br>Corporate cards via partner |
 | Insights | Know where the money goes | Personal dashboard<br>Trip history and search | Team spend analytics<br>Mileage and tax summaries | Custom report builder | – |
-| Platform | Run it safely | Organizations and tenancy<br>Sign-in, MFA and passkeys<br>Email notifications<br>Admin console | – | Push notifications<br>SSO and SCIM<br>Public API and webhooks | – |
+| Platform | Run it safely | Organizations and tenancy<br>Sign-in and TOTP MFA<br>Email notifications<br>Admin console | – | Push notifications<br>SAML SSO<br>Passkeys, once GA<br>Public API and webhooks | SCIM, once the identity provider supports it |
 
 ## Changes in v0.3
 
@@ -36,6 +36,7 @@ The repository docs are canonical from v0.3 onward. Changes made here since the 
 
 - **Near-duplicate detection (P2)** added to Intelligence. Exact-duplicate detection (SHA-256) stays P1; the perceptual hash for near-duplicates is P2.
 - **Travel booking via partner (P4)** added to Capture, so the roadmap's Phase 4 scope maps to a capability.
+- **Identity on Supabase ([ADR-0013](adr/0013-supabase-platform.md)).** P1 sign-in uses TOTP MFA. Passkeys move to P3, once Supabase's beta is generally available. SAML SSO stays P3 (Supabase Pro). SCIM moves to P4, since Supabase doesn't offer it for end users yet.
 
 ## Related
 

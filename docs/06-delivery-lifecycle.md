@@ -48,9 +48,13 @@ Everything between them is automated or adversarially reviewed. Work runs as con
 | Environment | Purpose | Data | Deployed | Keys |
 | --- | --- | --- | --- | --- |
 | Local | Build and debug | Seeded fixtures, Postgres in Docker, workflow dev server | On demand | Test keys |
-| Preview | One per pull request | Neon branch of staging with synthetic data | Every push | Sandbox keys (Plaid sandbox, capped Claude workspace) |
-| Staging | Integration and release candidate | Synthetic data plus the anonymized eval receipts | Every merge to main | Sandbox keys |
-| Production | Customers | Real, isolated by tenant | Promotion with product owner approval; flags control exposure | Live keys, least privilege |
+| Preview | One per pull request | The shared staging Supabase project, with synthetic data; no per-PR database | Every push | Staging Supabase keys: publishable key (client), secret key (server only). Other sandbox keys (Plaid sandbox, capped Claude workspace). |
+| Staging | Integration and release candidate | Staging Supabase project: synthetic data plus the anonymized eval receipts | Every merge to main | Supabase publishable key (client), secret key (server only). Other sandbox keys. |
+| Production | Customers | Production Supabase project: real data, isolated by tenant | Promotion with product owner approval; flags control exposure | Supabase publishable key (client), secret key (server only). Other live keys, least privilege. |
+
+- CI gates run against a Postgres service container, so no per-PR database is needed.
+- End-to-end tests against a preview create their own organization for each run, so parallel runs on the shared staging project stay isolated by the same row-level security that separates customers.
+- Custom database role passwords, such as `expensewise_app`'s, are never in migrations and don't survive a restore or a new project. After a restore, the runbook re-sets them from secrets ([ADR-0013](adr/0013-supabase-platform.md)).
 
 ## 7.4 Quality gates
 
@@ -130,7 +134,7 @@ Instant rollback to the previous deployment, with flags as kill switches. Databa
 
 ### Backups and recovery
 
-Postgres point-in-time recovery and object versioning, with a restore drill every quarter. The first drill is part of the Phase 1 exit criteria.
+Supabase Pro keeps daily database backups for 7 days; point-in-time recovery is deferred until the product is sold ([ADR-0013](adr/0013-supabase-platform.md)). Database backups don't include stored files, so a nightly job copies receipt images to a second provider through Supabase's S3-compatible endpoint (built in Phase 1). A restore drill covers both every quarter; the first drill is part of the Phase 1 exit criteria.
 
 ### Incidents
 
