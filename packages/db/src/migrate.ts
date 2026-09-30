@@ -15,9 +15,13 @@ export async function runMigrations(connectionString: string): Promise<void> {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const url = process.env.DATABASE_URL;
+  // Migrations run as the schema owner. Deployed environments keep that connection in
+  // DATABASE_MIGRATION_URL so it never reaches the app runtime; locally DATABASE_URL is fine.
+  const url = process.env.DATABASE_MIGRATION_URL ?? process.env.DATABASE_URL;
   if (!url) {
-    console.error('DATABASE_URL is not set. Point it at the database owner connection.');
+    console.error(
+      'Set DATABASE_MIGRATION_URL (or DATABASE_URL locally) to the schema owner connection.',
+    );
     process.exit(1);
   }
   await runMigrations(url);

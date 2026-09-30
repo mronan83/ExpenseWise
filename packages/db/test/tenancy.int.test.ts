@@ -1,7 +1,7 @@
 import { newId } from '@expensewise/domain';
 import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { withOrg } from '../src/client.ts';
+import { assertRowSecurityApplies, withOrg } from '../src/client.ts';
 import { expenses, organizations, trips } from '../src/schema.ts';
 import { connectAs, expectDbError, seedOrg } from './helpers.ts';
 
@@ -144,5 +144,26 @@ describe('policy coverage', () => {
       // The outbox is the one deliberate exception; see migration 0001.
       expect(row.forced, `${row.table} forces RLS`).toBe(row.table !== 'outbox_events');
     }
+  });
+});
+
+describe('runtime role guard', () => {
+  it('accepts expensewise_app, which row-level security applies to', async () => {
+    await expect(assertRowSecurityApplies(app.db)).resolves.toBeUndefined();
+  });
+
+  it('refuses a role that bypasses row-level security', async () => {
+    await expect(assertRowSecurityApplies(owner.db)).rejects.toThrow(/bypasses row-level security/);
+  });
+
+  it('gives the application role statement and idle-transaction timeouts', async () => {
+    const timeout = await app.db.execute<{ statement_timeout: string }>(
+      sql`show statement_timeout`,
+    );
+    const idle = await app.db.execute<{ idle_in_transaction_session_timeout: string }>(
+      sql`show idle_in_transaction_session_timeout`,
+    );
+    expect(timeout.rows[0]?.statement_timeout).toBe('15s');
+    expect(idle.rows[0]?.idle_in_transaction_session_timeout).toBe('30s');
   });
 });
