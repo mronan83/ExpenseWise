@@ -1,0 +1,36 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# builds and caches
+.next/
+out/
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+next-env.d.ts
+
+# test output
+coverage/
+playwright-report/
+test-results/
+blob-report/
+
+# local data
+.data/
+*.log
+
+# env and secrets
+.env
+.env.*
+!.env.example
+
+# eval data never goes in git (personal receipts; see docs/adr/0012)
+evals/data/private/
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
