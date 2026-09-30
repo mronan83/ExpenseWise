@@ -11,6 +11,14 @@
     }
   ],
   "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "A Supabase Auth access token for a signed-in user."
+      }
+    },
     "schemas": {
       "Health": {
         "type": "object",
@@ -31,6 +39,74 @@
           "status",
           "version"
         ]
+      },
+      "Identity": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "example": "6f1d2c3e-8a4b-4f5e-9c7d-0a1b2c3d4e5f"
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "alex@example.com"
+          },
+          "assuranceLevel": {
+            "type": "string",
+            "enum": [
+              "aal1",
+              "aal2"
+            ],
+            "description": "aal2 means this session passed multi-factor authentication."
+          },
+          "sessionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "userId",
+          "email",
+          "assuranceLevel",
+          "sessionId"
+        ]
+      },
+      "Problem": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "example": "https://expensewise.dev/problems/not-found"
+          },
+          "title": {
+            "type": "string",
+            "example": "Not found"
+          },
+          "status": {
+            "type": "integer",
+            "example": 404
+          },
+          "detail": {
+            "type": "string"
+          },
+          "instance": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "description": "Stable machine-readable error code."
+          }
+        },
+        "required": [
+          "type",
+          "title",
+          "status"
+        ]
       }
     },
     "parameters": {}
@@ -50,6 +126,52 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me": {
+      "get": {
+        "tags": [
+          "Identity"
+        ],
+        "summary": "The signed-in user",
+        "description": "Returns the identity proven by the access token. Organization memberships join this response in Phase 1.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The caller is signed in.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Identity"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No token, or the token is invalid or expired.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
                 }
               }
             }

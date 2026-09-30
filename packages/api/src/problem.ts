@@ -10,8 +10,10 @@ export function problem(
   slug: string,
   title: string,
   extra: { detail?: string; code?: string } = {},
+  headers: Record<string, string> = {},
 ) {
   return c.json({ type: `${PROBLEM_BASE}${slug}`, title, status, ...extra }, status, {
+    ...headers,
     'Content-Type': 'application/problem+json',
   });
 }

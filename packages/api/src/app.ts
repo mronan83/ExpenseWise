@@ -1,12 +1,16 @@
 import { DomainError } from '@expensewise/domain';
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { Hono, type Context, type ErrorHandler, type NotFoundHandler } from 'hono';
+import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
 import { problem } from './problem.ts';
 import { healthRoute } from './routes/health.ts';
+import { meRoute } from './routes/me.ts';
 
 export interface ApiOptions {
   /** Deployed commit SHA, or "dev". */
   readonly version: string;
+  /** Verifies access tokens. Without one, protected routes answer 503 auth_not_configured. */
+  readonly verifyToken?: TokenVerifier;
 }
 
 export const OPENAPI_INFO = {
@@ -43,7 +47,7 @@ const onError: ErrorHandler = (error, c) => {
  * client, the future iOS client, tests and OpenAPI generation.
  */
 export function createApi(options: ApiOptions) {
-  const app = new OpenAPIHono({
+  const app = new OpenAPIHono<{ Variables: AuthVariables }>({
     defaultHook: (result, c) => {
       if (!result.success) {
         return problem(c, 400, 'invalid-request', 'The request is not valid', {
@@ -56,7 +60,18 @@ export function createApi(options: ApiOptions) {
     },
   });
 
+  app.openAPIRegistry.registerComponent('securitySchemes', 'bearerAuth', {
+    type: 'http',
+    scheme: 'bearer',
+    bearerFormat: 'JWT',
+    description: 'A Supabase Auth access token for a signed-in user.',
+  });
+
   app.openapi(healthRoute, (c) => c.json({ status: 'ok' as const, version: options.version }, 200));
+
+  // Protected routes: register the identity check before each handler.
+  app.use(meRoute.getRoutingPath(), requireIdentity(options.verifyToken));
+  app.openapi(meRoute, (c) => c.json(c.var.identity, 200));
 
   app.doc31('/v1/openapi.json', OPENAPI_INFO);
 

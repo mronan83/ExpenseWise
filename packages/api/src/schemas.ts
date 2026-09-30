@@ -27,3 +27,14 @@ export const HealthSchema = z
     version: z.string().openapi({ example: '3f9c2ab', description: 'Deployed commit, or "dev".' }),
   })
   .openapi('Health');
+
+export const IdentitySchema = z
+  .object({
+    userId: z.string().openapi({ example: '6f1d2c3e-8a4b-4f5e-9c7d-0a1b2c3d4e5f' }),
+    email: z.string().nullable().openapi({ example: 'alex@example.com' }),
+    assuranceLevel: z.enum(['aal1', 'aal2']).openapi({
+      description: 'aal2 means this session passed multi-factor authentication.',
+    }),
+    sessionId: z.string().nullable(),
+  })
+  .openapi('Identity');
