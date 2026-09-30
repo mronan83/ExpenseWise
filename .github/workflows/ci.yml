@@ -92,10 +92,11 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: pnpm/action-setup@v4
+      # No dependency cache here: this job never installs, and setup-node's post step
+      # fails the job when the cache path it expects doesn't exist.
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
-          cache: pnpm
       - name: Dependency audit (high and critical block)
         run: pnpm audit --audit-level high
 
