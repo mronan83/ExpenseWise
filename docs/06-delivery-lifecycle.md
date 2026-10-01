@@ -134,7 +134,7 @@ Instant rollback to the previous deployment, with flags as kill switches. Databa
 
 ### Backups and recovery
 
-Supabase Pro keeps daily database backups for 7 days; point-in-time recovery is deferred until the product is sold ([ADR-0013](adr/0013-supabase-platform.md)). Database backups don't include stored files, so a nightly job copies receipt images to a second provider through Supabase's S3-compatible endpoint (built in Phase 1). A restore drill covers both every quarter; the first drill is part of the Phase 1 exit criteria.
+Production runs on Supabase's Free plan in Phase 1, which has no backups, so we keep our own ([ADR-0014](adr/0014-supabase-free-plan.md)). A nightly GitHub Actions job encrypts a dump of the database, auth users included, and copies new receipt images to a private Backblaze B2 bucket. Dumps are kept for 30 days plus 12 monthly copies; receipt images are never deleted from the copy. The same job writes a heartbeat so the project isn't paused for inactivity, and fails at 70% of a Free plan limit. A monthly workflow restores the latest backup into a throwaway database and checks row counts, row-level security and image checksums; the first drill on real data is part of the Phase 1 exit criteria. Recovery point: 24 hours. Recovery time: 4 hours. Point-in-time recovery is deferred until the product is sold ([ADR-0013](adr/0013-supabase-platform.md)).
 
 ### Incidents
 
