@@ -2,7 +2,7 @@
 
 Consolidate identity, the database and file storage on Supabase, and keep Vercel for hosting and Inngest for workflows.
 
-- **Status:** Accepted (decided by product owner after a cost and capability comparison)
+- **Status:** Accepted (decided by product owner after a cost and capability comparison); Amended by [ADR-0014](0014-supabase-free-plan.md) (production stays on the Free plan in Phase 1)
 - **Date:** 2026-09-30
 - **Deciders:** Product owner; Claude (principal architect)
 - **Decision register:** D-13 (decided after blueprint v0.3)

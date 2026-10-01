@@ -1,6 +1,6 @@
 # Runbook: connect Vercel, Supabase and GitHub
 
-How the production environment is wired, and the steps to rebuild it after a restore or in a new project. See [ADR-0013](../adr/0013-supabase-platform.md) for the decisions behind it.
+How the production environment is wired, and the steps to rebuild it after a restore or in a new project. See [ADR-0013](../adr/0013-supabase-platform.md) and [ADR-0014](../adr/0014-supabase-free-plan.md) for the decisions behind it.
 
 ## How the pieces connect
 
@@ -11,6 +11,7 @@ How the production environment is wired, and the steps to rebuild it after a res
 | API (Vercel) → Postgres | Tenant data as `expensewise_app`, transaction pooler, verified TLS | Vercel env: `DATABASE_URL` |
 | API (Vercel) → Supabase Storage | Signed upload and download URLs (Phase 1) | Vercel env: `SUPABASE_SECRET_KEY` |
 | GitHub Actions → Postgres | Migrations as the schema owner, then role passwords | GitHub environment `production` secrets |
+| GitHub Actions → Postgres, Storage and Backblaze B2 | The nightly encrypted backup and heartbeat (from increment 1) | GitHub environment `backup` secrets |
 
 The `postgres` role has BYPASSRLS. Its connection string lives only in GitHub secrets, never in Vercel.
 
@@ -69,9 +70,54 @@ Do this before merging the first pull request that adds migrations. The merge st
 
 Previews share the production Supabase project until a staging project exists (ADR-0013); no real data is stored before the Phase 1 dogfood month.
 
-## 4. Supabase Auth URLs (needed for sign-in in Phase 1)
+## 4. Supabase Auth (needed for sign-in in Phase 1)
 
-**Authentication → URL Configuration:** set Site URL to the production domain, and add redirect URLs for `https://expensewise-*-mronan83s-projects.vercel.app/**` so preview sign-ins work.
+Phase 1 signs in with email and password plus TOTP, and has no custom email domain ([D-15](../07-roadmap.md#phase-1-plan)).
+
+1. **Authentication → Sign In / Providers:** keep Email enabled and turn off **Allow new users to sign up**. Nobody needs to self-register in Phase 1.
+2. **Authentication → Users → Add user:** create the product owner's account with email and password, and tick **Auto Confirm User** so no confirmation email is needed. TOTP is enrolled in the app after the first sign-in.
+3. **Authentication → URL Configuration:** set Site URL to `https://expensewise-theta.vercel.app`, and add `https://expensewise-*-mronan83s-projects.vercel.app/**` as a redirect URL so preview sign-ins work.
+
+Supabase's built-in email covers password resets and the owner's own notifications. It is rate-limited and delivers only to members of the Supabase team. Before a second person is invited, add a sender domain or create their account the same way as step 2.
+
+## 5. Off-site backups (Backblaze B2)
+
+The Free plan keeps no backups, so a nightly workflow keeps our own ([ADR-0014](../adr/0014-supabase-free-plan.md)). Set this up before real use starts on Oct 15. The workflow itself arrives in increment 1 and uses the names below.
+
+1. **Create a Backblaze B2 account** at <https://www.backblaze.com/sign-up/cloud-storage> and choose the **US West** region. The region can't be changed later. The first 10 GB are free and no card is needed, but B2 verifies a phone number by text message.
+2. **Buckets → Create a Bucket:**
+   - **Bucket Unique Name:** `expensewise-backups-` plus a few random letters. Names are global across Backblaze.
+   - **Files in Bucket are:** Private.
+   - **Default Encryption:** Enable.
+   - **Object Lock:** Enable. Then, on the bucket's card, open the Object Lock setting and set a default retention of 30 days. The web console offers only compliance mode: for 30 days nobody, you included, can delete a backup. That is the point, and it can't be turned off later.
+3. **Lifecycle Settings** on the bucket's card: choose **Use custom lifecycle rules** and add two:
+   - file name prefix `db/daily/`: days from uploading to hiding 30, days from hiding to deleting 1;
+   - file name prefix `db/monthly/`: days from uploading to hiding 365, days from hiding to deleting 1.
+
+   Leave everything else, including `receipts/`, with no rule; receipt images are kept.
+4. **Application Keys → Add a New Application Key:**
+   - **Name:** `expensewise-backup`.
+   - **Allow access to Bucket(s):** only the bucket from step 2.
+   - **Type of Access:** Read and Write.
+   - Leave the file name prefix and duration empty.
+
+   Copy the `keyID` and `applicationKey` straight away; the key is shown only once.
+5. **Generate the backup passphrase** with `openssl rand -hex 32` and save it in your password manager. Without it the backups can't be decrypted, and nobody can recover it.
+6. **Supabase → Storage → Configuration → S3:** turn on **S3 protocol connection** if it is off, then under **Access keys** create a key described as `expensewise-backup`, and copy the access key ID and secret. The nightly job reads receipt images through it. These keys can read and write every bucket and bypass row-level security, so they go only in the `backup` environment.
+7. **GitHub → Settings → Environments → New environment** named `backup`:
+   - **Required reviewers:** leave unticked. A nightly job can't wait for an approval.
+   - **Deployment branches and tags:** **Selected branches and tags**, branch rule `main`.
+   - **Environment secrets:**
+
+     | Secret | Value |
+     | --- | --- |
+     | `BACKUP_DATABASE_URL` | The same session-pooler string as `DATABASE_MIGRATION_URL` (step 1.4) |
+     | `SUPABASE_S3_ACCESS_KEY_ID` | From step 6 |
+     | `SUPABASE_S3_SECRET_ACCESS_KEY` | From step 6 |
+     | `B2_KEY_ID` | `keyID` from step 4 |
+     | `B2_APPLICATION_KEY` | `applicationKey` from step 4 |
+     | `B2_BUCKET` | The bucket name from step 2 |
+     | `BACKUP_PASSPHRASE` | From step 5 |
 
 ## After a restore or in a new project
 
