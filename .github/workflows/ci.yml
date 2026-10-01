@@ -93,10 +93,14 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - uses: pnpm/action-setup@v6
       # No dependency cache here: this job never installs, and setup-node's post step
-      # fails the job when the cache path it expects doesn't exist.
+      # fails the job when the cache path it expects doesn't exist. setup-node also caches
+      # automatically when package.json names a package manager, and whenever no cache yet
+      # exists for the lockfile (the first run after it changes) this job tried to save one
+      # and failed. That made G4 fail only sometimes, hence the explicit opt-out.
       - uses: actions/setup-node@v7
         with:
           node-version-file: .nvmrc
+          package-manager-cache: false
       - name: Dependency audit (high and critical block)
         run: pnpm audit --audit-level high
 
