@@ -65,3 +65,16 @@ Previews share the production Supabase project until a staging project exists (A
 ## After a restore or in a new project
 
 Custom role passwords are not in backups or dumps. Re-run **Database migrations** (step 2.5): it re-applies any missing migrations and re-sets both passwords from the GitHub secrets.
+
+## If the migration run fails
+
+Read the failed step's log. It shows where the job connected (user, host, port, database), never the password.
+
+| Log says | Cause | Fix |
+| --- | --- | --- |
+| `DATABASE_MIGRATION_URL:` with nothing after it | The secret is missing, misnamed, or saved under **Environment variables** instead of **Environment secrets** | Add it as an environment secret on `production`, with the exact name |
+| `password authentication failed` (28P01) right after a password reset | Supabase's pooler caches credentials apart from the database and can keep rejecting the new password ([Supabase guide](https://supabase.com/docs/guides/troubleshooting/supavisor-error-password-authentication-failed-after-password-rotation)). The job already retries for about 90 seconds. | **Database → Settings → Connection pooling:** change the pool size by one and save, change it back and save, then run again |
+| `password authentication failed` with no recent reset | The password in the secret isn't the database's. Supabase can't show it, only reset it. | Reset it (section 1.4), update the secret, wait a few minutes, run again |
+| `still contains Supabase's [YOUR-PASSWORD] placeholder` | The template was pasted without filling in the password | Replace `[YOUR-PASSWORD]`, brackets included, with the password |
+
+Brackets or spaces left around a pasted password are removed automatically, and the log says so.
