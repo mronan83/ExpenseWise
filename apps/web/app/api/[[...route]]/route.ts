@@ -1,4 +1,5 @@
 import { createHttpApp, supabaseTokenVerifier } from '@expensewise/api';
+import { createReadinessProbe } from '@expensewise/db';
 import { handle } from 'hono/vercel';
 
 // The whole versioned API lives in @expensewise/api; Next.js only hands it requests under /api.
@@ -11,6 +12,8 @@ const handler = handle(
     version: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'dev',
     // Without a Supabase project, protected routes answer 503 rather than failing the build.
     verifyToken: supabaseUrl ? supabaseTokenVerifier({ projectUrl: supabaseUrl }) : undefined,
+    // Connects lazily on the first readiness request, with one connection per instance.
+    readiness: createReadinessProbe(process.env.DATABASE_URL),
   }),
 );
 

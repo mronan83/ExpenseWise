@@ -40,6 +40,63 @@
           "version"
         ]
       },
+      "Readiness": {
+        "type": "object",
+        "properties": {
+          "ready": {
+            "type": "boolean",
+            "description": "True when no check failed."
+          },
+          "checks": {
+            "type": "object",
+            "properties": {
+              "database": {
+                "$ref": "#/components/schemas/ReadinessCheck"
+              },
+              "role": {
+                "$ref": "#/components/schemas/ReadinessCheck"
+              },
+              "tls": {
+                "$ref": "#/components/schemas/ReadinessCheck"
+              },
+              "tenantIsolation": {
+                "$ref": "#/components/schemas/ReadinessCheck"
+              }
+            },
+            "required": [
+              "database",
+              "role",
+              "tls",
+              "tenantIsolation"
+            ]
+          }
+        },
+        "required": [
+          "ready",
+          "checks"
+        ]
+      },
+      "ReadinessCheck": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail",
+              "skip"
+            ]
+          },
+          "detail": {
+            "type": "string",
+            "example": "connected as expensewise_app"
+          }
+        },
+        "required": [
+          "status",
+          "detail"
+        ]
+      },
       "Identity": {
         "type": "object",
         "properties": {
@@ -126,6 +183,37 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/health/ready": {
+      "get": {
+        "tags": [
+          "Platform"
+        ],
+        "summary": "Readiness check",
+        "description": "Connects to the database the way tenant requests do and checks what tenant isolation depends on: the runtime role, verified TLS and enforced row-level security. Results are cached for a few seconds. Details are fixed messages, never raw errors.",
+        "responses": {
+          "200": {
+            "description": "Ready to serve tenant data.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Readiness"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Not ready; at least one check failed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Readiness"
                 }
               }
             }

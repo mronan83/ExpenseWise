@@ -54,7 +54,18 @@ Do this before merging the first pull request that adds migrations. The merge st
    - `SUPABASE_SECRET_KEY` = `sb_secret_…` (mark it Sensitive)
    - `DATABASE_URL` = `postgresql://expensewise_app.<project-ref>:<app password>@<pooler host>:6543/postgres` (mark it Sensitive). This is the transaction pooler: the same host as step 1.4, but with the `expensewise_app.<project-ref>` user and port 6543. Add it only after step 2.4 has set the password.
    - No `SUPABASE_URL` or `POSTGRES_URL`. The API reads the project URL only from `NEXT_PUBLIC_SUPABASE_URL`, and the `postgres` role must never reach the runtime.
-3. Redeploy. Changed variables only reach new deployments. `GET /api/v1/health` returns 200. `GET /api/v1/me` returns 401 without a token, not 503, which shows the API found the Supabase project.
+3. Redeploy. Changed variables only reach new deployments. Then check:
+   - `GET /api/v1/health` returns 200.
+   - `GET /api/v1/me` returns 401 without a token, not 503, which shows the API found the Supabase project.
+   - `GET /api/v1/health/ready` returns 200 with every check `pass`: the database answers, the app is connected as `expensewise_app`, TLS is verified against Supabase's root certificate, and row-level security is enforced on every tenant table. Any failure answers 503 and names the check:
+
+     | Check says | Fix |
+     | --- | --- |
+     | `DATABASE_URL is not set` | Add it (step 3.2) and redeploy |
+     | `password rejected` | `DATABASE_URL` must use password 1 from step 2.1; if you just ran migrations, see the pooler note under "If the migration run fails" |
+     | `connected as postgres, which bypasses row-level security` | `DATABASE_URL` is the migration connection; use the `expensewise_app.<project-ref>` user on port 6543 |
+     | `found 0 tenant tables … run migrations` | Run **Database migrations** (step 2.5) |
+     | `the connection is not TLS-verified` | `DATABASE_URL` must point at a `*.supabase.com` host |
 
 Previews share the production Supabase project until a staging project exists (ADR-0013); no real data is stored before the Phase 1 dogfood month.
 

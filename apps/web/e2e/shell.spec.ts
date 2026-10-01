@@ -46,6 +46,15 @@ test.describe('API through Next.js', () => {
     expect((await contract.json()) as { openapi: string }).toMatchObject({ openapi: '3.1.0' });
   });
 
+  test('reports readiness with a status that matches the report', async ({ request }) => {
+    // E2E runs without the production database, so this checks the wiring, not a pass.
+    const res = await request.get('/api/v1/health/ready');
+    const report = (await res.json()) as { ready: boolean; checks: Record<string, unknown> };
+    expect(res.status()).toBe(report.ready ? 200 : 503);
+    expect(res.headers()['cache-control']).toBe('no-store');
+    expect(Object.keys(report.checks)).toEqual(['database', 'role', 'tls', 'tenantIsolation']);
+  });
+
   test('answers unknown API routes with a problem document', async ({ request }) => {
     const res = await request.get('/api/v1/does-not-exist');
     expect(res.status()).toBe(404);

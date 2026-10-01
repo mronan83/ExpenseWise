@@ -38,6 +38,9 @@ importers:
       '@expensewise/api':
         specifier: workspace:*
         version: link:../../packages/api
+      '@expensewise/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@expensewise/domain':
         specifier: workspace:*
         version: link:../../packages/domain

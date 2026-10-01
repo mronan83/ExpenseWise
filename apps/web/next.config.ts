@@ -13,7 +13,7 @@ const config: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   // Workspace packages ship TypeScript source; Next compiles them.
-  transpilePackages: ['@expensewise/api', '@expensewise/domain'],
+  transpilePackages: ['@expensewise/api', '@expensewise/db', '@expensewise/domain'],
   headers: () => Promise.resolve([{ source: '/:path*', headers: securityHeaders }]),
 };
 
