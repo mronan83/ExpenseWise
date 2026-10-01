@@ -5,13 +5,31 @@ import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.
 import { problem } from './problem.ts';
 import { healthRoute } from './routes/health.ts';
 import { meRoute } from './routes/me.ts';
+import { readyRoute } from './routes/ready.ts';
+import type { Readiness } from './schemas.ts';
 
 export interface ApiOptions {
   /** Deployed commit SHA, or "dev". */
   readonly version: string;
   /** Verifies access tokens. Without one, protected routes answer 503 auth_not_configured. */
   readonly verifyToken?: TokenVerifier;
+  /** Checks the database the way tenant requests use it. Without one, readiness answers 503. */
+  readonly readiness?: ReadinessProbe;
 }
+
+/** Never expected to throw; a probe that does still reads as not ready. */
+export type ReadinessProbe = () => Promise<Readiness>;
+
+const needsDatabase = { status: 'skip', detail: 'needs a database connection' } as const;
+const notReady = (detail: string): Readiness => ({
+  ready: false,
+  checks: {
+    database: { status: 'fail', detail },
+    role: needsDatabase,
+    tls: needsDatabase,
+    tenantIsolation: needsDatabase,
+  },
+});
 
 export const OPENAPI_INFO = {
   openapi: '3.1.0',
@@ -68,6 +86,17 @@ export function createApi(options: ApiOptions) {
   });
 
   app.openapi(healthRoute, (c) => c.json({ status: 'ok' as const, version: options.version }, 200));
+
+  app.openapi(readyRoute, async (c) => {
+    const report = options.readiness
+      ? await options.readiness().catch((error: unknown) => {
+          console.error('Readiness probe threw', error);
+          return notReady('readiness check failed');
+        })
+      : notReady('readiness is not configured');
+    c.header('Cache-Control', 'no-store');
+    return report.ready ? c.json(report, 200) : c.json(report, 503);
+  });
 
   // Protected routes: register the identity check before each handler.
   app.use(meRoute.getRoutingPath(), requireIdentity(options.verifyToken));

@@ -38,3 +38,24 @@ export const IdentitySchema = z
     sessionId: z.string().nullable(),
   })
   .openapi('Identity');
+
+const ReadinessCheckSchema = z
+  .object({
+    status: z.enum(['pass', 'fail', 'skip']),
+    detail: z.string().openapi({ example: 'connected as expensewise_app' }),
+  })
+  .openapi('ReadinessCheck');
+
+export const ReadinessSchema = z
+  .object({
+    ready: z.boolean().openapi({ description: 'True when no check failed.' }),
+    checks: z.object({
+      database: ReadinessCheckSchema,
+      role: ReadinessCheckSchema,
+      tls: ReadinessCheckSchema,
+      tenantIsolation: ReadinessCheckSchema,
+    }),
+  })
+  .openapi('Readiness');
+
+export type Readiness = z.infer<typeof ReadinessSchema>;
