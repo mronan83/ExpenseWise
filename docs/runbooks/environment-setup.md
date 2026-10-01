@@ -19,7 +19,7 @@ The `postgres` role has BYPASSRLS. Its connection string lives only in GitHub se
 1. **Integrations → Data API:** it may stay enabled. ExpenseWise never calls it, and migration 0002 leaves its roles no privileges on our tables. Don't create tables by hand in the dashboard's `public` schema; they may be exposed to it.
 2. **Settings → JWT Keys:** confirm the current key is asymmetric (ES256 or RS256). New projects default to this.
 3. **Settings → API Keys:** note the publishable key (`sb_publishable_…`) and the secret key (`sb_secret_…`).
-4. **Connect** (top of the project page) **→ Connection string → Method: Session pooler:** copy the string for the `postgres` role. It looks like `postgresql://postgres.<project-ref>:[YOUR-PASSWORD]@aws-N-us-east-1.pooler.supabase.com:5432/postgres`; copy the host exactly, because the `aws-N` prefix varies.
+4. **Connect** (top of the project page) **→ Connection string → Method: Session pooler:** copy the string for the `postgres` role. It looks like `postgresql://postgres.<project-ref>:[YOUR-PASSWORD]@aws-N-<region>.pooler.supabase.com:5432/postgres`; copy the host exactly. The `<region>` must match `regions` in `apps/web/vercel.json` (production is us-west-2 and `pdx1`); if it doesn't, update one or the other first.
    - Replace `[YOUR-PASSWORD]`, brackets included, with the database password chosen when the project was created. If it is lost, reset it under **Database → Settings → Reset database password**; nothing else uses it yet.
    - A password with `@ : / ? # %` must be percent-encoded in the URL. Resetting to a long letters-and-digits password avoids that.
    - Use the session pooler, not the direct connection: the direct host is IPv6-only and GitHub's runners are IPv4-only. Use port 5432, not 6543: migrations need a whole session.
@@ -35,7 +35,7 @@ Do this before merging the first pull request that adds migrations. The merge st
    openssl rand -hex 32   # expensewise_relay
    ```
    Hex output is URL-safe, which matters because the app password goes into `DATABASE_URL` later. Any other generator is fine at 24+ letters and digits.
-2. **Settings → Environments → New environment**, name `production` (exactly), then **Configure environment**:
+2. **Settings → Environments**. If an environment called `Production` already exists, open it rather than creating another: Vercel creates it when it first deploys, and GitHub matches environment names regardless of case, so the workflow's `production` is that environment, unprotected until you configure it. Otherwise choose **New environment** and name it `production`. Then:
    - **Required reviewers:** tick it, add yourself, and leave **Prevent self-review** unticked. You both merge (which starts the run) and approve it; with self-review prevented, a solo owner could never approve. Then **Save protection rules**.
    - **Deployment branches and tags:** change "No restriction" to **Selected branches and tags**, then add a branch rule `main`. A workflow on any other branch can then never reach these secrets.
 3. **Environment secrets → Add environment secret**, three times. Use environment secrets, not repository secrets, so that the approval gate guards them:

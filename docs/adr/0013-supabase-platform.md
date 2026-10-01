@@ -62,7 +62,7 @@ The architecture sets the constraints. The API is the only path to data (AP1), P
 | CI | Gates keep using a Postgres service container, so per-PR databases are not needed. |
 | Branching | Deferred. Supabase Branching is Pro-only, Beta and billed hourly outside the spend cap. |
 | Point-in-time recovery | Deferred until the product is sold. It costs $100/month and up and needs Small compute. |
-| Region | us-east-1, next to Vercel's default function region. |
+| Region | us-west-2 (Oregon), where the project was created; a project's region can't be changed. Vercel functions are pinned to `pdx1` (Portland, also us-west-2) in `apps/web/vercel.json`. A request makes several database round trips, and Vercel's default `iad1` would add about 70 ms to each. The two must always move together. |
 
 ## Alternatives considered
 
