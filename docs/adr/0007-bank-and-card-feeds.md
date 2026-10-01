@@ -1,0 +1,53 @@
+# ADR-0007: Bank and card feeds
+
+Connect read-only Plaid transactions in Phase 2; no card issuing is planned.
+
+- **Status:** Accepted (decided by product owner)
+- **Date:** 2026-09-30
+- **Deciders:** Product owner; Claude (principal architect)
+- **Decision register:** D-07
+
+## Context
+
+Without a transaction feed we can't auto-create expenses from card swipes, spot missing receipts or reliably catch duplicates ([C4](../01-vision-and-scope.md#c4-automation-is-a-data-problem-more-than-an-ocr-problem)). The positioning adopts Ramp's rule that the transaction is the source of truth once bank feeds arrive ([C2](../01-vision-and-scope.md#c2-concur-ramp-and-expensify-are-three-different-businesses)). Issuing our own card is a regulated business; if we ever do it, we do it through a partner.
+
+## Decision
+
+- **Yes to feeds.** Connect read-only Plaid transactions in Phase 2.
+- **No card issuing.** No card issuing is planned. Phase 4 lists corporate cards through a partner only as a candidate that needs its own business case.
+- **What the feed drives:**
+  - A Transaction entity (feed, posted date) is matched to at most one expense.
+  - A card transaction with no receipt after 24 h triggers a nudge, at most one a day, with quiet hours respected.
+  - A hotel charge with no folio after 24 h becomes an inbox item.
+- **Plan and keys.** The Plaid Trial plan allows 10 bank connections. Preview environments use Plaid sandbox keys.
+
+## Alternatives considered
+
+| Option | Why not chosen |
+| --- | --- |
+| No feeds: receipts and email only | Leaves out card-swipe expenses, missing-receipt detection and reliable duplicate checks, which C4 identifies as the main automation gains. |
+| Card issuing via a partner | A regulated business, and no card issuing is planned. Corporate cards appear in Phase 4 only as a candidate that needs its own business case. |
+
+## Consequences
+
+### Positive
+
+- Receipt ↔ transaction matching, missing-receipt nudges and stronger duplicate detection become possible.
+- Read-only access means ExpenseWise moves no money through the feed.
+
+### Negative
+
+- Feeds carry amount, merchant and date only. A hotel charge shows no nightly breakdown, and IRS Publication 463 expects documentary evidence for lodging whatever the amount. This folio gap has to be closed through email ([ADR-0011](0011-travel-data-sources.md)).
+- The Trial plan's 10-connection limit bounds the early user base.
+- Feed cost adds to cost per user (R6), and Plaid is another subprocessor that must sign a data processing agreement.
+
+## Exit path / reversibility
+
+Plaid sits behind an adapter (AP7), and the Transaction shape and its adapter are designed in Phase 0, so another feed provider is a new adapter, not a new core. Capture and email-in keep working without feeds, so turning feeds off degrades automation but loses no receipts.
+
+## Links
+
+- [Capability map](../02-capability-map.md), [automation rules](../03-journeys-and-workflows.md#46-automation-rules)
+- [System context](../05-architecture.md#62-system-context), [domain model](../05-architecture.md#66-domain-model), [travel data](../05-architecture.md#611-travel-data)
+- [Risk register](../08-risk-register.md): R6, R8
+- [ADR-0011](0011-travel-data-sources.md)

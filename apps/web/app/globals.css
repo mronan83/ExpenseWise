@@ -1,0 +1,58 @@
+@import 'tailwindcss';
+
+/* Design tokens (docs/04-app-design.md). One set for web; exported to Swift for iOS later. */
+:root {
+  --paper: #f4f6f3;
+  --sheet: #ffffff;
+  --ink: #131b19;
+  --ink-2: #4a5653;
+  --ink-3: #5f6a66;
+  --rule: #dce1dc;
+  --carbon: #2d43c2;
+  --carbon-ink: #ffffff;
+  --carbon-wash: #e8ebfb;
+  --ok: #1d7849;
+  --warn: #a35f00;
+  --bad: #b42318;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0d1211;
+    --sheet: #151c1a;
+    --ink: #e4eae7;
+    --ink-2: #a7b2ae;
+    --ink-3: #8b9793;
+    --rule: #253029;
+    --carbon: #9aa7ff;
+    --carbon-ink: #0d1211;
+    --carbon-wash: #1c2242;
+    --ok: #4fc48c;
+    --warn: #e6a640;
+    --bad: #f2786d;
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-sheet: var(--sheet);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-rule: var(--rule);
+  --color-carbon: var(--carbon);
+  --color-carbon-ink: var(--carbon-ink);
+  --color-carbon-wash: var(--carbon-wash);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}

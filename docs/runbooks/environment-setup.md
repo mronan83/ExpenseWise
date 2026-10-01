@@ -1,0 +1,67 @@
+# Runbook: connect Vercel, Supabase and GitHub
+
+How the production environment is wired, and the steps to rebuild it after a restore or in a new project. See [ADR-0013](../adr/0013-supabase-platform.md) for the decisions behind it.
+
+## How the pieces connect
+
+| Connection | Carries | Where it is set |
+| --- | --- | --- |
+| Browser and iOS app → Supabase Auth | Sign-in, using the publishable key | Vercel env: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` |
+| API (Vercel) → Supabase JWKS | Verifying access tokens; no secret needed | Derived from `NEXT_PUBLIC_SUPABASE_URL` |
+| API (Vercel) → Postgres | Tenant data as `expensewise_app`, transaction pooler, verified TLS | Vercel env: `DATABASE_URL` |
+| API (Vercel) → Supabase Storage | Signed upload and download URLs (Phase 1) | Vercel env: `SUPABASE_SECRET_KEY` |
+| GitHub Actions → Postgres | Migrations as the schema owner, then role passwords | GitHub environment `production` secrets |
+
+The `postgres` role has BYPASSRLS. Its connection string lives only in GitHub secrets, never in Vercel.
+
+## 1. Supabase project settings
+
+1. **Integrations → Data API:** it may stay enabled. ExpenseWise never calls it, and migration 0002 leaves its roles no privileges on our tables. Don't create tables by hand in the dashboard's `public` schema; they may be exposed to it.
+2. **Settings → JWT Keys:** confirm the current key is asymmetric (ES256 or RS256). New projects default to this.
+3. **Settings → API Keys:** note the publishable key (`sb_publishable_…`) and the secret key (`sb_secret_…`).
+4. **Connect** (top of the project page) **→ Connection string → Method: Session pooler:** copy the string for the `postgres` role. It looks like `postgresql://postgres.<project-ref>:[YOUR-PASSWORD]@aws-N-<region>.pooler.supabase.com:5432/postgres`; copy the host exactly. The `<region>` must match `regions` in `apps/web/vercel.json` (production is us-west-2 and `pdx1`); if it doesn't, update one or the other first.
+   - Replace `[YOUR-PASSWORD]`, brackets included, with the database password chosen when the project was created. If it is lost, reset it under **Database → Settings → Reset database password**; nothing else uses it yet.
+   - A password with `@ : / ? # %` must be percent-encoded in the URL. Resetting to a long letters-and-digits password avoids that.
+   - Use the session pooler, not the direct connection: the direct host is IPv6-only and GitHub's runners are IPv4-only. Use port 5432, not 6543: migrations need a whole session.
+   - Leave out `sslmode`; our code verifies TLS against Supabase's root CA.
+
+## 2. GitHub: the production environment
+
+Do this before merging the first pull request that adds migrations. The merge starts the **Database migrations** workflow straight away, and if the `production` environment doesn't exist yet, GitHub creates it with no protection.
+
+1. **Generate the two role passwords** and save both in your password manager:
+   ```sh
+   openssl rand -hex 32   # expensewise_app
+   openssl rand -hex 32   # expensewise_relay
+   ```
+   Hex output is URL-safe, which matters because the app password goes into `DATABASE_URL` later. Any other generator is fine at 24+ letters and digits.
+2. **Settings → Environments**. If an environment called `Production` already exists, open it rather than creating another: Vercel creates it when it first deploys, and GitHub matches environment names regardless of case, so the workflow's `production` is that environment, unprotected until you configure it. Otherwise choose **New environment** and name it `production`. Then:
+   - **Required reviewers:** tick it, add yourself, and leave **Prevent self-review** unticked. You both merge (which starts the run) and approve it; with self-review prevented, a solo owner could never approve. Then **Save protection rules**.
+   - **Deployment branches and tags:** change "No restriction" to **Selected branches and tags**, then add a branch rule `main`. A workflow on any other branch can then never reach these secrets.
+3. **Environment secrets → Add environment secret**, three times. Use environment secrets, not repository secrets, so that the approval gate guards them:
+   - `DATABASE_MIGRATION_URL`: the full string from step 1.4, password filled in.
+   - `EXPENSEWISE_APP_DB_PASSWORD`: the first password from step 2.1.
+   - `EXPENSEWISE_RELAY_DB_PASSWORD`: the second.
+4. **Merge the pull request.** In **Actions**, the **Database migrations** run waits with "Review deployments". Open it, tick `production`, and **Approve and deploy**. The log ends with `Migrations applied.` and `Runtime role passwords set; neither role can bypass row-level security.` It stops with an error if either role could bypass row-level security.
+5. **Later runs:** **Actions → Database migrations → Run workflow** re-runs it by hand, after a restore for example. That button only exists once the workflow is on `main`.
+
+## 3. Vercel project
+
+1. **Settings → Build and Deployment:** set Root Directory to `apps/web` (keep "Include files outside the root directory" on), Framework Preset to Next.js, and Node.js Version to 22.x. Vercel picks up the pinned pnpm version from `package.json` by itself.
+2. **Settings → Environment Variables**, for Production and Preview:
+   - `NEXT_PUBLIC_SUPABASE_URL` = `https://<project-ref>.supabase.co`
+   - `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` = `sb_publishable_…`
+   - `SUPABASE_SECRET_KEY` = `sb_secret_…` (mark it Sensitive)
+   - `DATABASE_URL` = `postgresql://expensewise_app.<project-ref>:<app password>@<pooler host>:6543/postgres` (mark it Sensitive). This is the transaction pooler: the same host as step 1.4, but with the `expensewise_app.<project-ref>` user and port 6543. Add it only after step 2.4 has set the password.
+   - No `SUPABASE_URL` or `POSTGRES_URL`. The API reads the project URL only from `NEXT_PUBLIC_SUPABASE_URL`, and the `postgres` role must never reach the runtime.
+3. Redeploy. Changed variables only reach new deployments. `GET /api/v1/health` returns 200. `GET /api/v1/me` returns 401 without a token, not 503, which shows the API found the Supabase project.
+
+Previews share the production Supabase project until a staging project exists (ADR-0013); no real data is stored before the Phase 1 dogfood month.
+
+## 4. Supabase Auth URLs (needed for sign-in in Phase 1)
+
+**Authentication → URL Configuration:** set Site URL to the production domain, and add redirect URLs for `https://expensewise-*-mronan83s-projects.vercel.app/**` so preview sign-ins work.
+
+## After a restore or in a new project
+
+Custom role passwords are not in backups or dumps. Re-run **Database migrations** (step 2.5): it re-applies any missing migrations and re-sets both passwords from the GitHub secrets.

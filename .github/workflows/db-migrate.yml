@@ -1,0 +1,41 @@
+# Applies database migrations to Supabase, then sets the runtime roles' passwords.
+# Runs in the "production" GitHub environment: add yourself as a required reviewer there so
+# every run waits for your approval (production promotion needs the product owner, RACI).
+name: Database migrations
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['packages/db/migrations/**']
+
+concurrency:
+  group: db-migrate-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    name: Migrate production database
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply migrations (schema owner, verified TLS)
+        env:
+          DATABASE_MIGRATION_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
+        run: pnpm --filter @expensewise/db migrate
+      - name: Set runtime role passwords (sent as SCRAM verifiers, never in plain text)
+        env:
+          DATABASE_MIGRATION_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
+          EXPENSEWISE_APP_DB_PASSWORD: ${{ secrets.EXPENSEWISE_APP_DB_PASSWORD }}
+          EXPENSEWISE_RELAY_DB_PASSWORD: ${{ secrets.EXPENSEWISE_RELAY_DB_PASSWORD }}
+        run: pnpm --filter @expensewise/db roles:set-passwords
