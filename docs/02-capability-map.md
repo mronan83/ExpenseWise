@@ -36,6 +36,7 @@ The repository docs are canonical from v0.3 onward. Changes made here since the 
 
 - **Near-duplicate detection (P2)** added to Intelligence. Exact-duplicate detection (SHA-256) stays P1; the perceptual hash for near-duplicates is P2.
 - **Travel booking via partner (P4)** added to Capture, so the roadmap's Phase 4 scope maps to a capability.
+- **Email and password sign-in in Phase 1 (D-15).** Sign-in and TOTP MFA use email and password, with no custom email domain until a second person is invited ([Phase 1 plan](07-roadmap.md#phase-1-plan)).
 - **Identity on Supabase ([ADR-0013](adr/0013-supabase-platform.md)).** P1 sign-in uses TOTP MFA. Passkeys move to P3, once Supabase's beta is generally available. SAML SSO stays P3 (Supabase Pro). SCIM moves to P4, since Supabase doesn't offer it for end users yet.
 
 ## Related

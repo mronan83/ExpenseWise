@@ -19,7 +19,7 @@ ExpenseWise is a receipt-first, automation-first expense, receipt, mileage and t
 | [07 Roadmap](07-roadmap.md) | §8 | Phases P0–P4 in weeks, scope and exit criteria |
 | [08 Risk register](08-risk-register.md) | §10 | Risks R1–R8 with likelihood, impact and mitigation |
 | [Runbook: environment setup](runbooks/environment-setup.md) | – | Connecting Vercel, Supabase and GitHub; rebuilding after a restore |
-| [ADR index](adr/README.md) | §9 | Decisions D-01 to D-12 as ADR-0001 to ADR-0012, D-13 (after v0.3) as ADR-0013, and how to add an ADR |
+| [ADR index](adr/README.md) | §9 | Decisions D-01 to D-12 as ADR-0001 to ADR-0012, D-13 (after v0.3) as ADR-0013, and how to add an ADR; D-14 and D-15 are recorded in the roadmap |
 
 ## Decision status
 
@@ -38,6 +38,8 @@ ExpenseWise is a receipt-first, automation-first expense, receipt, mileage and t
 | D-11 | Travel data sources | [ADR-0011](adr/0011-travel-data-sources.md) | Accepted (recommended; no objection) |
 | D-12 | Eval set composition | [ADR-0012](adr/0012-eval-set-composition.md) | Proposed (awaiting product owner: permission to search the owner's Gmail for past receipts) |
 | D-13 | Supabase platform | [ADR-0013](adr/0013-supabase-platform.md) | Accepted (decided by product owner after a cost and capability comparison) |
+| D-14 | Start real use in week 4 (Oct 15), with Supabase Pro from then | [Roadmap: Phase 1 plan](07-roadmap.md#phase-1-plan) | Accepted (decided by product owner) |
+| D-15 | Email and password sign-in, no custom email domain in Phase 1 | [Roadmap: Phase 1 plan](07-roadmap.md#phase-1-plan) | Accepted (decided by product owner) |
 
 ## Visual version
 

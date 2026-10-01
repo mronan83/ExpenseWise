@@ -69,9 +69,15 @@ Do this before merging the first pull request that adds migrations. The merge st
 
 Previews share the production Supabase project until a staging project exists (ADR-0013); no real data is stored before the Phase 1 dogfood month.
 
-## 4. Supabase Auth URLs (needed for sign-in in Phase 1)
+## 4. Supabase Auth (needed for sign-in in Phase 1)
 
-**Authentication → URL Configuration:** set Site URL to the production domain, and add redirect URLs for `https://expensewise-*-mronan83s-projects.vercel.app/**` so preview sign-ins work.
+Phase 1 signs in with email and password plus TOTP, and has no custom email domain ([D-15](../07-roadmap.md#phase-1-plan)).
+
+1. **Authentication → Sign In / Providers:** keep Email enabled and turn off **Allow new users to sign up**. Nobody needs to self-register in Phase 1.
+2. **Authentication → Users → Add user:** create the product owner's account with email and password, and tick **Auto Confirm User** so no confirmation email is needed. TOTP is enrolled in the app after the first sign-in.
+3. **Authentication → URL Configuration:** set Site URL to `https://expensewise-theta.vercel.app`, and add `https://expensewise-*-mronan83s-projects.vercel.app/**` as a redirect URL so preview sign-ins work.
+
+Supabase's built-in email covers password resets and the owner's own notifications. It is rate-limited and delivers only to members of the Supabase team. Before a second person is invited, add a sender domain or create their account the same way as step 2.
 
 ## After a restore or in a new project
 
