@@ -1,6 +1,7 @@
 packages:
   - apps/*
   - packages/*
+  - evals
 
 # pnpm 10 blocks dependency install scripts unless allowed here.
 onlyBuiltDependencies:

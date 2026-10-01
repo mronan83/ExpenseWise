@@ -35,8 +35,9 @@ export default defineConfig(
   },
   {
     // Money is integer minor units. Floating-point parsing and ad-hoc rounding are
-    // banned in domain code so every conversion goes through the decimal helpers.
-    files: ['packages/domain/src/**/*.ts'],
+    // banned wherever amounts are read or scored, so every conversion goes through the
+    // decimal helpers.
+    files: ['packages/domain/src/**/*.ts', 'packages/extraction/src/**/*.ts', 'evals/src/**/*.ts'],
     ignores: ['**/*.test.ts'],
     rules: {
       'no-restricted-globals': [

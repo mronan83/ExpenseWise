@@ -1,0 +1,23 @@
+{
+  "name": "@expensewise/evals",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "data": "tsx src/data.ts",
+    "spike": "tsx src/run.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.131.0",
+    "@expensewise/domain": "workspace:*",
+    "@expensewise/extraction": "workspace:*",
+    "playwright-core": "1.63.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.15",
+    "vitest": "^5.0.3"
+  }
+}
