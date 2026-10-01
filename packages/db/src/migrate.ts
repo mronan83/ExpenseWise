@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { createDatabase } from './client.ts';
+import { describeConnection, retryWhilePoolerRejectsPassword } from './connection.ts';
 
 export const migrationsFolder = fileURLToPath(new URL('../migrations', import.meta.url));
 
@@ -14,6 +15,13 @@ export async function runMigrations(connectionString: string): Promise<void> {
   }
 }
 
+/** Logs where a CLI is about to connect, without the password. */
+export function logConnection(connectionString: string): void {
+  const { user, host, port, database, corrections } = describeConnection(connectionString);
+  console.log(`Connecting as ${user} to ${host}:${port}/${database}.`);
+  for (const correction of corrections) console.log(`Note: ${correction}.`);
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   // Migrations run as the schema owner. Deployed environments keep that connection in
   // DATABASE_MIGRATION_URL so it never reaches the app runtime; locally DATABASE_URL is fine.
@@ -24,6 +32,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     );
     process.exit(1);
   }
-  await runMigrations(url);
+  logConnection(url);
+  await retryWhilePoolerRejectsPassword(url, () => runMigrations(url), { log: console.log });
   console.log('Migrations applied.');
 }
