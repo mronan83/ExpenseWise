@@ -47,7 +47,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Tests (domain coverage floor 90%)
         run: pnpm test
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: coverage
@@ -117,7 +117,7 @@ jobs:
         run: pnpm --filter @expensewise/web exec playwright install --with-deps chromium webkit
       - name: Journeys and accessibility (desktop Chromium, iPhone WebKit)
         run: pnpm --filter @expensewise/web test:e2e
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-report
