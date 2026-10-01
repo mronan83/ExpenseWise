@@ -27,7 +27,9 @@ blob-report/
 !.env.example
 
 # eval data never goes in git (personal receipts; see docs/adr/0012)
-evals/data/private/
+# Eval documents and results are data: never committed (CLAUDE.md).
+evals/data/
+evals/results/
 
 # os / editor
 .DS_Store
