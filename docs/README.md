@@ -19,7 +19,7 @@ ExpenseWise is a receipt-first, automation-first expense, receipt, mileage and t
 | [07 Roadmap](07-roadmap.md) | §8 | Phases P0–P4 in weeks, scope and exit criteria |
 | [08 Risk register](08-risk-register.md) | §10 | Risks R1–R10 with likelihood, impact and mitigation |
 | [Runbook: environment setup](runbooks/environment-setup.md) | – | Connecting Vercel, Supabase and GitHub; off-site backups; rebuilding after a restore |
-| [ADR index](adr/README.md) | §9 | Decisions D-01 to D-12 as ADR-0001 to ADR-0012, D-13 (after v0.3) as ADR-0013, D-16 as ADR-0014, D-17 as ADR-0015, D-18 as ADR-0016, and how to add an ADR; D-14 and D-15 are recorded in the roadmap |
+| [ADR index](adr/README.md) | §9 | Decisions D-01 to D-12 as ADR-0001 to ADR-0012, D-13 (after v0.3) as ADR-0013, D-16 as ADR-0014, D-17 as ADR-0015, D-18 as ADR-0016, D-19 as ADR-0017, and how to add an ADR; D-14 and D-15 are recorded in the roadmap |
 
 ## Decision status
 
@@ -43,6 +43,7 @@ ExpenseWise is a receipt-first, automation-first expense, receipt, mileage and t
 | D-16 | Supabase Free plan through Phase 1, with self-managed off-site backups | [ADR-0014](adr/0014-supabase-free-plan.md) | Accepted (Free plan decided by product owner; the controls are recommended, no objection) |
 | D-17 | AI provider keys configured in the app, encrypted, per organization | [ADR-0015](adr/0015-ai-provider-keys-in-app.md) | Accepted (decided by product owner) |
 | D-18 | One person can sign in with several emails; each reaches the same member | [ADR-0016](adr/0016-several-sign-ins-per-person.md) | Accepted (decided by product owner) |
+| D-19 | Every receipt is read by Haiku and Sonnet side by side until the tier is chosen; events dispatch right after commit | [ADR-0017](adr/0017-read-receipts-with-two-models.md) | Accepted (decided by product owner) |
 
 ## Visual version
 

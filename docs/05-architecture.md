@@ -142,6 +142,7 @@ sequenceDiagram
 ```
 
 - **Outbox pattern.** Step 4 writes the receipt row and its event in one transaction, so a receipt can never exist without the event that processes it.
+- **Eager dispatch ([ADR-0017](adr/0017-read-receipts-with-two-models.md)).** Step 5 sends the committed event to the workflow runner at once, with the outbox id as its event id. The relay's sweep delivers anything that send missed, and the runner drops the duplicate.
 - **Safe retries.** Step 3 carries a client-generated ID and hash, so a retry on a flaky connection can't create a duplicate.
 
 ## 6.5 Receipt intelligence pipeline

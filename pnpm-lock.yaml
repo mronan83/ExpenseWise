@@ -44,9 +44,15 @@ importers:
       '@expensewise/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@expensewise/extraction':
+        specifier: workspace:*
+        version: link:../../packages/extraction
       '@expensewise/flags':
         specifier: workspace:*
         version: link:../../packages/flags
+      '@expensewise/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@expensewise/workflows':
         specifier: workspace:*
         version: link:../../packages/workflows
@@ -124,6 +130,12 @@ importers:
       '@expensewise/domain':
         specifier: workspace:*
         version: link:../domain
+      '@expensewise/extraction':
+        specifier: workspace:*
+        version: link:../extraction
+      '@expensewise/storage':
+        specifier: workspace:*
+        version: link:../storage
       '@hono/zod-openapi':
         specifier: ^1.6.3
         version: 1.6.3(hono@4.13.12)(zod@4.6.5)
@@ -211,11 +223,23 @@ importers:
         specifier: ^5.0.3
         version: 5.0.3(@opentelemetry/api@1.9.1)(@types/node@22.20.4)(@vitest/coverage-v8@5.0.3)(vite@8.3.1(@types/node@22.20.4)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
+  packages/storage:
+    devDependencies:
+      vitest:
+        specifier: ^5.0.3
+        version: 5.0.3(@opentelemetry/api@1.9.1)(@types/node@22.20.4)(@vitest/coverage-v8@5.0.3)(vite@8.3.1(@types/node@22.20.4)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+
   packages/workflows:
     dependencies:
       '@expensewise/db':
         specifier: workspace:*
         version: link:../db
+      '@expensewise/extraction':
+        specifier: workspace:*
+        version: link:../extraction
+      '@expensewise/storage':
+        specifier: workspace:*
+        version: link:../storage
       inngest:
         specifier: ^4.21.1
         version: 4.21.1(@opentelemetry/core@2.11.0(@opentelemetry/api@1.9.1))(hono@4.13.12)(next@16.3.7(@opentelemetry/api@1.9.1)(@playwright/test@1.63.0)(@types/node@22.20.4)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(react@19.3.0)(typescript@6.0.3)(zod@4.6.5)

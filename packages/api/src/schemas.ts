@@ -146,3 +146,133 @@ export const LinkSignInSchema = z
       }),
   })
   .openapi('LinkSignIn');
+
+const ConfidenceSchema = z.enum(['high', 'medium', 'low']);
+const TextFieldSchema = z.object({ value: z.string(), confidence: ConfidenceSchema }).nullable();
+const MoneyFieldSchema = z
+  .object({
+    amountMinor: z.number().int().openapi({ description: 'Integer minor units, e.g. cents.' }),
+    currency: z.string().openapi({ example: 'USD' }),
+    decimal: z.string().openapi({ example: '6.50', description: 'The same amount, for display.' }),
+    confidence: ConfidenceSchema,
+  })
+  .nullable();
+
+export const ReceiptStatusSchema = z.enum(['processing', 'extracted', 'needs_review', 'failed']);
+
+export const ReceiptSummarySchema = z
+  .object({
+    id: z.string().uuid(),
+    status: ReceiptStatusSchema.openapi({
+      description:
+        'processing while it is read; extracted when both models read it with confidence and ' +
+        'agree; needs_review otherwise; failed when no model could read it.',
+    }),
+    source: z.enum(['camera', 'upload', 'email', 'card', 'manual', 'mileage']),
+    contentType: z.string(),
+    byteSize: z.number().int(),
+    uploadedBy: z.string(),
+    createdAt: z.string().datetime(),
+    merchant: z.string().nullable(),
+    date: z.string().nullable(),
+    total: MoneyFieldSchema,
+  })
+  .openapi('ReceiptSummary');
+
+export const ReceiptReadingSchema = z
+  .object({
+    model: z.string().openapi({ example: 'claude-haiku-4-5' }),
+    label: z.string().openapi({ example: 'Haiku 4.5' }),
+    state: z.enum(['pending', 'missing', 'confident', 'unsure', 'failed']),
+    error: z.string().nullable(),
+    latencyMs: z.number().int().nullable(),
+    costMicroUsd: z.number().int().nullable(),
+    inputTokens: z.number().int().nullable(),
+    outputTokens: z.number().int().nullable(),
+    fields: z
+      .object({
+        documentType: z.string(),
+        merchant: TextFieldSchema,
+        date: TextFieldSchema,
+        currency: TextFieldSchema,
+        total: MoneyFieldSchema,
+        subtotal: MoneyFieldSchema,
+        taxTotal: MoneyFieldSchema,
+        tip: MoneyFieldSchema,
+        cardLastFour: TextFieldSchema,
+      })
+      .nullable(),
+    problems: z.array(z.string()),
+  })
+  .openapi('ReceiptReading');
+
+export const ReceiptDetailSchema = ReceiptSummarySchema.extend({
+  imageUrl: z
+    .string()
+    .nullable()
+    .openapi({ description: 'A short-lived link to the original file (5 minutes).' }),
+  readings: z.array(ReceiptReadingSchema),
+  differences: z
+    .array(z.string())
+    .openapi({ description: 'Filing fields the two models read differently.' }),
+}).openapi('ReceiptDetail');
+
+export const ReceiptListSchema = z
+  .object({
+    receipts: z.array(ReceiptSummarySchema),
+    comparison: z.object({
+      receipts: z.number().int(),
+      compared: z.number().int().openapi({ description: 'Receipts both models read.' }),
+      agreed: z.number().int().openapi({ description: 'Of those, how many they read alike.' }),
+      models: z.array(
+        z.object({
+          model: z.string(),
+          label: z.string(),
+          readings: z.number().int(),
+          confident: z.number().int(),
+          failed: z.number().int(),
+          averageLatencyMs: z.number().int().nullable(),
+          costMicroUsd: z.number().int(),
+        }),
+      ),
+    }),
+    readingAvailable: z.boolean().openapi({
+      description: 'Whether this server can hand receipts to the workflow runner for reading.',
+    }),
+  })
+  .openapi('ReceiptList');
+
+const ReceiptFileSchema = {
+  contentType: z.enum(['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf']),
+  byteSize: z
+    .number()
+    .int()
+    .min(1)
+    .max(10 * 1024 * 1024)
+    .openapi({ description: 'At most 10 MB (ADR-0014).' }),
+  sha256: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/)
+    .openapi({ description: 'SHA-256 of the file, lowercase hex.' }),
+};
+
+export const ReceiptUploadRequestSchema = z
+  .object(ReceiptFileSchema)
+  .openapi('ReceiptUploadRequest');
+
+export const ReceiptUploadTicketSchema = z
+  .object({
+    receiptId: z.string().uuid(),
+    bucket: z.string(),
+    path: z.string(),
+    token: z.string().openapi({ description: 'Uploads one file to this path, once.' }),
+  })
+  .openapi('ReceiptUploadTicket');
+
+export const FileReceiptSchema = z
+  .object({
+    id: z.string().uuid().openapi({ description: 'The receiptId from the upload ticket.' }),
+    source: z.enum(['camera', 'upload']),
+    ...ReceiptFileSchema,
+  })
+  .openapi('FileReceipt');

@@ -16,6 +16,7 @@ import {
   type TokenVerifier,
 } from './auth.ts';
 import { ProblemError } from './problem.ts';
+import { sealContext } from './provider-keys.ts';
 import {
   deleteAiKeyRoute,
   ensureWorkspaceRoute,
@@ -60,9 +61,6 @@ const signInView = (signIn: SignIn, caller: Identity) => ({
   linkedAt: signIn.createdAt.toISOString(),
   current: signIn.userId === caller.userId,
 });
-
-/** Binds a ciphertext to its organization and provider. */
-const sealContext = (orgId: string, provider: AiProvider) => `${orgId}:${provider}`;
 
 export function registerWorkspaceRoutes(
   app: OpenAPIHono<{ Variables: AuthVariables }>,

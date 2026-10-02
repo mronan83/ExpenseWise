@@ -37,6 +37,16 @@ export const MODELS = {
 export type ModelId = keyof typeof MODELS;
 export const MODEL_IDS = Object.keys(MODELS) as ModelId[];
 
+/**
+ * Every receipt is read by both tiers the product owner approved for the extraction spike,
+ * so the tier decision rests on their own receipts (ADR-0017). One tier is dropped once the
+ * decision is made.
+ */
+export const COMPARISON_MODELS = [
+  'claude-haiku-4-5',
+  'claude-sonnet-5-5',
+] as const satisfies readonly ModelId[];
+
 export function isModelId(value: string): value is ModelId {
   return Object.hasOwn(MODELS, value);
 }

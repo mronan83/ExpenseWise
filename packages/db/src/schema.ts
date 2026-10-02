@@ -330,9 +330,15 @@ export const extractionRuns = pgTable(
     inputTokens: integer('input_tokens'),
     outputTokens: integer('output_tokens'),
     costMicroUsd: bigint('cost_micro_usd', { mode: 'number' }),
+    /**
+     * The outbox event that asked for this reading. With the model it makes a workflow retry
+     * a no-op instead of a second row; a new request (read again) gets a new id.
+     */
+    requestId: uuid('request_id'),
     createdAt: createdAt(),
   },
   (t) => [
+    unique('extraction_runs_request_key').on(t.orgId, t.receiptId, t.model, t.requestId),
     foreignKey({
       name: 'extraction_runs_receipt_fk',
       columns: [t.orgId, t.receiptId],

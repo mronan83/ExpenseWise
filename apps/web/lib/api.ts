@@ -7,6 +7,8 @@ export class ApiProblem extends Error {
     readonly code: string | undefined,
     title: string,
     readonly detail?: string,
+    /** Other members of the problem document, such as the id of an existing receipt. */
+    readonly extra: Record<string, unknown> = {},
   ) {
     super(title);
     this.name = 'ApiProblem';
@@ -28,9 +30,15 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     code?: string;
     title?: string;
     detail?: string;
-  };
+  } & Record<string, unknown>;
   if (!res.ok) {
-    throw new ApiProblem(res.status, body.code, body.title ?? 'Something went wrong', body.detail);
+    throw new ApiProblem(
+      res.status,
+      body.code,
+      body.title ?? 'Something went wrong',
+      body.detail,
+      body,
+    );
   }
   return body as T;
 }

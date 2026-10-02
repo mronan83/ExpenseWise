@@ -9,10 +9,11 @@ import { meRoute } from './routes/me.ts';
 import { readyRoute } from './routes/ready.ts';
 import type { Readiness } from './schemas.ts';
 import type { SecretBox } from './secret-box.ts';
+import { registerReceiptRoutes, type ReceiptRouteOptions } from './receipt-routes.ts';
 import { registerWorkspaceRoutes } from './workspace-routes.ts';
 import type { WorkspaceStore } from './workspace.ts';
 
-export interface ApiOptions {
+export interface ApiOptions extends Pick<ReceiptRouteOptions, 'receipts' | 'files' | 'dispatch'> {
   /** Deployed commit SHA, or "dev". */
   readonly version: string;
   /** Verifies access tokens. Without one, protected routes answer 503 auth_not_configured. */
@@ -126,6 +127,7 @@ export function createApi(options: ApiOptions) {
   });
 
   registerWorkspaceRoutes(app, options);
+  registerReceiptRoutes(app, options);
 
   app.doc31('/v1/openapi.json', OPENAPI_INFO);
 

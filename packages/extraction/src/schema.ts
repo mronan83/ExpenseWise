@@ -27,6 +27,9 @@ export const DOCUMENT_TYPES = [
   'other',
 ] as const;
 
+/** Changes whenever ReceiptExtractionSchema changes, and is stored with every reading. */
+export const SCHEMA_VERSION = 'receipt-v1';
+
 export const ReceiptExtractionSchema = z.object({
   documentType: z.enum(DOCUMENT_TYPES),
   merchant: z

@@ -1,0 +1,2 @@
+ALTER TABLE "extraction_runs" ADD COLUMN "request_id" uuid;--> statement-breakpoint
+ALTER TABLE "extraction_runs" ADD CONSTRAINT "extraction_runs_request_key" UNIQUE("org_id","receipt_id","model","request_id");
