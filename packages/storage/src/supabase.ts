@@ -14,6 +14,13 @@ export interface SupabaseStorageOptions {
 
 const encodePath = (path: string) => path.split('/').map(encodeURIComponent).join('/');
 
+// A loop, not /\/+$/: that pattern backtracks quadratically on a long run of '/'.
+function withoutTrailingSlashes(url: string): string {
+  let end = url.length;
+  while (end > 0 && url[end - 1] === '/') end--;
+  return url.slice(0, end);
+}
+
 /**
  * Supabase Storage over its REST API with the secret key. Not supabase-js: the server keeps
  * to plain HTTP for everything but sign-in (ADR-0013). The bucket is private and is created
@@ -21,7 +28,7 @@ const encodePath = (path: string) => path.split('/').map(encodeURIComponent).joi
  */
 export function supabaseStorage(options: SupabaseStorageOptions): ObjectStore {
   const doFetch = options.fetch ?? fetch;
-  const base = `${options.projectUrl.replace(/\/+$/, '')}/storage/v1`;
+  const base = `${withoutTrailingSlashes(options.projectUrl)}/storage/v1`;
   const headers = {
     apikey: options.secretKey,
     authorization: `Bearer ${options.secretKey}`,

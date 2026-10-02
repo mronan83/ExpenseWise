@@ -61,6 +61,20 @@ describe('supabaseStorage', () => {
     });
   });
 
+  it('handles any number of trailing slashes on the project URL, quickly', async () => {
+    const { fetch, seen } = fakeFetch(() => json({ signedURL: '/object/sign/receipts/x?token=t' }));
+    const s = supabaseStorage({
+      projectUrl: `https://proj.supabase.co${'/'.repeat(50_000)}`,
+      secretKey: 'sb_secret_test',
+      bucket: 'receipts',
+      fileSizeLimitBytes: 1,
+      allowedMimeTypes: [],
+      fetch,
+    });
+    await s.signedDownloadUrl('x', 60);
+    expect(seen[0]!.url).toBe('https://proj.supabase.co/storage/v1/object/sign/receipts/x');
+  });
+
   it('treats an existing bucket as ready', async () => {
     const { fetch } = fakeFetch((req) =>
       req.url.endsWith('/bucket')
