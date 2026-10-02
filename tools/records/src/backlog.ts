@@ -84,6 +84,20 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'owner', ask: 'Your test: upload one receipt before buying Anthropic credit' },
     source: 'PR #20',
     affects: ['FR-INT-09', 'F-08'],
+    done: { date: '2026-10-02', in: 'Your test: a photographed receipt, read by GPT-5.6 Luna' },
+  },
+  {
+    num: 47,
+    title: 'A receipt that needs a look is a dead end',
+    type: 'Gap',
+    detail:
+      'The receipt page says Needs a look and offers only Read again. Add the two actions from the receipt review design: **Looks right**, which confirms a reading as it is (choosing which one, when the readings differ), and **Edit a field**. Either makes the receipt Ready, records who confirmed what in the audit trail, and keeps each correction as an eval candidate. Every fallback reading lands here by design (ADR-0020), so this matters more while Anthropic has no credit.',
+    priority: 'P1',
+    effort: 'M',
+    severity: 'Medium',
+    blocker: { kind: 'none' },
+    source: 'GAP-17, your observation on Oct 2',
+    affects: ['GAP-17', 'FR-INT-15', 'F-40'],
   },
   {
     num: 6,
@@ -616,7 +630,7 @@ export const BACKLOG: readonly BacklogItem[] = [
 /** How to order the open work, beyond priority. */
 export const SEQUENCING: readonly string[] = [
   '#2, #3, #4 and #46 need you, not code, and #1 is useless without #2. They are the best use of your next half hour. Do #46 before #4: the fallback only reads while Claude can’t.',
-  '#1 and #10 come before anything else Claude builds: real receipts exist, and so far only in one place.',
+  '#1 and #10 come before anything else Claude builds: real receipts exist, and so far only in one place. #47 comes straight after, since today a receipt that needs a look can’t be acted on.',
   '#6 unblocks most of increment 2 (#16–#19) and the dashboard (#28). #7 and #9 are small and touch the same code, so they ride with it.',
   '#8 is security, not polish: it should land before #24, which needs it, and before anyone else is invited (#29).',
   '#11–#15 are small, independent and each closes a gap; take them between features.',

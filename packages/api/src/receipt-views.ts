@@ -1,6 +1,7 @@
 import type { ExtractionRunRecord, ReceiptRecord } from '@expensewise/db';
-import { toDecimal, type Money } from '@expensewise/domain';
+import { toDecimal, zero, type Money } from '@expensewise/domain';
 import {
+  assumedZeros,
   COMPARISON_MODELS,
   FALLBACK_MODEL,
   MODELS,
@@ -19,8 +20,21 @@ const moneyView = (field: Field<Money> | null) =>
         currency: field.value.currency,
         decimal: toDecimal(field.value),
         confidence: field.confidence,
+        assumed: false,
       }
     : null;
+
+/** Zero in the reading's currency, for a tax or tip the receipt doesn't print. */
+const assumedZeroView = (currency: string) => {
+  const nothing = zero(currency);
+  return {
+    amountMinor: nothing.amountMinor,
+    currency,
+    decimal: toDecimal(nothing),
+    confidence: 'high' as const,
+    assumed: true,
+  };
+};
 
 const textView = (field: Field<string> | null) =>
   field ? { value: field.value, confidence: field.confidence } : null;
@@ -55,6 +69,7 @@ export function readingView(
   pending: boolean,
 ) {
   const n = pending ? null : normalized(run);
+  const assumed = n ? assumedZeros(n) : [];
   return {
     model,
     label: MODELS[model].label,
@@ -75,8 +90,16 @@ export function readingView(
             : null,
           total: moneyView(n.total),
           subtotal: moneyView(n.subtotal),
-          taxTotal: moneyView(n.taxTotal),
-          tip: moneyView(n.tip),
+          taxTotal: n.taxTotal
+            ? moneyView(n.taxTotal)
+            : assumed.includes('taxTotal') && n.total
+              ? assumedZeroView(n.total.value.currency)
+              : null,
+          tip: n.tip
+            ? moneyView(n.tip)
+            : assumed.includes('tip') && n.total
+              ? assumedZeroView(n.total.value.currency)
+              : null,
           cardLastFour: textView(n.cardLastFour),
         }
       : null,

@@ -5,6 +5,7 @@
  */
 export const PAGE_URLS: { readonly traceability?: string; readonly backlog?: string } = {
   traceability: 'https://claude.ai/artifact/8VCWvpqvNVELSKUwQawoyN',
+  backlog: 'https://claude.ai/artifact/MfctKLE69dRkcHzpYVt9TD',
 };
 
 export const REPOSITORY = 'mronan83/ExpenseWise';

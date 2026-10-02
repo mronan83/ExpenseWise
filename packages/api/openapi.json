@@ -529,13 +529,18 @@
                   "medium",
                   "low"
                 ]
+              },
+              "assumed": {
+                "type": "boolean",
+                "description": "True for a tax or tip the receipt does not print, taken as zero rather than read. Never set when the line is printed but unreadable, or when the printed figures leave an amount unaccounted for."
               }
             },
             "required": [
               "amountMinor",
               "currency",
               "decimal",
-              "confidence"
+              "confidence",
+              "assumed"
             ]
           }
         },
@@ -889,13 +894,18 @@
                       "medium",
                       "low"
                     ]
+                  },
+                  "assumed": {
+                    "type": "boolean",
+                    "description": "True for a tax or tip the receipt does not print, taken as zero rather than read. Never set when the line is printed but unreadable, or when the printed figures leave an amount unaccounted for."
                   }
                 },
                 "required": [
                   "amountMinor",
                   "currency",
                   "decimal",
-                  "confidence"
+                  "confidence",
+                  "assumed"
                 ]
               },
               "subtotal": {
@@ -924,13 +934,18 @@
                       "medium",
                       "low"
                     ]
+                  },
+                  "assumed": {
+                    "type": "boolean",
+                    "description": "True for a tax or tip the receipt does not print, taken as zero rather than read. Never set when the line is printed but unreadable, or when the printed figures leave an amount unaccounted for."
                   }
                 },
                 "required": [
                   "amountMinor",
                   "currency",
                   "decimal",
-                  "confidence"
+                  "confidence",
+                  "assumed"
                 ]
               },
               "taxTotal": {
@@ -959,13 +974,18 @@
                       "medium",
                       "low"
                     ]
+                  },
+                  "assumed": {
+                    "type": "boolean",
+                    "description": "True for a tax or tip the receipt does not print, taken as zero rather than read. Never set when the line is printed but unreadable, or when the printed figures leave an amount unaccounted for."
                   }
                 },
                 "required": [
                   "amountMinor",
                   "currency",
                   "decimal",
-                  "confidence"
+                  "confidence",
+                  "assumed"
                 ]
               },
               "tip": {
@@ -994,13 +1014,18 @@
                       "medium",
                       "low"
                     ]
+                  },
+                  "assumed": {
+                    "type": "boolean",
+                    "description": "True for a tax or tip the receipt does not print, taken as zero rather than read. Never set when the line is printed but unreadable, or when the printed figures leave an amount unaccounted for."
                   }
                 },
                 "required": [
                   "amountMinor",
                   "currency",
                   "decimal",
-                  "confidence"
+                  "confidence",
+                  "assumed"
                 ]
               },
               "cardLastFour": {

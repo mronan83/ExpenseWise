@@ -59,6 +59,8 @@ export function resolveSource(ref: string): { readonly file?: string; readonly l
     return { file: 'docs/README.md', label: ref };
   }
   if (/^PR #\d+$/.test(ref)) return { label: ref };
+  const owner = /^owner (\d{4}-\d{2}-\d{2})$/.exec(ref);
+  if (owner) return { label: `Product owner, ${owner[1]}` };
   const m = /^([a-z]+) (.+)$/.exec(ref);
   const doc = m ? DOCS[m[1]!] : undefined;
   if (!m || !doc) throw new Error(`"${ref}" is not a source reference`);

@@ -49,7 +49,8 @@ export interface Area {
  * Where a requirement comes from. A string of one of these forms, each checked:
  * `ADR-0017` (the file exists), `D-15` (in the decision register), or a doc key and a
  * section that appears in that doc, such as `journeys §4.6`, `arch AP5`, `design DP3`,
- * `vision C5`, `risks R4`, `roadmap inc 1`, `delivery §7.5`, `capmap P1`.
+ * `vision C5`, `risks R4`, `roadmap inc 1`, `delivery §7.5`, `capmap P1`. A requirement
+ * that comes straight from the product owner cites `owner 2026-10-02`, the day it was given.
  */
 export type SourceRef = string;
 

@@ -159,6 +159,12 @@ const MoneyFieldSchema = z
     currency: z.string().openapi({ example: 'USD' }),
     decimal: z.string().openapi({ example: '6.50', description: 'The same amount, for display.' }),
     confidence: ConfidenceSchema,
+    assumed: z.boolean().openapi({
+      description:
+        'True for a tax or tip the receipt does not print, taken as zero rather than read. ' +
+        'Never set when the line is printed but unreadable, or when the printed figures leave ' +
+        'an amount unaccounted for.',
+    }),
   })
   .nullable();
 

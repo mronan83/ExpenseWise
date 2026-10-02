@@ -35,6 +35,7 @@ describe('references', () => {
     expect(resolveSource('journeys §4.6').file).toBe('docs/03-journeys-and-workflows.md');
     expect(resolveSource('arch AP5').file).toBe('docs/05-architecture.md');
     expect(resolveSource('roadmap inc 2').file).toBe('docs/07-roadmap.md');
+    expect(resolveSource('owner 2026-10-02')).toEqual({ label: 'Product owner, 2026-10-02' });
     expect(resolveSource('ADR-0017').file).toMatch(/^docs\/adr\/0017-/);
     expect(() => resolveSource('arch AP99')).toThrow('not found');
     expect(() => resolveSource('ADR-9999')).toThrow('no ADR-9999');

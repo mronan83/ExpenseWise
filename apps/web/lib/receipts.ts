@@ -12,6 +12,8 @@ export interface MoneyField {
   currency: string;
   decimal: string;
   confidence: Confidence;
+  /** A tax or tip the receipt doesn't print, taken as zero rather than read. */
+  assumed: boolean;
 }
 
 export interface ReceiptSummary {

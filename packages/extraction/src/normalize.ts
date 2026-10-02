@@ -1,6 +1,7 @@
 import {
   assertCurrency,
   DomainError,
+  equals,
   fromDecimal,
   isIsoDate,
   sum,
@@ -126,4 +127,29 @@ export function normalizeExtraction(
     cardLastFour,
     problems,
   };
+}
+
+/** Amounts a receipt may simply not print. */
+export type OptionalAmount = 'taxTotal' | 'tip';
+
+/**
+ * Which of tax and tip count as zero because the receipt prints no such line (product
+ * owner, 2 Oct). The reading itself keeps them absent, since that is what was read; this is
+ * the rule for showing and filing it. Never assumed when the line is printed but couldn't be
+ * read, nor when a printed subtotal and the lines that were read don't reach the total:
+ * then a line was most likely missed, and a zero would hide it.
+ */
+export function assumedZeros(n: NormalizedExtraction): OptionalAmount[] {
+  const total = n.total?.value;
+  if (!total) return [];
+  const unread = (name: string) => n.problems.some((p) => p === name || p.startsWith(`${name}[`));
+  const absent: OptionalAmount[] = [];
+  if (n.taxTotal === null && !unread('taxes')) absent.push('taxTotal');
+  if (n.tip === null && !unread('tip')) absent.push('tip');
+  if (absent.length === 0 || !n.subtotal) return absent;
+  const parts = [n.subtotal.value, n.taxTotal?.value, n.tip?.value].filter(
+    (m): m is Money => m !== undefined,
+  );
+  if (parts.some((m) => m.currency !== total.currency)) return [];
+  return equals(sum(total.currency, parts), total) ? absent : [];
 }

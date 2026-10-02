@@ -321,6 +321,24 @@ describe('reading receipts side by side', () => {
     expect([haiku!.costMicroUsd, sonnet!.costMicroUsd]).toEqual([3000, 6000]);
   });
 
+  it("shows tax and tip the receipt doesn't print as zero, marked as assumed", async () => {
+    const s = setup();
+    const id = await filed(s);
+    s.read(id, ['6.50', '6.50'], 'extracted');
+    const { body } = await s.call('GET', `/v1/receipts/${id}`, 'riley');
+    const [haiku] = body.readings as {
+      fields: Record<string, { decimal: string; assumed: boolean } | null>;
+    }[];
+    expect(haiku!.fields.total).toMatchObject({ decimal: '6.50', assumed: false });
+    expect(haiku!.fields.taxTotal).toMatchObject({
+      decimal: '0.00',
+      currency: 'USD',
+      assumed: true,
+    });
+    expect(haiku!.fields.tip).toMatchObject({ decimal: '0.00', assumed: true });
+    expect(haiku!.fields.subtotal).toBeNull();
+  });
+
   it('keeps a running comparison of the two models', async () => {
     const s = setup();
     const id = await filed(s);
