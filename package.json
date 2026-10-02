@@ -19,7 +19,8 @@
     "format:check": "prettier --check .",
     "db:up": "bash scripts/dev-postgres.sh start",
     "db:down": "bash scripts/dev-postgres.sh stop",
-    "db:migrate": "pnpm --filter @expensewise/db migrate"
+    "db:migrate": "pnpm --filter @expensewise/db migrate",
+    "records:pages": "pnpm --filter @expensewise/records pages"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

@@ -13,6 +13,6 @@
 - [ ] State changes emit audit events; telemetry events added where useful
 - [ ] Money stays integer minor units; every new tenant table has `org_id` and a row-level security policy
 - [ ] Accessibility checked (axe in G5 for new screens)
-- [ ] Docs and ADRs updated in this pull request (or not needed)
+- [ ] Docs, ADRs and requirement records (`tools/records`) updated in this pull request (or not needed)
 - [ ] Behind a feature flag, default off, if customer-visible
 - [ ] Demonstrated on the preview environment and accepted by the product owner
