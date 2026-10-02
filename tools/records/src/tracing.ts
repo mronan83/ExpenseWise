@@ -140,7 +140,7 @@ export const GAPS: readonly Gap[] = [
     affects: ['NFR-PRV-04'],
     severity: 'Medium',
     evidence:
-      'ADR-0010 requires a data processing agreement with every subprocessor. Receipts reach Supabase, Vercel, Inngest and Anthropic today, and OpenAI once PR #20 merges.',
+      'ADR-0010 requires a data processing agreement with every subprocessor. Receipts reach Supabase, Vercel, Inngest and Anthropic, and OpenAI on the fallback path (ADR-0020).',
     fix: 'Your answer to Q3 (#36).',
     backlog: 36,
   },
@@ -225,6 +225,12 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-02',
+    change:
+      'PR #20 merged: GPT-5.6 Luna reads a receipt when no Claude model can (F-08, ADR-0020). FR-INT-09 and F-08 are Partial until a real receipt shows OpenAI accepts the request (#46). Backlog #5 done.',
+    by: 'Claude, after the merge',
+  },
   {
     date: '2026-10-02',
     change:

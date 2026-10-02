@@ -63,11 +63,25 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'The OpenAI fallback waits on your merge',
     type: 'Feature',
     detail:
-      'PR #20: when neither Claude model can read a receipt, GPT-5.6 Luna reads it once on your OpenAI key, and the receipt Needs a look. Its decision record merges with it, and merging releases it.',
+      'PR #20: when neither Claude model can read a receipt, GPT-5.6 Luna reads it once on your OpenAI key, and the receipt Needs a look (ADR-0020).',
     priority: 'P1',
     effort: 'S',
     severity: 'Medium',
     blocker: { kind: 'owner', ask: 'Your word on PR #20: merge' },
+    source: 'PR #20',
+    affects: ['FR-INT-09', 'F-08'],
+    done: { date: '2026-10-02', in: 'PR #20' },
+  },
+  {
+    num: 46,
+    title: 'The fallback hasn’t read a real receipt yet',
+    type: 'Verify',
+    detail:
+      'The OpenAI reader was tested against stand-in answers only, to spend nothing on your key. Upload one receipt while Anthropic still has no credit: it should come back as Needs a look with a GPT-5.6 Luna column. If OpenAI rejects the request, its own message shows on the receipt and I fix it. Your OpenAI account needs credit. Do this before #4, or Claude reads it instead.',
+    priority: 'P1',
+    effort: 'S',
+    severity: 'Medium',
+    blocker: { kind: 'owner', ask: 'Your test: upload one receipt before buying Anthropic credit' },
     source: 'PR #20',
     affects: ['FR-INT-09', 'F-08'],
   },
@@ -601,7 +615,7 @@ export const BACKLOG: readonly BacklogItem[] = [
 
 /** How to order the open work, beyond priority. */
 export const SEQUENCING: readonly string[] = [
-  '#2, #3 and #4 need you, not code, and #1 is useless without #2. They are the best use of your next half hour.',
+  '#2, #3, #4 and #46 need you, not code, and #1 is useless without #2. They are the best use of your next half hour. Do #46 before #4: the fallback only reads while Claude can’t.',
   '#1 and #10 come before anything else Claude builds: real receipts exist, and so far only in one place.',
   '#6 unblocks most of increment 2 (#16–#19) and the dashboard (#28). #7 and #9 are small and touch the same code, so they ride with it.',
   '#8 is security, not polish: it should land before #24, which needs it, and before anyone else is invited (#29).',
