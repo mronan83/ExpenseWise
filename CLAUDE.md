@@ -8,6 +8,7 @@ Expense, receipt, mileage and trip app. A pnpm + Turborepo TypeScript monorepo, 
 - `pnpm test:integration` needs `DATABASE_URL`. The SessionStart hook starts a local Postgres and exports it; otherwise run `pnpm db:up`.
 - `pnpm contract:check` checks that `packages/api/openapi.json` and the db migrations match the code.
 - `pnpm build && pnpm test:e2e`: Playwright. Locally, run `--project=desktop-chromium` with `PLAYWRIGHT_CHROMIUM_EXECUTABLE` set by the hook.
+- `pnpm records:pages --out <dir> --since <previous production commit>`: builds the requirements and backlog pages. It refuses while the records disagree with the code.
 
 ## Invariants: don't break these
 
@@ -26,3 +27,10 @@ Expense, receipt, mileage and trip app. A pnpm + Turborepo TypeScript monorepo, 
 - Conventional Commits, small PRs, and the PR template's Definition of Done.
 - Tests sit next to domain code (`*.test.ts`). Integration tests are in `packages/db/test` (`*.int.test.ts`).
 - A flaky test is a bug. Never skip, quarantine or retry to get to green.
+
+## Records: requirements, traceability and backlog
+
+- `tools/records/src` is the source of truth for what is required and what is next. It holds objectives, requirements, features, gaps, questions, the change log and the backlog. The code is the source of truth for what exists.
+- A pull request that changes behaviour updates the records in the same PR. That means statuses, checks, any new API operation, page, workflow or flag claimed by a feature, and a change-log entry. `pnpm test` fails when the records and the code disagree. Never weaken those checks to get to green.
+- After a merge, don't post the backlog in the conversation. The merge only starts the Release run. Wait until it succeeds and production's `/api/v1/health` reports the merged commit, or the run reports that no build was needed. Then build both pages from the latest `main` and republish them to the URLs in `tools/records/src/pages.ts`. Report with the links. Never publish after a merge alone. Publish from a branch only as a draft (`--draft`), which says so on the page.
+- A requirement or answer from the product owner is recorded the same day: questions answered, requirements added as Planned, gaps opened with a backlog item.

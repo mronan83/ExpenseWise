@@ -27,6 +27,9 @@
     "contract:check": {},
     "@expensewise/api#test": {
       "outputs": []
+    },
+    "@expensewise/records#test": {
+      "cache": false
     }
   }
 }

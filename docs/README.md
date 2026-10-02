@@ -17,6 +17,7 @@ ExpenseWise is a receipt-first, automation-first expense, receipt, mileage and t
 | [05 Architecture](05-architecture.md) | §6 | Principles AP1–AP8, context, containers, receipt path, pipeline, domain model, stack, security, iPhone, travel data |
 | [06 Delivery lifecycle](06-delivery-lifecycle.md) | §7 | Operating model, RACI, environments, gates G1–G6, test strategy, Ready and Done, release and operations, SLOs |
 | [07 Roadmap](07-roadmap.md) | §8 | Phases P0–P4 in weeks, scope and exit criteria |
+| [Requirements and backlog](../tools/records/src) | – | Objectives, functional and non-functional requirements traced to features, decisions, code and checks; gaps, open questions and the backlog. Published after each successful release as [the traceability page](https://claude.ai/artifact/8VCWvpqvNVELSKUwQawoyN) and the backlog page |
 | [08 Risk register](08-risk-register.md) | §10 | Risks R1–R10 with likelihood, impact and mitigation |
 | [Runbook: environment setup](runbooks/environment-setup.md) | – | Connecting Vercel, Supabase and GitHub; off-site backups; rebuilding after a restore |
 | [ADR index](adr/README.md) | §9 | Decisions D-01 to D-12 as ADR-0001 to ADR-0012, D-13 (after v0.3) as ADR-0013, D-16 as ADR-0014, D-17 as ADR-0015, D-18 as ADR-0016, D-19 as ADR-0017, D-20 as ADR-0018, D-21 as ADR-0019, D-22 as ADR-0020, and how to add an ADR; D-14 and D-15 are recorded in the roadmap |

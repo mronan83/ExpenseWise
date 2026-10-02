@@ -110,7 +110,7 @@ A story is finished when:
 
 - [ ] Gates G1–G5 are green, and acceptance criteria run as automated tests.
 - [ ] State changes emit audit events, and telemetry events are added.
-- [ ] Accessibility is checked, and docs or ADRs are updated in the same pull request.
+- [ ] Accessibility is checked, and docs, ADRs and the requirement records (`tools/records`) are updated in the same pull request.
 - [ ] It has been demonstrated on its preview environment and accepted by the product owner.
 - [ ] It is in production behind a flag, default off until release.
 
