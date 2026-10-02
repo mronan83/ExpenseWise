@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import pg from 'pg';
 import { connectionConfig, retryWhilePoolerRejectsPassword } from './connection.ts';
 import { logConnection } from './migrate.ts';
-import { setRolePasswords } from './role-passwords.ts';
+import { canSignIn, roleConnectionString, setRolePasswords } from './role-passwords.ts';
 
 // Runs after migrations in deployed environments (.github/workflows/db-migrate.yml).
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
@@ -23,12 +23,21 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       const client = new pg.Client(connectionConfig(url));
       try {
         await client.connect();
-        await setRolePasswords(client, { expensewise_app: app, expensewise_relay: relay });
+        await setRolePasswords(
+          client,
+          { expensewise_app: app, expensewise_relay: relay },
+          {
+            // Re-setting a working password breaks the role behind Supabase's pooler.
+            alreadyWorks: (role, password) =>
+              canSignIn(roleConnectionString(url, role, password), console.log),
+            log: console.log,
+          },
+        );
       } finally {
         await client.end().catch(() => undefined);
       }
     },
     { log: console.log },
   );
-  console.log('Runtime role passwords set; neither role can bypass row-level security.');
+  console.log('Runtime roles can sign in; neither can bypass row-level security.');
 }
