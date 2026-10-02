@@ -114,9 +114,13 @@ export const AiProviderKeyTestSchema = z
     valid: z.boolean(),
     status: AiProviderKeyStatusSchema,
     reason: z
-      .enum(['rejected', 'unreachable', 'unreadable'])
+      .enum(['rejected', 'refused', 'unreachable', 'unreadable'])
       .optional()
       .openapi({ description: 'Why the key could not be used, when valid is false.' }),
+    detail: z
+      .string()
+      .optional()
+      .openapi({ description: 'What the provider answered, when it answered. Never the key.' }),
   })
   .openapi('AiProviderKeyTest');
 
