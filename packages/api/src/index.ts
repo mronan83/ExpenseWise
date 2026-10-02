@@ -2,3 +2,6 @@ export * from './app.ts';
 export * from './auth.ts';
 export * from './schemas.ts';
 export * from './redact.ts';
+export * from './ai-providers.ts';
+export * from './secret-box.ts';
+export * from './workspace.ts';

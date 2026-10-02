@@ -59,3 +59,63 @@ export const ReadinessSchema = z
   .openapi('Readiness');
 
 export type Readiness = z.infer<typeof ReadinessSchema>;
+
+export const OrganizationSchema = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string().openapi({ example: "alex's organization" }),
+    homeCurrency: z.string().openapi({ example: 'USD' }),
+  })
+  .openapi('Organization');
+
+export const WorkspaceSchema = z
+  .object({
+    organization: OrganizationSchema,
+    member: z.object({
+      id: z.string().uuid(),
+      role: z.enum(['member', 'approver', 'finance_admin', 'owner', 'auditor']),
+    }),
+  })
+  .openapi('Workspace');
+
+export const AiProviderSchema = z.enum(['anthropic', 'openai']).openapi('AiProvider');
+
+export const AiProviderKeyStatusSchema = z
+  .object({
+    provider: AiProviderSchema,
+    configured: z.boolean(),
+    keyHint: z
+      .string()
+      .nullable()
+      .openapi({ example: 'gAAA', description: 'The last four characters of the stored key.' }),
+    authScheme: z.enum(['api_key', 'bearer']).nullable().openapi({
+      description: 'How the provider accepted the key: as an API key header or a bearer token.',
+    }),
+    verifiedAt: z.string().datetime().nullable(),
+    updatedAt: z.string().datetime().nullable(),
+  })
+  .openapi('AiProviderKeyStatus');
+
+export const AiProviderKeyListSchema = z
+  .object({ providers: z.array(AiProviderKeyStatusSchema) })
+  .openapi('AiProviderKeyList');
+
+export const SetAiProviderKeySchema = z
+  .object({
+    apiKey: z.string().trim().min(8).max(1000).openapi({
+      description:
+        'The key from the provider. It is checked with the provider, then stored encrypted and never returned.',
+    }),
+  })
+  .openapi('SetAiProviderKey');
+
+export const AiProviderKeyTestSchema = z
+  .object({
+    valid: z.boolean(),
+    status: AiProviderKeyStatusSchema,
+    reason: z
+      .enum(['rejected', 'unreachable', 'unreadable'])
+      .optional()
+      .openapi({ description: 'Why the key could not be used, when valid is false.' }),
+  })
+  .openapi('AiProviderKeyTest');

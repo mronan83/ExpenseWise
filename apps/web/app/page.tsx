@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { connection } from 'next/server';
 import { flags } from '../lib/flags';
 
@@ -20,8 +21,13 @@ export default async function HomePage() {
     <div className="mx-auto flex min-h-dvh max-w-md flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]">
       <header className="flex items-baseline justify-between py-3">
         <span className="font-mono text-xs tracking-widest text-ink-2 uppercase">ExpenseWise</span>
-        <span className="font-mono text-xs text-ink-3">
-          Phase 0 preview{showBuild ? ` · ${build}` : ''}
+        <span className="flex items-baseline gap-3">
+          <span className="font-mono text-xs text-ink-3">
+            Phase 0 preview{showBuild ? ` · ${build}` : ''}
+          </span>
+          <Link href="/settings/ai" className="text-xs font-semibold text-carbon">
+            Settings
+          </Link>
         </span>
       </header>
 

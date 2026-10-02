@@ -29,6 +29,20 @@
       "when": 1790788597018,
       "tag": "0003_role_timeouts",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790941615537,
+      "tag": "0004_ai_provider_keys",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1790941616575,
+      "tag": "0005_ai_provider_keys_rls_and_membership",
+      "breakpoints": true
     }
   ]
 }

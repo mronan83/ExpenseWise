@@ -1,12 +1,16 @@
 import { DomainError } from '@expensewise/domain';
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { Hono, type Context, type ErrorHandler, type NotFoundHandler } from 'hono';
+import type { ProviderKeyVerifier } from './ai-providers.ts';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
-import { problem } from './problem.ts';
+import { problem, ProblemError } from './problem.ts';
 import { healthRoute } from './routes/health.ts';
 import { meRoute } from './routes/me.ts';
 import { readyRoute } from './routes/ready.ts';
 import type { Readiness } from './schemas.ts';
+import type { SecretBox } from './secret-box.ts';
+import { registerWorkspaceRoutes } from './workspace-routes.ts';
+import type { WorkspaceStore } from './workspace.ts';
 
 export interface ApiOptions {
   /** Deployed commit SHA, or "dev". */
@@ -17,6 +21,13 @@ export interface ApiOptions {
   readonly readiness?: ReadinessProbe;
   /** Sends unexpected errors to error tracking. Broken business rules (422) are not errors. */
   readonly reportError?: (error: unknown) => void;
+  /** Organizations and AI provider keys. Without it, those routes answer 503. */
+  readonly workspace?: WorkspaceStore;
+  /** Encrypts AI provider keys at rest. Without it, saving or testing a key answers 503. */
+  readonly secrets?: SecretBox;
+  /** Checks AI provider keys with a free call to the provider. */
+  readonly verifyProviderKey?: ProviderKeyVerifier;
+  readonly now?: () => Date;
 }
 
 /** Never expected to throw; a probe that does still reads as not ready. */
@@ -53,6 +64,9 @@ const notFound: NotFoundHandler = (c: Context) =>
 
 function errorHandler(reportError?: (error: unknown) => void): ErrorHandler {
   return (error, c) => {
+    if (error instanceof ProblemError) {
+      return problem(c, error.status, error.slug, error.title, error.extra);
+    }
     if (error instanceof DomainError) {
       return problem(c, 422, 'business-rule', 'A business rule was not met', {
         detail: error.message,
@@ -107,6 +121,8 @@ export function createApi(options: ApiOptions) {
   // Protected routes: register the identity check before each handler.
   app.use(meRoute.getRoutingPath(), requireIdentity(options.verifyToken));
   app.openapi(meRoute, (c) => c.json(c.var.identity, 200));
+
+  registerWorkspaceRoutes(app, options);
 
   app.doc31('/v1/openapi.json', OPENAPI_INFO);
 
