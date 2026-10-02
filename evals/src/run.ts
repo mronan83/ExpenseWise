@@ -4,12 +4,13 @@ import Anthropic from '@anthropic-ai/sdk';
 import {
   ClaudeExtractor,
   formatUsd,
-  isModelId,
+  isClaudeModelId,
   MODEL_IDS,
   MODELS,
   PROMPT_VERSION,
   type ExtractionInput,
   type Extractor,
+  type ClaudeModelId,
   type ModelId,
 } from '@expensewise/extraction';
 import { OracleExtractor } from './oracle.ts';
@@ -18,7 +19,7 @@ import { renderReport, type Outcome, type ResultRow } from './report.ts';
 import { scoreDocument } from './score.ts';
 import { SOURCES, type GroundTruth, type Manifest, type Source } from './truth.ts';
 
-const ALIASES: Record<string, ModelId> = {
+const ALIASES: Record<string, ClaudeModelId> = {
   fable: 'claude-fable-5-1',
   opus: 'claude-opus-5-5',
   sonnet: 'claude-sonnet-5-5',
@@ -40,7 +41,7 @@ const { values } = parseArgs({
 
 const models = values.models.split(',').map((m) => {
   const id = ALIASES[m.trim()] ?? m.trim();
-  if (!isModelId(id))
+  if (!isClaudeModelId(id))
     throw new Error(`Unknown model "${m}". Use ${Object.keys(ALIASES).join(', ')}.`);
   return id;
 });
@@ -90,7 +91,7 @@ const truthFor = (input: ExtractionInput & { file?: string }): GroundTruth => {
   return truth;
 };
 const client = dryRun ? null : new Anthropic({ maxRetries: 4 });
-const extractorFor = (model: ModelId): Extractor =>
+const extractorFor = (model: ClaudeModelId): Extractor =>
   client ? new ClaudeExtractor(client, model) : new OracleExtractor(model, truthFor);
 
 const startedAt = new Date().toISOString();

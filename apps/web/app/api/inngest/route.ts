@@ -9,8 +9,8 @@ import {
 } from '@expensewise/workflows';
 import { serve } from 'inngest/next';
 import {
-  anthropicKeyReader,
   appDatabase,
+  providerKeyReader,
   receiptFiles,
   workflowClient,
   workflowsServed,
@@ -38,13 +38,13 @@ function readingPorts(): ReceiptReadingPorts {
   if (reading) return reading;
   const db = appDatabase();
   const files = receiptFiles();
-  const anthropicKey = anthropicKeyReader();
-  if (!db || !files || !anthropicKey) {
+  const providerKey = providerKeyReader();
+  if (!db || !files || !providerKey) {
     throw new Error(
       'Reading receipts needs DATABASE_URL, NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY',
     );
   }
-  reading = receiptReadingPorts({ db, files, anthropicKey });
+  reading = receiptReadingPorts({ db, files, providerKey });
   return reading;
 }
 

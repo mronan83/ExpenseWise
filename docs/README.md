@@ -20,7 +20,7 @@ ExpenseWise is a receipt-first, automation-first expense, receipt, mileage and t
 | [Requirements and backlog](../tools/records/src) | – | Objectives, functional and non-functional requirements traced to features, decisions, code and checks; gaps, open questions and the backlog. Published after each successful release as [the traceability page](https://claude.ai/artifact/8VCWvpqvNVELSKUwQawoyN) and the backlog page |
 | [08 Risk register](08-risk-register.md) | §10 | Risks R1–R10 with likelihood, impact and mitigation |
 | [Runbook: environment setup](runbooks/environment-setup.md) | – | Connecting Vercel, Supabase and GitHub; off-site backups; rebuilding after a restore |
-| [ADR index](adr/README.md) | §9 | Decisions D-01 to D-12 as ADR-0001 to ADR-0012, D-13 (after v0.3) as ADR-0013, D-16 as ADR-0014, D-17 as ADR-0015, D-18 as ADR-0016, D-19 as ADR-0017, D-20 as ADR-0018, D-21 as ADR-0019, and how to add an ADR; D-14 and D-15 are recorded in the roadmap |
+| [ADR index](adr/README.md) | §9 | Decisions D-01 to D-12 as ADR-0001 to ADR-0012, D-13 (after v0.3) as ADR-0013, D-16 as ADR-0014, D-17 as ADR-0015, D-18 as ADR-0016, D-19 as ADR-0017, D-20 as ADR-0018, D-21 as ADR-0019, D-22 as ADR-0020, and how to add an ADR; D-14 and D-15 are recorded in the roadmap |
 
 ## Decision status
 
@@ -42,11 +42,12 @@ ExpenseWise is a receipt-first, automation-first expense, receipt, mileage and t
 | D-14 | Start real use in week 4 (Oct 15) | [Roadmap: Phase 1 plan](07-roadmap.md#phase-1-plan) | Accepted (decided by product owner); its Supabase Pro part is replaced by D-16 |
 | D-15 | Email and password sign-in, no custom email domain in Phase 1 | [Roadmap: Phase 1 plan](07-roadmap.md#phase-1-plan) | Accepted (decided by product owner) |
 | D-16 | Supabase Free plan through Phase 1, with self-managed off-site backups | [ADR-0014](adr/0014-supabase-free-plan.md) | Accepted (Free plan decided by product owner; the controls are recommended, no objection) |
-| D-17 | AI provider keys configured in the app, encrypted, per organization | [ADR-0015](adr/0015-ai-provider-keys-in-app.md) | Accepted (decided by product owner) |
+| D-17 | AI provider keys configured in the app, encrypted, per organization | [ADR-0015](adr/0015-ai-provider-keys-in-app.md) | Accepted (decided by product owner); Amended by [ADR-0020](adr/0020-openai-fallback-reader.md) |
 | D-18 | One person can sign in with several emails; each reaches the same member | [ADR-0016](adr/0016-several-sign-ins-per-person.md) | Accepted (decided by product owner) |
-| D-19 | Every receipt is read by Haiku and Sonnet side by side until the tier is chosen; events dispatch right after commit | [ADR-0017](adr/0017-read-receipts-with-two-models.md) | Accepted (decided by product owner) |
+| D-19 | Every receipt is read by Haiku and Sonnet side by side until the tier is chosen; events dispatch right after commit | [ADR-0017](adr/0017-read-receipts-with-two-models.md) | Accepted (decided by product owner); Amended by [ADR-0020](adr/0020-openai-fallback-reader.md) |
 | D-20 | A release applies migrations, then promotes that commit's build; Vercel no longer publishes on its own | [ADR-0018](adr/0018-release-migrates-then-promotes.md) | Accepted (decided by product owner) |
 | D-21 | Asking for the merge is the production approval; the release runs straight after it | [ADR-0019](adr/0019-merge-is-the-release.md) | Accepted (decided by product owner) |
+| D-22 | When neither Claude model can read a receipt, GPT-5.6 Luna reads it on the organization's OpenAI key; its reading can't make a receipt Ready | [ADR-0020](adr/0020-openai-fallback-reader.md) | Accepted (fallback decided by product owner; model and Ready rule recommended, no objection) |
 
 ## Visual version
 

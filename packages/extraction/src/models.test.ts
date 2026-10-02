@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { costNanoUsd, formatUsd, isModelId, MODEL_IDS, MODELS } from './models.ts';
+import {
+  costNanoUsd,
+  FALLBACK_MODEL,
+  formatUsd,
+  isClaudeModelId,
+  isModelId,
+  MODEL_IDS,
+  MODELS,
+} from './models.ts';
 
 describe('model price table', () => {
   it('covers the four tiers the spike compares, most capable first', () => {
@@ -12,6 +20,14 @@ describe('model price table', () => {
     expect(MODELS['claude-haiku-4-5'].effort).toBeNull();
     expect(isModelId('claude-opus-5-5')).toBe(true);
     expect(isModelId('gpt-4')).toBe(false);
+  });
+
+  it('keeps the fallback reader out of the Claude tiers', () => {
+    expect(MODELS[FALLBACK_MODEL].provider).toBe('openai');
+    expect(MODEL_IDS).not.toContain(FALLBACK_MODEL);
+    expect(isModelId(FALLBACK_MODEL)).toBe(true);
+    expect(isClaudeModelId(FALLBACK_MODEL)).toBe(false);
+    expect(isClaudeModelId('claude-sonnet-5-5')).toBe(true);
   });
 
   it('prices a call exactly in nano-dollars', () => {

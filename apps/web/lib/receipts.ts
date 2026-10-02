@@ -26,9 +26,13 @@ export interface ReceiptSummary {
   total: MoneyField | null;
 }
 
+/** compared: weighed by the tier decision. fallback: read only because Claude couldn't. */
+export type ReadingRole = 'compared' | 'fallback';
+
 export interface Reading {
   model: string;
   label: string;
+  role: ReadingRole;
   state: 'pending' | 'missing' | 'confident' | 'unsure' | 'failed';
   error: string | null;
   latencyMs: number | null;
@@ -58,6 +62,7 @@ export interface ReceiptDetail extends ReceiptSummary {
 export interface ModelStats {
   model: string;
   label: string;
+  role: ReadingRole;
   readings: number;
   confident: number;
   failed: number;
@@ -104,18 +109,23 @@ export function formatSeconds(ms: number | null): string {
   return ms === null ? '–' : `${(ms / 1000).toFixed(1)} s`;
 }
 
+/** The provider behind a reading, by its role: Claude compares, OpenAI is the fallback. */
+export const providerOf = (reading: Pick<Reading, 'role'>) =>
+  reading.role === 'fallback' ? 'OpenAI' : 'Anthropic';
+
 /** What a failed reading's error code means for the person looking at it. */
-export function describeReadingError(error: string | null): string {
+export function describeReadingError(error: string | null, provider = 'Anthropic'): string {
   if (!error) return 'This model could not read the receipt.';
+  const said = error.split(': ').slice(1).join(': ');
   if (error === 'no_key')
-    return 'No Anthropic key is saved. Add one in Settings, then read it again.';
+    return `No ${provider} key is saved. Add one in Settings, then read it again.`;
   if (error === 'unreadable_key')
     return 'The saved key can no longer be decrypted. Save it again in Settings.';
   if (error === 'not_uploaded') return 'The file never arrived. Upload it again.';
-  if (error.startsWith('key_rejected'))
-    return `Anthropic rejected the key. ${error.split(': ').slice(1).join(': ')}`;
-  if (error.startsWith('request_rejected'))
-    return `Anthropic refused the request. ${error.split(': ').slice(1).join(': ')}`;
+  if (error.startsWith('key_rejected')) return `${provider} rejected the key. ${said}`;
+  if (error.startsWith('request_rejected')) return `${provider} refused the request. ${said}`;
+  if (error.startsWith('unavailable'))
+    return `${provider} didn't answer after several tries. Read it again later.`;
   if (error.startsWith('model_')) return 'The model could not read this document.';
   return 'This model could not read the receipt.';
 }

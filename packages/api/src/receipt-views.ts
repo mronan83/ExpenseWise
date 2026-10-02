@@ -2,6 +2,7 @@ import type { ExtractionRunRecord, ReceiptRecord } from '@expensewise/db';
 import { toDecimal, type Money } from '@expensewise/domain';
 import {
   COMPARISON_MODELS,
+  FALLBACK_MODEL,
   MODELS,
   normalizeExtraction,
   readingDifferences,
@@ -39,6 +40,15 @@ export function latestRuns(receiptId: string, runs: readonly ExtractionRunRecord
   return mine.filter((r) => r.requestId === latest);
 }
 
+/**
+ * compared: a model the tier decision weighs. fallback: it read the receipt only because no
+ * compared model could (ADR-0020).
+ */
+export type ReadingRole = 'compared' | 'fallback';
+
+const roleOf = (model: ModelId): ReadingRole =>
+  model === FALLBACK_MODEL ? 'fallback' : 'compared';
+
 export function readingView(
   model: ModelId,
   run: ExtractionRunRecord | undefined,
@@ -48,6 +58,7 @@ export function readingView(
   return {
     model,
     label: MODELS[model].label,
+    role: roleOf(model),
     state: pending ? ('pending' as const) : run ? run.outcome : ('missing' as const),
     error: pending ? null : (run?.error ?? null),
     latencyMs: pending ? null : (run?.latencyMs ?? null),
@@ -75,17 +86,24 @@ export function readingView(
 
 export type ReadingView = ReturnType<typeof readingView>;
 
-/** The readings to show for a receipt: every compared model, pending while it is read. */
+/**
+ * The readings to show for a receipt: every compared model, pending while it is read, then
+ * the fallback model's, only when it was asked to read.
+ */
 export function readingsOf(receipt: ReceiptRecord, runs: readonly ExtractionRunRecord[]) {
   const latest = latestRuns(receipt.id, runs);
   const pending = receipt.status === 'processing';
-  return COMPARISON_MODELS.map((model) =>
-    readingView(
-      model,
-      latest.find((r) => r.model === model),
-      pending,
+  const fallback = latest.find((r) => r.model === FALLBACK_MODEL);
+  return [
+    ...COMPARISON_MODELS.map((model) =>
+      readingView(
+        model,
+        latest.find((r) => r.model === model),
+        pending,
+      ),
     ),
-  );
+    ...(fallback ? [readingView(FALLBACK_MODEL, fallback, pending)] : []),
+  ];
 }
 
 function differencesOf(receipt: ReceiptRecord, runs: readonly ExtractionRunRecord[]): string[] {
@@ -96,9 +114,13 @@ function differencesOf(receipt: ReceiptRecord, runs: readonly ExtractionRunRecor
 }
 
 export function receiptSummary(receipt: ReceiptRecord, runs: readonly ExtractionRunRecord[]) {
-  // The headline comes from the most capable model that read it.
+  // The headline comes from the most capable compared model that read it, else the fallback.
   const readings = readingsOf(receipt, runs);
-  const best = [...readings].reverse().find((r) => r.fields)?.fields ?? null;
+  const compared = readings.filter((r) => r.role === 'compared').reverse();
+  const best =
+    compared.find((r) => r.fields)?.fields ??
+    readings.find((r) => r.role === 'fallback')?.fields ??
+    null;
   return {
     id: receipt.id,
     status: receipt.status,
@@ -128,7 +150,8 @@ export function receiptDetail(
 
 /**
  * How the compared models did on these receipts' latest readings: what the product owner
- * needs to choose a tier (ADR-0006, ADR-0017).
+ * needs to choose a tier (ADR-0006, ADR-0017). The fallback model gets its own row once it
+ * has been asked to read, so its spend shows; it never counts as compared.
  */
 export function comparisonSummary(
   receipts: readonly ReceiptRecord[],
@@ -136,13 +159,20 @@ export function comparisonSummary(
 ) {
   const settled = receipts.filter((r) => r.status !== 'processing');
   const latest = new Map(settled.map((r) => [r.id, latestRuns(r.id, runs)]));
-  const models = COMPARISON_MODELS.map((model) => {
+  const usedFallback = [...latest.values()].some((rs) =>
+    rs.some((r) => r.model === FALLBACK_MODEL),
+  );
+  const shown: ModelId[] = usedFallback
+    ? [...COMPARISON_MODELS, FALLBACK_MODEL]
+    : [...COMPARISON_MODELS];
+  const models = shown.map((model) => {
     const mine = [...latest.values()].flatMap((rs) => rs.filter((r) => r.model === model));
     const read = mine.filter((r) => r.outcome !== 'failed');
     const timed = read.filter((r) => r.latencyMs !== null);
     return {
       model,
       label: MODELS[model].label,
+      role: roleOf(model),
       readings: mine.length,
       confident: mine.filter((r) => r.outcome === 'confident').length,
       failed: mine.length - read.length,

@@ -2,7 +2,7 @@
 
 Each organization stores its own Anthropic and OpenAI keys in ExpenseWise, encrypted and checked with the provider on save, instead of in deployment environment variables.
 
-- **Status:** Accepted (decided by product owner)
+- **Status:** Accepted (decided by product owner); point 7 amended by [ADR-0020](0020-openai-fallback-reader.md)
 - **Date:** 2026-10-02
 - **Deciders:** Product owner; Claude (principal architect)
 - **Decision register:** D-17
@@ -22,7 +22,7 @@ That is also where they belong as the product grows. A key spends money with a p
 4. **Checked on save.** A key is stored only after a free call to the provider (listing models) succeeds. Anthropic issues both API keys (sent as `x-api-key`) and OAuth-style tokens (sent as a bearer token), so both are tried and the working scheme is stored with the key. A **Test** action repeats the check at any time.
 5. **Owner and finance admin only, and audited.** Only those two roles can set, test or remove a key. Each change appends an audit event in the same transaction.
 6. **Sign-in comes forward.** The settings screen needs a signed-in owner, so this change brings email and password sign-in (D-15) forward. The owner's one-person organization is created on first sign-in. A read-only `own_memberships` policy lets the API find the caller's organizations by user id before an organization is chosen.
-7. **OpenAI keys are stored, not yet used.** Extraction stays on Claude (ADR-0006). Using OpenAI needs an OpenAI extractor behind the same `Extractor` interface, and a spike run that compares it on the eval set.
+7. **OpenAI keys are stored, not yet used.** *Amended by [ADR-0020](0020-openai-fallback-reader.md): an OpenAI key now reads a receipt when neither Claude model can.* Extraction stays on Claude (ADR-0006). Using OpenAI needs an OpenAI extractor behind the same `Extractor` interface, and a spike run that compares it on the eval set.
 
 Out of scope until increment 1's multi-factor work: requiring step-up (aal2) for key changes, which ADR-0013 asks of admin actions.
 
