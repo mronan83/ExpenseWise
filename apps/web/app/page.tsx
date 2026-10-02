@@ -54,14 +54,13 @@ export default async function HomePage() {
         {destinations.map((d) =>
           'primary' in d ? (
             <span key={d.label} className="flex justify-center">
-              <span
-                aria-disabled="true"
-                title="Capture arrives in Phase 1"
+              <Link
+                href="/receipts"
                 className="grid size-11 place-items-center rounded-full bg-carbon text-xl text-carbon-ink"
               >
                 <span aria-hidden="true">+</span>
                 <span className="sr-only">{d.label}</span>
-              </span>
+              </Link>
             </span>
           ) : (
             <span

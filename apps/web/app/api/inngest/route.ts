@@ -1,38 +1,59 @@
 import { createDatabase } from '@expensewise/db';
 import {
-  createWorkflowClient,
   outboxRelayFunction,
+  receiptReadingFunction,
+  receiptReadingPorts,
   relayPorts,
+  type ReceiptReadingPorts,
   type RelayPorts,
 } from '@expensewise/workflows';
 import { serve } from 'inngest/next';
+import {
+  anthropicKeyReader,
+  appDatabase,
+  receiptFiles,
+  workflowClient,
+  workflowsServed,
+} from '../../../lib/server';
 
 // Inngest calls this route to run our workflows (ADR-0003). Static segments win over the
 // /api catch-all, so the versioned API never sees these requests.
-const isDev = process.env.INNGEST_DEV === '1';
-const eventKey = process.env.INNGEST_EVENT_KEY;
-const signingKey = process.env.INNGEST_SIGNING_KEY;
 
-const client = createWorkflowClient({
-  eventKey,
-  signingKey,
-  isDev,
-  appVersion: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7),
-});
+// The relay connects as expensewise_relay, which can only claim and mark outbox events. It
+// is registered only with its URL: a sweep that fails every 5 minutes, with retries, would
+// spend most of the free plan's executions on errors.
+const relayUrl = process.env.RELAY_DATABASE_URL;
+let relay: RelayPorts | undefined;
+const relayFunctions = relayUrl
+  ? [
+      outboxRelayFunction(workflowClient, () => {
+        relay ??= relayPorts(createDatabase(relayUrl, { max: 1 }).db, workflowClient);
+        return relay;
+      }),
+    ]
+  : [];
 
-// The relay connects as expensewise_relay, which can only claim and mark outbox events.
-let ports: RelayPorts | undefined;
-function relay(): RelayPorts {
-  const url = process.env.RELAY_DATABASE_URL;
-  if (!url) throw new Error('RELAY_DATABASE_URL is not set');
-  ports ??= relayPorts(createDatabase(url, { max: 1 }).db, client);
-  return ports;
+let reading: ReceiptReadingPorts | undefined;
+function readingPorts(): ReceiptReadingPorts {
+  if (reading) return reading;
+  const db = appDatabase();
+  const files = receiptFiles();
+  const anthropicKey = anthropicKeyReader();
+  if (!db || !files || !anthropicKey) {
+    throw new Error(
+      'Reading receipts needs DATABASE_URL, NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY',
+    );
+  }
+  reading = receiptReadingPorts({ db, files, anthropicKey });
+  return reading;
 }
 
-const handler =
-  isDev || (eventKey && signingKey)
-    ? serve({ client, functions: [outboxRelayFunction(client, relay)] })
-    : undefined;
+const handler = workflowsServed
+  ? serve({
+      client: workflowClient,
+      functions: [...relayFunctions, receiptReadingFunction(workflowClient, readingPorts)],
+    })
+  : undefined;
 
 // Without keys the route says so plainly, rather than failing the build or every request.
 const notConfigured = () =>
@@ -50,5 +71,5 @@ export const GET = handler?.GET ?? notConfigured;
 export const POST = handler?.POST ?? notConfigured;
 export const PUT = handler?.PUT ?? notConfigured;
 
-// A relay run can take several database and network round trips.
+// A reading step calls the model with a 50-second limit.
 export const maxDuration = 60;

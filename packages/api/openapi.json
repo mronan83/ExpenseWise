@@ -388,6 +388,654 @@
         "required": [
           "accessToken"
         ]
+      },
+      "ReceiptUploadTicket": {
+        "type": "object",
+        "properties": {
+          "receiptId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "bucket": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "Uploads one file to this path, once."
+          }
+        },
+        "required": [
+          "receiptId",
+          "bucket",
+          "path",
+          "token"
+        ]
+      },
+      "ReceiptUploadRequest": {
+        "type": "object",
+        "properties": {
+          "contentType": {
+            "type": "string",
+            "enum": [
+              "image/jpeg",
+              "image/png",
+              "image/webp",
+              "image/gif",
+              "application/pdf"
+            ]
+          },
+          "byteSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10485760,
+            "description": "At most 10 MB (ADR-0014)."
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "SHA-256 of the file, lowercase hex."
+          }
+        },
+        "required": [
+          "contentType",
+          "byteSize",
+          "sha256"
+        ]
+      },
+      "ReceiptSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "processing",
+              "extracted",
+              "needs_review",
+              "failed"
+            ],
+            "description": "processing while it is read; extracted when both models read it with confidence and agree; needs_review otherwise; failed when no model could read it."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "camera",
+              "upload",
+              "email",
+              "card",
+              "manual",
+              "mileage"
+            ]
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "byteSize": {
+            "type": "integer"
+          },
+          "uploadedBy": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "merchant": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "total": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "amountMinor": {
+                "type": "integer",
+                "description": "Integer minor units, e.g. cents."
+              },
+              "currency": {
+                "type": "string",
+                "example": "USD"
+              },
+              "decimal": {
+                "type": "string",
+                "example": "6.50",
+                "description": "The same amount, for display."
+              },
+              "confidence": {
+                "type": "string",
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              }
+            },
+            "required": [
+              "amountMinor",
+              "currency",
+              "decimal",
+              "confidence"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "source",
+          "contentType",
+          "byteSize",
+          "uploadedBy",
+          "createdAt",
+          "merchant",
+          "date",
+          "total"
+        ]
+      },
+      "FileReceipt": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The receiptId from the upload ticket."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "camera",
+              "upload"
+            ]
+          },
+          "contentType": {
+            "type": "string",
+            "enum": [
+              "image/jpeg",
+              "image/png",
+              "image/webp",
+              "image/gif",
+              "application/pdf"
+            ]
+          },
+          "byteSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10485760,
+            "description": "At most 10 MB (ADR-0014)."
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "SHA-256 of the file, lowercase hex."
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "contentType",
+          "byteSize",
+          "sha256"
+        ]
+      },
+      "ReceiptList": {
+        "type": "object",
+        "properties": {
+          "receipts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReceiptSummary"
+            }
+          },
+          "comparison": {
+            "type": "object",
+            "properties": {
+              "receipts": {
+                "type": "integer"
+              },
+              "compared": {
+                "type": "integer",
+                "description": "Receipts both models read."
+              },
+              "agreed": {
+                "type": "integer",
+                "description": "Of those, how many they read alike."
+              },
+              "models": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "model": {
+                      "type": "string"
+                    },
+                    "label": {
+                      "type": "string"
+                    },
+                    "readings": {
+                      "type": "integer"
+                    },
+                    "confident": {
+                      "type": "integer"
+                    },
+                    "failed": {
+                      "type": "integer"
+                    },
+                    "averageLatencyMs": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "costMicroUsd": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "model",
+                    "label",
+                    "readings",
+                    "confident",
+                    "failed",
+                    "averageLatencyMs",
+                    "costMicroUsd"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "receipts",
+              "compared",
+              "agreed",
+              "models"
+            ]
+          },
+          "readingAvailable": {
+            "type": "boolean",
+            "description": "Whether this server can hand receipts to the workflow runner for reading."
+          }
+        },
+        "required": [
+          "receipts",
+          "comparison",
+          "readingAvailable"
+        ]
+      },
+      "ReceiptDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ReceiptSummary"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "imageUrl": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "A short-lived link to the original file (5 minutes)."
+              },
+              "readings": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ReceiptReading"
+                }
+              },
+              "differences": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Filing fields the two models read differently."
+              }
+            },
+            "required": [
+              "imageUrl",
+              "readings",
+              "differences"
+            ]
+          }
+        ]
+      },
+      "ReceiptReading": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string",
+            "example": "claude-haiku-4-5"
+          },
+          "label": {
+            "type": "string",
+            "example": "Haiku 4.5"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "missing",
+              "confident",
+              "unsure",
+              "failed"
+            ]
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "latencyMs": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "costMicroUsd": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "inputTokens": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "outputTokens": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "fields": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "documentType": {
+                "type": "string"
+              },
+              "merchant": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "value": {
+                    "type": "string"
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  }
+                },
+                "required": [
+                  "value",
+                  "confidence"
+                ]
+              },
+              "date": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "value": {
+                    "type": "string"
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  }
+                },
+                "required": [
+                  "value",
+                  "confidence"
+                ]
+              },
+              "currency": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "value": {
+                    "type": "string"
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  }
+                },
+                "required": [
+                  "value",
+                  "confidence"
+                ]
+              },
+              "total": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "amountMinor": {
+                    "type": "integer",
+                    "description": "Integer minor units, e.g. cents."
+                  },
+                  "currency": {
+                    "type": "string",
+                    "example": "USD"
+                  },
+                  "decimal": {
+                    "type": "string",
+                    "example": "6.50",
+                    "description": "The same amount, for display."
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  }
+                },
+                "required": [
+                  "amountMinor",
+                  "currency",
+                  "decimal",
+                  "confidence"
+                ]
+              },
+              "subtotal": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "amountMinor": {
+                    "type": "integer",
+                    "description": "Integer minor units, e.g. cents."
+                  },
+                  "currency": {
+                    "type": "string",
+                    "example": "USD"
+                  },
+                  "decimal": {
+                    "type": "string",
+                    "example": "6.50",
+                    "description": "The same amount, for display."
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  }
+                },
+                "required": [
+                  "amountMinor",
+                  "currency",
+                  "decimal",
+                  "confidence"
+                ]
+              },
+              "taxTotal": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "amountMinor": {
+                    "type": "integer",
+                    "description": "Integer minor units, e.g. cents."
+                  },
+                  "currency": {
+                    "type": "string",
+                    "example": "USD"
+                  },
+                  "decimal": {
+                    "type": "string",
+                    "example": "6.50",
+                    "description": "The same amount, for display."
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  }
+                },
+                "required": [
+                  "amountMinor",
+                  "currency",
+                  "decimal",
+                  "confidence"
+                ]
+              },
+              "tip": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "amountMinor": {
+                    "type": "integer",
+                    "description": "Integer minor units, e.g. cents."
+                  },
+                  "currency": {
+                    "type": "string",
+                    "example": "USD"
+                  },
+                  "decimal": {
+                    "type": "string",
+                    "example": "6.50",
+                    "description": "The same amount, for display."
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  }
+                },
+                "required": [
+                  "amountMinor",
+                  "currency",
+                  "decimal",
+                  "confidence"
+                ]
+              },
+              "cardLastFour": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "value": {
+                    "type": "string"
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  }
+                },
+                "required": [
+                  "value",
+                  "confidence"
+                ]
+              }
+            },
+            "required": [
+              "documentType",
+              "merchant",
+              "date",
+              "currency",
+              "total",
+              "subtotal",
+              "taxTotal",
+              "tip",
+              "cardLastFour"
+            ]
+          },
+          "problems": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "model",
+          "label",
+          "state",
+          "error",
+          "latencyMs",
+          "costMicroUsd",
+          "inputTokens",
+          "outputTokens",
+          "fields",
+          "problems"
+        ]
       }
     },
     "parameters": {}
@@ -1078,6 +1726,374 @@
           },
           "503": {
             "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/receipts/uploads": {
+      "post": {
+        "tags": [
+          "Receipts"
+        ],
+        "summary": "Get a one-time upload for a receipt file",
+        "description": "Step 1 of capture (architecture 6.4). Returns a path and token the client uploads the file to directly, so image bytes never pass through the API. A file already filed in this organization is refused before it is uploaded again.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReceiptUploadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Upload the file to this path with this token, then file it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptUploadTicket"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The same file is already filed; receiptId names it.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in, the database or file storage is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/receipts": {
+      "post": {
+        "tags": [
+          "Receipts"
+        ],
+        "summary": "File an uploaded receipt",
+        "description": "Step 3 of capture. Records the receipt and the event that has it read, in one transaction, then hands the event to the workflow runner. Safe to retry with the same id.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FileReceipt"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "This receipt was already filed (a retried request).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptSummary"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Filed; it is being read.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptSummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The same file is already filed as another receipt; receiptId names it.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in, the database or file storage is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Receipts"
+        ],
+        "summary": "Recent receipts, and how the compared models did on them",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The 100 most recent receipts, newest first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in, the database or file storage is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/receipts/{receiptId}": {
+      "get": {
+        "tags": [
+          "Receipts"
+        ],
+        "summary": "One receipt, with each model’s reading side by side",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "receiptId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The receipt.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such receipt in this organization.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in, the database or file storage is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/receipts/{receiptId}/read": {
+      "post": {
+        "tags": [
+          "Receipts"
+        ],
+        "summary": "Read a receipt again",
+        "description": "For example after adding an AI provider key. Each model reads it afresh.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "receiptId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "It is being read again.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptSummary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such receipt in this organization.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in, the database or file storage is not configured on this server.",
             "content": {
               "application/problem+json": {
                 "schema": {

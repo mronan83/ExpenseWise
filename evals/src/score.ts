@@ -1,6 +1,8 @@
 import { assertCurrency, fromDecimal } from '@expensewise/domain';
 import {
+  isAutoReady,
   normalizeExtraction,
+  sameMerchant,
   type ConfidenceLevel,
   type ExtractionRun,
   type NormalizedExtraction,
@@ -20,9 +22,6 @@ export const FIELDS = [
 ] as const;
 export type FieldName = (typeof FIELDS)[number];
 
-/** Fields that must be read with high confidence for an expense to skip review. */
-const READY_FIELDS = ['merchant', 'date', 'currency', 'total'] as const;
-
 export interface FieldScore {
   readonly field: FieldName;
   readonly correct: boolean;
@@ -39,38 +38,7 @@ export interface DocumentScore {
   readonly silentError: boolean;
 }
 
-/** Store and brand names match loosely: case, punctuation and "&" vs "and" don't count. */
-export function sameMerchant(expected: string, actual: string): boolean {
-  const norm = (s: string) =>
-    s
-      .toLowerCase()
-      .replace(/&/g, ' and ')
-      .replace(/[^a-z0-9]+/g, ' ')
-      .replace(/\b(the|inc|llc|ltd)\b/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-  const a = norm(expected);
-  const b = norm(actual);
-  if (!a || !b) return false;
-  if (a === b || a.includes(b) || b.includes(a)) return true;
-  return levenshtein(a, b) * 100 <= Math.max(a.length, b.length) * 15;
-}
-
-function levenshtein(a: string, b: string): number {
-  let previous = Array.from({ length: b.length + 1 }, (_, j) => j);
-  for (let i = 1; i <= a.length; i++) {
-    const current = [i];
-    for (let j = 1; j <= b.length; j++) {
-      current[j] = Math.min(
-        (previous[j] ?? 0) + 1,
-        (current[j - 1] ?? 0) + 1,
-        (previous[j - 1] ?? 0) + (a[i - 1] === b[j - 1] ? 0 : 1),
-      );
-    }
-    previous = current;
-  }
-  return previous[b.length] ?? 0;
-}
+export { sameMerchant };
 
 type Run = Pick<ExtractionRun, 'outcome' | 'extraction'>;
 
@@ -121,8 +89,7 @@ export function scoreDocument(truth: GroundTruth, run: Run): DocumentScore {
     .filter((c): c is [FieldName, boolean, ConfidenceLevel | null] => c[1] !== undefined)
     .map(([field, correct, confidence]) => ({ field, correct, confidence }));
   const allCorrect = fields.every((f) => f.correct);
-  const autoReady =
-    n !== null && n.problems.length === 0 && READY_FIELDS.every((f) => n[f]?.confidence === 'high');
+  const autoReady = n !== null && isAutoReady(n);
   return { fields, allCorrect, autoReady, silentError: autoReady && !allCorrect };
 }
 

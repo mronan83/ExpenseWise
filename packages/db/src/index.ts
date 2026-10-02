@@ -6,5 +6,6 @@ export * from './members.ts';
 export * from './role-passwords.ts';
 export * from './outbox.ts';
 export * from './readiness.ts';
+export * from './receipts.ts';
 export * from './schema.ts';
 export * from './sign-ins.ts';
