@@ -2,12 +2,19 @@ import {
   AI_PROVIDERS,
   type AiProvider,
   type Membership,
+  type SignIn,
   type StoredProviderKey,
 } from '@expensewise/db';
 import type { MemberRole } from '@expensewise/domain';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import type { ProviderKeyVerifier } from './ai-providers.ts';
-import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
+import {
+  AuthError,
+  requireIdentity,
+  type AuthVariables,
+  type Identity,
+  type TokenVerifier,
+} from './auth.ts';
 import { ProblemError } from './problem.ts';
 import {
   deleteAiKeyRoute,
@@ -16,6 +23,7 @@ import {
   setAiKeyRoute,
   testAiKeyRoute,
 } from './routes/workspace.ts';
+import { linkSignInRoute, listSignInsRoute, unlinkSignInRoute } from './routes/sign-ins.ts';
 import { keyHint, SecretBoxError, type SecretBox } from './secret-box.ts';
 import type { WorkspaceStore } from './workspace.ts';
 
@@ -43,6 +51,16 @@ export function keyStatus(provider: AiProvider, stored: StoredProviderKey | unde
   };
 }
 
+/** How recent the other sign-in's token must be to link it: it should come from signing in now. */
+const LINK_TOKEN_MAX_AGE_MS = 10 * 60 * 1000;
+
+const signInView = (signIn: SignIn, caller: Identity) => ({
+  id: signIn.id,
+  email: signIn.email,
+  linkedAt: signIn.createdAt.toISOString(),
+  current: signIn.userId === caller.userId,
+});
+
 /** Binds a ciphertext to its organization and provider. */
 const sealContext = (orgId: string, provider: AiProvider) => `${orgId}:${provider}`;
 
@@ -53,9 +71,16 @@ export function registerWorkspaceRoutes(
   const now = options.now ?? (() => new Date());
   const auth = requireIdentity(options.verifyToken);
   const paths = new Set(
-    [ensureWorkspaceRoute, listAiKeysRoute, setAiKeyRoute, testAiKeyRoute, deleteAiKeyRoute].map(
-      (r) => r.getRoutingPath(),
-    ),
+    [
+      ensureWorkspaceRoute,
+      listAiKeysRoute,
+      setAiKeyRoute,
+      testAiKeyRoute,
+      deleteAiKeyRoute,
+      listSignInsRoute,
+      linkSignInRoute,
+      unlinkSignInRoute,
+    ].map((r) => r.getRoutingPath()),
   );
   for (const path of paths) app.use(path, auth);
 
@@ -90,8 +115,8 @@ export function registerWorkspaceRoutes(
       code: 'not_configured',
     });
 
-  /** The caller's membership, when they may manage keys. */
-  const manager = async (userId: string): Promise<Membership> => {
+  /** The caller's membership. */
+  const member = async (userId: string): Promise<Membership> => {
     const membership = await store().findMembership(userId);
     if (!membership) {
       throw new ProblemError(
@@ -104,6 +129,12 @@ export function registerWorkspaceRoutes(
         },
       );
     }
+    return membership;
+  };
+
+  /** The caller's membership, when they may manage keys. */
+  const manager = async (userId: string): Promise<Membership> => {
+    const membership = await member(userId);
     if (!MANAGER_ROLES.has(membership.role)) {
       throw new ProblemError(403, 'forbidden', 'Only an owner or finance admin can do this', {
         code: 'forbidden_role',
@@ -230,6 +261,109 @@ export function registerWorkspaceRoutes(
     const { provider } = c.req.valid('param');
     const removed = await store().deleteKey(who.orgId, provider, c.var.identity.userId);
     if (!removed) throw notStored(provider);
+    return c.body(null, 204);
+  });
+
+  app.openapi(listSignInsRoute, async (c) => {
+    const caller = c.var.identity;
+    const who = await member(caller.userId);
+    const signIns = await store().listSignIns(who);
+    return c.json({ signIns: signIns.map((s) => signInView(s, caller)) }, 200);
+  });
+
+  app.openapi(linkSignInRoute, async (c) => {
+    const caller = c.var.identity;
+    const who = await member(caller.userId);
+    const { accessToken } = c.req.valid('json');
+    const invalid = (code: string, title: string, detail: string) =>
+      new ProblemError(422, code.replaceAll('_', '-'), title, { code, detail });
+
+    let other: Identity;
+    try {
+      // requireIdentity ran, so a verifier exists.
+      other = await options.verifyToken!(accessToken);
+    } catch (error) {
+      if (!(error instanceof AuthError)) throw error;
+      throw invalid(
+        'invalid_sign_in',
+        'That sign-in could not be confirmed',
+        'Sign in with the other email again, then link it.',
+      );
+    }
+    if (other.userId === caller.userId) {
+      throw invalid(
+        'same_sign_in',
+        'That is the sign-in you are using',
+        'Sign in with your other email address.',
+      );
+    }
+    if (!other.issuedAt || now().getTime() - other.issuedAt.getTime() > LINK_TOKEN_MAX_AGE_MS) {
+      throw invalid(
+        'stale_sign_in',
+        'That sign-in is too old to link',
+        'Sign in with the other email again, then link it.',
+      );
+    }
+    if (!other.email) {
+      throw invalid(
+        'email_required',
+        'That account has no email address',
+        'Only email sign-ins can be linked.',
+      );
+    }
+
+    const result = await store().linkSignIn(
+      who,
+      { userId: other.userId, email: other.email },
+      caller.userId,
+    );
+    switch (result.status) {
+      case 'linked':
+        return c.json(signInView(result.signIn, caller), 201);
+      case 'already_linked':
+        return c.json(signInView(result.signIn, caller), 200);
+      case 'other_member':
+        throw new ProblemError(409, 'sign-in-in-use', 'That sign-in belongs to someone else here', {
+          code: 'sign_in_in_use',
+        });
+      case 'has_own_organization':
+        throw new ProblemError(
+          409,
+          'sign-in-has-organization',
+          'That sign-in already has its own receipts or settings',
+          {
+            code: 'sign_in_has_organization',
+            detail:
+              'Nothing was changed. Sign in with that email instead and link this one to it, ' +
+              'so its work stays where it is.',
+          },
+        );
+    }
+  });
+
+  app.openapi(unlinkSignInRoute, async (c) => {
+    const caller = c.var.identity;
+    const who = await member(caller.userId);
+    const { signInId } = c.req.valid('param');
+    const keys = store();
+    const target = (await keys.listSignIns(who)).find((s) => s.id === signInId);
+    const notFound = () =>
+      new ProblemError(404, 'not-found', 'You have no such sign-in', { code: 'not_found' });
+    if (!target) throw notFound();
+    if (target.userId === caller.userId) {
+      throw new ProblemError(
+        409,
+        'current-sign-in',
+        'You cannot remove the sign-in you are using',
+        {
+          code: 'current_sign_in',
+          detail: 'Sign in with another of your emails to remove this one.',
+        },
+      );
+    }
+    const outcome = await keys.unlinkSignIn(who, signInId, caller.userId);
+    if (outcome === 'not_found') throw notFound();
+    // 'last' cannot happen here: the caller's own sign-in remains.
     return c.body(null, 204);
   });
 }

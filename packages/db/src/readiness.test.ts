@@ -12,6 +12,7 @@ import {
 const tables = (overrides: Partial<Record<string, Partial<TableRow>>> = {}): TableRow[] =>
   [
     'ai_provider_keys',
+    'member_sign_ins',
     'approval_steps',
     'audit_events',
     'categories',
@@ -58,7 +59,7 @@ describe('evaluateTenantIsolation', () => {
   it('passes when every tenant table forces RLS, outbox aside', () => {
     expect(evaluateTenantIsolation(tables())).toEqual({
       status: 'pass',
-      detail: 'row-level security enforced on 13 tenant tables',
+      detail: 'row-level security enforced on 14 tenant tables',
     });
   });
 

@@ -90,6 +90,8 @@ Phase 1 signs in with email and password plus TOTP, and has no custom email doma
 
    No environment variable is needed. Keys are encrypted with a key derived from `SUPABASE_SECRET_KEY`, unless `APP_ENCRYPTION_KEY` is set. Rotating that secret makes stored keys unreadable: **Test** says so, and you save them again.
 
+5. **If you sign in with more than one email** ([ADR-0016](../adr/0016-several-sign-ins-per-person.md)), create each one as in step 2. Then sign in with the one that holds your keys, open **Settings → Sign-ins**, and under **Add another email you use** enter the other email and its password. Both now open the same receipts as the same person. Link in that direction: an email that already has its own receipts or keys can't be moved, and the screen says so.
+
 Supabase's built-in email covers password resets and the owner's own notifications. It is rate-limited and delivers only to members of the Supabase team. Before a second person is invited, add a sender domain or create their account the same way as step 2.
 
 ## 5. Off-site backups (Backblaze B2)

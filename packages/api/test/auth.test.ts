@@ -62,6 +62,13 @@ describe('GET /v1/me', () => {
     });
   });
 
+  it('tells callers when the token was issued, without returning it from /v1/me', async () => {
+    const before = Math.floor(Date.now() / 1000) * 1000;
+    const identity = await verifyToken(await sign());
+    expect(identity.issuedAt?.getTime()).toBeGreaterThanOrEqual(before);
+    expect(identity.issuedAt!.getTime()).toBeLessThanOrEqual(Date.now());
+  });
+
   it('asks for a token when none is sent', async () => {
     const res = await call();
     expect(res.status).toBe(401);

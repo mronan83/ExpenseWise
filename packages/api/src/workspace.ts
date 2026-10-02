@@ -5,14 +5,19 @@ import {
   ensureOwnerOrganization,
   findMemberships,
   getProviderKey,
+  linkSignIn,
   listProviderKeys,
+  listSignIns,
   markProviderKeyVerified,
   organizations,
   saveProviderKey,
+  unlinkSignIn,
   withOrg,
   type AiProvider,
   type Database,
+  type LinkResult,
   type Membership,
+  type SignIn,
   type ProviderKeyWrite,
   type StoredProviderKey,
 } from '@expensewise/db';
@@ -38,6 +43,17 @@ export interface WorkspaceStore {
   saveKey(orgId: string, key: ProviderKeyWrite, actorUserId: string): Promise<StoredProviderKey>;
   markVerified(orgId: string, provider: AiProvider, at: Date, actorUserId: string): Promise<void>;
   deleteKey(orgId: string, provider: AiProvider, actorUserId: string): Promise<boolean>;
+  listSignIns(member: Membership): Promise<SignIn[]>;
+  linkSignIn(
+    member: Membership,
+    other: { userId: string; email: string },
+    actorUserId: string,
+  ): Promise<LinkResult>;
+  unlinkSignIn(
+    member: Membership,
+    signInId: string,
+    actorUserId: string,
+  ): Promise<'removed' | 'not_found' | 'last'>;
 }
 
 const keyEntity = (provider: AiProvider) => ({ entityType: 'ai_provider_key', entityId: provider });
@@ -117,6 +133,18 @@ export function dbWorkspaceStore(db: Database): WorkspaceStore {
         }
         return removed;
       });
+    },
+    async listSignIns(member) {
+      await safe();
+      return withOrg(db, member.orgId, (tx) => listSignIns(tx, member.memberId));
+    },
+    async linkSignIn(member, other, actorUserId) {
+      await safe();
+      return linkSignIn(db, member, other, actorUserId);
+    },
+    async unlinkSignIn(member, signInId, actorUserId) {
+      await safe();
+      return unlinkSignIn(db, member, signInId, actorUserId);
     },
   };
 }

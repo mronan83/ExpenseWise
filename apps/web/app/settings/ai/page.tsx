@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, ApiProblem } from '../../../lib/api';
 import { formText } from '../../../lib/form';
 import { supabase } from '../../../lib/supabase';
+import { SettingsNav } from '../nav';
 
 type Provider = 'anthropic' | 'openai';
 
@@ -92,6 +93,7 @@ export default function AiSettingsPage() {
         ) : null}
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
+        <SettingsNav current="/settings/ai" />
         <h1 className="text-2xl font-bold">AI providers</h1>
         <p className="text-sm text-ink-2">
           Receipts are read with your own provider keys. Each key is checked with the provider when

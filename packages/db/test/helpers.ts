@@ -1,7 +1,7 @@
 import { newId } from '@expensewise/domain';
 import { expect, inject } from 'vitest';
 import { createDatabase, withOrg, type Database } from '../src/client.ts';
-import { members, organizations } from '../src/schema.ts';
+import { members, memberSignIns, organizations } from '../src/schema.ts';
 
 export function connectAs(role: 'owner' | 'app' | 'relay') {
   const urls = { owner: inject('ownerUrl'), app: inject('appUrl'), relay: inject('relayUrl') };
@@ -11,18 +11,21 @@ export function connectAs(role: 'owner' | 'app' | 'relay') {
 export async function seedOrg(db: Database, name: string) {
   const orgId = newId();
   const memberId = newId();
+  const userId = `user_${memberId}`;
+  const email = `${name}@example.com`;
   await withOrg(db, orgId, async (tx) => {
     await tx.insert(organizations).values({ id: orgId, name, homeCurrency: 'USD' });
     await tx.insert(members).values({
       id: memberId,
       orgId,
-      userId: `user_${memberId}`,
-      email: `${name}@example.com`,
+      userId,
+      email,
       displayName: name,
       role: 'owner',
     });
+    await tx.insert(memberSignIns).values({ orgId, memberId, userId, email });
   });
-  return { orgId, memberId };
+  return { orgId, memberId, userId };
 }
 
 /** Drizzle wraps driver errors; check the whole cause chain for the Postgres message. */

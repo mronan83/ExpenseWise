@@ -1,8 +1,14 @@
-import type { AiProvider, Membership, StoredProviderKey } from '@expensewise/db';
+import type {
+  AiProvider,
+  LinkResult,
+  Membership,
+  SignIn,
+  StoredProviderKey,
+} from '@expensewise/db';
 import { describe, expect, it } from 'vitest';
 import type { ProviderKeyVerifier, ProviderVerdict } from '../src/ai-providers.ts';
 import { createApi } from '../src/app.ts';
-import type { Identity } from '../src/auth.ts';
+import { AuthError, type Identity } from '../src/auth.ts';
 import { createSecretBox } from '../src/secret-box.ts';
 import type { WorkspaceStore } from '../src/workspace.ts';
 
@@ -10,11 +16,53 @@ const ORG = '0192f7a0-0000-7000-8000-0000000000a1';
 const MEMBER = '0192f7a0-0000-7000-8000-0000000000b1';
 const NOW = new Date('2026-10-02T12:00:00.000Z');
 
+const OTHER_ORG = '0192f7a0-0000-7000-8000-0000000000a2';
+const SIGN_IN = '0192f7a0-0000-7000-8000-0000000000c1';
+
 const identities: Record<string, Identity> = {
-  owner: { userId: 'u-owner', email: 'owner@example.com', assuranceLevel: 'aal1', sessionId: 's' },
-  member: { userId: 'u-member', email: 'm@example.com', assuranceLevel: 'aal1', sessionId: 's' },
-  stranger: { userId: 'u-new', email: 'new@example.com', assuranceLevel: 'aal1', sessionId: 's' },
-  noemail: { userId: 'u-x', email: null, assuranceLevel: 'aal1', sessionId: 's' },
+  owner: {
+    userId: 'u-owner',
+    email: 'owner@example.com',
+    assuranceLevel: 'aal1',
+    sessionId: 's',
+    issuedAt: NOW,
+  },
+  member: {
+    userId: 'u-member',
+    email: 'm@example.com',
+    assuranceLevel: 'aal1',
+    sessionId: 's',
+    issuedAt: NOW,
+  },
+  stranger: {
+    userId: 'u-new',
+    email: 'new@example.com',
+    assuranceLevel: 'aal1',
+    sessionId: 's',
+    issuedAt: NOW,
+  },
+  noemail: { userId: 'u-x', email: null, assuranceLevel: 'aal1', sessionId: 's', issuedAt: NOW },
+  work: {
+    userId: 'u-work',
+    email: 'o@work.example',
+    assuranceLevel: 'aal1',
+    sessionId: 's',
+    issuedAt: NOW,
+  },
+  stale: {
+    userId: 'u-stale',
+    email: 'old@example.com',
+    assuranceLevel: 'aal1',
+    sessionId: 's',
+    issuedAt: new Date(NOW.getTime() - 11 * 60 * 1000),
+  },
+  busy: {
+    userId: 'u-busy',
+    email: 'busy@example.com',
+    assuranceLevel: 'aal1',
+    sessionId: 's',
+    issuedAt: NOW,
+  },
 };
 
 /** An in-memory store with one organization: an owner and a plain member. */
@@ -25,6 +73,17 @@ function fakeStore() {
   };
   const keys = new Map<AiProvider, StoredProviderKey>();
   const audit: string[] = [];
+  const signIns: (SignIn & { memberId: string })[] = [
+    {
+      id: SIGN_IN,
+      userId: 'u-owner',
+      email: 'owner@example.com',
+      createdAt: NOW,
+      memberId: MEMBER,
+    },
+  ];
+  // u-busy has an organization of its own with work in it.
+  memberships['u-busy'] = { orgId: OTHER_ORG, memberId: OTHER_ORG, role: 'owner' };
   const store: WorkspaceStore = {
     ensureOrganization: ({ userId }) => {
       const existing = memberships[userId];
@@ -56,8 +115,40 @@ function fakeStore() {
       if (had) audit.push(`removed:${provider}`);
       return Promise.resolve(had);
     },
+    listSignIns: (member) =>
+      Promise.resolve(
+        signIns.filter((s) => s.memberId === member.memberId).map(({ memberId: _m, ...s }) => s),
+      ),
+    linkSignIn: (member, other): Promise<LinkResult> => {
+      const existing = signIns.find((s) => s.userId === other.userId);
+      if (existing) {
+        const { memberId: _m, ...signIn } = existing;
+        return Promise.resolve({ status: 'already_linked', signIn });
+      }
+      if (memberships[other.userId]?.orgId === OTHER_ORG) {
+        return Promise.resolve({ status: 'has_own_organization' });
+      }
+      if (memberships[other.userId]) return Promise.resolve({ status: 'other_member' });
+      const signIn = {
+        id: `${SIGN_IN.slice(0, -1)}${signIns.length + 1}`,
+        ...other,
+        createdAt: NOW,
+      };
+      signIns.push({ ...signIn, memberId: member.memberId });
+      memberships[other.userId] = member;
+      audit.push(`linked:${other.email}`);
+      return Promise.resolve({ status: 'linked', signIn });
+    },
+    unlinkSignIn: (member, signInId) => {
+      const i = signIns.findIndex((s) => s.id === signInId && s.memberId === member.memberId);
+      if (i === -1) return Promise.resolve('not_found' as const);
+      const [gone] = signIns.splice(i, 1);
+      delete memberships[gone!.userId];
+      audit.push(`unlinked:${gone!.email}`);
+      return Promise.resolve('removed' as const);
+    },
   };
-  return { store, keys, audit };
+  return { store, keys, audit, signIns };
 }
 
 function setup(verdict: ProviderVerdict = { ok: true, authScheme: 'api_key' }) {
@@ -70,7 +161,10 @@ function setup(verdict: ProviderVerdict = { ok: true, authScheme: 'api_key' }) {
   const secrets = createSecretBox('test-encryption-secret-123456');
   const api = createApi({
     version: 't',
-    verifyToken: (token) => Promise.resolve(identities[token]!),
+    verifyToken: (token) => {
+      const who = identities[token.split('.')[0]!];
+      return who ? Promise.resolve(who) : Promise.reject(new AuthError('invalid_token', 'no'));
+    },
     workspace: fake.store,
     secrets,
     verifyProviderKey: verify,
@@ -289,5 +383,88 @@ describe('AI provider keys', () => {
     });
     expect(res2.status).toBe(503);
     expect(await res2.json()).toMatchObject({ code: 'encryption_not_configured' });
+  });
+});
+
+/** An access token for the body: long enough for the schema, and names its identity. */
+const token = (who: string) => `${who}.${'x'.repeat(24)}`;
+
+describe('sign-ins', () => {
+  it('lists the sign-ins that reach the caller, marking the current one', async () => {
+    const { call } = setup();
+    const res = await call('GET', '/v1/me/sign-ins', 'owner');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      signIns: [
+        { id: SIGN_IN, email: 'owner@example.com', linkedAt: NOW.toISOString(), current: true },
+      ],
+    });
+  });
+
+  it('links a second sign-in with proof of both, once', async () => {
+    const { call, audit } = setup();
+    const res = await call('POST', '/v1/me/sign-ins', 'owner', { accessToken: token('work') });
+    expect(res.status).toBe(201);
+    expect(await res.json()).toMatchObject({ email: 'o@work.example', current: false });
+    const again = await call('POST', '/v1/me/sign-ins', 'owner', { accessToken: token('work') });
+    expect(again.status).toBe(200);
+    expect(audit).toEqual(['linked:o@work.example']);
+
+    // The new sign-in now reaches the same person, and sees itself as current.
+    const list = await call('GET', '/v1/me/sign-ins', 'work');
+    const body = (await list.json()) as { signIns: { email: string; current: boolean }[] };
+    expect(body.signIns.map((s) => [s.email, s.current])).toEqual([
+      ['owner@example.com', false],
+      ['o@work.example', true],
+    ]);
+  });
+
+  it.each([
+    ['an invalid token', token('nobody'), 'invalid_sign_in'],
+    ['the caller’s own token', token('owner'), 'same_sign_in'],
+    ['a token from an old sign-in', token('stale'), 'stale_sign_in'],
+    ['an account without email', token('noemail'), 'email_required'],
+  ])('refuses %s', async (_label, accessToken, code) => {
+    const { call, audit } = setup();
+    const res = await call('POST', '/v1/me/sign-ins', 'owner', { accessToken });
+    expect(res.status).toBe(422);
+    expect(await res.json()).toMatchObject({ code });
+    expect(audit).toEqual([]);
+  });
+
+  it('refuses a sign-in that has its own work, or belongs to someone else', async () => {
+    const { call } = setup();
+    const busy = await call('POST', '/v1/me/sign-ins', 'owner', { accessToken: token('busy') });
+    expect(busy.status).toBe(409);
+    expect(await busy.json()).toMatchObject({ code: 'sign_in_has_organization' });
+    const taken = await call('POST', '/v1/me/sign-ins', 'owner', {
+      accessToken: token('member'),
+    });
+    expect(taken.status).toBe(409);
+    expect(await taken.json()).toMatchObject({ code: 'sign_in_in_use' });
+  });
+
+  it('needs an organization first', async () => {
+    const { call } = setup();
+    const res = await call('GET', '/v1/me/sign-ins', 'stranger');
+    expect(res.status).toBe(403);
+    expect(await res.json()).toMatchObject({ code: 'no_organization' });
+  });
+
+  it('removes another sign-in, but never the one making the request', async () => {
+    const { call, audit } = setup();
+    const linked = await call('POST', '/v1/me/sign-ins', 'owner', {
+      accessToken: token('work'),
+    });
+    const { id } = (await linked.json()) as { id: string };
+
+    const self = await call('DELETE', `/v1/me/sign-ins/${SIGN_IN}`, 'owner');
+    expect(self.status).toBe(409);
+    expect(await self.json()).toMatchObject({ code: 'current_sign_in' });
+
+    expect((await call('DELETE', `/v1/me/sign-ins/${id}`, 'owner')).status).toBe(204);
+    expect((await call('DELETE', `/v1/me/sign-ins/${id}`, 'owner')).status).toBe(404);
+    expect(audit).toEqual(['linked:o@work.example', 'unlinked:o@work.example']);
+    expect((await call('GET', '/v1/me/sign-ins', 'work')).status).toBe(403);
   });
 });

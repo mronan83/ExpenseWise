@@ -120,7 +120,10 @@ export function createApi(options: ApiOptions) {
 
   // Protected routes: register the identity check before each handler.
   app.use(meRoute.getRoutingPath(), requireIdentity(options.verifyToken));
-  app.openapi(meRoute, (c) => c.json(c.var.identity, 200));
+  app.openapi(meRoute, (c) => {
+    const { userId, email, assuranceLevel, sessionId } = c.var.identity;
+    return c.json({ userId, email, assuranceLevel, sessionId }, 200);
+  });
 
   registerWorkspaceRoutes(app, options);
 
