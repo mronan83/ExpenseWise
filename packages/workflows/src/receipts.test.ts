@@ -1,10 +1,17 @@
 import { createHash } from 'node:crypto';
 import type { ExtractionRunRecord, NewExtractionRun } from '@expensewise/db';
-import type { ExtractionRun, Extractor, ModelId, ReceiptExtraction } from '@expensewise/extraction';
-import { InngestTestEngine } from '@inngest/test';
+import {
+  ProviderHttpError,
+  type ExtractionRun,
+  type Extractor,
+  type ModelId,
+  type ReceiptExtraction,
+} from '@expensewise/extraction';
+import { InngestTestEngine, mockCtx } from '@inngest/test';
 import { describe, expect, it } from 'vitest';
 import { createWorkflowClient } from './functions.ts';
 import {
+  permanentFailure,
   readWith,
   receiptReadingFunction,
   sniffMediaType,
@@ -103,13 +110,35 @@ const uploaded = {
   data: { orgId: ORG, receiptId: RECEIPT, outboxId: REQUEST },
 };
 
-async function run(w: ReturnType<typeof world>) {
+/**
+ * Runs the function. `exhausted` names steps that have run out of retries: the runtime then
+ * makes their `step.run` reject, which the test engine doesn't model, so it is injected.
+ */
+async function run(w: ReturnType<typeof world>, exhausted: string[] = []) {
   const t = new InngestTestEngine({
     function: receiptReadingFunction(client, () => w.ports),
     events: [uploaded],
+    transformCtx: (raw) => {
+      const ctx = mockCtx(raw);
+      const original = ctx.step.run.bind(ctx.step);
+      const run = ((id: string, ...rest: unknown[]) =>
+        exhausted.includes(id)
+          ? Promise.reject(new Error('Overloaded'))
+          : (original as (...args: unknown[]) => unknown)(id, ...rest)) as typeof ctx.step.run;
+      return { ...ctx, step: { ...ctx.step, run } };
+    },
   });
   return t.execute();
 }
+
+/** The models called, once each: the test engine may run a parallel step twice. */
+const called = (w: ReturnType<typeof world>) => [...new Set(w.calls)].sort();
+
+const noCredit = () =>
+  Object.assign(new Error('400'), {
+    status: 400,
+    error: { error: { message: 'Your credit balance is too low' } },
+  });
 
 describe('reading a receipt with both models', () => {
   it('files it as Ready when both read it with confidence and agree', async () => {
@@ -117,7 +146,7 @@ describe('reading a receipt with both models', () => {
     const { result, error } = await run(w);
     expect(error).toBeUndefined();
     expect(result).toEqual({ status: 'extracted', differences: [] });
-    expect(w.calls.sort()).toEqual(['claude-haiku-4-5', 'claude-sonnet-5-5']);
+    expect(called(w)).toEqual(['claude-haiku-4-5', 'claude-sonnet-5-5']);
     expect(w.runs.map((r) => [r.model, r.outcome, r.requestId, r.costMicroUsd])).toEqual(
       expect.arrayContaining([
         ['claude-haiku-4-5', 'confident', REQUEST, 4500],
@@ -139,24 +168,29 @@ describe('reading a receipt with both models', () => {
   });
 
   it('records a missing key as a failed reading, and calls no model', async () => {
-    const w = world({ 'claude-haiku-4-5': 'no_key', 'claude-sonnet-5-5': 'no_key' });
+    const w = world({
+      'claude-haiku-4-5': 'no_key',
+      'claude-sonnet-5-5': 'no_key',
+      'gpt-5.6-luna': 'no_key',
+    });
     const { result } = await run(w);
     expect(result).toEqual({ status: 'failed', differences: [] });
     expect(w.calls).toEqual([]);
-    expect(w.runs.map((r) => r.error)).toEqual(['no_key', 'no_key']);
+    // The fallback is optional: without its key it is skipped, not stored as a failure.
+    expect(w.runs.map((r) => [r.model, r.error])).toEqual([
+      ['claude-haiku-4-5', 'no_key'],
+      ['claude-sonnet-5-5', 'no_key'],
+    ]);
   });
 
   it('keeps the other reading when the provider rejects one request for good', async () => {
-    const rejected = Object.assign(new Error('400'), {
-      status: 400,
-      error: { error: { message: 'Your credit balance is too low' } },
-    });
-    const w = world({ 'claude-sonnet-5-5': rejected });
+    const w = world({ 'claude-sonnet-5-5': noCredit() });
     const { result } = await run(w);
     expect(result).toEqual({ status: 'needs_review', differences: [] });
     expect(w.runs.find((r) => r.model === 'claude-sonnet-5-5')?.error).toBe(
       'request_rejected: Your credit balance is too low',
     );
+    expect(w.calls).not.toContain('gpt-5.6-luna');
   });
 
   it('reads nothing when the stored file is not the one described', async () => {
@@ -165,6 +199,98 @@ describe('reading a receipt with both models', () => {
     expect(result).toEqual({ status: 'failed', differences: [] });
     expect(w.calls).toEqual([]);
     expect(w.settled[0]?.detail).toMatchObject({ problem: 'file_changed' });
+  });
+});
+
+describe('the fallback reader', () => {
+  it('reads the receipt when Anthropic has no credit, and asks for a look', async () => {
+    const w = world({ 'claude-haiku-4-5': noCredit(), 'claude-sonnet-5-5': noCredit() });
+    const { result, error } = await run(w);
+    expect(error).toBeUndefined();
+    // A confident fallback reading still needs a look: one unmeasured reading isn't Ready.
+    expect(result).toEqual({ status: 'needs_review', differences: [] });
+    expect(called(w)).toEqual(['claude-haiku-4-5', 'claude-sonnet-5-5', 'gpt-5.6-luna']);
+    expect(w.runs.find((r) => r.model === 'gpt-5.6-luna')).toMatchObject({
+      extractor: 'openai',
+      outcome: 'confident',
+      requestId: REQUEST,
+    });
+    expect(w.settled[0]?.detail).toMatchObject({
+      fallback: 'gpt-5.6-luna',
+      readings: {
+        'claude-haiku-4-5': 'failed',
+        'claude-sonnet-5-5': 'failed',
+        'gpt-5.6-luna': 'confident',
+      },
+    });
+  });
+
+  it('reads the receipt when there is no Anthropic key', async () => {
+    const w = world({ 'claude-haiku-4-5': 'no_key', 'claude-sonnet-5-5': 'no_key' });
+    const { result } = await run(w);
+    expect(result).toEqual({ status: 'needs_review', differences: [] });
+    expect(called(w)).toEqual(['gpt-5.6-luna']);
+  });
+
+  it('is not called when a Claude model read the receipt', async () => {
+    const w = world({ 'claude-sonnet-5-5': 'no_key' });
+    const { result } = await run(w);
+    expect(result).toEqual({ status: 'needs_review', differences: [] });
+    expect(called(w)).toEqual(['claude-haiku-4-5']);
+    expect(w.settled[0]?.detail).not.toHaveProperty('fallback');
+  });
+
+  it('reads the receipt when the Claude steps run out of retries', async () => {
+    const w = world({});
+    const { result, error } = await run(w, ['read with Haiku 4.5', 'read with Sonnet 5.5']);
+    expect(error).toBeUndefined();
+    expect(result).toEqual({ status: 'needs_review', differences: [] });
+    expect(w.runs.map((r) => [r.model, r.outcome, r.error])).toEqual(
+      expect.arrayContaining([
+        ['claude-haiku-4-5', 'failed', 'unavailable: Overloaded'],
+        ['claude-sonnet-5-5', 'failed', 'unavailable: Overloaded'],
+        ['gpt-5.6-luna', 'confident', null],
+      ]),
+    );
+  });
+
+  it('settles as failed when the fallback has no credit either', async () => {
+    const w = world({
+      'claude-haiku-4-5': noCredit(),
+      'claude-sonnet-5-5': noCredit(),
+      'gpt-5.6-luna': new ProviderHttpError(
+        429,
+        'You exceeded your current quota.',
+        'insufficient_quota',
+      ),
+    });
+    const { result } = await run(w);
+    expect(result).toEqual({ status: 'failed', differences: [] });
+    expect(w.runs.find((r) => r.model === 'gpt-5.6-luna')?.error).toBe(
+      'request_rejected: You exceeded your current quota.',
+    );
+  });
+});
+
+describe('permanentFailure', () => {
+  it.each([
+    [
+      new ProviderHttpError(401, 'Incorrect API key provided.', 'invalid_api_key'),
+      'key_rejected: Incorrect API key provided.',
+    ],
+    [
+      new ProviderHttpError(429, 'Quota exceeded.', 'insufficient_quota'),
+      'request_rejected: Quota exceeded.',
+    ],
+    [
+      new ProviderHttpError(400, undefined, undefined),
+      'request_rejected: The provider answered 400',
+    ],
+    [new ProviderHttpError(429, 'Rate limit reached.', 'rate_limit_exceeded'), undefined],
+    [new ProviderHttpError(503, 'Unavailable', undefined), undefined],
+    [new Error('socket hang up'), undefined],
+  ])('reads %o as %s', (error, expected) => {
+    expect(permanentFailure(error)).toBe(expected);
   });
 });
 

@@ -8,10 +8,12 @@ import {
 } from '@expensewise/db';
 import {
   COMPARISON_MODELS,
+  FALLBACK_MODEL,
   isAutoReady,
   MODELS,
   normalizeExtraction,
   PROMPT_VERSION,
+  ProviderHttpError,
   readingDifferences,
   ReceiptExtractionSchema,
   SCHEMA_VERSION,
@@ -31,7 +33,7 @@ export interface ReceiptFile {
   readonly sha256: string;
 }
 
-/** Why a reading could not start: the organization has no usable Anthropic key. */
+/** Why a reading could not start: the organization has no usable key for the provider. */
 export type KeyProblem = 'no_key' | 'unreadable_key';
 
 /** What reading a receipt needs from the database, storage and the provider. */
@@ -89,18 +91,29 @@ export async function checkFile(
   return { ok: true, mediaType };
 }
 
-/** A provider error that retrying won't fix: a rejected key, no credit, a refused file. */
-function permanentFailure(error: unknown): string | undefined {
+/**
+ * A provider error that retrying won't fix: a rejected key, no credit, a refused file.
+ * OpenAI reports an empty balance as 429 `insufficient_quota`, which waiting won't fix
+ * either; any other 429 is a rate limit and is retried.
+ */
+export function permanentFailure(error: unknown): string | undefined {
   const status = (error as { status?: unknown }).status;
-  if (typeof status !== 'number' || status === 408 || status === 409 || status === 429) {
+  if (typeof status !== 'number') return undefined;
+  const noCredit = error instanceof ProviderHttpError && error.code === 'insufficient_quota';
+  if (!noCredit && (status === 408 || status === 409 || status === 429 || status >= 500)) {
     return undefined;
   }
-  if (status >= 500) return undefined;
-  const nested = (error as { error?: { error?: { message?: unknown } } }).error?.error?.message;
+  const nested =
+    error instanceof ProviderHttpError
+      ? error.providerMessage
+      : (error as { error?: { error?: { message?: unknown } } }).error?.error?.message;
   const message = typeof nested === 'string' ? nested : `The provider answered ${status}`;
   const code = status === 401 || status === 403 ? 'key_rejected' : 'request_rejected';
   return `${code}: ${message}`.slice(0, 300);
 }
+
+/** The extractor column: which provider's reader produced the reading. */
+const extractorOf = (model: ModelId) => (MODELS[model].provider === 'openai' ? 'openai' : 'claude');
 
 /** A reading in the shape it is stored, from what the extractor returned. */
 export function toStoredRun(
@@ -113,7 +126,7 @@ export function toStoredRun(
   return {
     receiptId,
     requestId,
-    extractor: 'claude',
+    extractor: extractorOf(run.model),
     model: run.model,
     promptVersion: run.promptVersion,
     schemaVersion: SCHEMA_VERSION,
@@ -144,7 +157,7 @@ const failedRun = (
 ): NewExtractionRun => ({
   receiptId,
   requestId,
-  extractor: 'claude',
+  extractor: extractorOf(model),
   model,
   promptVersion: PROMPT_VERSION,
   schemaVersion: SCHEMA_VERSION,
@@ -167,20 +180,24 @@ export interface ReadingRequest {
 
 /**
  * Reads the receipt with one model and stores the result. Problems retrying can't fix are
- * stored as a failed reading; anything else is thrown so the step is retried.
+ * stored as a failed reading; anything else is thrown so the step is retried. An optional
+ * reader (the fallback) is skipped, and nothing stored, when the organization has no key for
+ * it.
  */
 export async function readWith(
   ports: ReceiptReadingPorts,
   request: ReadingRequest,
   model: ModelId,
   mediaType: DocumentMediaType,
-): Promise<NewExtractionRun['outcome']> {
+  options: { optional?: boolean } = {},
+): Promise<NewExtractionRun['outcome'] | 'skipped'> {
   const { orgId, receiptId, requestId } = request;
   const save = async (run: NewExtractionRun) => {
     await ports.saveRun(orgId, run);
     return run.outcome;
   };
   const extractor = await ports.extractor(orgId, model);
+  if (extractor === 'no_key' && options.optional) return 'skipped';
   if (typeof extractor === 'string') return save(failedRun(receiptId, requestId, model, extractor));
   const receipt = await ports.loadReceipt(orgId, receiptId);
   const bytes = receipt && (await ports.fetchFile(receipt.storageKey));
@@ -196,6 +213,22 @@ export async function readWith(
   }
 }
 
+/**
+ * Stores a failed reading for a model whose step ran out of retries, such as a provider
+ * outage, so the receipt shows why and the fallback can read it.
+ */
+export async function noteUnavailable(
+  ports: ReceiptReadingPorts,
+  request: ReadingRequest,
+  model: ModelId,
+  reason: string,
+): Promise<'failed'> {
+  const { orgId, receiptId, requestId } = request;
+  const error = `unavailable: ${reason}`.slice(0, 300);
+  await ports.saveRun(orgId, failedRun(receiptId, requestId, model, error));
+  return 'failed';
+}
+
 function readingOf(run: ExtractionRunRecord | undefined): NormalizedExtraction | null {
   if (!run || run.outcome === 'failed') return null;
   const parsed = ReceiptExtractionSchema.safeParse(run.output);
@@ -206,7 +239,9 @@ function readingOf(run: ExtractionRunRecord | undefined): NormalizedExtraction |
  * Decides the receipt's status from the readings stored for this request. Until the tier
  * decision a receipt is Ready only when both models read it with confidence and agree on
  * merchant, date, currency and total; anything less needs a look. A model with no stored
- * reading counts as failed.
+ * reading counts as failed. When no Claude model read it, the fallback reading counts: it
+ * can make a receipt Needs a look, never Ready, because one reading by a model nobody has
+ * measured on these receipts is not the evidence Ready stands for (ADR-0020).
  */
 export async function settleReading(
   ports: ReceiptReadingPorts,
@@ -217,21 +252,27 @@ export async function settleReading(
   const runs = await ports.runs(orgId, receiptId, requestId);
   const byModel = COMPARISON_MODELS.map((model) => runs.find((r) => r.model === model));
   const readings = byModel.map(readingOf);
+  const fallbackRun = runs.find((r) => r.model === FALLBACK_MODEL);
+  const usedFallback = !readings.some(Boolean) && readingOf(fallbackRun) !== null;
   const [first, second] = readings;
   const differences = first && second ? readingDifferences(first, second) : [];
-  const status: ReceiptStatus = !readings.some(Boolean)
-    ? 'failed'
-    : first && second && differences.length === 0 && isAutoReady(first) && isAutoReady(second)
-      ? 'extracted'
-      : 'needs_review';
+  const status: ReceiptStatus = usedFallback
+    ? 'needs_review'
+    : !readings.some(Boolean)
+      ? 'failed'
+      : first && second && differences.length === 0 && isAutoReady(first) && isAutoReady(second)
+        ? 'extracted'
+        : 'needs_review';
   await ports.settle(orgId, receiptId, {
     status,
     requestId,
     detail: {
       differences,
-      readings: Object.fromEntries(
-        COMPARISON_MODELS.map((model, i) => [model, byModel[i]?.outcome ?? 'missing']),
-      ),
+      readings: Object.fromEntries([
+        ...COMPARISON_MODELS.map((model, i) => [model, byModel[i]?.outcome ?? 'missing']),
+        ...(fallbackRun ? [[FALLBACK_MODEL, fallbackRun.outcome]] : []),
+      ]),
+      ...(usedFallback ? { fallback: FALLBACK_MODEL } : {}),
       ...(problem ? { problem } : {}),
     },
   });
@@ -246,11 +287,16 @@ function readingRequest(data: unknown): ReadingRequest {
   return { orgId, receiptId, requestId: outboxId };
 }
 
+const stepFailure = (error: unknown) =>
+  error instanceof Error ? error.message : 'the step failed after its retries';
+
 /**
  * Reads a receipt after it is uploaded or when someone asks again: check the file, read it
- * with each model in parallel steps, then settle its status. Steps retry on their own; if
- * the run still fails, the receipt is settled from whatever readings were stored, so it never
- * stays "processing".
+ * with each compared model in parallel steps, then settle its status. If neither Claude model
+ * could read it (no credit, a rejected key, an outage), the fallback model reads it, when the
+ * organization has a key for it (ADR-0020). Steps retry on their own; a model whose step runs
+ * out of retries is stored as unavailable. If the run itself fails, the receipt is settled
+ * from whatever readings were stored, so it never stays "processing".
  */
 export function receiptReadingFunction(client: Inngest, ports: () => ReceiptReadingPorts) {
   return client.createFunction(
@@ -274,13 +320,22 @@ export function receiptReadingFunction(client: Inngest, ports: () => ReceiptRead
       if (!file.ok) {
         return step.run('settle', () => settleReading(ports(), request, file.problem));
       }
-      await Promise.all(
-        COMPARISON_MODELS.map((model) =>
-          step.run(`read with ${MODELS[model].label}`, () =>
-            readWith(ports(), request, model, file.mediaType),
-          ),
-        ),
-      );
+      const readWithStep = (model: ModelId, optional = false) => {
+        const { label } = MODELS[model];
+        return step
+          .run(`read with ${label}`, () =>
+            readWith(ports(), request, model, file.mediaType, { optional }),
+          )
+          .catch((error: unknown) =>
+            step.run(`note ${label} unavailable`, () =>
+              noteUnavailable(ports(), request, model, stepFailure(error)),
+            ),
+          );
+      };
+      const outcomes = await Promise.all(COMPARISON_MODELS.map((model) => readWithStep(model)));
+      if (!outcomes.some((outcome) => outcome === 'confident' || outcome === 'unsure')) {
+        await readWithStep(FALLBACK_MODEL, true);
+      }
       return step.run('settle', () => settleReading(ports(), request));
     },
   );

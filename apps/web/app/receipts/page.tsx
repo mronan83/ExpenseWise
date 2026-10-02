@@ -248,6 +248,9 @@ function Comparison({ list }: { list: ReceiptList }) {
             <tr key={m.model} className="border-t border-rule">
               <th scope="row" className="py-1.5 text-left font-medium">
                 {m.label}
+                {m.role === 'fallback' ? (
+                  <span className="ml-1 text-xs font-normal text-ink-2">fallback</span>
+                ) : null}
               </th>
               <td className="py-1.5 text-right tabular-nums">
                 {m.confident}/{m.readings}

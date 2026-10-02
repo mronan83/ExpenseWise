@@ -109,7 +109,46 @@ function fakeReceipts() {
     const at = receipts.findIndex((r) => r.id === id);
     receipts[at] = { ...receipts[at]!, status };
   };
-  return { store, receipts, runs, events, read };
+  /** Stands in for the workflow when Anthropic has no credit: the fallback reads it. */
+  const readByFallback = (id: string) => {
+    const requestId = events.at(-1)!.outboxId;
+    const base = {
+      receiptId: id,
+      requestId,
+      promptVersion: 'extract-v1',
+      inputTokens: null,
+      outputTokens: null,
+      latencyMs: null,
+      costMicroUsd: null,
+    };
+    for (const model of ['claude-haiku-4-5', 'claude-sonnet-5-5'] as const) {
+      runs.push({
+        ...base,
+        id: `run-${runs.length}`,
+        model,
+        outcome: 'failed',
+        output: null,
+        error: 'request_rejected: Your credit balance is too low',
+        createdAt: new Date(NOW.getTime() + runs.length),
+      });
+    }
+    runs.push({
+      ...base,
+      id: `run-${runs.length}`,
+      model: 'gpt-5.6-luna',
+      outcome: 'confident',
+      output: reading('7.25'),
+      error: null,
+      latencyMs: 2500,
+      inputTokens: 2000,
+      outputTokens: 400,
+      costMicroUsd: 880,
+      createdAt: new Date(NOW.getTime() + runs.length),
+    });
+    const at = receipts.findIndex((r) => r.id === id);
+    receipts[at] = { ...receipts[at]!, status: 'needs_review' };
+  };
+  return { store, receipts, runs, events, read, readByFallback };
 }
 
 function setup(opts: { files?: boolean; dispatch?: 'ok' | 'fails' | 'none' } = {}) {
@@ -296,6 +335,7 @@ describe('reading receipts side by side', () => {
         {
           model: 'claude-haiku-4-5',
           label: 'Haiku 4.5',
+          role: 'compared',
           readings: 1,
           confident: 1,
           failed: 0,
@@ -305,6 +345,7 @@ describe('reading receipts side by side', () => {
         {
           model: 'claude-sonnet-5-5',
           label: 'Sonnet 5.5',
+          role: 'compared',
           readings: 1,
           confident: 1,
           failed: 0,
@@ -313,6 +354,45 @@ describe('reading receipts side by side', () => {
         },
       ],
     });
+  });
+
+  it('shows the fallback reading when no Claude model could read the receipt', async () => {
+    const s = setup();
+    const id = await filed(s);
+    s.readByFallback(id);
+    const { body } = await s.call('GET', `/v1/receipts/${id}`, 'riley');
+    expect(body).toMatchObject({
+      status: 'needs_review',
+      merchant: 'Blue Bottle Coffee',
+      total: { amountMinor: 725, decimal: '7.25' },
+      differences: [],
+    });
+    expect(
+      (body.readings as { label: string; role: string; state: string }[]).map((r) => [
+        r.label,
+        r.role,
+        r.state,
+      ]),
+    ).toEqual([
+      ['Haiku 4.5', 'compared', 'failed'],
+      ['Sonnet 5.5', 'compared', 'failed'],
+      ['GPT-5.6 Luna', 'fallback', 'confident'],
+    ]);
+    const list = await s.call('GET', '/v1/receipts', 'riley');
+    expect(list.body.comparison).toMatchObject({ receipts: 1, compared: 0, agreed: 0 });
+    expect(
+      (list.body.comparison as { models: { model: string; role: string; costMicroUsd: number }[] })
+        .models,
+    ).toEqual([
+      expect.objectContaining({ model: 'claude-haiku-4-5', role: 'compared', failed: 1 }),
+      expect.objectContaining({ model: 'claude-sonnet-5-5', role: 'compared', failed: 1 }),
+      expect.objectContaining({
+        model: 'gpt-5.6-luna',
+        role: 'fallback',
+        confident: 1,
+        costMicroUsd: 880,
+      }),
+    ]);
   });
 
   it('reads a receipt again on request', async () => {

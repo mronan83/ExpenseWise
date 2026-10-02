@@ -169,8 +169,9 @@ export const ReceiptSummarySchema = z
     id: z.string().uuid(),
     status: ReceiptStatusSchema.openapi({
       description:
-        'processing while it is read; extracted when both models read it with confidence and ' +
-        'agree; needs_review otherwise; failed when no model could read it.',
+        'processing while it is read; extracted when both compared models read it with ' +
+        'confidence and agree; needs_review otherwise, including when only the fallback model ' +
+        'read it; failed when no model could read it.',
     }),
     source: z.enum(['camera', 'upload', 'email', 'card', 'manual', 'mileage']),
     contentType: z.string(),
@@ -183,10 +184,17 @@ export const ReceiptSummarySchema = z
   })
   .openapi('ReceiptSummary');
 
+const ReadingRoleSchema = z.enum(['compared', 'fallback']).openapi({
+  description:
+    'compared: one of the models the tier decision weighs. fallback: read only because no ' +
+    'compared model could (ADR-0020).',
+});
+
 export const ReceiptReadingSchema = z
   .object({
     model: z.string().openapi({ example: 'claude-haiku-4-5' }),
     label: z.string().openapi({ example: 'Haiku 4.5' }),
+    role: ReadingRoleSchema,
     state: z.enum(['pending', 'missing', 'confident', 'unsure', 'failed']),
     error: z.string().nullable(),
     latencyMs: z.number().int().nullable(),
@@ -232,6 +240,7 @@ export const ReceiptListSchema = z
         z.object({
           model: z.string(),
           label: z.string(),
+          role: ReadingRoleSchema,
           readings: z.number().int(),
           confident: z.number().int(),
           failed: z.number().int(),
