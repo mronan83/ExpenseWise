@@ -119,3 +119,30 @@ export const AiProviderKeyTestSchema = z
       .openapi({ description: 'Why the key could not be used, when valid is false.' }),
   })
   .openapi('AiProviderKeyTest');
+
+export const SignInSchema = z
+  .object({
+    id: z.string().uuid(),
+    email: z.string().openapi({ example: 'alex@example.com' }),
+    linkedAt: z.string().datetime(),
+    current: z
+      .boolean()
+      .openapi({ description: 'Whether this is the sign-in making the request.' }),
+  })
+  .openapi('SignIn');
+
+export const SignInListSchema = z.object({ signIns: z.array(SignInSchema) }).openapi('SignInList');
+
+export const LinkSignInSchema = z
+  .object({
+    accessToken: z
+      .string()
+      .min(20)
+      .max(8000)
+      .openapi({
+        description:
+          'An access token for the other sign-in, from signing in with it moments ago. With the ' +
+          "request's own token it proves the caller controls both. Used once, never stored.",
+      }),
+  })
+  .openapi('LinkSignIn');

@@ -81,7 +81,7 @@ export const members = pgTable(
   {
     id: id(),
     orgId: orgId(),
-    /** Subject from the identity provider. */
+    /** The member's first sign-in (identity provider subject). Access uses member_sign_ins. */
     userId: text('user_id').notNull(),
     email: text('email').notNull(),
     displayName: text('display_name').notNull(),
@@ -97,6 +97,35 @@ export const members = pgTable(
       columns: [t.orgId, t.managerMemberId],
       foreignColumns: [t.orgId, t.id],
     }),
+  ],
+);
+
+/**
+ * How a member signs in. A person can have several sign-ins, such as a personal and a work
+ * email; each one reaches the same member, so approvals and separation of duties still see
+ * one person. A sign-in belongs to exactly one member (Phase 1). Access goes through this
+ * table; members.user_id records only the member's first sign-in.
+ */
+export const memberSignIns = pgTable(
+  'member_sign_ins',
+  {
+    id: id(),
+    orgId: orgId(),
+    memberId: uuid('member_id').notNull(),
+    /** Subject from the identity provider (Supabase Auth `sub`). */
+    userId: text('user_id').notNull(),
+    email: text('email').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('member_sign_ins_org_id_id_key').on(t.orgId, t.id),
+    unique('member_sign_ins_user_key').on(t.userId),
+    foreignKey({
+      name: 'member_sign_ins_member_fk',
+      columns: [t.orgId, t.memberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    index('member_sign_ins_member_idx').on(t.orgId, t.memberId),
   ],
 );
 

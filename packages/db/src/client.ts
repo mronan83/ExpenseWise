@@ -69,9 +69,19 @@ export async function withOrg<T>(
 }
 
 /**
+ * Moves an open withOrg() transaction to another organization: from here on it sees and
+ * writes only `orgId`'s rows. Only for one person's change that spans two organizations
+ * they sign in to, such as moving a sign-in out of an empty organization.
+ */
+export async function switchOrg(tx: Transaction, orgId: string): Promise<void> {
+  if (!isUuid(orgId)) throw new Error(`switchOrg needs an organization UUID, got "${orgId}"`);
+  await tx.execute(sql`select set_config('app.org_id', ${orgId}, true)`);
+}
+
+/**
  * Runs `work` in a transaction that knows the signed-in user but no organization. Row-level
- * security then shows only that user's own member rows (policy own_memberships), which is how
- * the API finds the caller's organizations. The user id must come from a verified token.
+ * security then shows only that user's own sign-ins and the members they sign in as (policies
+ * own_sign_ins and own_memberships), which is how the API finds the caller's organizations. The user id must come from a verified token.
  */
 export async function withUser<T>(
   db: Database,

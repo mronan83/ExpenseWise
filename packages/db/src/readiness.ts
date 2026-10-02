@@ -31,7 +31,7 @@ export interface ReadinessProbeOptions {
 
 const RUNTIME_ROLE = 'expensewise_app';
 /** Schema v1 has 13 tenant tables (ai_provider_keys since 0004); fewer means migrations have not run. */
-const MIN_TENANT_TABLES = 13;
+const MIN_TENANT_TABLES = 14;
 /** The one tenant table that deliberately does not force RLS (migration 0001). */
 const UNFORCED_TABLES = new Set(['outbox_events']);
 const LOCAL_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);

@@ -10,6 +10,8 @@ export interface Identity {
   /** Authenticator assurance level: aal2 means the session passed multi-factor authentication. */
   readonly assuranceLevel: 'aal1' | 'aal2';
   readonly sessionId: string | null;
+  /** When the token was issued (`iat`), so an action can ask for a recent sign-in. */
+  readonly issuedAt: Date | null;
 }
 
 export type TokenVerifier = (token: string) => Promise<Identity>;
@@ -70,6 +72,7 @@ export function supabaseTokenVerifier(options: {
         email: typeof payload.email === 'string' ? payload.email : null,
         assuranceLevel: payload.aal === 'aal2' ? 'aal2' : 'aal1',
         sessionId: typeof payload.session_id === 'string' ? payload.session_id : null,
+        issuedAt: typeof payload.iat === 'number' ? new Date(payload.iat * 1000) : null,
       };
     } catch (error) {
       if (error instanceof AuthError) throw error;
