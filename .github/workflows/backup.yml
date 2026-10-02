@@ -1,0 +1,44 @@
+# Nightly off-site backup (ADR-0014): the database, auth users included, and new receipt
+# images, encrypted on the runner and uploaded to a private Backblaze B2 bucket. Also writes
+# the heartbeat and fails at 70% of a Free plan limit. GitHub emails the owner when a
+# scheduled run fails.
+#
+# The repository is public, so its logs are too: the script prints steps, counts, sizes and
+# timings only, and this workflow uploads no artifacts.
+name: Nightly backup
+
+on:
+  schedule:
+    - cron: '17 9 * * *' # 02:17 in California; GitHub may start scheduled runs late
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: backup
+  cancel-in-progress: false
+
+jobs:
+  backup:
+    name: Back up the database and receipt images
+    runs-on: ubuntu-latest
+    # Only main can use this environment, and it has no approval step: a nightly job can't
+    # wait for one. Its secrets are listed in the runbook, section 5.
+    environment: backup
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.119.0
+      - name: Back up, write the heartbeat, check the Free plan limits
+        run: bash scripts/backup/backup.sh
+        env:
+          BACKUP_DATABASE_URL: ${{ secrets.BACKUP_DATABASE_URL }}
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}
+          SUPABASE_S3_ACCESS_KEY_ID: ${{ secrets.SUPABASE_S3_ACCESS_KEY_ID }}
+          SUPABASE_S3_SECRET_ACCESS_KEY: ${{ secrets.SUPABASE_S3_SECRET_ACCESS_KEY }}

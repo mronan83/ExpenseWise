@@ -64,6 +64,13 @@
       "when": 1790949167637,
       "tag": "0008_extraction_run_requests",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790984022306,
+      "tag": "0009_ops_heartbeat",
+      "breakpoints": true
     }
   ]
 }

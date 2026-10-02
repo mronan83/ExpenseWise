@@ -98,7 +98,7 @@ Supabase's built-in email covers password resets and the owner's own notificatio
 
 ## 5. Off-site backups (Backblaze B2)
 
-The Free plan keeps no backups, so a nightly workflow keeps our own ([ADR-0014](../adr/0014-supabase-free-plan.md)). Set this up before real use starts on Oct 15. The workflow itself arrives in increment 1 and uses the names below.
+The Free plan keeps no backups, so a nightly workflow keeps our own ([ADR-0014](../adr/0014-supabase-free-plan.md)): **Nightly backup** (`.github/workflows/backup.yml`, running `scripts/backup/backup.sh`) at 02:17 California time. It needs the secrets below and nothing else; it works out the Backblaze and Supabase S3 addresses itself.
 
 1. **Create a Backblaze B2 account** at <https://www.backblaze.com/sign-up/cloud-storage> and choose the **US West** region. The region can't be changed later. The first 10 GB are free and no card is needed, but B2 verifies a phone number by text message.
 2. **Buckets → Create a Bucket:**
@@ -134,6 +134,24 @@ The Free plan keeps no backups, so a nightly workflow keeps our own ([ADR-0014](
      | `B2_APPLICATION_KEY` | `applicationKey` from step 4 |
      | `B2_BUCKET` | The bucket name from step 2 |
      | `BACKUP_PASSPHRASE` | From step 5 |
+
+8. **Run it once now: Actions → Nightly backup → Run workflow** (branch `main`). It takes a minute or two. A green run ends with `Done in … s`, after lines for the dump, the daily and monthly copies, the check that the uploaded copy decrypts, the receipt images, the heartbeat and the two Free plan limits. A red run names what is wrong, such as a missing secret or a key Backblaze refused, and never prints a secret. After that it runs every night, and GitHub emails you when a run fails.
+
+### Restoring from the off-site backup
+
+The monthly restore drill automates this (backlog #10). By hand, on any machine with Docker, the AWS CLI, `gpg`, `psql` and the Supabase CLI:
+
+1. Download the dump you want from the bucket, such as `db/daily/2026-10-02.tar.gz.gpg`, and decrypt it with the passphrase from your password manager: `gpg --decrypt --output db.tar.gz <file>`, then `tar -xzf db.tar.gz`. It holds `roles.sql`, `schema.sql`, `data.sql` and `manifest.json`, which records the row count of every table and each file's SHA-256.
+2. Into a new or empty Supabase project, as its `postgres` role, using the session-pooler address, run Supabase's documented restore:
+   ```sh
+   psql --single-transaction --variable ON_ERROR_STOP=1 \
+     --file roles.sql --file schema.sql \
+     --command 'SET session_replication_role = replica' --file data.sql \
+     --dbname "<session-pooler URL>"
+   ```
+3. Check the row counts against `manifest.json`.
+4. Copy the images back: each `receipts/<path>.gpg` in the bucket decrypts to the object `<path>` in the `receipts` storage bucket. Its SHA-256 must equal the `sha256` column of the receipt whose `storage_key` is `<path>`.
+5. Follow "After a restore or in a new project" below. The runtime roles come back without passwords, so the Release run sets them again.
 
 ## 6. Workflows, error tracking and feature flags
 
