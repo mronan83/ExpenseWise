@@ -24,7 +24,7 @@ flowchart TB
 Two human gates sit at the points of highest leverage:
 
 1. **What counts as Ready.** The product owner agrees the acceptance criteria.
-2. **What reaches customers.** The product owner approves promotion.
+2. **What reaches customers.** The product owner approves promotion by asking for the merge, which releases it ([ADR-0019](adr/0019-merge-is-the-release.md)).
 
 Everything between them is automated or adversarially reviewed. Work runs as continuous flow, with a two-week increment for demo, acceptance and re-planning.
 

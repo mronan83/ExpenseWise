@@ -1,8 +1,8 @@
 # Releases main to production in a safe order (ADR-0018): apply database migrations, set the
 # runtime roles' passwords, then make this commit's Vercel build live. Vercel builds every
 # push but doesn't assign the production domain itself, so nothing reaches production until
-# this run is approved in the "production" environment (production promotion needs the
-# product owner, RACI) and the database is ready for the new code.
+# this run has made the database ready for the new code. The product owner's request to
+# merge is the release approval (ADR-0019), so the run starts as soon as a merge lands.
 name: Release
 
 on:

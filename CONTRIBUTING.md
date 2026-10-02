@@ -9,7 +9,7 @@ How a change moves from idea to production. The full model is in [docs/06-delive
 3. **Commit.** Use [Conventional Commits](https://www.conventionalcommits.org): `feat:`, `fix:`, `docs:`, `chore:`, `test:`, `refactor:`, `ci:`. Release notes are generated from them.
 4. **Pull request.** Small and focused. The template carries the Definition of Done. Gates G1–G5 must be green.
 5. **Review and accept.** An adversarial review pass, then the product owner accepts the increment.
-6. **Merge and promote.** Merge to `main`. Vercel builds it, and the **Release** workflow waits for the product owner's approval, applies migrations, then makes that build live ([ADR-0018](docs/adr/0018-release-migrates-then-promotes.md)).
+6. **Merge and deploy.** Merge to `main` only when the product owner asks for it; that request is the release approval. Vercel builds the commit, and the **Release** workflow applies migrations, then makes that build live ([ADR-0018](docs/adr/0018-release-migrates-then-promotes.md), [ADR-0019](docs/adr/0019-merge-is-the-release.md)).
 
 ## Rules the code relies on
 

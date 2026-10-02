@@ -19,7 +19,7 @@ ExpenseWise is a receipt-first, automation-first expense, receipt, mileage and t
 | [07 Roadmap](07-roadmap.md) | §8 | Phases P0–P4 in weeks, scope and exit criteria |
 | [08 Risk register](08-risk-register.md) | §10 | Risks R1–R10 with likelihood, impact and mitigation |
 | [Runbook: environment setup](runbooks/environment-setup.md) | – | Connecting Vercel, Supabase and GitHub; off-site backups; rebuilding after a restore |
-| [ADR index](adr/README.md) | §9 | Decisions D-01 to D-12 as ADR-0001 to ADR-0012, D-13 (after v0.3) as ADR-0013, D-16 as ADR-0014, D-17 as ADR-0015, D-18 as ADR-0016, D-19 as ADR-0017, D-20 as ADR-0018, and how to add an ADR; D-14 and D-15 are recorded in the roadmap |
+| [ADR index](adr/README.md) | §9 | Decisions D-01 to D-12 as ADR-0001 to ADR-0012, D-13 (after v0.3) as ADR-0013, D-16 as ADR-0014, D-17 as ADR-0015, D-18 as ADR-0016, D-19 as ADR-0017, D-20 as ADR-0018, D-21 as ADR-0019, and how to add an ADR; D-14 and D-15 are recorded in the roadmap |
 
 ## Decision status
 
@@ -45,6 +45,7 @@ ExpenseWise is a receipt-first, automation-first expense, receipt, mileage and t
 | D-18 | One person can sign in with several emails; each reaches the same member | [ADR-0016](adr/0016-several-sign-ins-per-person.md) | Accepted (decided by product owner) |
 | D-19 | Every receipt is read by Haiku and Sonnet side by side until the tier is chosen; events dispatch right after commit | [ADR-0017](adr/0017-read-receipts-with-two-models.md) | Accepted (decided by product owner) |
 | D-20 | A release applies migrations, then promotes that commit's build; Vercel no longer publishes on its own | [ADR-0018](adr/0018-release-migrates-then-promotes.md) | Accepted (decided by product owner) |
+| D-21 | Asking for the merge is the production approval; the release runs straight after it | [ADR-0019](adr/0019-merge-is-the-release.md) | Accepted (decided by product owner) |
 
 ## Visual version
 
