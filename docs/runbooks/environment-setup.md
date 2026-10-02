@@ -33,7 +33,7 @@ The `postgres` role has BYPASSRLS. Its connection string lives only in GitHub se
 
 ## 2. GitHub: the production environment
 
-Do this before merging the first pull request that adds migrations. The merge starts the **Database migrations** workflow straight away, and if the `production` environment doesn't exist yet, GitHub creates it with no protection.
+Do this before the first merge to `main`. Every merge starts the **Release** workflow straight away ([ADR-0018](../adr/0018-release-migrates-then-promotes.md)), and if the `production` environment doesn't exist yet, GitHub creates it with no protection.
 
 1. **Generate the two role passwords** and save both in your password manager:
    ```sh
@@ -44,12 +44,13 @@ Do this before merging the first pull request that adds migrations. The merge st
 2. **Settings → Environments**. If an environment called `Production` already exists, open it rather than creating another: Vercel creates it when it first deploys, and GitHub matches environment names regardless of case, so the workflow's `production` is that environment, unprotected until you configure it. Otherwise choose **New environment** and name it `production`. Then:
    - **Required reviewers:** tick it, add yourself, and leave **Prevent self-review** unticked. You both merge (which starts the run) and approve it; with self-review prevented, a solo owner could never approve. Then **Save protection rules**.
    - **Deployment branches and tags:** change "No restriction" to **Selected branches and tags**, then add a branch rule `main`. A workflow on any other branch can then never reach these secrets.
-3. **Environment secrets → Add environment secret**, three times. Use environment secrets, not repository secrets, so that the approval gate guards them:
+3. **Environment secrets → Add environment secret**, four times. Use environment secrets, not repository secrets, so that the approval gate guards them:
    - `DATABASE_MIGRATION_URL`: the full string from step 1.4, password filled in.
    - `EXPENSEWISE_APP_DB_PASSWORD`: the first password from step 2.1.
    - `EXPENSEWISE_RELAY_DB_PASSWORD`: the second.
-4. **Merge the pull request.** In **Actions**, the **Database migrations** run waits with "Review deployments". Open it, tick `production`, and **Approve and deploy**. The log ends with `Migrations applied.` and `Runtime roles can sign in; neither can bypass row-level security.` It stops with an error if either role could bypass row-level security.
-5. **Later runs:** **Actions → Database migrations → Run workflow** re-runs it by hand, after a restore for example. That button only exists once the workflow is on `main`.
+   - `VERCEL_TOKEN`: from **Vercel → Account Settings → Tokens → Create**, scoped to the team that owns `expensewise`. The release uses it only to make a finished build live.
+4. **Merge the pull request.** In **Actions**, the **Release** run waits with "Review deployments". Open it, tick `production`, and **Approve and deploy**. It applies migrations, makes sure the runtime roles can sign in, then makes that commit's Vercel build live and checks the production domain serves it. The log ends with `Release: released.` It stops with an error if either role could bypass row-level security, if the build failed, or if production doesn't switch.
+5. **Later runs:** **Actions → Release → Run workflow** re-runs it by hand, after a restore for example. That button only exists once the workflow is on `main`.
 
 ## 3. Vercel project
 
@@ -60,7 +61,8 @@ Do this before merging the first pull request that adds migrations. The merge st
    - `SUPABASE_SECRET_KEY` = `sb_secret_…` (mark it Sensitive)
    - `DATABASE_URL` = `postgresql://expensewise_app.<project-ref>:<app password>@<pooler host>:6543/postgres` (mark it Sensitive). This is the transaction pooler: the same host as step 1.4, but with the `expensewise_app.<project-ref>` user and port 6543. Add it only after step 2.4 has set the password.
    - No `SUPABASE_URL` or `POSTGRES_URL`. The API reads the project URL only from `NEXT_PUBLIC_SUPABASE_URL`, and the `postgres` role must never reach the runtime.
-3. Redeploy. Changed variables only reach new deployments. Then check:
+3. **Settings → Environments → Production:** turn off **Auto-assign Custom Production Domains**. Vercel still builds every push to `main`, but the build goes live only when the **Release** run promotes it, after migrations ([ADR-0018](../adr/0018-release-migrates-then-promotes.md)). To roll back, use **Instant Rollback** on an earlier production deployment as usual.
+4. Redeploy. Changed variables only reach new deployments. Then check:
    - `GET /api/v1/health` returns 200.
    - `GET /api/v1/me` returns 401 without a token, not 503, which shows the API found the Supabase project.
    - `GET /api/v1/health/ready` returns 200 with every check `pass`: the database answers, the app is connected as `expensewise_app`, TLS is verified against Supabase's root certificate, and row-level security is enforced on every tenant table. Any failure answers 503 and names the check:
@@ -68,9 +70,9 @@ Do this before merging the first pull request that adds migrations. The merge st
      | Check says | Fix |
      | --- | --- |
      | `DATABASE_URL is not set` | Add it (step 3.2) and redeploy |
-     | `password rejected` | `DATABASE_URL` must use password 1 from step 2.1; if you just ran migrations, see the pooler note under "If the migration run fails" |
+     | `password rejected` | `DATABASE_URL` must use password 1 from step 2.1; if you just ran migrations, see the pooler note under "If the release run fails" |
      | `connected as postgres, which bypasses row-level security` | `DATABASE_URL` is the migration connection; use the `expensewise_app.<project-ref>` user on port 6543 |
-     | `found 0 tenant tables … run migrations` | Run **Database migrations** (step 2.5) |
+     | `found 0 tenant tables … run migrations` | Run **Release** (step 2.5) |
      | `the connection is not TLS-verified` | `DATABASE_URL` must point at a `*.supabase.com` host |
 
 Previews share the production Supabase project until a staging project exists (ADR-0013); no real data is stored before the Phase 1 dogfood month.
@@ -164,9 +166,9 @@ The `shell.build-version` flag shows the deployed commit next to "Phase 0 previe
 
 ## After a restore or in a new project
 
-Custom role passwords are not in backups or dumps. Re-run **Database migrations** (step 2.5): it re-applies any missing migrations and sets each role's password from the GitHub secrets when the role can't already sign in with it.
+Custom role passwords are not in backups or dumps. Re-run **Release** (step 2.5): it re-applies any missing migrations and sets each role's password from the GitHub secrets when the role can't already sign in with it.
 
-## If the migration run fails
+## If the release run fails
 
 Read the failed step's log. It shows where the job connected (user, host, port, database), never the password.
 
@@ -176,5 +178,8 @@ Read the failed step's log. It shows where the job connected (user, host, port, 
 | `password rejected` in `/api/v1/health/ready`, or `password authentication failed` (28P01), right after a password reset | Supabase's pooler caches credentials apart from the database and can keep rejecting the new password ([Supabase guide](https://supabase.com/docs/guides/troubleshooting/supavisor-error-password-authentication-failed-after-password-rotation)). The job retries for about 90 seconds, and it only sets a password when the role can't already sign in, so a routine migration run never causes this. | **Database → Settings → Connection pooling:** change the pool size by one and save, change it back and save, then run again |
 | `password authentication failed` with no recent reset | The password in the secret isn't the database's. Supabase can't show it, only reset it. | Reset it (section 1.4), update the secret, wait a few minutes, run again |
 | `still contains Supabase's [YOUR-PASSWORD] placeholder` | The template was pasted without filling in the password | Replace `[YOUR-PASSWORD]`, brackets included, with the password |
+| `Vercel answered 403` in the release's last step | `VERCEL_TOKEN` is missing, expired, or not scoped to the team that owns `expensewise` | Create a new token (section 2.3) and replace the secret, then **Re-run jobs** |
+| `Production still serves <old> instead of <new>` | Auto-assign is still on and another build went live, or the promotion is still settling | Check **Vercel → Deployments**; promote the build for this commit there, or re-run the release |
+| `Vercel has no production build of <commit>` | Vercel skipped the build because the commit doesn't change the app (docs only) | Nothing: production keeps the last release, which has the same app |
 
 Brackets or spaces left around a pasted password are removed automatically, and the log says so.

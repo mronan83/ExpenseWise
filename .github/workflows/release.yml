@@ -1,0 +1,56 @@
+# Releases main to production in a safe order (ADR-0018): apply database migrations, set the
+# runtime roles' passwords, then make this commit's Vercel build live. Vercel builds every
+# push but doesn't assign the production domain itself, so nothing reaches production until
+# this run is approved in the "production" environment (production promotion needs the
+# product owner, RACI) and the database is ready for the new code.
+name: Release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+# One release at a time. A run queued behind another is replaced by a newer push, and a run
+# whose commit is no longer the head of main migrates but doesn't promote.
+concurrency:
+  group: release-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Migrate, then promote
+    runs-on: ubuntu-latest
+    environment: production
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Apply migrations (schema owner, verified TLS)
+        env:
+          DATABASE_MIGRATION_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
+        run: pnpm --filter @expensewise/db migrate
+      - name: Set runtime role passwords (only where they don't already work)
+        env:
+          DATABASE_MIGRATION_URL: ${{ secrets.DATABASE_MIGRATION_URL }}
+          EXPENSEWISE_APP_DB_PASSWORD: ${{ secrets.EXPENSEWISE_APP_DB_PASSWORD }}
+          EXPENSEWISE_RELAY_DB_PASSWORD: ${{ secrets.EXPENSEWISE_RELAY_DB_PASSWORD }}
+        run: pnpm --filter @expensewise/db roles:set-passwords
+      - name: Make this commit's build live
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          # Identifiers, not credentials.
+          VERCEL_PROJECT_ID: prj_GTcrU44bpSXbZA1IS6f2tfNTZQQg
+          VERCEL_TEAM_ID: team_A8TfHlLyTc2toipq0WsMVKvK
+          PRODUCTION_URL: https://expensewise-theta.vercel.app
+          RELEASE_SHA: ${{ github.sha }}
+          REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node .github/scripts/promote-production.mjs
