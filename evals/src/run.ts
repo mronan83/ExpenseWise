@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
 import Anthropic from '@anthropic-ai/sdk';
+import { parseDecimal, toScale } from '@expensewise/domain';
 import {
   ClaudeExtractor,
   formatUsd,
@@ -35,6 +36,8 @@ const { values } = parseArgs({
     concurrency: { type: 'string', default: '4' },
     'dry-run': { type: 'boolean', default: false },
     yes: { type: 'boolean', default: false },
+    // Refuse to send anything when the estimate is above this many dollars.
+    'max-usd': { type: 'string' },
   },
 });
 
@@ -68,6 +71,11 @@ console.log(
   `${items.length} documents × ${models.length} models (${models.map((m) => MODELS[m].label).join(', ')}).`,
 );
 console.log(`Estimated API cost: about $${formatUsd(estimate, 2)}.`);
+const maxUsd = values['max-usd'];
+if (maxUsd !== undefined && estimate > toScale(parseDecimal(maxUsd), 9, 'exact')) {
+  console.error(`The estimate is above the --max-usd cap of $${maxUsd}. Nothing was sent.`);
+  process.exit(1);
+}
 if (!dryRun && !values.yes) {
   console.log('Nothing was sent. Re-run with --yes to spend it, or --dry-run to test the harness.');
   process.exit(0);

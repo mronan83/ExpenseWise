@@ -91,6 +91,92 @@ export function summarize(
   };
 }
 
+export interface CascadeSummary {
+  readonly first: ModelId;
+  readonly second: ModelId;
+  readonly source: Source | 'all';
+  readonly documents: number;
+  /** Documents whose first read would not skip review, so the second model read them too. */
+  readonly escalated: number;
+  readonly fieldsCorrect: number;
+  readonly fieldsScored: number;
+  readonly allCorrect: number;
+  readonly autoReady: number;
+  readonly silentErrors: number;
+  readonly costNanoUsd: bigint;
+}
+
+/**
+ * Model-tier escalation (ADR-0006): every document goes to `first`; when its read would
+ * not skip review, `second` reads it too and its answer is kept. Built from the same run's
+ * results, so it costs nothing extra to evaluate.
+ */
+export function summarizeCascade(
+  rows: readonly ResultRow[],
+  first: ModelId,
+  second: ModelId,
+  source: Source | 'all',
+): CascadeSummary {
+  const byItem = new Map<string, { first?: ResultRow; second?: ResultRow }>();
+  for (const row of rows) {
+    if (source !== 'all' && row.source !== source) continue;
+    const entry = byItem.get(row.itemId) ?? {};
+    if (row.model === first) entry.first = row;
+    if (row.model === second) entry.second = row;
+    byItem.set(row.itemId, entry);
+  }
+  let documents = 0;
+  let escalated = 0;
+  let fieldsCorrect = 0;
+  let fieldsScored = 0;
+  let allCorrect = 0;
+  let autoReady = 0;
+  let silentErrors = 0;
+  let costNanoUsd = 0n;
+  for (const { first: a, second: b } of byItem.values()) {
+    if (!a) continue;
+    documents++;
+    costNanoUsd += a.costNanoUsd;
+    let kept = a;
+    if (!a.score.autoReady && b) {
+      escalated++;
+      costNanoUsd += b.costNanoUsd;
+      kept = b;
+    }
+    fieldsScored += kept.score.fields.length;
+    fieldsCorrect += kept.score.fields.filter((f) => f.correct).length;
+    if (kept.score.allCorrect) allCorrect++;
+    if (kept.score.autoReady) autoReady++;
+    if (kept.score.silentError) silentErrors++;
+  }
+  return {
+    first,
+    second,
+    source,
+    documents,
+    escalated,
+    fieldsCorrect,
+    fieldsScored,
+    allCorrect,
+    autoReady,
+    silentErrors,
+    costNanoUsd,
+  };
+}
+
+/** The two cheapest models in a run, cheapest first: the natural escalation pair. */
+export function cascadePair(models: readonly ModelId[]): [ModelId, ModelId] | null {
+  const byPrice = [...models].sort((a, b) =>
+    MODELS[a].price.input < MODELS[b].price.input
+      ? -1
+      : MODELS[a].price.input > MODELS[b].price.input
+        ? 1
+        : 0,
+  );
+  const [cheapest, next] = byPrice;
+  return cheapest && next ? [cheapest, next] : null;
+}
+
 const perDocument = (s: Summary) => (s.documents === 0 ? 0n : s.costNanoUsd / BigInt(s.documents));
 
 /** The spike report: one table across models, then field accuracy by model and source. */
@@ -127,6 +213,26 @@ export function renderReport(
       });
       lines.push(
         `| ${MODELS[model].label} | ${cells.join(' | ')} | ${percent(s.autoReady, s.documents)}% |`,
+      );
+    }
+    lines.push('');
+  }
+  const pair = cascadePair(models);
+  if (pair) {
+    const [first, second] = pair;
+    lines.push(
+      `## Cascade: ${MODELS[first].label} first, ${MODELS[second].label} when unsure`,
+      '',
+      `Every document goes to ${MODELS[first].label}. When its read would not skip review, ${MODELS[second].label} reads it too and its answer is kept.`,
+      '',
+      '| Documents | Escalated | Fields correct | Documents fully correct | Would skip review | Wrong but skipped review | Cost per document |',
+      '| --- | --- | --- | --- | --- | --- | --- |',
+    );
+    for (const source of ['all', ...sources] as const) {
+      const c = summarizeCascade(rows, first, second, source);
+      const perDoc = c.documents === 0 ? 0n : c.costNanoUsd / BigInt(c.documents);
+      lines.push(
+        `| ${source === 'all' ? 'All' : source} (${c.documents}) | ${percent(c.escalated, c.documents)}% | ${percent(c.fieldsCorrect, c.fieldsScored)}% | ${percent(c.allCorrect, c.documents)}% | ${percent(c.autoReady, c.documents)}% | ${c.silentErrors} | $${formatUsd(perDoc, 4)} |`,
       );
     }
     lines.push('');

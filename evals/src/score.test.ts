@@ -1,6 +1,13 @@
 import type { ReceiptExtraction } from '@expensewise/extraction';
 import { describe, expect, it } from 'vitest';
-import { percent, percentile, summarize, type ResultRow } from './report.ts';
+import {
+  cascadePair,
+  percent,
+  percentile,
+  summarize,
+  summarizeCascade,
+  type ResultRow,
+} from './report.ts';
 import { sameMerchant, scoreDocument } from './score.ts';
 import type { GroundTruth } from './truth.ts';
 
@@ -156,5 +163,61 @@ describe('report arithmetic', () => {
       costNanoUsd: 10_000_000n,
     });
     expect(s.fieldAccuracy.total).toEqual({ correct: 1, scored: 2 });
+  });
+
+  it('simulates escalating unsure reads from the cheap model to the stronger one', () => {
+    const sure = scoreDocument(truth, { outcome: 'extracted', extraction: good });
+    const unsure = scoreDocument(truth, {
+      outcome: 'extracted',
+      extraction: { ...good, total: { value: '58.35', confidence: 'low' } },
+    });
+    const sureButWrong = scoreDocument(truth, {
+      outcome: 'extracted',
+      extraction: { ...good, total: { value: '1.00', confidence: 'high' } },
+    });
+    const row = (
+      itemId: string,
+      model: ResultRow['model'],
+      score: ReturnType<typeof scoreDocument>,
+      cost: bigint,
+    ): ResultRow => ({
+      itemId,
+      source: 'synthetic-receipt',
+      model,
+      outcome: 'extracted',
+      latencyMs: 1000,
+      costNanoUsd: cost,
+      score,
+    });
+    const haiku = 'claude-haiku-4-5' as const;
+    const sonnet = 'claude-sonnet-5-5' as const;
+    const rows = [
+      // a: Haiku is sure and right, so Sonnet's read is never paid for.
+      row('a', haiku, sure, 1_000n),
+      row('a', sonnet, sure, 3_000n),
+      // b: Haiku is unsure, so Sonnet's (sure, right) read is kept.
+      row('b', haiku, unsure, 1_000n),
+      row('b', sonnet, sure, 3_000n),
+      // c: Haiku is sure but wrong: the cascade cannot catch it.
+      row('c', haiku, sureButWrong, 1_000n),
+      row('c', sonnet, sure, 3_000n),
+    ];
+    expect(summarizeCascade(rows, haiku, sonnet, 'all')).toMatchObject({
+      documents: 3,
+      escalated: 1,
+      allCorrect: 2,
+      autoReady: 3,
+      silentErrors: 1,
+      costNanoUsd: 6_000n,
+    });
+    expect(summarizeCascade(rows, haiku, sonnet, 'cord').documents).toBe(0);
+  });
+
+  it('pairs the two cheapest models, cheapest first', () => {
+    expect(cascadePair(['claude-sonnet-5-5', 'claude-haiku-4-5', 'claude-opus-5-5'])).toEqual([
+      'claude-haiku-4-5',
+      'claude-sonnet-5-5',
+    ]);
+    expect(cascadePair(['claude-haiku-4-5'])).toBeNull();
   });
 });

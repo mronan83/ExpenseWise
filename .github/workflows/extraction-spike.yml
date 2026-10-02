@@ -1,0 +1,63 @@
+# The extraction spike (ADR-0006, ADR-0012) against the Anthropic API. It spends money, so it
+# only runs by hand, in the `evals` environment: the product owner approves every run, and the
+# runner refuses to send anything when its estimate is above the cap.
+# The repository is public, and so is this log: it shows totals only, never receipt contents,
+# and the run uploads no artifacts.
+name: Extraction spike
+
+on:
+  workflow_dispatch:
+    inputs:
+      models:
+        description: Models to compare (fable, opus, sonnet, haiku)
+        required: true
+        default: sonnet,haiku
+      max_usd:
+        description: Refuse to run if the estimate is above this many dollars
+        required: true
+        default: '4'
+
+concurrency:
+  group: extraction-spike
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  TURBO_TELEMETRY_DISABLED: '1'
+
+jobs:
+  spike:
+    name: Extraction spike
+    runs-on: ubuntu-latest
+    environment: evals
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Install Chromium for the synthetic documents
+        run: pnpm --filter @expensewise/evals exec playwright-core install --with-deps chromium
+      - name: Build the eval set (CORD v2 test split and synthetic travel documents)
+        run: pnpm --filter @expensewise/evals data
+      - name: Run the spike
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          MODELS: ${{ inputs.models }}
+          MAX_USD: ${{ inputs.max_usd }}
+        run: pnpm --filter @expensewise/evals spike --models "$MODELS" --max-usd "$MAX_USD" --yes
+      - name: Publish the report to the run summary
+        if: always()
+        run: |
+          shopt -s nullglob
+          reports=(evals/results/*/report.md)
+          if [ ${#reports[@]} -eq 0 ]; then
+            echo "No report was written." >> "$GITHUB_STEP_SUMMARY"
+          else
+            cat "${reports[@]}" >> "$GITHUB_STEP_SUMMARY"
+          fi

@@ -119,6 +119,18 @@ The Free plan keeps no backups, so a nightly workflow keeps our own ([ADR-0014](
      | `B2_BUCKET` | The bucket name from step 2 |
      | `BACKUP_PASSPHRASE` | From step 5 |
 
+## 7. The extraction spike (GitHub Actions)
+
+The **Extraction spike** workflow calls the Anthropic API, which costs money. It runs only by hand, in a GitHub environment that needs your approval for every run. It refuses to send anything when its estimate is above the cap you give it.
+
+1. **Create an API key** in the Anthropic Console (Developer Platform), under **API keys**.
+2. **GitHub → Settings → Environments → New environment** named `evals`:
+   - **Required reviewers:** tick it and add yourself; leave **Prevent self-review** unticked.
+   - **Deployment branches and tags:** **Selected branches and tags**, branch rule `main`.
+   - **Environment secret** `ANTHROPIC_API_KEY`: the key from step 1.
+3. **Actions → Extraction spike → Run workflow.** Choose the models, by default `sonnet,haiku`, and a dollar cap, by default 4. Then open the run and choose **Review deployments → Approve and deploy**.
+4. **The report** appears on the run's summary page. It holds totals by model and source, and the cascade (cheapest model first, the next when unsure); it never includes receipt contents, because this repository's logs are public.
+
 ## After a restore or in a new project
 
 Custom role passwords are not in backups or dumps. Re-run **Database migrations** (step 2.5): it re-applies any missing migrations and re-sets both passwords from the GitHub secrets.
