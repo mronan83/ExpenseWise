@@ -1,0 +1,22 @@
+{
+  "name": "@expensewise/workflows",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@expensewise/db": "workspace:*",
+    "inngest": "^4.21.1"
+  },
+  "devDependencies": {
+    "@inngest/test": "^1.0.0",
+    "vitest": "^5.0.3"
+  }
+}

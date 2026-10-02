@@ -12,6 +12,10 @@ How the production environment is wired, and the steps to rebuild it after a res
 | API (Vercel) → Supabase Storage | Signed upload and download URLs (Phase 1) | Vercel env: `SUPABASE_SECRET_KEY` |
 | GitHub Actions → Postgres | Migrations as the schema owner, then role passwords | GitHub environment `production` secrets |
 | GitHub Actions → Postgres, Storage and Backblaze B2 | The nightly encrypted backup and heartbeat (from increment 1) | GitHub environment `backup` secrets |
+| Inngest → `/api/inngest` | Runs workflows, including the outbox relay every 5 minutes | Vercel env: `INNGEST_SIGNING_KEY`, `INNGEST_EVENT_KEY` (set by the integration) |
+| Outbox relay (Vercel) → Postgres | Claims and marks outbox events as `expensewise_relay`, which can read nothing else | Vercel env: `RELAY_DATABASE_URL` |
+| Browser and server → Sentry | Errors and traces, with bodies, cookies, query strings and credentials stripped | Vercel env: `NEXT_PUBLIC_SENTRY_DSN` |
+| Server → PostHog (optional) | Feature flag decisions | Vercel env: `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST` |
 
 The `postgres` role has BYPASSRLS. Its connection string lives only in GitHub secrets, never in Vercel.
 
@@ -118,6 +122,34 @@ The Free plan keeps no backups, so a nightly workflow keeps our own ([ADR-0014](
      | `B2_APPLICATION_KEY` | `applicationKey` from step 4 |
      | `B2_BUCKET` | The bucket name from step 2 |
      | `BACKUP_PASSPHRASE` | From step 5 |
+
+## 6. Workflows, error tracking and feature flags
+
+All three run on free plans with no card. The app works without them: workflows answer 503, errors stay in the Vercel logs, and every flag is off.
+
+1. **Inngest (required before increment 1).** In Vercel: **Integrations → Browse Marketplace → Inngest → Install**, and pick the `expensewise` project. It creates the Inngest account, sets `INNGEST_EVENT_KEY` and `INNGEST_SIGNING_KEY`, and syncs `/api/inngest` after each deployment. The free plan allows 50,000 executions a month; the relay's 5-minute sweep uses about 8,600 of them.
+2. **The relay's database URL.** **Vercel → Settings → Environment Variables**, Production only, marked Sensitive:
+   - `RELAY_DATABASE_URL` = `postgresql://expensewise_relay.<project-ref>:<relay password>@<pooler host>:6543/postgres`
+   - It is the same host and port as `DATABASE_URL` (step 3.2), with the `expensewise_relay` user and the second password from step 2.1.
+3. **Sentry (required before real use on Oct 15).** Sign up at <https://sentry.io/signup/> on the free Developer plan. Create a **Next.js** project, then copy its DSN into `NEXT_PUBLIC_SENTRY_DSN` for Production and Preview. Source maps are optional: they need `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT`.
+4. **PostHog (optional for now).** `FLAG_OVERRIDES` is enough while you are the only user, though each change needs a redeploy. To flip flags without a redeploy:
+   - sign up at <https://us.posthog.com/signup>;
+   - copy the project token (`phc_…`) into `NEXT_PUBLIC_POSTHOG_KEY`, and set `NEXT_PUBLIC_POSTHOG_HOST` to `https://us.i.posthog.com`;
+   - create each flag under **Feature flags** with the exact key from `packages/flags/src/registry.ts`.
+5. **Redeploy, then check:**
+   - `GET /api/inngest` no longer answers 503.
+   - Inngest's dashboard lists the app `expensewise` with the function **Outbox relay**, and a run every 5 minutes.
+   - Sentry receives events once the DSN is set and an error occurs.
+
+### Closing Phase 0: a flagged change through every gate
+
+The `shell.build-version` flag shows the deployed commit next to "Phase 0 preview" on the home page. It merged dark (off).
+
+1. **Turn it on in production:**
+   - with PostHog, enable the flag for everyone;
+   - without PostHog, set `FLAG_OVERRIDES` = `shell.build-version=on` for Production and redeploy.
+2. **Open the production home page.** The header reads "Phase 0 preview · <commit>". The change went from branch to production, off, through G1–G5, and was released by the flag alone.
+3. **Turn it off again**, either in PostHog or by deleting `FLAG_OVERRIDES` and redeploying.
 
 ## After a restore or in a new project
 

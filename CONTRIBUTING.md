@@ -16,7 +16,9 @@ How a change moves from idea to production. The full model is in [docs/06-delive
 - **Money** is integer minor units plus an ISO 4217 code. Use `@expensewise/domain` (`money`, `fromDecimal`, `allocate`, `convert`). ESLint blocks `parseFloat` and `Math.round` in domain code.
 - **Tenancy.** Every query runs inside `withOrg(db, orgId, …)`. The API and workers connect as `expensewise_app`, which row-level security confines to one organization.
 - **Audit.** Every state change calls `appendAuditEvent()` in the same transaction as the change.
-- **Async work** goes through `enqueueOutbox()` in the same transaction, never a direct call to a queue.
+- **Async work** goes through `enqueueOutbox()` in the same transaction, never a direct call to a queue. The relay in `packages/workflows` hands committed events to Inngest with the outbox id as the event id, so a workflow starts once even if an event is relayed twice.
+- **Feature flags.** Anything a user can see ships behind a flag in `packages/flags/src/registry.ts`, off by default (AP8). Read it on the server with `flags.isEnabled()`. Delete the flag and its off branch once it is on everywhere.
+- **Errors.** Unexpected errors go to Sentry with credentials redacted, and with no request bodies, cookies, query strings or database parameters. Never put receipt contents in an error message.
 - **API changes** start in `packages/api`. Run `pnpm --filter @expensewise/api contract:generate` and commit `openapi.json`; CI fails on drift.
 
 ## Adding a tenant table

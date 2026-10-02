@@ -12,6 +12,11 @@ test.describe('app shell', () => {
     await expect(nav.getByText('Home', { exact: true })).toHaveAttribute('aria-current', 'page');
   });
 
+  test('ships the build-version change dark: its flag is off by default', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByText('Phase 0 preview', { exact: true })).toBeVisible();
+  });
+
   test('sends security headers', async ({ request }) => {
     const res = await request.get('/');
     expect(res.headers()['x-content-type-options']).toBe('nosniff');
@@ -53,6 +58,14 @@ test.describe('API through Next.js', () => {
     expect(res.status()).toBe(report.ready ? 200 : 503);
     expect(res.headers()['cache-control']).toBe('no-store');
     expect(Object.keys(report.checks)).toEqual(['database', 'role', 'tls', 'tenantIsolation']);
+  });
+
+  test('says plainly when workflows are not configured', async ({ request }) => {
+    // E2E runs without Inngest keys; production gets them from the Vercel integration.
+    const res = await request.get('/api/inngest');
+    expect(res.status()).toBe(503);
+    expect(res.headers()['content-type']).toContain('application/problem+json');
+    expect(await res.json()).toMatchObject({ code: 'workflows_not_configured' });
   });
 
   test('answers unknown API routes with a problem document', async ({ request }) => {

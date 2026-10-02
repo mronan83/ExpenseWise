@@ -1,0 +1,20 @@
+{
+  "name": "@expensewise/flags",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "posthog-node": "^5.55.0"
+  },
+  "devDependencies": {
+    "vitest": "^5.0.3"
+  }
+}
