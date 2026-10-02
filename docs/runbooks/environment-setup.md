@@ -15,6 +15,7 @@ How the production environment is wired, and the steps to rebuild it after a res
 | Inngest → `/api/inngest` | Runs workflows, including the outbox relay every 5 minutes | Vercel env: `INNGEST_SIGNING_KEY`, `INNGEST_EVENT_KEY` (set by the integration) |
 | Outbox relay (Vercel) → Postgres | Claims and marks outbox events as `expensewise_relay`, which can read nothing else | Vercel env: `RELAY_DATABASE_URL` |
 | Browser and server → Sentry | Errors and traces, with bodies, cookies, query strings and credentials stripped | Vercel env: `NEXT_PUBLIC_SENTRY_DSN` |
+| API (Vercel) → Anthropic, OpenAI | Checking each organization's AI provider keys, and extraction from increment 1. Keys are entered in the app and stored encrypted ([ADR-0015](../adr/0015-ai-provider-keys-in-app.md)) | Nothing to set: the encryption key derives from `SUPABASE_SECRET_KEY` |
 | Server → PostHog (optional) | Feature flag decisions | Vercel env: `NEXT_PUBLIC_POSTHOG_KEY`, `NEXT_PUBLIC_POSTHOG_HOST` |
 
 The `postgres` role has BYPASSRLS. Its connection string lives only in GitHub secrets, never in Vercel.
@@ -81,6 +82,13 @@ Phase 1 signs in with email and password plus TOTP, and has no custom email doma
 1. **Authentication → Sign In / Providers:** keep Email enabled and turn off **Allow new users to sign up**. Nobody needs to self-register in Phase 1.
 2. **Authentication → Users → Add user:** create the product owner's account with email and password, and tick **Auto Confirm User** so no confirmation email is needed. TOTP is enrolled in the app after the first sign-in.
 3. **Authentication → URL Configuration:** set Site URL to `https://expensewise-theta.vercel.app`, and add `https://expensewise-*-mronan83s-projects.vercel.app/**` as a redirect URL so preview sign-ins work.
+
+4. **Sign in and add your AI provider keys** ([ADR-0015](../adr/0015-ai-provider-keys-in-app.md)). Open the app, choose **Settings**, and sign in with the account from step 2. Your one-person organization is created on first sign-in. Then:
+   - Paste each key, Anthropic and, if you use it, OpenAI, and choose **Check and save**.
+   - The key is checked with the provider before it is stored. It is stored encrypted, and only its last four characters are ever shown again.
+   - **Test** re-checks a stored key; **Remove** deletes it.
+
+   No environment variable is needed. Keys are encrypted with a key derived from `SUPABASE_SECRET_KEY`, unless `APP_ENCRYPTION_KEY` is set. Rotating that secret makes stored keys unreadable: **Test** says so, and you save them again.
 
 Supabase's built-in email covers password resets and the owner's own notifications. It is rate-limited and delivers only to members of the Supabase team. Before a second person is invited, add a sender domain or create their account the same way as step 2.
 

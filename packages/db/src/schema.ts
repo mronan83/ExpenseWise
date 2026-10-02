@@ -52,6 +52,8 @@ export const extractionOutcome = pgEnum('extraction_outcome', ['confident', 'uns
 export const approvalDecision = pgEnum('approval_decision', ['pending', 'approved', 'returned']);
 export const mileageMethod = pgEnum('mileage_method', ['manual', 'route', 'gps']);
 export const actorType = pgEnum('actor_type', ['user', 'system']);
+export const aiProvider = pgEnum('ai_provider', ['anthropic', 'openai']);
+export const aiAuthScheme = pgEnum('ai_auth_scheme', ['api_key', 'bearer']);
 
 const id = () => uuid('id').primaryKey().$defaultFn(newId);
 const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
@@ -417,5 +419,37 @@ export const outboxEvents = pgTable(
     index('outbox_events_unpublished_idx')
       .on(t.createdAt)
       .where(sql`published_at IS NULL`),
+  ],
+);
+
+/**
+ * Each organization's own API keys for AI providers (ADR-0015). The key is stored only as
+ * AES-256-GCM ciphertext bound to (org_id, provider); the plaintext never leaves the server
+ * and is never returned by the API. key_hint is the last four characters, for display.
+ */
+export const aiProviderKeys = pgTable(
+  'ai_provider_keys',
+  {
+    id: id(),
+    orgId: orgId(),
+    provider: aiProvider('provider').notNull(),
+    ciphertext: text('ciphertext').notNull(),
+    keyHint: text('key_hint').notNull(),
+    /** How the provider accepted the key: as an API key header or as a bearer token. */
+    authScheme: aiAuthScheme('auth_scheme').notNull(),
+    verifiedAt: timestamp('verified_at', { withTimezone: true }),
+    updatedByMemberId: uuid('updated_by_member_id').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('ai_provider_keys_org_id_id_key').on(t.orgId, t.id),
+    unique('ai_provider_keys_org_provider_key').on(t.orgId, t.provider),
+    foreignKey({
+      name: 'ai_provider_keys_updated_by_fk',
+      columns: [t.orgId, t.updatedByMemberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    check('ai_provider_keys_hint_short', sql`length(${t.keyHint}) <= 4`),
   ],
 );

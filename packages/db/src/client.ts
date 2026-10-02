@@ -58,10 +58,33 @@ export async function withOrg<T>(
   db: Database,
   orgId: string,
   work: (tx: Transaction) => Promise<T>,
+  options: { userId?: string } = {},
 ): Promise<T> {
   if (!isUuid(orgId)) throw new Error(`withOrg needs an organization UUID, got "${orgId}"`);
   return db.transaction(async (tx) => {
     await tx.execute(sql`select set_config('app.org_id', ${orgId}, true)`);
+    if (options.userId) await setUser(tx, options.userId);
     return work(tx);
   });
+}
+
+/**
+ * Runs `work` in a transaction that knows the signed-in user but no organization. Row-level
+ * security then shows only that user's own member rows (policy own_memberships), which is how
+ * the API finds the caller's organizations. The user id must come from a verified token.
+ */
+export async function withUser<T>(
+  db: Database,
+  userId: string,
+  work: (tx: Transaction) => Promise<T>,
+): Promise<T> {
+  return db.transaction(async (tx) => {
+    await setUser(tx, userId);
+    return work(tx);
+  });
+}
+
+async function setUser(tx: Transaction, userId: string): Promise<void> {
+  if (!userId.trim()) throw new Error('withUser needs a user id');
+  await tx.execute(sql`select set_config('app.user_id', ${userId}, true)`);
 }
