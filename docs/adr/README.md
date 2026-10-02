@@ -32,7 +32,7 @@ Each ADR records one decision with its context, the alternatives considered and 
 ## How to add an ADR
 
 1. **Decide whether you need one.** A story that is architectural needs an ADR before it is Ready ([Definition of Ready](../06-delivery-lifecycle.md#76-definition-of-ready-and-definition-of-done)).
-2. **Copy the template.** Copy [0000-template.md](0000-template.md) to `NNNN-short-title.md`, where `NNNN` is the next unused number (the next one is 0020). Numbers are never reused.
+2. **Copy the template.** Copy [0000-template.md](0000-template.md) to `NNNN-short-title.md`, where `NNNN` is the next unused number (the next one is 0021). Numbers are never reused.
 3. **Fill in every section.** Keep it tight. Name concrete alternatives, and give an honest exit path.
 4. **Open it as Proposed.** Add a row to the index above in the same pull request.
 5. **Record the outcome.** When the product owner accepts it, set the status to Accepted. Docs and ADRs are updated in the same pull request as the change they describe ([Definition of Done](../06-delivery-lifecycle.md#76-definition-of-ready-and-definition-of-done)).
