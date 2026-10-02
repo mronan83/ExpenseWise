@@ -275,6 +275,61 @@ describe('AI provider keys', () => {
     expect(down.audit).toEqual([]);
   });
 
+  it('says what the provider answered, so a failed check can be acted on', async () => {
+    const refused = setup({ ok: false, reason: 'refused', status: 400, detail: 'bad request' });
+    const res = await refused.call('PUT', '/v1/settings/ai-providers/anthropic', 'owner', {
+      apiKey: 'sk-ant-api03-some-key',
+    });
+    expect(res.status).toBe(422);
+    expect(await res.json()).toMatchObject({
+      code: 'key_refused',
+      detail: 'Anthropic answered 400: bad request. Nothing was stored.',
+    });
+
+    const busy = setup({ ok: false, reason: 'unreachable', status: 529, detail: 'Overloaded' });
+    const res2 = await busy.call('PUT', '/v1/settings/ai-providers/anthropic', 'owner', {
+      apiKey: 'sk-ant-api03-some-key',
+    });
+    expect(res2.status).toBe(502);
+    expect(await res2.json()).toMatchObject({
+      title: 'Anthropic is busy or having trouble',
+      detail: 'Anthropic answered 529: Overloaded. Nothing was stored. Try again shortly.',
+    });
+
+    const silent = setup({
+      ok: false,
+      reason: 'unreachable',
+      detail: 'no answer within 8 seconds',
+    });
+    const res3 = await silent.call('PUT', '/v1/settings/ai-providers/anthropic', 'owner', {
+      apiKey: 'sk-ant-api03-some-key',
+    });
+    expect(await res3.json()).toMatchObject({
+      title: 'Anthropic could not be reached',
+      detail:
+        'No answer from Anthropic: no answer within 8 seconds. Nothing was stored. Try again shortly.',
+    });
+  });
+
+  it('cleans what copying adds to a key before checking it, and refuses what is not a key', async () => {
+    const { call, checked } = setup();
+    // An env-file line pasted whole, with a line break and a zero-width space inside. Built at
+    // runtime so the secret scanner doesn't read the fake key as a real one.
+    const pasted = [' ANTHROPIC_API_KEY=', '"', 'sk-ant-api03-abc\n def\u200B', '" '].join('');
+    const res = await call('PUT', '/v1/settings/ai-providers/anthropic', 'owner', {
+      apiKey: pasted,
+    });
+    expect(res.status).toBe(200);
+    expect(checked).toEqual([{ provider: 'anthropic', key: 'sk-ant-api03-abcdef' }]);
+
+    const bad = await call('PUT', '/v1/settings/ai-providers/anthropic', 'owner', {
+      apiKey: 'sk-ant-\u00e9t\u00e9-not-a-key',
+    });
+    expect(bad.status).toBe(422);
+    expect(await bad.json()).toMatchObject({ code: 'key_malformed' });
+    expect(checked).toHaveLength(1);
+  });
+
   it('re-checks a stored key with its stored scheme, and records the check', async () => {
     const { call, audit, checked } = setup({ ok: true, authScheme: 'api_key' });
     await call('PUT', '/v1/settings/ai-providers/anthropic', 'owner', {
@@ -300,13 +355,18 @@ describe('AI provider keys', () => {
       verifyToken: (t) => Promise.resolve(identities[t]!),
       workspace: first.store,
       secrets: createSecretBox('test-encryption-secret-123456'),
-      verifyProviderKey: () => Promise.resolve({ ok: false, reason: 'rejected', status: 401 }),
+      verifyProviderKey: () =>
+        Promise.resolve({ ok: false, reason: 'rejected', status: 401, detail: 'key revoked' }),
     });
     const res = await api.request('/v1/settings/ai-providers/openai/test', {
       method: 'POST',
       headers: { authorization: 'Bearer owner' },
     });
-    expect(await res.json()).toMatchObject({ valid: false, reason: 'rejected' });
+    expect(await res.json()).toMatchObject({
+      valid: false,
+      reason: 'rejected',
+      detail: 'OpenAI answered 401: key revoked',
+    });
 
     // A rotated encryption secret makes the stored key unreadable: re-enter it.
     const rotated = createApi({

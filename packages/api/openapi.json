@@ -323,10 +323,15 @@
             "type": "string",
             "enum": [
               "rejected",
+              "refused",
               "unreachable",
               "unreadable"
             ],
             "description": "Why the key could not be used, when valid is false."
+          },
+          "detail": {
+            "type": "string",
+            "description": "What the provider answered, when it answered. Never the key."
           }
         },
         "required": [

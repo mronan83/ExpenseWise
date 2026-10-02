@@ -164,11 +164,14 @@ function ProviderCard({
 
   const test = () =>
     void run(async () => {
-      const result = await api<{ valid: boolean; reason?: string; status: KeyStatus }>(
-        `/v1/settings/ai-providers/${status.provider}/test`,
-        { method: 'POST' },
-      );
+      const result = await api<{
+        valid: boolean;
+        reason?: string;
+        detail?: string;
+        status: KeyStatus;
+      }>(`/v1/settings/ai-providers/${status.provider}/test`, { method: 'POST' });
       onChange(result.status);
+      const answered = result.detail ? ` ${result.detail}.` : '';
       setMessage(
         result.valid
           ? { tone: 'ok', text: 'The key works.' }
@@ -176,10 +179,12 @@ function ProviderCard({
               tone: 'warn',
               text:
                 result.reason === 'rejected'
-                  ? `${info.name} no longer accepts this key. Save a new one.`
+                  ? `${info.name} no longer accepts this key.${answered} Save a new one.`
                   : result.reason === 'unreadable'
                     ? 'The stored key can no longer be decrypted. Save it again.'
-                    : `${info.name} could not be reached. Try again shortly.`,
+                    : result.reason === 'refused'
+                      ? `${info.name} refused the check.${answered}`
+                      : `${info.name} could not be reached.${answered} Try again shortly.`,
             },
       );
     });

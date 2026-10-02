@@ -7,7 +7,12 @@ import {
 } from '@expensewise/db';
 import type { MemberRole } from '@expensewise/domain';
 import type { OpenAPIHono } from '@hono/zod-openapi';
-import type { ProviderKeyVerifier } from './ai-providers.ts';
+import {
+  isPlausibleKey,
+  normalizeProviderKey,
+  type ProviderKeyVerifier,
+  type ProviderVerdict,
+} from './ai-providers.ts';
 import {
   AuthError,
   requireIdentity,
@@ -40,6 +45,37 @@ export interface WorkspaceRouteOptions {
 const MANAGER_ROLES: ReadonlySet<MemberRole> = new Set(['owner', 'finance_admin']);
 
 const PROVIDER_NAMES: Record<AiProvider, string> = { anthropic: 'Anthropic', openai: 'OpenAI' };
+
+type FailedVerdict = Extract<ProviderVerdict, { ok: false }>;
+
+/** "Anthropic answered 400: <its message>", or why there was no answer. */
+function answerText(name: string, verdict: FailedVerdict): string {
+  if (!verdict.status) return `No answer from ${name}: ${verdict.detail ?? 'the request failed'}`;
+  return `${name} answered ${verdict.status}${verdict.detail ? `: ${verdict.detail}` : ''}`;
+}
+
+/** A failed check as a problem document that says what the provider actually answered. */
+function verdictProblem(name: string, verdict: FailedVerdict): ProblemError {
+  const answered = `${answerText(name, verdict)}. Nothing was stored.`;
+  if (verdict.reason === 'rejected') {
+    return new ProblemError(422, 'key-rejected', `${name} rejected this key`, {
+      code: 'key_rejected',
+      detail: answered,
+    });
+  }
+  if (verdict.reason === 'refused') {
+    return new ProblemError(422, 'key-refused', `${name} refused the check`, {
+      code: 'key_refused',
+      detail: answered,
+    });
+  }
+  return new ProblemError(
+    502,
+    'provider-unreachable',
+    verdict.status ? `${name} is busy or having trouble` : `${name} could not be reached`,
+    { code: 'provider_unreachable', detail: `${answered} Try again shortly.` },
+  );
+}
 
 export function keyStatus(provider: AiProvider, stored: StoredProviderKey | undefined) {
   return {
@@ -172,24 +208,25 @@ export function registerWorkspaceRoutes(
     const who = await manager(c.var.identity.userId);
     const { secrets, verify } = keyTools();
     const { provider } = c.req.valid('param');
-    const { apiKey } = c.req.valid('json');
+    const apiKey = normalizeProviderKey(c.req.valid('json').apiKey);
+    const name = PROVIDER_NAMES[provider];
+    if (!isPlausibleKey(apiKey)) {
+      throw new ProblemError(422, 'key-malformed', `That doesn't look like a ${name} key`, {
+        code: 'key_malformed',
+        detail:
+          'It is too short or has characters keys never contain. Copy it again from the ' +
+          `${name} console and paste only the key. Nothing was stored.`,
+      });
+    }
 
     const verdict = await verify(provider, apiKey);
     if (!verdict.ok) {
-      throw verdict.reason === 'rejected'
-        ? new ProblemError(422, 'key-rejected', `${PROVIDER_NAMES[provider]} rejected this key`, {
-            code: 'key_rejected',
-            detail: `${PROVIDER_NAMES[provider]} answered ${verdict.status ?? 'with an error'} when the key was checked. Nothing was stored.`,
-          })
-        : new ProblemError(
-            502,
-            'provider-unreachable',
-            `${PROVIDER_NAMES[provider]} could not be reached`,
-            {
-              code: 'provider_unreachable',
-              detail: 'The key could not be checked, so nothing was stored. Try again shortly.',
-            },
-          );
+      // Never the key: the provider's own message and status, for diagnosing from the logs.
+      console.warn(
+        `Checking a ${provider} key: ${verdict.reason}` +
+          `${verdict.status ? ` (${verdict.status})` : ''}${verdict.detail ? `: ${verdict.detail}` : ''}`,
+      );
+      throw verdictProblem(name, verdict);
     }
     const saved = await store().saveKey(
       who.orgId,
@@ -227,7 +264,14 @@ export function registerWorkspaceRoutes(
     const verdict = await verify(provider, key, stored.authScheme);
     if (!verdict.ok) {
       return c.json(
-        { valid: false, reason: verdict.reason, status: keyStatus(provider, stored) },
+        {
+          valid: false,
+          reason: verdict.reason,
+          ...(verdict.detail || verdict.status
+            ? { detail: answerText(PROVIDER_NAMES[provider], verdict) }
+            : {}),
+          status: keyStatus(provider, stored),
+        },
         200,
       );
     }
