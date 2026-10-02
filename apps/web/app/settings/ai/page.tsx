@@ -18,16 +18,18 @@ interface KeyStatus {
   updatedAt: string | null;
 }
 
-const PROVIDERS: Record<Provider, { name: string; where: string; url: string }> = {
+const PROVIDERS: Record<Provider, { name: string; where: string; url: string; use: string }> = {
   anthropic: {
     name: 'Anthropic',
     where: 'Claude Console → API keys',
     url: 'https://console.anthropic.com/settings/keys',
+    use: 'Reads every receipt with Haiku 4.5 and Sonnet 5.5, side by side.',
   },
   openai: {
     name: 'OpenAI',
     where: 'OpenAI Platform → API keys',
     url: 'https://platform.openai.com/api-keys',
+    use: "Reads a receipt with GPT-5.6 Luna only when Claude can't: no credit, a rejected key or an outage.",
   },
 };
 
@@ -216,6 +218,7 @@ function ProviderCard({
           {status.configured ? `Key ending ${status.keyHint}` : 'No key'}
         </span>
       </div>
+      <p className="text-sm text-ink-2">{info.use}</p>
       {status.verifiedAt ? (
         <p className="text-sm text-ink-2">
           Last checked {new Date(status.verifiedAt).toLocaleString()}

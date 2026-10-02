@@ -2,7 +2,7 @@
 
 Each receipt is read by Haiku 4.5 and Sonnet 5.5 side by side, on the organization's own key, so the model-tier decision rests on the product owner's real receipts. Events reach the workflow runner right after commit, and the outbox relay becomes the safety net.
 
-- **Status:** Accepted (decided by product owner)
+- **Status:** Accepted (decided by product owner); point 2 amended by [ADR-0020](0020-openai-fallback-reader.md)
 - **Date:** 2026-10-02
 - **Deciders:** Product owner; Claude (principal architect)
 - **Decision register:** D-19
@@ -28,6 +28,7 @@ The receipt path in the architecture (section 6.4) also needs its first real imp
    - **Ready** (`extracted`) only when both models read the merchant, date, currency and total with high confidence and agree on them.
    - **Needs review** when at least one reading succeeded but that test fails.
    - **Failed** when no reading succeeded: no key, a rejected key, no credit, or a file that doesn't match what was described.
+   - *Amended by [ADR-0020](0020-openai-fallback-reader.md):* when no Claude reading succeeded, the fallback model reads the receipt. Its reading makes the receipt Needs review, never Ready.
    - Agreement between two independent readings is a stronger Ready signal than either model's own confidence.
 3. **The tier decision uses the page's running comparison:** receipts compared, how many the models read alike, and confidence, time and spend per model. Once the tier is chosen, `COMPARISON_MODELS` shrinks to one model and Ready falls back to ADR-0006's single-reading rule.
 4. **The capture path follows section 6.4:**

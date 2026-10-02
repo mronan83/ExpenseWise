@@ -1,7 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import type { ExtractionInput, ExtractionRun, Extractor } from './extractor.ts';
-import { costNanoUsd, MODELS, type ModelId, type TokenUsage } from './models.ts';
+import { costNanoUsd, MODELS, type ClaudeModelId, type TokenUsage } from './models.ts';
 import { PROMPT_VERSION, SYSTEM_PROMPT } from './prompt.ts';
 import { ReceiptExtractionSchema } from './schema.ts';
 
@@ -12,7 +12,7 @@ import { ReceiptExtractionSchema } from './schema.ts';
 export class ClaudeExtractor implements Extractor {
   constructor(
     private readonly client: Anthropic,
-    readonly model: ModelId,
+    readonly model: ClaudeModelId,
   ) {}
 
   async extract(input: ExtractionInput): Promise<ExtractionRun> {

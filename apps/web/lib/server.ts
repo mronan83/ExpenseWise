@@ -103,11 +103,13 @@ export const dispatchEvents =
       }
     : undefined;
 
-/** Decrypts an organization's stored Anthropic key for the receipt workflow. */
-export function anthropicKeyReader() {
+/**
+ * Decrypts an organization's stored key for a provider, for the receipt workflow: Anthropic
+ * for the compared models, OpenAI for the fallback (ADR-0020).
+ */
+export function providerKeyReader() {
   const db = appDatabase();
   const secrets = secretBox();
   if (!db || !secrets) return undefined;
-  const read = storedKeyReader(db, secrets);
-  return (orgId: string) => read(orgId, 'anthropic');
+  return storedKeyReader(db, secrets);
 }

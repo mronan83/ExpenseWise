@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { api, ApiProblem } from '../../../lib/api';
 import {
   describeReadingError,
+  providerOf,
   formatCost,
   formatMoney,
   formatSeconds,
@@ -158,6 +159,7 @@ export default function ReceiptPage() {
 
 function Verdict({ receipt, stale }: { receipt: ReceiptDetail; stale: boolean }) {
   const status = RECEIPT_STATUS[receipt.status];
+  const fallback = receipt.readings.find((r) => r.role === 'fallback');
   let text: string;
   if (receipt.status === 'processing') {
     text = stale
@@ -166,7 +168,9 @@ function Verdict({ receipt, stale }: { receipt: ReceiptDetail; stale: boolean })
   } else if (receipt.status === 'extracted') {
     text = 'Both models read it with confidence and agree.';
   } else if (receipt.status === 'failed') {
-    text = 'Neither model could read it. See why below.';
+    text = 'No model could read it. See why below.';
+  } else if (fallback?.fields) {
+    text = `Claude couldn't read it, so ${fallback.label} did. One reading, so check it before you rely on it.`;
   } else if (receipt.differences.length > 0) {
     text = `The models disagree on ${receipt.differences.join(', ')}.`;
   } else {
@@ -218,6 +222,9 @@ function Comparison({ receipt }: { receipt: ReceiptDetail }) {
             {readings.map((r) => (
               <th key={r.model} scope="col" className="pb-2 font-semibold">
                 {r.label}
+                {r.role === 'fallback' ? (
+                  <span className="block text-xs font-normal text-ink-2">fallback</span>
+                ) : null}
               </th>
             ))}
           </tr>
@@ -231,7 +238,7 @@ function Comparison({ receipt }: { receipt: ReceiptDetail }) {
               {readings.map((r) => (
                 <td key={r.model} className="py-2 pr-2 text-xs text-warn">
                   {r.state === 'failed' || r.state === 'missing'
-                    ? describeReadingError(r.error)
+                    ? describeReadingError(r.error, providerOf(r))
                     : ''}
                 </td>
               ))}

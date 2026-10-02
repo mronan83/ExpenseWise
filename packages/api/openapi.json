@@ -465,7 +465,7 @@
               "needs_review",
               "failed"
             ],
-            "description": "processing while it is read; extracted when both models read it with confidence and agree; needs_review otherwise; failed when no model could read it."
+            "description": "processing while it is read; extracted when both compared models read it with confidence and agree; needs_review otherwise, including when only the fallback model read it; failed when no model could read it."
           },
           "source": {
             "type": "string",
@@ -631,6 +631,14 @@
                     "label": {
                       "type": "string"
                     },
+                    "role": {
+                      "type": "string",
+                      "enum": [
+                        "compared",
+                        "fallback"
+                      ],
+                      "description": "compared: one of the models the tier decision weighs. fallback: read only because no compared model could (ADR-0020)."
+                    },
                     "readings": {
                       "type": "integer"
                     },
@@ -653,6 +661,7 @@
                   "required": [
                     "model",
                     "label",
+                    "role",
                     "readings",
                     "confident",
                     "failed",
@@ -727,6 +736,14 @@
           "label": {
             "type": "string",
             "example": "Haiku 4.5"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "compared",
+              "fallback"
+            ],
+            "description": "compared: one of the models the tier decision weighs. fallback: read only because no compared model could (ADR-0020)."
           },
           "state": {
             "type": "string",
@@ -1032,6 +1049,7 @@
         "required": [
           "model",
           "label",
+          "role",
           "state",
           "error",
           "latencyMs",
