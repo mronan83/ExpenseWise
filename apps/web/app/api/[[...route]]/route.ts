@@ -1,5 +1,6 @@
 import { createHttpApp, supabaseTokenVerifier } from '@expensewise/api';
 import { createReadinessProbe } from '@expensewise/db';
+import * as Sentry from '@sentry/nextjs';
 import { handle } from 'hono/vercel';
 
 // The whole versioned API lives in @expensewise/api; Next.js only hands it requests under /api.
@@ -14,6 +15,8 @@ const handler = handle(
     verifyToken: supabaseUrl ? supabaseTokenVerifier({ projectUrl: supabaseUrl }) : undefined,
     // Connects lazily on the first readiness request, with one connection per instance.
     readiness: createReadinessProbe(process.env.DATABASE_URL),
+    // Unexpected errors go to error tracking (a no-op until NEXT_PUBLIC_SENTRY_DSN is set).
+    reportError: (error) => Sentry.captureException(error),
   }),
 );
 

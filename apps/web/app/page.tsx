@@ -1,3 +1,6 @@
+import { connection } from 'next/server';
+import { flags } from '../lib/flags';
+
 const destinations = [
   { label: 'Home', current: true },
   { label: 'Expenses' },
@@ -7,12 +10,19 @@ const destinations = [
 ] as const;
 
 /** Phase 0 app shell: the inbox layout and tab bar, with no data behind them yet. */
-export default function HomePage() {
+export default async function HomePage() {
+  // Flags are read per request, so turning one on needs no redeploy.
+  await connection();
+  const showBuild = await flags.isEnabled('shell.build-version');
+  const build = process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'dev';
+
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]">
       <header className="flex items-baseline justify-between py-3">
         <span className="font-mono text-xs tracking-widest text-ink-2 uppercase">ExpenseWise</span>
-        <span className="font-mono text-xs text-ink-3">Phase 0 preview</span>
+        <span className="font-mono text-xs text-ink-3">
+          Phase 0 preview{showBuild ? ` · ${build}` : ''}
+        </span>
       </header>
 
       <main className="flex flex-1 flex-col gap-4">

@@ -15,6 +15,8 @@ export interface ApiOptions {
   readonly verifyToken?: TokenVerifier;
   /** Checks the database the way tenant requests use it. Without one, readiness answers 503. */
   readonly readiness?: ReadinessProbe;
+  /** Sends unexpected errors to error tracking. Broken business rules (422) are not errors. */
+  readonly reportError?: (error: unknown) => void;
 }
 
 /** Never expected to throw; a probe that does still reads as not ready. */
@@ -49,16 +51,19 @@ const notFound: NotFoundHandler = (c: Context) =>
     code: 'not_found',
   });
 
-const onError: ErrorHandler = (error, c) => {
-  if (error instanceof DomainError) {
-    return problem(c, 422, 'business-rule', 'A business rule was not met', {
-      detail: error.message,
-      code: error.code,
-    });
-  }
-  console.error(error);
-  return problem(c, 500, 'internal', 'Something went wrong on our side', { code: 'internal' });
-};
+function errorHandler(reportError?: (error: unknown) => void): ErrorHandler {
+  return (error, c) => {
+    if (error instanceof DomainError) {
+      return problem(c, 422, 'business-rule', 'A business rule was not met', {
+        detail: error.message,
+        code: error.code,
+      });
+    }
+    console.error(error);
+    reportError?.(error);
+    return problem(c, 500, 'internal', 'Something went wrong on our side', { code: 'internal' });
+  };
+}
 
 /**
  * The versioned HTTP API, independent of Next.js so the same app serves the web
@@ -90,6 +95,7 @@ export function createApi(options: ApiOptions) {
   app.openapi(readyRoute, async (c) => {
     const report = options.readiness
       ? await options.readiness().catch((error: unknown) => {
+          // Logged only: a connection failure can carry connection details.
           console.error('Readiness probe threw', error);
           return notReady('readiness check failed');
         })
@@ -105,7 +111,7 @@ export function createApi(options: ApiOptions) {
   app.doc31('/v1/openapi.json', OPENAPI_INFO);
 
   app.notFound(notFound);
-  app.onError(onError);
+  app.onError(errorHandler(options.reportError));
 
   return app;
 }
@@ -120,7 +126,7 @@ export function createHttpApp(options: ApiOptions) {
   const app = new Hono().basePath('/api');
   app.route('/', createApi(options));
   app.notFound(notFound);
-  app.onError(onError);
+  app.onError(errorHandler(options.reportError));
   return app;
 }
 
