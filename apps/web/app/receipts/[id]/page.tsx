@@ -193,7 +193,9 @@ function Value({ value }: { value: TextField | MoneyField | string | null | unde
   return (
     <span className="flex flex-col">
       <span className="tabular-nums">{text}</span>
-      {value.confidence === 'high' ? null : (
+      {isMoney(value) && value.assumed ? (
+        <span className="text-xs text-ink-2">not on receipt</span>
+      ) : value.confidence === 'high' ? null : (
         <span className="text-xs text-warn">{value.confidence} confidence</span>
       )}
     </span>

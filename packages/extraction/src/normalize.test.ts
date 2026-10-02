@@ -1,6 +1,6 @@
 import { money } from '@expensewise/domain';
 import { describe, expect, it } from 'vitest';
-import { normalizeExtraction } from './normalize.ts';
+import { assumedZeros, normalizeExtraction } from './normalize.ts';
 import type { ReceiptExtraction } from './schema.ts';
 
 const base: ReceiptExtraction = {
@@ -91,5 +91,47 @@ describe('normalizeExtraction', () => {
     expect(n.tip).toBeNull();
     expect(n.taxTotal).toBeNull();
     expect(n.cardLastFour).toBeNull();
+  });
+});
+
+describe('assumedZeros', () => {
+  const read = (over: Partial<ReceiptExtraction>) => normalizeExtraction({ ...base, ...over });
+
+  it('counts tax and tip a receipt does not print as zero', () => {
+    expect(assumedZeros(read({ subtotal: null, taxes: [], tip: null }))).toEqual([
+      'taxTotal',
+      'tip',
+    ]);
+  });
+
+  it('agrees with a subtotal that already equals the total', () => {
+    const n = read({ subtotal: { value: '58.43', confidence: 'high' }, taxes: [], tip: null });
+    expect(assumedZeros(n)).toEqual(['taxTotal', 'tip']);
+  });
+
+  it('assumes only the missing one when the rest add up', () => {
+    const n = read({ subtotal: { value: '54.00', confidence: 'high' }, tip: null });
+    expect(assumedZeros(n)).toEqual(['tip']);
+  });
+
+  it('assumes nothing when the printed figures leave an amount unaccounted for', () => {
+    expect(assumedZeros(read({ taxes: [], tip: null }))).toEqual([]);
+  });
+
+  it('never assumes a line that is printed but unreadable, or anything without a total', () => {
+    const unreadable = read({
+      subtotal: null,
+      taxes: [],
+      tip: { value: '8.5.0', confidence: 'low' },
+    });
+    expect(unreadable.problems).toContain('tip');
+    expect(assumedZeros(unreadable)).toEqual(['taxTotal']);
+    expect(assumedZeros(read({ total: null, taxes: [], tip: null }))).toEqual([]);
+  });
+
+  it('leaves the reading itself as read', () => {
+    const n = read({ subtotal: null, taxes: [], tip: null });
+    expect(n.taxTotal).toBeNull();
+    expect(n.tip).toBeNull();
   });
 });

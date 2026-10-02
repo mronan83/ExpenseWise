@@ -151,8 +151,19 @@ export const GAPS: readonly Gap[] = [
     severity: 'Low',
     evidence:
       'The receipt page shows each model’s values with their confidence and the original image; the schema asks for no source text.',
-    fix: 'Ask the model for each field’s source line; highlight it; let a tap correct the value and keep the correction (#37).',
+    fix: 'Ask the model for each field’s source line and highlight it (#37). Correcting a value arrives with #47.',
     backlog: 37,
+  },
+  {
+    id: 'GAP-17',
+    title:
+      'A receipt that needs a look is a dead end: the page offers no way to confirm or correct it.',
+    affects: ['FR-INT-15', 'FR-INT-11'],
+    severity: 'Medium',
+    evidence:
+      'Reported by the product owner on Oct 2. The receipt page’s only action is Read again; the receipt review design (design §5.3) has Looks right and Edit a field. Every fallback reading lands in Needs a look (ADR-0020).',
+    fix: 'Build both actions; either makes the receipt Ready, with an audit event (#47).',
+    backlog: 47,
   },
   {
     id: 'GAP-15',
@@ -225,6 +236,18 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-02',
+    change:
+      'From your message: the fallback read a real receipt, so #46 is done and FR-INT-09 and F-08 are Verified. New FR-INT-14: tax and tip the receipt doesn’t print count as $0, built in this change. New FR-INT-15 and GAP-17: a receipt that needs a look must offer a next step (#47, P1).',
+    by: 'Claude, at your direction',
+  },
+  {
+    date: '2026-10-02',
+    change:
+      'PR #21 merged and released (0d52203): the records and both pages are live, published after the release. The backlog page is published for the first time.',
+    by: 'Claude, after the release',
+  },
   {
     date: '2026-10-02',
     change:
