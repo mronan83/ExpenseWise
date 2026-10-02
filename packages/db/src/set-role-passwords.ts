@@ -4,7 +4,7 @@ import { connectionConfig, retryWhilePoolerRejectsPassword } from './connection.
 import { logConnection } from './migrate.ts';
 import { canSignIn, roleConnectionString, setRolePasswords } from './role-passwords.ts';
 
-// Runs after migrations in deployed environments (.github/workflows/db-migrate.yml).
+// Runs after migrations in deployed environments (.github/workflows/release.yml).
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const url = process.env.DATABASE_MIGRATION_URL ?? process.env.DATABASE_URL;
   const app = process.env.EXPENSEWISE_APP_DB_PASSWORD;

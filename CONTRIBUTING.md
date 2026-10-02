@@ -9,7 +9,7 @@ How a change moves from idea to production. The full model is in [docs/06-delive
 3. **Commit.** Use [Conventional Commits](https://www.conventionalcommits.org): `feat:`, `fix:`, `docs:`, `chore:`, `test:`, `refactor:`, `ci:`. Release notes are generated from them.
 4. **Pull request.** Small and focused. The template carries the Definition of Done. Gates G1–G5 must be green.
 5. **Review and accept.** An adversarial review pass, then the product owner accepts the increment.
-6. **Merge and promote.** Merge to `main`, which deploys to staging once environments exist. Production promotion needs the product owner's approval.
+6. **Merge and promote.** Merge to `main`. Vercel builds it, and the **Release** workflow waits for the product owner's approval, applies migrations, then makes that build live ([ADR-0018](docs/adr/0018-release-migrates-then-promotes.md)).
 
 ## Rules the code relies on
 
@@ -32,6 +32,7 @@ How a change moves from idea to production. The full model is in [docs/06-delive
 
 - Never edit a migration that has been merged. Add a new one.
 - Expand, migrate, contract: add new structures first, move the code over, and remove old structures in a later release.
+- A release migrates before the new build goes live, so for a minute the live code meets the new schema. Each migration must keep the previous release working.
 - Migrations run as the schema owner, never as `expensewise_app`.
 
 ## Decisions
