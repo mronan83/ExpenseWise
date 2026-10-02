@@ -2,7 +2,7 @@
 
 Production releases run as one approved GitHub Actions job: apply migrations, then promote that commit's Vercel build. Vercel no longer assigns the production domain on its own.
 
-- **Status:** Accepted (decided by product owner)
+- **Status:** Accepted (decided by product owner). Amended by [ADR-0019](0019-merge-is-the-release.md): the merge request is the approval, and the run no longer waits for a click.
 - **Date:** 2026-10-02
 - **Deciders:** Product owner; Claude (principal architect)
 - **Decision register:** D-20

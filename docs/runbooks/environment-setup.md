@@ -42,14 +42,14 @@ Do this before the first merge to `main`. Every merge starts the **Release** wor
    ```
    Hex output is URL-safe, which matters because the app password goes into `DATABASE_URL` later. Any other generator is fine at 24+ letters and digits.
 2. **Settings → Environments**. If an environment called `Production` already exists, open it rather than creating another: Vercel creates it when it first deploys, and GitHub matches environment names regardless of case, so the workflow's `production` is that environment, unprotected until you configure it. Otherwise choose **New environment** and name it `production`. Then:
-   - **Required reviewers:** tick it, add yourself, and leave **Prevent self-review** unticked. You both merge (which starts the run) and approve it; with self-review prevented, a solo owner could never approve. Then **Save protection rules**.
+   - **Required reviewers:** leave unticked. Asking for the merge is the release approval ([ADR-0019](../adr/0019-merge-is-the-release.md)), so each merge releases straight away.
    - **Deployment branches and tags:** change "No restriction" to **Selected branches and tags**, then add a branch rule `main`. A workflow on any other branch can then never reach these secrets.
-3. **Environment secrets → Add environment secret**, four times. Use environment secrets, not repository secrets, so that the approval gate guards them:
+3. **Environment secrets → Add environment secret**, four times. Use environment secrets, not repository secrets, so that only workflows on `main` can read them:
    - `DATABASE_MIGRATION_URL`: the full string from step 1.4, password filled in.
    - `EXPENSEWISE_APP_DB_PASSWORD`: the first password from step 2.1.
    - `EXPENSEWISE_RELAY_DB_PASSWORD`: the second.
    - `VERCEL_TOKEN`: from **Vercel → Account Settings → Tokens → Create**, scoped to the team that owns `expensewise`. The release uses it only to make a finished build live.
-4. **Merge the pull request.** In **Actions**, the **Release** run waits with "Review deployments". Open it, tick `production`, and **Approve and deploy**. It applies migrations, makes sure the runtime roles can sign in, then makes that commit's Vercel build live and checks the production domain serves it. The log ends with `Release: released.` It stops with an error if either role could bypass row-level security, if the build failed, or if production doesn't switch.
+4. **Merge the pull request.** In **Actions**, the **Release** run starts at once. It applies migrations, makes sure the runtime roles can sign in, then makes that commit's Vercel build live and checks the production domain serves it. The log ends with `Release: released.` It stops with an error if either role could bypass row-level security, if the build failed, or if production doesn't switch.
 5. **Later runs:** **Actions → Release → Run workflow** re-runs it by hand, after a restore for example. That button only exists once the workflow is on `main`.
 
 ## 3. Vercel project
