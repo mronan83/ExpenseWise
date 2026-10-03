@@ -24,7 +24,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
   },
   {
     id: 'FR-CAP-02',
-    text: 'Email a receipt or a purchase summary, or forward an airline, hotel or ride email, to a personal receipts address: the body and any PDF or image attached are read like a receipt and wait as a receipt for review. Only mail from an address the person signs in with is read.',
+    text: 'Email a receipt or a purchase summary, or forward an airline, hotel or ride email, to a personal receipts address: the body and any PDF or image attached are read like a receipt. A purchase summary always waits for review, marked as a summary; a receipt follows the same rule as a photo. Only mail from an address the person signs in with is read.',
     sources: ['ADR-0011', 'D-11', 'arch §6.11', 'roadmap inc 2', 'owner 2026-10-03'],
     priority: 'Must',
     phase: 'P1',
@@ -32,7 +32,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
     capabilities: ['Capture · Email-in forwarding'],
     features: ['F-16'],
     backlog: [19],
-    note: 'Your requirement of Oct 3 widened it from travel emails to any receipt or purchase summary. Whether every emailed receipt waits for review is open as Q10.',
+    note: 'Your requirement of Oct 3 widened it from travel emails to any receipt or purchase summary; your answer to Q10 (C) says which wait for review.',
   },
   {
     id: 'FR-CAP-03',
@@ -210,6 +210,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
     features: ['F-06', 'F-07'],
     checks: ['api/receipts › keeps a running comparison of the two models'],
     shortfalls: ['#4', '#21'],
+    note: 'With #52, comparing models becomes a choice rather than the default (Q11).',
   },
   {
     id: 'FR-INT-09',
@@ -219,6 +220,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
     phase: 'P1',
     status: 'Verified',
     features: ['F-08'],
+    note: 'Replaced by FR-INT-16 once #52 is built: your answer to Q8 makes OpenAI a model like the others, which can be primary, not a fallback.',
     checks: [
       'workflows/receipts › reads the receipt when Anthropic has no credit, and asks for a look',
       'workflows/receipts › settles as failed when the fallback has no credit either',
@@ -297,25 +299,25 @@ export const FUNCTIONAL: readonly Requirement[] = [
   },
   {
     id: 'FR-INT-16',
-    text: 'Owners and finance admins turn each AI model on or off for their organization, and only models that are on read its receipts. Every change records who made it.',
+    text: 'Owners and finance admins turn each AI model on or off for their organization and choose which one is primary; any model can be primary, OpenAI’s included. Only models that are on read its receipts; with none on, a receipt is filed for a person to fill in. An operator switch per model turns it off for every organization at once. Every change records who made it.',
     sources: ['owner 2026-10-03'],
     priority: 'Must',
     phase: 'P1',
     status: 'Planned',
     features: ['F-45'],
     backlog: [52],
-    note: 'Your requirement of Oct 3. Who switches what, and what happens when every model is off, is open as Q8. It is also how the tier decision (#21) takes effect.',
+    note: 'Your requirement of Oct 3 and your answer to Q8 (1C, 2A; OpenAI is a model like the others, not a fallback). What a model that is on but not primary does is open as Q11. It is how the tier decision (#21) takes effect, and it replaces the fallback rule (FR-INT-09) once built.',
   },
   {
     id: 'FR-INT-17',
-    text: 'A reading also captures the time of the purchase and the merchant’s address when the receipt prints them, each with its confidence. Either may be blank when the receipt doesn’t show it, and a blank one never makes a receipt Need a look.',
+    text: 'A reading also captures the time of the purchase and the merchant’s address when the receipt prints them, each with its confidence, and the expense carries them too, editable like its other fields. The address is kept as printed, with its city and country picked out; the time as printed, with its time zone worked out from the address where it can be, and set by the person where it can’t, if they want. Either may be blank, and a blank one never makes a receipt Need a look.',
     sources: ['owner 2026-10-03'],
     priority: 'Must',
     phase: 'P1',
     status: 'Planned',
     features: ['F-46'],
     backlog: [53],
-    note: 'Your requirement of Oct 3. Where they live, and in what shape, is open as Q9.',
+    note: 'Your requirement of Oct 3 and your answer to Q9. Claude’s assumption, yours to overturn: a different time or address on the expense shows against its receipt, as other fields do, but doesn’t by itself reject it at review, which checks what is claimed (FR-GOV-10).',
   },
   {
     id: 'FR-INT-13',
@@ -461,14 +463,14 @@ export const FUNCTIONAL: readonly Requirement[] = [
   },
   {
     id: 'FR-EXP-11',
-    text: 'An organization defines its own expense categories and types. Every expense has a type, and every type belongs to one category.',
+    text: 'An organization defines its own expense categories and types, as two lists that can each nest. Every expense has a category and a type, and choosing a category narrows the types to those it allows.',
     sources: ['owner 2026-10-03'],
     priority: 'Must',
     phase: 'P1',
     status: 'Planned',
     features: ['F-43'],
     backlog: [51],
-    note: 'Your requirement of Oct 3. What a type is beside a category is open as Q7.',
+    note: 'Your requirement of Oct 3 and your answer to Q7: two trees, the category filtering the types. Claude’s assumptions, yours to overturn: a type can be allowed in several categories; the GL and tax codes sit on the category, and the rules (attendees, mileage rate, receipt needed) on the type.',
   },
 
   // Governance
