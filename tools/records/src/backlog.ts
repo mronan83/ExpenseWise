@@ -177,6 +177,20 @@ export const BACKLOG: readonly BacklogItem[] = [
     affects: ['FR-EXP-02', 'FR-GOV-12', 'F-10'],
   },
 
+  {
+    num: 54,
+    title: 'Check every signed-in screen in CI',
+    type: 'Gap',
+    detail:
+      'Gate G5 sees only sign-in prompts (GAP-21). Run the real API on a test database with a test sign-in, seed every state a screen can be in, and check each at 375, 390, 440 and 1280 px in light and dark: nothing off-screen or overlapping, values not cut off, AA contrast and axe. The sweep that found the Oct 3 issues does this by hand and is the starting point. Real iOS Safari stays a manual check before each release that changes a form, until a device cloud is worth paying for.',
+    priority: 'P1',
+    effort: 'M',
+    severity: 'Medium',
+    blocker: { kind: 'none' },
+    source: 'GAP-21',
+    affects: ['GAP-21', 'NFR-UX-01', 'NFR-UX-02'],
+  },
+
   // P2: this month
   {
     num: 11,

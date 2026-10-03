@@ -12,7 +12,8 @@
   --carbon-ink: #ffffff;
   --carbon-wash: #e8ebfb;
   --ok: #1d7849;
-  --warn: #a35f00;
+  /* At least 4.5:1 on sheet, paper and carbon-wash, where a "differs" note sits on a highlighted row. */
+  --warn: #965700;
   --bad: #b42318;
 }
 
@@ -55,4 +56,42 @@ body {
   background: var(--paper);
   color: var(--ink);
   font-variant-numeric: tabular-nums;
+}
+
+/*
+ * iOS Safari draws date and time fields as native controls with a minimum width of their own,
+ * about 205 points for a date, that min-width can't shrink. Two of them side by side then run
+ * out of their card and over each other. Without the native look they size like any other
+ * field and still open the system picker. The value is left-aligned like a text field, and an
+ * empty field keeps a text field's height, since iOS shows no placeholder in it.
+ */
+@layer base {
+  input:is([type='date'], [type='time'], [type='datetime-local'], [type='month']) {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+    min-height: calc(2.5rem + 2px);
+  }
+
+  input::-webkit-date-and-time-value {
+    text-align: left;
+  }
+}
+
+/*
+ * A link or button set as small text, with a touch area 44 points tall (iOS's minimum) that
+ * doesn't move anything around it.
+ */
+@utility tap {
+  position: relative;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    right: -0.5rem;
+    left: -0.5rem;
+    height: 2.75rem;
+    transform: translateY(-50%);
+  }
 }

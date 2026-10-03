@@ -49,9 +49,9 @@ export default function TripPage() {
   const trip = load.state === 'ready' ? load.trip : null;
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-md flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]">
+    <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]">
       <header className="flex items-baseline justify-between py-3">
-        <Link href="/trips" className="text-sm font-semibold text-carbon">
+        <Link href="/trips" className="tap text-sm font-semibold text-carbon">
           ← Trips
         </Link>
       </header>

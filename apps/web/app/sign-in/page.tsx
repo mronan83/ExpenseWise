@@ -32,9 +32,9 @@ export default function SignInPage() {
   }
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-md flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]">
+    <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]">
       <header className="flex items-baseline justify-between py-3">
-        <Link href="/" className="font-mono text-xs tracking-widest text-ink-2 uppercase">
+        <Link href="/" className="tap font-mono text-xs tracking-widest text-ink-2 uppercase">
           ExpenseWise
         </Link>
       </header>
