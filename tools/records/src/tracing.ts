@@ -449,15 +449,25 @@ export const QUESTIONS: readonly Question[] = [
   {
     id: 'Q17',
     title: 'Which addresses may send receipts in',
-    ask: 'Email-in reads mail only from an address you sign in with, and your first test came from your work address, which isn’t one. A: add the work address as a sign-in (Settings → Sign-ins). B: each person keeps a short list of forwarding addresses, each confirmed once with a code sent to it, which let mail in but can’t sign in.',
+    ask: 'Email-in reads mail only from an address you sign in with. A: keep it that way; an address you send receipts from is added as a sign-in (Settings → Sign-ins). B: each person also keeps a short list of forwarding addresses, each confirmed once with a code sent to it, which let mail in but can’t sign in.',
     why: 'Signing in with an employer’s address ties your ExpenseWise account to that job and its mail policies. A forwarding address only lets receipts in. Either way, each email is proved by its sender’s DKIM signature, and the Bird allowlist must include the address too.',
     recommendation: 'B.',
     affects: ['FR-CAP-02', 'F-16'],
+    answer: {
+      date: '2026-10-03',
+      text: 'A: your work address is already a sign-in, so sign-in addresses stay the only senders; no forwarding list. I had guessed it wasn’t one without being able to see your sign-ins.',
+    },
   },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-03',
+    change:
+      'Your answer to Q17: A, sign-in addresses stay the only senders; your work address already is one. A correction to the entry below: your work address was also already on the Bird allowlist, so neither explains why Bird made no call for your first test. The next test is watched in the logs as it arrives.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-03',
     change:

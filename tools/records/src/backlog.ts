@@ -831,7 +831,7 @@ export const BACKLOG: readonly BacklogItem[] = [
 
 /** How to order the open work, beyond priority. */
 export const SEQUENCING: readonly string[] = [
-  'Your order, Oct 3: the Home dashboard (#28, done), then email-in (#19 and #58, done: attachments, then the email’s own text, first at your direction), then reports drafted after a trip (#23), which bring reports to finish to Home (Q15). Q17 decides which addresses may send receipts in.',
+  'Your order, Oct 3: the Home dashboard (#28, done), then email-in (#19 and #58, done: attachments, then the email’s own text, first at your direction), then reports drafted after a trip (#23), which bring reports to finish to Home (Q15).',
   '#48 needs you, not code: it keeps a leaked key from erasing the backups; any time this month. #4 can wait: the OpenAI fallback reads receipts meanwhile, and #21 waits on it. #52 and #55 are unblocked by your answers.',
   'Mileage (#17) adds business miles to Home.',
   '#8 is security, not polish: it should land before #24, which needs it, and before anyone else is invited (#29). So should #50, which keeps each member’s records their own.',

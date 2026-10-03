@@ -260,7 +260,7 @@ export const FEATURES: readonly Feature[] = [
       'db/inbound.int',
       'extraction/checks › always flags a purchase summary, however well it reads',
     ],
-    note: 'Email or forward a receipt to the Bird mailbox: the webhook checks Bird’s signature, and a workflow fetches the email as it arrived, proves the sender by DKIM aligned with the From domain, finds the member who signs in with that address, and files each PDF or photo like an upload. With nothing attached, the email’s own text is filed as a PDF (ADR-0027). A purchase summary always waits for review. Mail from anyone else is dropped with nothing kept. Q17 asks whether addresses you don’t sign in with may send receipts in.',
+    note: 'Email or forward a receipt to the Bird mailbox: the webhook checks Bird’s signature, and a workflow fetches the email as it arrived, proves the sender by DKIM aligned with the From domain, finds the member who signs in with that address, and files each PDF or photo like an upload. With nothing attached, the email’s own text is filed as a PDF (ADR-0027). A purchase summary always waits for review. Mail from anyone else is dropped with nothing kept; only sign-in addresses send receipts in (Q17).',
   },
 
   // Expenses, trips and reports
