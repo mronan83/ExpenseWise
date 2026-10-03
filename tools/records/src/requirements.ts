@@ -295,6 +295,17 @@ export const FUNCTIONAL: readonly Requirement[] = [
     ],
   },
   {
+    id: 'FR-INT-16',
+    text: 'Owners and finance admins turn each AI model on or off for their organization, and only models that are on read its receipts. Every change records who made it.',
+    sources: ['owner 2026-10-03'],
+    priority: 'Must',
+    phase: 'P1',
+    status: 'Planned',
+    features: ['F-45'],
+    backlog: [52],
+    note: 'Your requirement of Oct 3. Who switches what, and what happens when every model is off, is open as Q8. It is also how the tier decision (#21) takes effect.',
+  },
+  {
     id: 'FR-INT-13',
     text: 'Anomaly and fraud signals.',
     sources: ['capmap P4', 'roadmap P4'],

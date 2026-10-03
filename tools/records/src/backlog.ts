@@ -342,7 +342,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Choose the model tier: Haiku or Sonnet',
     type: 'Decision',
     detail:
-      'Proposed rule: Haiku if it agrees with Sonnet on at least 95% of receipts and is never confidently wrong where Sonnet was right; otherwise Sonnet. Needs about 20 of your receipts read by both, so it waits on #4.',
+      'Proposed rule: Haiku if it agrees with Sonnet on at least 95% of receipts and is never confidently wrong where Sonnet was right; otherwise Sonnet. Needs about 20 of your receipts read by both, so it waits on #4. The decision takes effect by turning the other model off (#52).',
     priority: 'P3',
     effort: 'S',
     severity: 'Medium',
@@ -607,6 +607,19 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'owner', ask: 'Your answer to Q7: what a type is beside a category' },
     source: 'Product owner, Oct 3',
     affects: ['FR-EXP-11', 'F-43', 'FR-INT-10', 'F-15'],
+  },
+  {
+    num: 52,
+    title: 'Turn AI models on and off',
+    type: 'Feature',
+    detail:
+      'A switch for each AI model in Settings, for owners and finance admins, recorded in the audit trail. The reading workflow asks only the models that are on; a model with no key stays off. Read again uses the switches as they are then. Its shape waits on your answer to Q8.',
+    priority: 'P2',
+    effort: 'M',
+    severity: 'Medium',
+    blocker: { kind: 'owner', ask: 'Your answer to Q8: what turning a model off covers' },
+    source: 'Product owner, Oct 3',
+    affects: ['FR-INT-16', 'F-45', 'FR-INT-08', 'FR-INT-09'],
   },
   // Done
   {
