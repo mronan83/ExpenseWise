@@ -2,15 +2,17 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { api, ApiProblem } from '../../../lib/api';
 import {
   describeReadingError,
+  FIELD_LABELS,
   providerOf,
   formatCost,
   formatMoney,
   formatSeconds,
   RECEIPT_STATUS,
+  type CorrectableField,
   type MoneyField,
   type Reading,
   type ReceiptDetail,
@@ -88,6 +90,12 @@ export default function ReceiptPage() {
   }, [reading, refresh]);
 
   async function readAgain() {
+    if (
+      receipt?.confirmation &&
+      !window.confirm('Reading it again replaces the confirmed values. Read it again?')
+    ) {
+      return;
+    }
     setBusy(true);
     setMessage(null);
     setStale(false);
@@ -130,6 +138,14 @@ export default function ReceiptPage() {
         {receipt ? (
           <>
             <Verdict receipt={receipt} stale={reading && stale} />
+            {receipt.status === 'needs_review' ? (
+              <Review
+                key={receipt.readings.map((r) => r.model + r.state).join()}
+                receipt={receipt}
+                onConfirmed={(next) => setLoad({ state: 'ready', receipt: next })}
+              />
+            ) : null}
+            {receipt.confirmation ? <Filed confirmation={receipt.confirmation} /> : null}
             <Comparison receipt={receipt} />
             <div className="flex flex-wrap items-center gap-3">
               <button
@@ -165,6 +181,14 @@ function Verdict({ receipt, stale }: { receipt: ReceiptDetail; stale: boolean })
     text = stale
       ? 'This is taking longer than it should. Try reading it again.'
       : 'Both models are reading it. This takes a few seconds.';
+  } else if (receipt.status === 'extracted' && receipt.confirmation) {
+    const { by, label, corrections } = receipt.confirmation;
+    const fixes = corrections.map((c) => FIELD_LABELS[c.field].toLowerCase());
+    text = `${by} confirmed ${label}'s reading${
+      fixes.length > 0
+        ? `, correcting the ${new Intl.ListFormat('en', { type: 'conjunction' }).format(fixes)}`
+        : ''
+    }.`;
   } else if (receipt.status === 'extracted') {
     text = 'Both models read it with confidence and agree.';
   } else if (receipt.status === 'failed') {
@@ -180,6 +204,244 @@ function Verdict({ receipt, stale }: { receipt: ReceiptDetail; stale: boolean })
     <p role="status" className="rounded-xl border border-rule bg-sheet px-4 py-3 text-sm">
       <span className={`font-semibold ${status.tone}`}>{status.label}.</span> {text}
     </p>
+  );
+}
+
+const MONEY_FIELDS: CorrectableField[] = ['total', 'taxTotal', 'tip'];
+
+/** What a confirmed receipt is filed with; a corrected field shows what was read. */
+function Filed({ confirmation }: { confirmation: NonNullable<ReceiptDetail['confirmation']> }) {
+  const { values, corrections } = confirmation;
+  const shown: [CorrectableField, string | null][] = [
+    ['merchant', values.merchant],
+    ['date', values.date],
+    ['total', values.total ? formatMoney(values.total) : null],
+    ['taxTotal', values.taxTotal ? formatMoney(values.taxTotal) : null],
+    ['tip', values.tip ? formatMoney(values.tip) : null],
+  ];
+  return (
+    <section
+      aria-labelledby="filed-title"
+      className="rounded-xl border border-rule bg-sheet p-4 text-sm"
+    >
+      <h2 id="filed-title" className="mb-2 text-base font-semibold">
+        Filed as
+      </h2>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+        {shown.map(([field, value]) => {
+          const fix = corrections.find((c) => c.field === field);
+          return (
+            <div key={field} className="contents">
+              <dt className="text-xs font-medium text-ink-2">{FIELD_LABELS[field]}</dt>
+              <dd className="flex flex-col">
+                <span className="tabular-nums">{value ?? '–'}</span>
+                {fix ? (
+                  <span className="text-xs text-ink-2">
+                    {fix.read === null
+                      ? 'entered by hand'
+                      : `corrected; read as ${
+                          MONEY_FIELDS.includes(field)
+                            ? formatMoney({ decimal: fix.read, currency: values.currency })
+                            : fix.read
+                        }`}
+                  </span>
+                ) : null}
+              </dd>
+            </div>
+          );
+        })}
+      </dl>
+    </section>
+  );
+}
+
+/** The values a person can confirm or correct, as text, from one reading. */
+function draftOf(reading: Reading | undefined): Record<CorrectableField, string> {
+  const f = reading?.fields;
+  return {
+    merchant: f?.merchant?.value ?? '',
+    date: f?.date?.value ?? '',
+    currency: f?.currency?.value ?? f?.total?.currency ?? '',
+    total: f?.total?.decimal ?? '',
+    taxTotal: f?.taxTotal?.decimal ?? '',
+    tip: f?.tip?.decimal ?? '',
+  };
+}
+
+const REQUIRED: CorrectableField[] = ['merchant', 'date', 'currency', 'total'];
+
+/**
+ * Looks right / Edit a field (FR-INT-15): the next step for a receipt that needs a look.
+ * Either files it as Ready with the chosen reading, corrected where the person changed it.
+ */
+function Review({
+  receipt,
+  onConfirmed,
+}: {
+  receipt: ReceiptDetail;
+  onConfirmed: (receipt: ReceiptDetail) => void;
+}) {
+  const choices = receipt.readings.filter((r) => r.fields);
+  // Start from the reading the headline shows: the most capable compared model, else fallback.
+  const preferred =
+    [...choices].reverse().find((r) => r.role === 'compared') ?? choices[0] ?? undefined;
+  const [model, setModel] = useState(preferred?.model ?? '');
+  const chosen = choices.find((r) => r.model === model);
+  const [editing, setEditing] = useState(choices.length === 0);
+  const [draft, setDraft] = useState(() => draftOf(chosen));
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const read = draftOf(chosen);
+  const missing = REQUIRED.filter((f) => read[f] === '');
+
+  function choose(next: string) {
+    setModel(next);
+    setDraft(draftOf(choices.find((r) => r.model === next)));
+    setError(null);
+  }
+
+  async function confirm(corrections: Partial<Record<CorrectableField, string>>) {
+    setBusy(true);
+    setError(null);
+    try {
+      onConfirmed(
+        await api<ReceiptDetail>(`/v1/receipts/${receipt.id}/confirm`, {
+          method: 'POST',
+          body: JSON.stringify({ model: chosen?.model ?? model, corrections }),
+        }),
+      );
+    } catch (e) {
+      setError(describeError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function save(event: FormEvent) {
+    event.preventDefault();
+    const changed = Object.fromEntries(
+      (Object.keys(draft) as CorrectableField[])
+        .filter((f) => draft[f].trim() !== read[f])
+        .map((f) => [f, draft[f].trim()]),
+    );
+    void confirm(changed);
+  }
+
+  const input = (field: CorrectableField, extra: Record<string, string | number> = {}) => (
+    <label key={field} className="flex flex-col gap-1 text-xs font-medium text-ink-2">
+      {FIELD_LABELS[field]}
+      <input
+        name={field}
+        value={draft[field]}
+        onChange={(e) => setDraft({ ...draft, [field]: e.target.value })}
+        required={REQUIRED.includes(field)}
+        className="rounded-lg border border-rule bg-paper px-3 py-2 text-base text-ink"
+        {...extra}
+      />
+    </label>
+  );
+
+  return (
+    <section
+      aria-labelledby="review-title"
+      className="flex flex-col gap-3 rounded-xl border border-rule bg-sheet p-4"
+    >
+      <h2 id="review-title" className="text-base font-semibold">
+        Is this right?
+      </h2>
+      {choices.length > 1 ? (
+        <fieldset className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
+          <legend className="mb-1 text-xs font-medium text-ink-2">Use the reading from</legend>
+          {choices.map((r) => (
+            <label key={r.model} className="flex items-center gap-2">
+              <input
+                type="radio"
+                name="reading"
+                value={r.model}
+                checked={r.model === model}
+                onChange={() => choose(r.model)}
+              />
+              {r.label}
+            </label>
+          ))}
+        </fieldset>
+      ) : chosen ? (
+        <p className="text-xs text-ink-2">From {chosen.label}&apos;s reading, shown below.</p>
+      ) : (
+        <p className="text-xs text-ink-2">No model read it, so enter the details yourself.</p>
+      )}
+
+      {editing ? (
+        <form onSubmit={save} className="flex flex-col gap-3">
+          {input('merchant', { autoComplete: 'off', maxLength: 200 })}
+          <div className="grid grid-cols-2 gap-3">
+            {input('date', { type: 'date' })}
+            {input('currency', { maxLength: 3, autoCapitalize: 'characters', autoComplete: 'off' })}
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            {input('total', { inputMode: 'decimal', autoComplete: 'off' })}
+            {input('taxTotal', { inputMode: 'decimal', autoComplete: 'off' })}
+            {input('tip', { inputMode: 'decimal', autoComplete: 'off' })}
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="submit"
+              disabled={busy}
+              className="rounded-lg bg-carbon px-4 py-2 text-sm font-semibold text-carbon-ink disabled:opacity-60"
+            >
+              {busy ? 'Saving…' : 'Save and file'}
+            </button>
+            {choices.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditing(false);
+                  setDraft(draftOf(chosen));
+                  setError(null);
+                }}
+                className="rounded-lg border border-rule px-4 py-2 text-sm font-semibold"
+              >
+                Cancel
+              </button>
+            ) : null}
+          </div>
+        </form>
+      ) : (
+        <>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => void confirm({})}
+              disabled={busy || missing.length > 0}
+              className="rounded-lg bg-carbon px-4 py-2 text-sm font-semibold text-carbon-ink disabled:opacity-60"
+            >
+              {busy ? 'Saving…' : 'Looks right'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              disabled={busy}
+              className="rounded-lg border border-rule px-4 py-2 text-sm font-semibold"
+            >
+              Edit a field
+            </button>
+          </div>
+          {missing.length > 0 ? (
+            <p className="text-xs text-warn">
+              {chosen?.label ?? 'The reading'} has no{' '}
+              {missing.map((f) => FIELD_LABELS[f].toLowerCase()).join(', ')}. Enter it with Edit a
+              field.
+            </p>
+          ) : null}
+        </>
+      )}
+      {error ? (
+        <p role="alert" className="text-sm text-warn">
+          {error}
+        </p>
+      ) : null}
+    </section>
   );
 }
 

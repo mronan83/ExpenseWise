@@ -1,12 +1,20 @@
 import type { CommittedEvent, Membership } from '@expensewise/db';
 import { newId } from '@expensewise/domain';
+import { confirmReading } from '@expensewise/extraction';
 import { receiptPath, RECEIPT_BUCKET, type ObjectStore } from '@expensewise/storage';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
 import { ProblemError } from './problem.ts';
-import { comparisonSummary, receiptDetail, receiptSummary } from './receipt-views.ts';
+import {
+  comparisonSummary,
+  latestRuns,
+  normalized,
+  receiptDetail,
+  receiptSummary,
+} from './receipt-views.ts';
 import type { ReceiptStore } from './receipts.ts';
 import {
+  confirmReceiptRoute,
   fileReceiptRoute,
   getReceiptRoute,
   listReceiptsRoute,
@@ -42,6 +50,7 @@ export function registerReceiptRoutes(
       listReceiptsRoute,
       getReceiptRoute,
       readReceiptAgainRoute,
+      confirmReceiptRoute,
     ].map((r) => r.getRoutingPath()),
   );
   for (const path of paths) app.use(path, auth);
@@ -82,6 +91,24 @@ export function registerReceiptRoutes(
     });
   const notFound = () =>
     new ProblemError(404, 'not-found', 'No such receipt', { code: 'not_found' });
+  const notWaiting = (stale: boolean) =>
+    new ProblemError(409, 'not-waiting', 'This receipt is not waiting for a look', {
+      code: stale ? 'read_again' : 'not_waiting',
+      detail: stale
+        ? 'It was read again after these readings were shown. Refresh and look again.'
+        : 'It is being read, or it is already Ready.',
+    });
+  const unprocessable = (code: string, title: string, extra: Record<string, unknown> = {}) =>
+    new ProblemError(422, code.replaceAll('_', '-'), title, { code, ...extra });
+
+  const imageOf = async (storageKey: string) => {
+    try {
+      return (await options.files?.signedDownloadUrl(storageKey, IMAGE_LINK_SECONDS)) ?? null;
+    } catch {
+      // A missing or unreachable file still shows the readings.
+      return null;
+    }
+  };
 
   const dispatch = async (event: CommittedEvent) => {
     if (!options.dispatch) return;
@@ -130,10 +157,10 @@ export function registerReceiptRoutes(
 
   app.openapi(listReceiptsRoute, async (c) => {
     const who = await member(c.var.identity.userId);
-    const { receipts, runs } = await stores().receipts.list(who.orgId, LIST_LIMIT);
+    const { receipts, runs, reviews } = await stores().receipts.list(who.orgId, LIST_LIMIT);
     return c.json(
       {
-        receipts: receipts.map((r) => receiptSummary(r, runs)),
+        receipts: receipts.map((r) => receiptSummary(r, runs, reviews)),
         comparison: comparisonSummary(receipts, runs),
         readingAvailable: options.dispatch !== undefined,
       },
@@ -146,15 +173,8 @@ export function registerReceiptRoutes(
     const { receiptId } = c.req.valid('param');
     const found = await stores().receipts.get(who.orgId, receiptId);
     if (!found) throw notFound();
-    let imageUrl: string | null = null;
-    try {
-      imageUrl =
-        (await options.files?.signedDownloadUrl(found.receipt.storageKey, IMAGE_LINK_SECONDS)) ??
-        null;
-    } catch {
-      // A missing or unreachable file still shows the readings.
-    }
-    return c.json(receiptDetail(found.receipt, found.runs, imageUrl), 200);
+    const imageUrl = await imageOf(found.receipt.storageKey);
+    return c.json(receiptDetail(found.receipt, found.runs, imageUrl, found.reviews), 200);
   });
 
   app.openapi(readReceiptAgainRoute, async (c) => {
@@ -167,6 +187,60 @@ export function registerReceiptRoutes(
     await dispatch(event);
     const found = await receipts.get(who.orgId, receiptId);
     if (!found) throw notFound();
-    return c.json(receiptSummary(found.receipt, found.runs), 202);
+    return c.json(receiptSummary(found.receipt, found.runs, found.reviews), 202);
+  });
+
+  app.openapi(confirmReceiptRoute, async (c) => {
+    const caller = c.var.identity;
+    const who = await member(caller.userId);
+    const { receiptId } = c.req.valid('param');
+    const body = c.req.valid('json');
+    const { receipts } = stores();
+    const found = await receipts.get(who.orgId, receiptId);
+    if (!found) throw notFound();
+    if (found.receipt.status !== 'needs_review') throw notWaiting(false);
+    const run = latestRuns(receiptId, found.runs).find((r) => r.model === body.model);
+    if (!run) {
+      throw unprocessable('no_such_reading', 'This receipt has no such reading', {
+        detail: `Choose one of the readings shown: ${body.model} is not among them.`,
+      });
+    }
+    const result = confirmReading(normalized(run), body.corrections ?? {});
+    if (!result.ok) {
+      const { error } = result;
+      throw error.kind === 'missing'
+        ? unprocessable('missing_fields', 'Some filing fields are still missing', {
+            detail: 'Enter them with Edit a field.',
+            fields: error.fields,
+          })
+        : unprocessable('invalid_value', 'A value is not valid', {
+            detail: error.message,
+            field: error.field,
+          });
+    }
+    const { confirmed, corrections } = result.value;
+    const outcome = await receipts.confirm(
+      who.orgId,
+      receiptId,
+      {
+        memberId: who.memberId,
+        requestId: run.requestId,
+        model: run.model,
+        merchant: confirmed.merchant,
+        transactionDate: confirmed.date,
+        currency: confirmed.currency,
+        totalMinor: confirmed.total.amountMinor,
+        taxMinor: confirmed.taxTotal?.amountMinor ?? null,
+        tipMinor: confirmed.tip?.amountMinor ?? null,
+        corrections,
+      },
+      caller.userId,
+    );
+    if (outcome === 'missing') throw notFound();
+    if (outcome !== 'confirmed') throw notWaiting(outcome === 'stale');
+    const after = await receipts.get(who.orgId, receiptId);
+    if (!after) throw notFound();
+    const imageUrl = await imageOf(after.receipt.storageKey);
+    return c.json(receiptDetail(after.receipt, after.runs, imageUrl, after.reviews), 200);
   });
 }

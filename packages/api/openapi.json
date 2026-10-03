@@ -465,7 +465,7 @@
               "needs_review",
               "failed"
             ],
-            "description": "processing while it is read; extracted when both compared models read it with confidence and agree; needs_review otherwise, including when only the fallback model read it; failed when no model could read it."
+            "description": "processing while it is read; extracted (shown as Ready) when both compared models read it with confidence and agree, or when a member confirmed or corrected a reading (ADR-0021); needs_review otherwise, including when only the fallback model read it; failed when no model could read it."
           },
           "source": {
             "type": "string",
@@ -721,12 +721,16 @@
                   "type": "string"
                 },
                 "description": "Filing fields the two models read differently."
+              },
+              "confirmation": {
+                "$ref": "#/components/schemas/ReceiptConfirmation"
               }
             },
             "required": [
               "imageUrl",
               "readings",
-              "differences"
+              "differences",
+              "confirmation"
             ]
           }
         ]
@@ -1083,6 +1087,272 @@
           "outputTokens",
           "fields",
           "problems"
+        ]
+      },
+      "ReceiptConfirmation": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "by": {
+            "type": "string",
+            "description": "The member who confirmed it."
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "model": {
+            "type": "string",
+            "description": "Whose reading was confirmed or corrected."
+          },
+          "label": {
+            "type": "string",
+            "example": "GPT-5.6 Luna"
+          },
+          "values": {
+            "type": "object",
+            "properties": {
+              "merchant": {
+                "type": "string"
+              },
+              "date": {
+                "type": "string"
+              },
+              "currency": {
+                "type": "string"
+              },
+              "total": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "amountMinor": {
+                    "type": "integer",
+                    "description": "Integer minor units, e.g. cents."
+                  },
+                  "currency": {
+                    "type": "string",
+                    "example": "USD"
+                  },
+                  "decimal": {
+                    "type": "string",
+                    "example": "6.50",
+                    "description": "The same amount, for display."
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "assumed": {
+                    "type": "boolean",
+                    "description": "True for a tax or tip the receipt does not print, taken as zero rather than read. Never set when the line is printed but unreadable, or when the printed figures leave an amount unaccounted for."
+                  }
+                },
+                "required": [
+                  "amountMinor",
+                  "currency",
+                  "decimal",
+                  "confidence",
+                  "assumed"
+                ]
+              },
+              "taxTotal": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "amountMinor": {
+                    "type": "integer",
+                    "description": "Integer minor units, e.g. cents."
+                  },
+                  "currency": {
+                    "type": "string",
+                    "example": "USD"
+                  },
+                  "decimal": {
+                    "type": "string",
+                    "example": "6.50",
+                    "description": "The same amount, for display."
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "assumed": {
+                    "type": "boolean",
+                    "description": "True for a tax or tip the receipt does not print, taken as zero rather than read. Never set when the line is printed but unreadable, or when the printed figures leave an amount unaccounted for."
+                  }
+                },
+                "required": [
+                  "amountMinor",
+                  "currency",
+                  "decimal",
+                  "confidence",
+                  "assumed"
+                ]
+              },
+              "tip": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "amountMinor": {
+                    "type": "integer",
+                    "description": "Integer minor units, e.g. cents."
+                  },
+                  "currency": {
+                    "type": "string",
+                    "example": "USD"
+                  },
+                  "decimal": {
+                    "type": "string",
+                    "example": "6.50",
+                    "description": "The same amount, for display."
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "assumed": {
+                    "type": "boolean",
+                    "description": "True for a tax or tip the receipt does not print, taken as zero rather than read. Never set when the line is printed but unreadable, or when the printed figures leave an amount unaccounted for."
+                  }
+                },
+                "required": [
+                  "amountMinor",
+                  "currency",
+                  "decimal",
+                  "confidence",
+                  "assumed"
+                ]
+              }
+            },
+            "required": [
+              "merchant",
+              "date",
+              "currency",
+              "total",
+              "taxTotal",
+              "tip"
+            ],
+            "description": "What the receipt is filed with."
+          },
+          "corrections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "field": {
+                  "type": "string",
+                  "enum": [
+                    "merchant",
+                    "date",
+                    "currency",
+                    "total",
+                    "taxTotal",
+                    "tip"
+                  ]
+                },
+                "read": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "What the model read; null when it read nothing."
+                },
+                "corrected": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "field",
+                "read",
+                "corrected"
+              ]
+            }
+          }
+        },
+        "required": [
+          "by",
+          "at",
+          "model",
+          "label",
+          "values",
+          "corrections"
+        ],
+        "description": "Set when a member confirmed this reading; the merchant, date and total above are then the confirmed values."
+      },
+      "ConfirmReceipt": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string",
+            "description": "The reading to confirm, by model, from the receipt’s latest readings.",
+            "example": "gpt-5.6-luna"
+          },
+          "corrections": {
+            "type": "object",
+            "properties": {
+              "merchant": {
+                "type": "string",
+                "maxLength": 200,
+                "description": "The merchant, as it should be filed.",
+                "example": "Blue Bottle Coffee"
+              },
+              "date": {
+                "type": "string",
+                "maxLength": 200,
+                "description": "The transaction date, YYYY-MM-DD.",
+                "example": "2026-09-24"
+              },
+              "currency": {
+                "type": "string",
+                "maxLength": 200,
+                "description": "An ISO 4217 code. Amounts keep their printed value.",
+                "example": "USD"
+              },
+              "total": {
+                "type": "string",
+                "maxLength": 200,
+                "description": "A plain decimal in the receipt’s currency.",
+                "example": "65.00"
+              },
+              "taxTotal": {
+                "type": "string",
+                "maxLength": 200,
+                "description": "A plain decimal in the receipt’s currency.",
+                "example": "5.20"
+              },
+              "tip": {
+                "type": "string",
+                "maxLength": 200,
+                "description": "A plain decimal in the receipt’s currency.",
+                "example": "0.00"
+              }
+            },
+            "additionalProperties": false,
+            "description": "Only the fields the person changed. Omit to confirm as read."
+          }
+        },
+        "required": [
+          "model"
         ]
       }
     },
@@ -2132,6 +2402,113 @@
           },
           "404": {
             "description": "No such receipt in this organization.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in, the database or file storage is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/receipts/{receiptId}/confirm": {
+      "post": {
+        "tags": [
+          "Receipts"
+        ],
+        "summary": "Confirm a reading that needs a look, as read or corrected",
+        "description": "\"Looks right\" and \"Edit a field\" (FR-INT-15, ADR-0021). Makes the receipt Ready with the chosen reading and any corrected fields, records who confirmed what in the audit trail, and keeps each correction beside what the model read.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "receiptId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfirmReceipt"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "It is Ready.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such receipt in this organization.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It is not waiting for a look: being read, already Ready, or read again since its readings were shown.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "No such reading, a value that is not valid, or a filing field still missing; field or fields name which.",
             "content": {
               "application/problem+json": {
                 "schema": {

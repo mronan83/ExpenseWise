@@ -1,5 +1,6 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import {
+  ConfirmReceiptSchema,
   FileReceiptSchema,
   ProblemSchema,
   ReceiptDetailSchema,
@@ -128,5 +129,37 @@ export const readReceiptAgainRoute = createRoute({
     },
     ...common,
     404: problem('No such receipt in this organization.'),
+  },
+});
+
+export const confirmReceiptRoute = createRoute({
+  method: 'post',
+  path: '/v1/receipts/{receiptId}/confirm',
+  tags: ['Receipts'],
+  summary: 'Confirm a reading that needs a look, as read or corrected',
+  description:
+    '"Looks right" and "Edit a field" (FR-INT-15, ADR-0021). Makes the receipt Ready with ' +
+    'the chosen reading and any corrected fields, records who confirmed what in the audit ' +
+    'trail, and keeps each correction beside what the model read.',
+  ...secured,
+  request: {
+    params: receiptParam,
+    body: { content: { 'application/json': { schema: ConfirmReceiptSchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'It is Ready.',
+      content: { 'application/json': { schema: ReceiptDetailSchema } },
+    },
+    ...common,
+    404: problem('No such receipt in this organization.'),
+    409: problem(
+      'It is not waiting for a look: being read, already Ready, or read again since its ' +
+        'readings were shown.',
+    ),
+    422: problem(
+      'No such reading, a value that is not valid, or a filing field still missing; field ' +
+        'or fields name which.',
+    ),
   },
 });

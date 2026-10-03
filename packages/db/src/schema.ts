@@ -348,6 +348,56 @@ export const extractionRuns = pgTable(
   ],
 );
 
+/**
+ * A member confirming a reading that needed a look, as it was or with fields corrected
+ * (FR-INT-15, ADR-0021). The values are what the receipt is filed with; each correction keeps
+ * what the model read, so it can join the eval set. Append-only: reading the receipt again
+ * and confirming again adds a row.
+ */
+export const receiptReviews = pgTable(
+  'receipt_reviews',
+  {
+    id: id(),
+    orgId: orgId(),
+    receiptId: uuid('receipt_id').notNull(),
+    memberId: uuid('member_id').notNull(),
+    /** The reading request confirmed; the review applies while it is the latest. */
+    requestId: uuid('request_id'),
+    /** The model whose reading was confirmed or corrected. */
+    model: text('model').notNull(),
+    merchant: text('merchant').notNull(),
+    transactionDate: date('transaction_date', { mode: 'string' }).notNull(),
+    currency: char('currency', { length: 3 }).notNull(),
+    totalMinor: bigint('total_minor', { mode: 'number' }).notNull(),
+    taxMinor: bigint('tax_minor', { mode: 'number' }),
+    tipMinor: bigint('tip_minor', { mode: 'number' }),
+    /** [{ field, read, corrected }]: empty when the reading was confirmed as it was. */
+    corrections: jsonb('corrections')
+      .notNull()
+      .default(sql`'[]'::jsonb`),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('receipt_reviews_org_id_id_key').on(t.orgId, t.id),
+    foreignKey({
+      name: 'receipt_reviews_receipt_fk',
+      columns: [t.orgId, t.receiptId],
+      foreignColumns: [receipts.orgId, receipts.id],
+    }),
+    foreignKey({
+      name: 'receipt_reviews_member_fk',
+      columns: [t.orgId, t.memberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    check('receipt_reviews_currency_code', sql`${t.currency} ~ '^[A-Z]{3}$'`),
+    check(
+      'receipt_reviews_amounts_not_negative',
+      sql`${t.totalMinor} >= 0 AND coalesce(${t.taxMinor}, 0) >= 0 AND coalesce(${t.tipMinor}, 0) >= 0`,
+    ),
+    index('receipt_reviews_receipt_idx').on(t.orgId, t.receiptId),
+  ],
+);
+
 export const mileageLogs = pgTable(
   'mileage_logs',
   {

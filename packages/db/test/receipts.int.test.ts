@@ -3,18 +3,21 @@ import { asc } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { withOrg } from '../src/client.ts';
 import {
+  confirmReceipt,
   fileReceipt,
   getReceipt,
   listExtractionRuns,
+  listReceiptReviews,
   listReceipts,
   recordExtractionRun,
   requestReceiptReading,
   runsForRequest,
   settleReceipt,
   type NewExtractionRun,
+  type NewReceiptReview,
 } from '../src/receipts.ts';
-import { auditEvents, outboxEvents } from '../src/schema.ts';
-import { connectAs, seedOrg } from './helpers.ts';
+import { auditEvents, outboxEvents, receiptReviews } from '../src/schema.ts';
+import { connectAs, expectDbError, seedOrg } from './helpers.ts';
 
 const app = connectAs('app');
 afterAll(async () => {
@@ -155,5 +158,123 @@ describe('reading a receipt', () => {
     );
     const all = await withOrg(app.db, acme.orgId, (tx) => listExtractionRuns(tx, [input.id]));
     expect(all.map((r) => r.requestId)).toEqual([again!.outboxId]);
+  });
+});
+
+describe('confirming a reading that needs a look', () => {
+  const review = (memberId: string, requestId: string): NewReceiptReview => ({
+    memberId,
+    requestId,
+    model: 'gpt-5.6-luna',
+    merchant: 'Blue Bottle',
+    transactionDate: '2026-09-24',
+    currency: 'USD',
+    totalMinor: 6500,
+    taxMinor: 0,
+    tipMinor: 100,
+    corrections: [{ field: 'total', read: '6.50', corrected: '65.00' }],
+  });
+
+  /** A filed receipt read once by the fallback and settled as needing a look. */
+  async function needingALook(name: string, n: number) {
+    const org = await seedOrg(app.db, name);
+    const input = receipt(org.memberId, n);
+    const filed = await withOrg(app.db, org.orgId, (tx) =>
+      fileReceipt(tx, org.orgId, input, org.userId),
+    );
+    if (filed.status !== 'filed') throw new Error('expected a new receipt');
+    const requestId = filed.event.outboxId;
+    await withOrg(app.db, org.orgId, async (tx) => {
+      await recordExtractionRun(tx, org.orgId, run(input.id, requestId, 'gpt-5.6-luna'));
+      await settleReceipt(tx, org.orgId, input.id, {
+        status: 'needs_review',
+        requestId,
+        detail: {},
+      });
+    });
+    const confirm = (r: NewReceiptReview, receiptId = input.id) =>
+      withOrg(app.db, org.orgId, (tx) => confirmReceipt(tx, org.orgId, receiptId, r, org.userId));
+    return { org, receiptId: input.id, requestId, confirm };
+  }
+
+  it('makes it Ready with the values, the corrections and an audit event, together', async () => {
+    const { org, receiptId, requestId, confirm } = await needingALook('acme-confirm', 10);
+    expect(await confirm(review(org.memberId, requestId))).toBe('confirmed');
+
+    const after = await withOrg(app.db, org.orgId, async (tx) => ({
+      receipt: await getReceipt(tx, receiptId),
+      reviews: await listReceiptReviews(tx, [receiptId]),
+      audit: await tx.select().from(auditEvents).orderBy(asc(auditEvents.sequence)),
+    }));
+    expect(after.receipt?.status).toBe('extracted');
+    expect(after.reviews).toEqual([
+      expect.objectContaining({
+        receiptId,
+        requestId,
+        model: 'gpt-5.6-luna',
+        reviewedBy: 'acme-confirm',
+        merchant: 'Blue Bottle',
+        transactionDate: '2026-09-24',
+        totalMinor: 6500,
+        tipMinor: 100,
+        corrections: [{ field: 'total', read: '6.50', corrected: '65.00' }],
+      }),
+    ]);
+    expect(after.audit.map((e) => e.action)).toEqual([
+      'receipt.captured',
+      'receipt.read',
+      'receipt.confirmed',
+    ]);
+    expect(after.audit.at(-1)).toMatchObject({
+      actorType: 'user',
+      actorId: org.userId,
+      payload: { requestId, model: 'gpt-5.6-luna' },
+    });
+  });
+
+  it('refuses a receipt that is no longer waiting, or was read again since', async () => {
+    const { org, receiptId, requestId, confirm } = await needingALook('acme-confirm-guard', 11);
+    expect(await confirm(review(org.memberId, requestId), newId())).toBe('missing');
+    expect(await confirm(review(org.memberId, newId()))).toBe('stale');
+
+    expect(await confirm(review(org.memberId, requestId))).toBe('confirmed');
+    // Confirmed once: a second tap changes nothing.
+    expect(await confirm(review(org.memberId, requestId))).toBe('not_waiting');
+
+    const again = await withOrg(app.db, org.orgId, (tx) =>
+      requestReceiptReading(tx, org.orgId, receiptId, org.userId),
+    );
+    // Being read again: nothing to confirm until it settles.
+    expect(await confirm(review(org.memberId, requestId))).toBe('not_waiting');
+    await withOrg(app.db, org.orgId, async (tx) => {
+      await recordExtractionRun(tx, org.orgId, run(receiptId, again!.outboxId, 'gpt-5.6-luna'));
+      await settleReceipt(tx, org.orgId, receiptId, {
+        status: 'needs_review',
+        requestId: again!.outboxId,
+        detail: {},
+      });
+    });
+    // The readings shown before the read-again are stale; the new ones can be confirmed.
+    expect(await confirm(review(org.memberId, requestId))).toBe('stale');
+    expect(await confirm(review(org.memberId, again!.outboxId))).toBe('confirmed');
+    const reviews = await withOrg(app.db, org.orgId, (tx) => listReceiptReviews(tx, [receiptId]));
+    expect(reviews.map((r) => r.requestId)).toEqual([again!.outboxId, requestId]);
+  });
+
+  it('keeps reviews inside their organization, and never edits or deletes one', async () => {
+    const { org, receiptId, requestId, confirm } = await needingALook('acme-confirm-rls', 12);
+    await confirm(review(org.memberId, requestId));
+    const other = await seedOrg(app.db, 'globex-confirm-rls');
+    expect(await withOrg(app.db, other.orgId, (tx) => listReceiptReviews(tx, [receiptId]))).toEqual(
+      [],
+    );
+    await expectDbError(
+      withOrg(app.db, org.orgId, (tx) => tx.update(receiptReviews).set({ totalMinor: 1 })),
+      /permission denied/,
+    );
+    await expectDbError(
+      withOrg(app.db, org.orgId, (tx) => tx.delete(receiptReviews)),
+      /permission denied/,
+    );
   });
 });

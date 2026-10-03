@@ -4,7 +4,7 @@ import { appendAuditEvent } from './audit.ts';
 import type { Transaction } from './client.ts';
 import { enqueueOutbox } from './outbox.ts';
 import type { receiptStatus } from './schema.ts';
-import { auditEvents, extractionRuns, members, receipts } from './schema.ts';
+import { auditEvents, extractionRuns, members, receiptReviews, receipts } from './schema.ts';
 
 export type ReceiptStatus = (typeof receiptStatus.enumValues)[number];
 
@@ -285,4 +285,118 @@ export async function settleReceipt(
     action: 'receipt.read',
     payload: { status: outcome.status, requestId: outcome.requestId, ...outcome.detail },
   });
+}
+
+/** A member's confirmation of a reading that needed a look (ADR-0021). */
+export interface ReceiptReviewRecord {
+  readonly id: string;
+  readonly receiptId: string;
+  readonly requestId: string | null;
+  readonly model: string;
+  readonly reviewedBy: string;
+  readonly merchant: string;
+  readonly transactionDate: string;
+  readonly currency: string;
+  readonly totalMinor: number;
+  readonly taxMinor: number | null;
+  readonly tipMinor: number | null;
+  readonly corrections: unknown;
+  readonly createdAt: Date;
+}
+
+/** Every review of these receipts, newest first. Call inside withOrg(). */
+export function listReceiptReviews(
+  tx: Transaction,
+  receiptIds: readonly string[],
+): Promise<ReceiptReviewRecord[]> {
+  if (receiptIds.length === 0) return Promise.resolve([]);
+  return tx
+    .select({
+      id: receiptReviews.id,
+      receiptId: receiptReviews.receiptId,
+      requestId: receiptReviews.requestId,
+      model: receiptReviews.model,
+      reviewedBy: members.displayName,
+      merchant: receiptReviews.merchant,
+      transactionDate: receiptReviews.transactionDate,
+      currency: receiptReviews.currency,
+      totalMinor: receiptReviews.totalMinor,
+      taxMinor: receiptReviews.taxMinor,
+      tipMinor: receiptReviews.tipMinor,
+      corrections: receiptReviews.corrections,
+      createdAt: receiptReviews.createdAt,
+    })
+    .from(receiptReviews)
+    .innerJoin(
+      members,
+      and(eq(members.orgId, receiptReviews.orgId), eq(members.id, receiptReviews.memberId)),
+    )
+    .where(inArray(receiptReviews.receiptId, [...receiptIds]))
+    .orderBy(desc(receiptReviews.createdAt), desc(receiptReviews.id));
+}
+
+export interface NewReceiptReview {
+  readonly memberId: string;
+  /** The request whose readings were shown; refused if a newer one has started since. */
+  readonly requestId: string | null;
+  readonly model: string;
+  readonly merchant: string;
+  readonly transactionDate: string;
+  readonly currency: string;
+  readonly totalMinor: number;
+  readonly taxMinor: number | null;
+  readonly tipMinor: number | null;
+  readonly corrections: readonly { field: string; read: string | null; corrected: string }[];
+}
+
+export type ConfirmReceiptResult =
+  | 'confirmed'
+  /** No such receipt in this organization. */
+  | 'missing'
+  /** It is not waiting for a look: being read, already Ready, or not read at all. */
+  | 'not_waiting'
+  /** It was read again after the readings the person confirmed were shown. */
+  | 'stale';
+
+/**
+ * Makes a receipt that needs a look Ready with the values a member confirmed: the review
+ * row, the status and the audit event, in the caller's transaction. Call inside withOrg().
+ */
+export async function confirmReceipt(
+  tx: Transaction,
+  orgId: string,
+  receiptId: string,
+  review: NewReceiptReview,
+  actorUserId: string,
+): Promise<ConfirmReceiptResult> {
+  // The lock orders this against a concurrent read-again or a second confirmation.
+  const [current] = await tx
+    .select({ status: receipts.status })
+    .from(receipts)
+    .where(eq(receipts.id, receiptId))
+    .for('update');
+  if (!current) return 'missing';
+  if (current.status !== 'needs_review') return 'not_waiting';
+  const [latest] = await tx
+    .select({ requestId: extractionRuns.requestId })
+    .from(extractionRuns)
+    .where(eq(extractionRuns.receiptId, receiptId))
+    .orderBy(desc(extractionRuns.createdAt), desc(extractionRuns.id))
+    .limit(1);
+  if ((latest?.requestId ?? null) !== review.requestId) return 'stale';
+
+  await tx.insert(receiptReviews).values({ ...review, orgId, receiptId });
+  await tx.update(receipts).set({ status: 'extracted' }).where(eq(receipts.id, receiptId));
+  await appendAuditEvent(tx, orgId, {
+    actor: { type: 'user', id: actorUserId },
+    entityType: 'receipt',
+    entityId: receiptId,
+    action: 'receipt.confirmed',
+    payload: {
+      requestId: review.requestId,
+      model: review.model,
+      corrections: review.corrections,
+    },
+  });
+  return 'confirmed';
 }

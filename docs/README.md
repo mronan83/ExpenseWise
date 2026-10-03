@@ -48,6 +48,7 @@ ExpenseWise is a receipt-first, automation-first expense, receipt, mileage and t
 | D-20 | A release applies migrations, then promotes that commit's build; Vercel no longer publishes on its own | [ADR-0018](adr/0018-release-migrates-then-promotes.md) | Accepted (decided by product owner) |
 | D-21 | Asking for the merge is the production approval; the release runs straight after it | [ADR-0019](adr/0019-merge-is-the-release.md) | Accepted (decided by product owner) |
 | D-22 | When neither Claude model can read a receipt, GPT-5.6 Luna reads it on the organization's OpenAI key; its reading can't make a receipt Ready | [ADR-0020](adr/0020-openai-fallback-reader.md) | Accepted (fallback decided by product owner; model and Ready rule recommended, no objection) |
+| D-23 | A receipt that needs a look is confirmed as read or corrected by a person, which makes it Ready; corrections keep what the model read | [ADR-0021](adr/0021-confirming-a-reading.md) | Accepted (actions requested by product owner; storage and rules recommended, no objection) |
 
 ## Visual version
 

@@ -55,11 +55,42 @@ export interface Reading {
   problems: string[];
 }
 
+/** The fields a person can correct before filing (FR-INT-15). */
+export type CorrectableField = 'merchant' | 'date' | 'currency' | 'total' | 'taxTotal' | 'tip';
+
+export interface Confirmation {
+  by: string;
+  at: string;
+  model: string;
+  label: string;
+  /** What the receipt is filed with. */
+  values: {
+    merchant: string;
+    date: string;
+    currency: string;
+    total: MoneyField | null;
+    taxTotal: MoneyField | null;
+    tip: MoneyField | null;
+  };
+  corrections: { field: CorrectableField; read: string | null; corrected: string }[];
+}
+
 export interface ReceiptDetail extends ReceiptSummary {
   imageUrl: string | null;
   readings: Reading[];
   differences: string[];
+  /** Set when a member confirmed a reading; the headline values are then theirs. */
+  confirmation: Confirmation | null;
 }
+
+export const FIELD_LABELS: Record<CorrectableField, string> = {
+  merchant: 'Merchant',
+  date: 'Date',
+  currency: 'Currency',
+  total: 'Total',
+  taxTotal: 'Tax',
+  tip: 'Tip',
+};
 
 export interface ModelStats {
   model: string;
