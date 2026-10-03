@@ -2,7 +2,7 @@
 
 The index of ExpenseWise architecture decision records (ADRs) and how to add one.
 
-Each ADR records one decision with its context, the alternatives considered and an exit path. ADR-0001 to ADR-0012 record decisions D-01 to D-12 from the blueprint's decision register (v0.3, 30 September 2026). "Decided by product owner" records the product owner's call from 30 September 2026. "Recommended; no objection" means Claude is proceeding on it unless the product owner objects. ADR-0013 records D-13, decided after v0.3, ADR-0014 records D-16, ADR-0015 records D-17, ADR-0016 records D-18, ADR-0017 records D-19, ADR-0018 records D-20, ADR-0019 records D-21, and ADR-0020 records D-22.
+Each ADR records one decision with its context, the alternatives considered and an exit path. ADR-0001 to ADR-0012 record decisions D-01 to D-12 from the blueprint's decision register (v0.3, 30 September 2026). "Decided by product owner" records the product owner's call from 30 September 2026. "Recommended; no objection" means Claude is proceeding on it unless the product owner objects. ADR-0013 records D-13, decided after v0.3, ADR-0014 records D-16, ADR-0015 records D-17, ADR-0016 records D-18, ADR-0017 records D-19, ADR-0018 records D-20, ADR-0019 records D-21, ADR-0020 records D-22, and ADR-0021 records D-23.
 
 ## Index
 
@@ -27,12 +27,13 @@ Each ADR records one decision with its context, the alternatives considered and 
 | [0017](0017-read-receipts-with-two-models.md) | Read every receipt with two models until the tier is chosen | D-19 | Accepted (decided by product owner); amended by [ADR-0020](0020-openai-fallback-reader.md) | 2026-10-02 |
 | [0018](0018-release-migrates-then-promotes.md) | A release migrates first, then makes the build live | D-20 | Accepted (decided by product owner); amended by [ADR-0019](0019-merge-is-the-release.md) | 2026-10-02 |
 | [0019](0019-merge-is-the-release.md) | Merging is the release | D-21 | Accepted (decided by product owner) | 2026-10-02 |
-| [0020](0020-openai-fallback-reader.md) | GPT-5.6 Luna reads a receipt when Claude can't | D-22 | Accepted (fallback decided by product owner; model and Ready rule recommended, no objection) | 2026-10-02 |
+| [0020](0020-openai-fallback-reader.md) | GPT-5.6 Luna reads a receipt when Claude can't | D-22 | Accepted (fallback decided by product owner; model and Ready rule recommended, no objection); amended by [ADR-0021](0021-confirming-a-reading.md) | 2026-10-02 |
+| [0021](0021-confirming-a-reading.md) | A person confirms or corrects a reading that needs a look | D-23 | Accepted (actions requested by product owner; storage and rules recommended, no objection) | 2026-10-03 |
 
 ## How to add an ADR
 
 1. **Decide whether you need one.** A story that is architectural needs an ADR before it is Ready ([Definition of Ready](../06-delivery-lifecycle.md#76-definition-of-ready-and-definition-of-done)).
-2. **Copy the template.** Copy [0000-template.md](0000-template.md) to `NNNN-short-title.md`, where `NNNN` is the next unused number (the next one is 0021). Numbers are never reused.
+2. **Copy the template.** Copy [0000-template.md](0000-template.md) to `NNNN-short-title.md`, where `NNNN` is the next unused number (the next one is 0022). Numbers are never reused.
 3. **Fill in every section.** Keep it tight. Name concrete alternatives, and give an honest exit path.
 4. **Open it as Proposed.** Add a row to the index above in the same pull request.
 5. **Record the outcome.** When the product owner accepts it, set the status to Accepted. Docs and ADRs are updated in the same pull request as the change they describe ([Definition of Done](../06-delivery-lifecycle.md#76-definition-of-ready-and-definition-of-done)).

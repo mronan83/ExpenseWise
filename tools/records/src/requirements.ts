@@ -246,9 +246,13 @@ export const FUNCTIONAL: readonly Requirement[] = [
     sources: ['owner 2026-10-02', 'design §5.3', 'journeys §4.5'],
     priority: 'Must',
     phase: 'P1',
-    status: 'Planned',
+    status: 'Verified',
     features: ['F-40'],
-    backlog: [47],
+    checks: [
+      'api/receipts › makes the fallback reading Ready with Looks right, and says who confirmed it',
+      'api/receipts › files corrected fields with Edit a field, keeping what the model read',
+      'db/receipts.int › makes it Ready with the values, the corrections and an audit event, together',
+    ],
   },
   {
     id: 'FR-INT-10',
@@ -268,10 +272,13 @@ export const FUNCTIONAL: readonly Requirement[] = [
     priority: 'Should',
     phase: 'P1',
     status: 'Partial',
-    features: ['F-06'],
-    checks: ['api/receipts › shows both readings, where they differ, and money as minor units'],
+    features: ['F-06', 'F-40'],
+    checks: [
+      'api/receipts › shows both readings, where they differ, and money as minor units',
+      'extraction/confirm',
+    ],
     shortfalls: ['GAP-14'],
-    note: 'Confidence and the original image are shown; source text and corrections are not.',
+    note: 'Confidence and the original image are shown. A reading that needs a look can be corrected, and each correction is kept beside what was read (F-40). Source text is not shown, and a Ready reading can’t be corrected.',
   },
   {
     id: 'FR-INT-12',

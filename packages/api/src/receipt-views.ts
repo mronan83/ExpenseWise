@@ -1,5 +1,5 @@
-import type { ExtractionRunRecord, ReceiptRecord } from '@expensewise/db';
-import { toDecimal, zero, type Money } from '@expensewise/domain';
+import type { ExtractionRunRecord, ReceiptRecord, ReceiptReviewRecord } from '@expensewise/db';
+import { money, toDecimal, zero, type Money } from '@expensewise/domain';
 import {
   assumedZeros,
   COMPARISON_MODELS,
@@ -8,6 +8,7 @@ import {
   normalizeExtraction,
   readingDifferences,
   ReceiptExtractionSchema,
+  type CorrectableField,
   type Field,
   type ModelId,
   type NormalizedExtraction,
@@ -39,7 +40,7 @@ const assumedZeroView = (currency: string) => {
 const textView = (field: Field<string> | null) =>
   field ? { value: field.value, confidence: field.confidence } : null;
 
-function normalized(run: ExtractionRunRecord | undefined): NormalizedExtraction | null {
+export function normalized(run: ExtractionRunRecord | undefined): NormalizedExtraction | null {
   if (!run || run.outcome === 'failed') return null;
   const parsed = ReceiptExtractionSchema.safeParse(run.output);
   return parsed.success ? normalizeExtraction(parsed.data) : null;
@@ -136,14 +137,67 @@ function differencesOf(receipt: ReceiptRecord, runs: readonly ExtractionRunRecor
   return a && b ? readingDifferences(a, b) : [];
 }
 
-export function receiptSummary(receipt: ReceiptRecord, runs: readonly ExtractionRunRecord[]) {
-  // The headline comes from the most capable compared model that read it, else the fallback.
+/**
+ * The confirmation that decides what the receipt is filed with: the newest one of its latest
+ * readings, while the receipt is Ready. Reading it again starts over (ADR-0021).
+ */
+export function currentReview(
+  receipt: ReceiptRecord,
+  runs: readonly ExtractionRunRecord[],
+  reviews: readonly ReceiptReviewRecord[],
+): ReceiptReviewRecord | null {
+  if (receipt.status !== 'extracted') return null;
+  const request = latestRuns(receipt.id, runs)[0]?.requestId ?? null;
+  return reviews.find((r) => r.receiptId === receipt.id && r.requestId === request) ?? null;
+}
+
+function confirmationView(review: ReceiptReviewRecord) {
+  const corrections = Array.isArray(review.corrections)
+    ? (review.corrections as { field: CorrectableField; read: string | null; corrected: string }[])
+    : [];
+  const amount = (minor: number | null) =>
+    minor === null ? null : moneyView({ value: money(minor, review.currency), confidence: 'high' });
+  return {
+    by: review.reviewedBy,
+    at: review.createdAt.toISOString(),
+    model: review.model,
+    label: review.model in MODELS ? MODELS[review.model as ModelId].label : review.model,
+    values: {
+      merchant: review.merchant,
+      date: review.transactionDate,
+      currency: review.currency,
+      total: amount(review.totalMinor),
+      taxTotal: amount(review.taxMinor),
+      tip: amount(review.tipMinor),
+    },
+    corrections: corrections.map(({ field, read, corrected }) => ({ field, read, corrected })),
+  };
+}
+
+export function receiptSummary(
+  receipt: ReceiptRecord,
+  runs: readonly ExtractionRunRecord[],
+  reviews: readonly ReceiptReviewRecord[] = [],
+) {
+  const review = currentReview(receipt, runs, reviews);
+  // The headline is what a member confirmed; else the most capable compared model that read
+  // it; else the fallback.
   const readings = readingsOf(receipt, runs);
   const compared = readings.filter((r) => r.role === 'compared').reverse();
   const best =
     compared.find((r) => r.fields)?.fields ??
     readings.find((r) => r.role === 'fallback')?.fields ??
     null;
+  const confirmed = review
+    ? {
+        merchant: review.merchant,
+        date: review.transactionDate,
+        total: moneyView({
+          value: money(review.totalMinor, review.currency),
+          confidence: 'high',
+        }),
+      }
+    : null;
   return {
     id: receipt.id,
     status: receipt.status,
@@ -152,9 +206,9 @@ export function receiptSummary(receipt: ReceiptRecord, runs: readonly Extraction
     byteSize: receipt.byteSize,
     uploadedBy: receipt.uploadedBy,
     createdAt: receipt.createdAt.toISOString(),
-    merchant: best?.merchant?.value ?? null,
-    date: best?.date?.value ?? null,
-    total: best?.total ?? null,
+    merchant: confirmed ? confirmed.merchant : (best?.merchant?.value ?? null),
+    date: confirmed ? confirmed.date : (best?.date?.value ?? null),
+    total: confirmed ? confirmed.total : (best?.total ?? null),
   };
 }
 
@@ -162,12 +216,15 @@ export function receiptDetail(
   receipt: ReceiptRecord,
   runs: readonly ExtractionRunRecord[],
   imageUrl: string | null,
+  reviews: readonly ReceiptReviewRecord[] = [],
 ) {
+  const review = currentReview(receipt, runs, reviews);
   return {
-    ...receiptSummary(receipt, runs),
+    ...receiptSummary(receipt, runs, reviews),
     imageUrl,
     readings: readingsOf(receipt, runs),
     differences: differencesOf(receipt, runs),
+    confirmation: review ? confirmationView(review) : null,
   };
 }
 

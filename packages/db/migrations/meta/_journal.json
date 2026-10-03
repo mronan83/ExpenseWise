@@ -71,6 +71,20 @@
       "when": 1790984022306,
       "tag": "0009_ops_heartbeat",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790989758614,
+      "tag": "0010_receipt_reviews",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1790989759587,
+      "tag": "0011_receipt_reviews_rls",
+      "breakpoints": true
     }
   ]
 }

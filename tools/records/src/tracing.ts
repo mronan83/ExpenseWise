@@ -164,8 +164,8 @@ export const GAPS: readonly Gap[] = [
     affects: ['FR-INT-11'],
     severity: 'Low',
     evidence:
-      'The receipt page shows each model’s values with their confidence and the original image; the schema asks for no source text.',
-    fix: 'Ask the model for each field’s source line and highlight it (#37). Correcting a value arrives with #47.',
+      'The receipt page shows each model’s values with their confidence and the original image; the schema asks for no source text. Since #47 a reading that needs a look can be corrected, but a Ready one can’t.',
+    fix: 'Ask the model for each field’s source line and highlight it, and correct any field with a tap, as a reversal once it is an expense (#37).',
     backlog: 37,
   },
   {
@@ -178,6 +178,10 @@ export const GAPS: readonly Gap[] = [
       'Reported by the product owner on Oct 2. The receipt page’s only action is Read again; the receipt review design (design §5.3) has Looks right and Edit a field. Every fallback reading lands in Needs a look (ADR-0020).',
     fix: 'Build both actions; either makes the receipt Ready, with an audit event (#47).',
     backlog: 47,
+    closed: {
+      date: '2026-10-03',
+      note: 'Looks right and Edit a field are on the receipt page (F-40, ADR-0021): either makes the receipt Ready, records who did it in the audit trail, and keeps each correction beside what the model read.',
+    },
   },
   {
     id: 'GAP-15',
@@ -250,6 +254,12 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-03',
+    change:
+      'PR #26: Looks right and Edit a field (F-40, ADR-0021, D-23). A receipt that needs a look can now be made Ready, so #47 is done, GAP-17 closed and FR-INT-15 Verified. Corrections are kept beside what the model read, in a new append-only table under row-level security; FR-INT-11 stays Partial (source text, GAP-14).',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-03',
     change:

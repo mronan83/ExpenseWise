@@ -4,6 +4,7 @@ import type {
   Membership,
   NewReceipt,
   ReceiptRecord,
+  ReceiptReviewRecord,
 } from '@expensewise/db';
 import type { ReceiptExtraction } from '@expensewise/extraction';
 import { memoryObjectStore } from '@expensewise/storage';
@@ -42,6 +43,7 @@ const reading = (total: string): ReceiptExtraction => ({
 function fakeReceipts() {
   const receipts: ReceiptRecord[] = [];
   const runs: ExtractionRunRecord[] = [];
+  const reviews: ReceiptReviewRecord[] = [];
   const events: CommittedEvent[] = [];
   let n = 0;
   const store: ReceiptStore = {
@@ -67,10 +69,29 @@ function fakeReceipts() {
       events.push(event);
       return Promise.resolve({ status: 'filed', receipt, event });
     },
-    list: () => Promise.resolve({ receipts, runs }),
+    list: () => Promise.resolve({ receipts, runs, reviews }),
     get: (_org, id) => {
       const receipt = receipts.find((r) => r.id === id);
-      return Promise.resolve(receipt ? { receipt, runs } : undefined);
+      return Promise.resolve(receipt ? { receipt, runs, reviews } : undefined);
+    },
+    confirm: (_org, id, review) => {
+      const i = receipts.findIndex((r) => r.id === id);
+      if (i === -1) return Promise.resolve('missing');
+      if (receipts[i]!.status !== 'needs_review') return Promise.resolve('not_waiting');
+      const latest = runs
+        .filter((r) => r.receiptId === id)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+      if ((latest?.requestId ?? null) !== review.requestId) return Promise.resolve('stale');
+      const { memberId: _member, ...values } = review;
+      reviews.unshift({
+        ...values,
+        id: `review-${reviews.length}`,
+        receiptId: id,
+        reviewedBy: 'riley',
+        createdAt: NOW,
+      });
+      receipts[i] = { ...receipts[i]!, status: 'extracted' };
+      return Promise.resolve('confirmed');
     },
     requestReading: (orgId, id) => {
       const i = receipts.findIndex((r) => r.id === id);
@@ -148,7 +169,7 @@ function fakeReceipts() {
     const at = receipts.findIndex((r) => r.id === id);
     receipts[at] = { ...receipts[at]!, status: 'needs_review' };
   };
-  return { store, receipts, runs, events, read, readByFallback };
+  return { store, receipts, runs, reviews, events, read, readByFallback };
 }
 
 function setup(opts: { files?: boolean; dispatch?: 'ok' | 'fails' | 'none' } = {}) {
@@ -276,17 +297,17 @@ describe('capturing a receipt', () => {
   });
 });
 
-describe('reading receipts side by side', () => {
-  async function filed(s: ReturnType<typeof setup>) {
-    const { body: ticket } = await s.call('POST', '/v1/receipts/uploads', 'riley', s.file);
-    await s.call('POST', '/v1/receipts', 'riley', {
-      id: ticket.receiptId,
-      source: 'camera',
-      ...s.file,
-    });
-    return ticket.receiptId as string;
-  }
+async function filed(s: ReturnType<typeof setup>) {
+  const { body: ticket } = await s.call('POST', '/v1/receipts/uploads', 'riley', s.file);
+  await s.call('POST', '/v1/receipts', 'riley', {
+    id: ticket.receiptId,
+    source: 'camera',
+    ...s.file,
+  });
+  return ticket.receiptId as string;
+}
 
+describe('reading receipts side by side', () => {
   it('shows each model pending while the receipt is read', async () => {
     const s = setup();
     const id = await filed(s);
@@ -436,5 +457,137 @@ describe('reading receipts side by side', () => {
     const s = setup({ dispatch: 'none' });
     const { body } = await s.call('GET', '/v1/receipts', 'riley');
     expect(body.readingAvailable).toBe(false);
+  });
+});
+
+describe('confirming a receipt that needs a look', () => {
+  const confirm = (s: ReturnType<typeof setup>, id: string, body: unknown, who = 'riley') =>
+    s.call('POST', `/v1/receipts/${id}/confirm`, who, body);
+
+  it('makes the fallback reading Ready with Looks right, and says who confirmed it', async () => {
+    const s = setup();
+    const id = await filed(s);
+    s.readByFallback(id);
+    const res = await confirm(s, id, { model: 'gpt-5.6-luna' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      status: 'extracted',
+      merchant: 'Blue Bottle Coffee',
+      date: '2026-09-24',
+      total: { amountMinor: 725, currency: 'USD', decimal: '7.25', assumed: false },
+      confirmation: {
+        by: 'riley',
+        model: 'gpt-5.6-luna',
+        label: 'GPT-5.6 Luna',
+        corrections: [],
+      },
+    });
+    expect(s.reviews).toEqual([
+      expect.objectContaining({ totalMinor: 725, taxMinor: 0, tipMinor: 0, corrections: [] }),
+    ]);
+    const list = await s.call('GET', '/v1/receipts', 'riley');
+    expect(list.body.receipts).toEqual([
+      expect.objectContaining({ id, status: 'extracted', total: res.body.total }),
+    ]);
+  });
+
+  it('files corrected fields with Edit a field, keeping what the model read', async () => {
+    const s = setup();
+    const id = await filed(s);
+    s.read(id, ['65.00', '6.50'], 'needs_review');
+    const res = await confirm(s, id, {
+      model: 'claude-sonnet-5-5',
+      corrections: { total: '6.75', tip: '1.00' },
+    });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      status: 'extracted',
+      total: { amountMinor: 675, decimal: '6.75' },
+      confirmation: {
+        label: 'Sonnet 5.5',
+        values: {
+          merchant: 'Blue Bottle Coffee',
+          date: '2026-09-24',
+          currency: 'USD',
+          total: { amountMinor: 675, decimal: '6.75' },
+          taxTotal: { amountMinor: 0, decimal: '0.00' },
+          tip: { amountMinor: 100, decimal: '1.00' },
+        },
+        corrections: [
+          { field: 'total', read: '6.50', corrected: '6.75' },
+          { field: 'tip', read: null, corrected: '1.00' },
+        ],
+      },
+    });
+    // The readings themselves stay as the models read them.
+    const sonnet = (res.body.readings as { fields: { total: { decimal: string } } }[])[1];
+    expect(sonnet!.fields.total.decimal).toBe('6.50');
+  });
+
+  it('refuses a receipt that is not waiting for a look', async () => {
+    const s = setup();
+    const id = await filed(s);
+    expect((await confirm(s, id, { model: 'claude-haiku-4-5' })).status).toBe(409);
+    s.read(id, ['6.50', '6.50'], 'extracted');
+    const ready = await confirm(s, id, { model: 'claude-haiku-4-5' });
+    expect(ready).toMatchObject({ status: 409, body: { code: 'not_waiting' } });
+    const missing = await confirm(s, '0192f7a0-0000-7000-8000-0000000000c9', {
+      model: 'claude-haiku-4-5',
+    });
+    expect(missing.status).toBe(404);
+  });
+
+  it('names the field that is not valid, or the filing fields still missing', async () => {
+    const s = setup();
+    const id = await filed(s);
+    s.readByFallback(id);
+    expect(await confirm(s, id, { model: 'claude-opus-9' })).toMatchObject({
+      status: 422,
+      body: { code: 'no_such_reading' },
+    });
+    expect(
+      await confirm(s, id, { model: 'gpt-5.6-luna', corrections: { date: '2026-13-01' } }),
+    ).toMatchObject({ status: 422, body: { code: 'invalid_value', field: 'date' } });
+    expect(
+      await confirm(s, id, { model: 'gpt-5.6-luna', corrections: { total: '7.255' } }),
+    ).toMatchObject({ status: 422, body: { code: 'invalid_value', field: 'total' } });
+
+    // A reading with no total can't be filed as it is; entering one fixes that.
+    const luna = s.runs.findIndex((r) => r.model === 'gpt-5.6-luna');
+    s.runs[luna] = { ...s.runs[luna]!, output: { ...reading('7.25'), total: null } };
+    expect(await confirm(s, id, { model: 'gpt-5.6-luna' })).toMatchObject({
+      status: 422,
+      body: { code: 'missing_fields', fields: ['total'] },
+    });
+    const fixed = await confirm(s, id, { model: 'gpt-5.6-luna', corrections: { total: '7.25' } });
+    expect(fixed.status).toBe(200);
+    expect(s.reviews).toHaveLength(1);
+  });
+
+  it('starts over when the receipt is read again', async () => {
+    const s = setup();
+    const id = await filed(s);
+    s.readByFallback(id);
+    await confirm(s, id, { model: 'gpt-5.6-luna', corrections: { total: '9.00' } });
+    const again = await s.call('POST', `/v1/receipts/${id}/read`, 'riley');
+    expect(again.body).toMatchObject({ status: 'processing' });
+    s.readByFallback(id);
+    const { body } = await s.call('GET', `/v1/receipts/${id}`, 'riley');
+    expect(body).toMatchObject({
+      status: 'needs_review',
+      total: { decimal: '7.25' },
+      confirmation: null,
+    });
+  });
+
+  it('needs a signed-in member', async () => {
+    const s = setup();
+    const id = await filed(s);
+    s.readByFallback(id);
+    expect(
+      (await s.call('POST', `/v1/receipts/${id}/confirm`, undefined, { model: 'gpt-5.6-luna' }))
+        .status,
+    ).toBe(401);
+    expect((await confirm(s, id, { model: 'gpt-5.6-luna' }, 'mallory')).status).toBe(403);
   });
 });

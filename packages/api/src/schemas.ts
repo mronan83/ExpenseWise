@@ -1,4 +1,5 @@
 import { SUPPORTED_CURRENCIES } from '@expensewise/domain';
+import { CORRECTABLE_FIELDS } from '@expensewise/extraction';
 import { z } from '@hono/zod-openapi';
 
 /** RFC 9457 problem details. Every error response uses this shape. */
@@ -175,9 +176,10 @@ export const ReceiptSummarySchema = z
     id: z.string().uuid(),
     status: ReceiptStatusSchema.openapi({
       description:
-        'processing while it is read; extracted when both compared models read it with ' +
-        'confidence and agree; needs_review otherwise, including when only the fallback model ' +
-        'read it; failed when no model could read it.',
+        'processing while it is read; extracted (shown as Ready) when both compared models ' +
+        'read it with confidence and agree, or when a member confirmed or corrected a reading ' +
+        '(ADR-0021); needs_review otherwise, including when only the fallback model read it; ' +
+        'failed when no model could read it.',
     }),
     source: z.enum(['camera', 'upload', 'email', 'card', 'manual', 'mileage']),
     contentType: z.string(),
@@ -224,6 +226,37 @@ export const ReceiptReadingSchema = z
   })
   .openapi('ReceiptReading');
 
+const CorrectableFieldSchema = z.enum(CORRECTABLE_FIELDS);
+
+export const ReceiptConfirmationSchema = z
+  .object({
+    by: z.string().openapi({ description: 'The member who confirmed it.' }),
+    at: z.string().datetime(),
+    model: z.string().openapi({ description: 'Whose reading was confirmed or corrected.' }),
+    label: z.string().openapi({ example: 'GPT-5.6 Luna' }),
+    values: z
+      .object({
+        merchant: z.string(),
+        date: z.string(),
+        currency: z.string(),
+        total: MoneyFieldSchema,
+        taxTotal: MoneyFieldSchema,
+        tip: MoneyFieldSchema,
+      })
+      .openapi({ description: 'What the receipt is filed with.' }),
+    corrections: z.array(
+      z.object({
+        field: CorrectableFieldSchema,
+        read: z
+          .string()
+          .nullable()
+          .openapi({ description: 'What the model read; null when it read nothing.' }),
+        corrected: z.string(),
+      }),
+    ),
+  })
+  .openapi('ReceiptConfirmation');
+
 export const ReceiptDetailSchema = ReceiptSummarySchema.extend({
   imageUrl: z
     .string()
@@ -233,7 +266,36 @@ export const ReceiptDetailSchema = ReceiptSummarySchema.extend({
   differences: z
     .array(z.string())
     .openapi({ description: 'Filing fields the two models read differently.' }),
+  confirmation: ReceiptConfirmationSchema.nullable().openapi({
+    description:
+      'Set when a member confirmed this reading; the merchant, date and total above are then ' +
+      'the confirmed values.',
+  }),
 }).openapi('ReceiptDetail');
+
+const correction = (description: string, example: string) =>
+  z.string().max(200).optional().openapi({ description, example });
+
+export const ConfirmReceiptSchema = z
+  .object({
+    model: z.string().openapi({
+      description: 'The reading to confirm, by model, from the receipt’s latest readings.',
+      example: 'gpt-5.6-luna',
+    }),
+    corrections: z
+      .object({
+        merchant: correction('The merchant, as it should be filed.', 'Blue Bottle Coffee'),
+        date: correction('The transaction date, YYYY-MM-DD.', '2026-09-24'),
+        currency: correction('An ISO 4217 code. Amounts keep their printed value.', 'USD'),
+        total: correction('A plain decimal in the receipt’s currency.', '65.00'),
+        taxTotal: correction('A plain decimal in the receipt’s currency.', '5.20'),
+        tip: correction('A plain decimal in the receipt’s currency.', '0.00'),
+      })
+      .strict()
+      .optional()
+      .openapi({ description: 'Only the fields the person changed. Omit to confirm as read.' }),
+  })
+  .openapi('ConfirmReceipt');
 
 export const ReceiptListSchema = z
   .object({
