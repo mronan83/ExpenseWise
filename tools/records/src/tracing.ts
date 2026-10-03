@@ -87,6 +87,10 @@ export const GAPS: readonly Gap[] = [
       'Vercel environment variables, read Oct 2 (names and targets only). Every branch push builds unreviewed code that can read production data and every stored receipt.',
     fix: 'Untick Preview on both. Previews then have no database until staging exists (#30); CI tests against its own Postgres, so nothing is lost.',
     backlog: 3,
+    closed: {
+      date: '2026-10-03',
+      note: 'You unticked Preview on both; Vercel now lists `DATABASE_URL` and `SUPABASE_SECRET_KEY` for Production only (read Oct 3, names and targets only). Previews now have no data, which Q13 is about.',
+    },
   },
   {
     id: 'GAP-03',
@@ -388,10 +392,24 @@ export const QUESTIONS: readonly Question[] = [
       text: 'A, as recommended: Sep 30, 2026, with the time as 1:12 PM where one matters, everywhere a date is shown (NFR-UX-06, #55).',
     },
   },
+  {
+    id: 'Q13',
+    title: 'Where to check a changed screen on your iPhone, now previews have no data',
+    ask: 'Since #3, a preview build has no database, so a signed-in screen on a preview has nothing on it. The pull request template still asks for a changed screen to be checked on an iPhone through the preview before merging. A: check on production, right after each release. B: build staging next (#30, from P3 to P1): a second free Supabase project with made-up data that previews use. C: drop the iPhone check and rely on CI.',
+    why: 'CI’s iPhone run is WebKit on Linux, not iOS Safari (GAP-22), so the iPhone check is what catches an iOS-only fault, as your Oct 3 screenshot did. A finds it after it reaches production; B finds it before. Staging also gives the delivery lifecycle the release candidate environment it describes (delivery §7.3). The Free plan allows two projects, so B costs nothing; it needs about 20 minutes of your setup, and the rest is mine.',
+    recommendation: 'B, with A until staging is ready. C would leave GAP-22 with no defence.',
+    affects: ['NFR-SEC-13', 'NFR-UX-02', 'GAP-22'],
+  },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-03',
+    change:
+      'You unticked Preview on `DATABASE_URL` and `SUPABASE_SECRET_KEY`, and Vercel now holds both for Production only, so #3 is done, GAP-02 closed and NFR-SEC-13 Implemented. Previews now show no data, so Q13 asks where you check a changed screen on your iPhone; I recommend building staging next (#30). Email-in moves from Postmark to Bird at your direction (ADR-0024, #19). Bird doesn’t report DMARC and its receiving guide doesn’t say how webhooks are signed, so we check the sender’s DKIM alignment ourselves and confirm the signing before building.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-03',
     change:

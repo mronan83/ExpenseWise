@@ -137,6 +137,10 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'owner', ask: 'Your go-ahead, or five minutes in Vercel' },
     source: 'GAP-02',
     affects: ['GAP-02', 'NFR-SEC-13'],
+    done: {
+      date: '2026-10-03',
+      in: 'Your change in Vercel; both now target Production only (read Oct 3, names and targets only)',
+    },
   },
   {
     num: 7,
@@ -303,12 +307,12 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Email-in: receipts and purchase summaries by email',
     type: 'Feature',
     detail:
-      'A personal address that takes receipts and purchase summaries, emailed or forwarded, and reads the body and any PDF or image like a receipt. Only mail from the person’s own sign-in addresses is read; anything else is dropped. The only automatic route for travel receipts (ADR-0011). Postmark’s inbound address works without a domain of ours. Your answer to Q10: a purchase summary always waits for review; a receipt follows the photo rule.',
+      'A personal address that takes receipts and purchase summaries, emailed or forwarded, and reads the body and any PDF or image like a receipt. Only mail from the person’s own sign-in addresses is read; anything else is dropped. The only automatic route for travel receipts (ADR-0011). It comes in through Bird, your choice of Oct 3 (ADR-0024): an address on Bird’s inbound domain needs no domain of ours. Bird reports SPF and DKIM but not DMARC yet, so we check that the DKIM signature belongs to the From domain ourselves, and the build starts by confirming how Bird signs its webhooks. Your answer to Q10: a purchase summary always waits for review; a receipt follows the photo rule.',
     priority: 'P2',
     effort: 'L',
     severity: 'Medium',
-    blocker: { kind: 'owner', ask: 'A Postmark account from you' },
-    source: 'Roadmap increment 2',
+    blocker: { kind: 'owner', ask: 'A Bird account from you, US region' },
+    source: 'Roadmap increment 2, ADR-0024',
     affects: ['FR-CAP-02', 'F-16'],
   },
   {
@@ -486,7 +490,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'No staging environment',
     type: 'Ops',
     detail:
-      'The delivery lifecycle runs previews and the release candidate on a second, free Supabase project with synthetic data. It doesn’t exist yet, so previews either hold production credentials (#3) or no data.',
+      'The delivery lifecycle runs previews and the release candidate on a second, free Supabase project with synthetic data. It doesn’t exist yet. Since #3, previews hold no production credentials and so no data: a signed-in screen on a preview shows nothing to check, on an iPhone or anywhere (Q13).',
     priority: 'P3',
     effort: 'M',
     severity: 'Medium',
