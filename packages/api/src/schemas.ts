@@ -308,6 +308,42 @@ export const ConfirmReceiptSchema = z
   })
   .openapi('ConfirmReceipt');
 
+export const NeedsYouReasonSchema = z
+  .object({
+    code: z.enum(['failed', 'fallback', 'differ', 'checks', 'unsure']).openapi({
+      description:
+        'failed: no model could read it. fallback: only the fallback model read it. differ: ' +
+        'the compared models read the filing fields differently. checks: its sums or date ' +
+        'fail a check (FR-INT-04). unsure: a model was not confident, or one could not read it.',
+    }),
+    fields: z
+      .array(z.string())
+      .openapi({ description: 'differ: the filing fields read differently.' }),
+    checks: z
+      .array(z.enum(READING_CHECKS))
+      .openapi({ description: 'checks: the checks the readings fail.' }),
+    error: z.string().nullable().openapi({
+      description: 'failed: why the first compared model could not read it, such as no_key.',
+    }),
+    by: z
+      .string()
+      .nullable()
+      .openapi({ description: 'fallback: the model that read it.', example: 'GPT-5.6 Luna' }),
+  })
+  .openapi('NeedsYouReason');
+
+export const InboxSchema = z
+  .object({
+    items: z.array(
+      z.object({
+        kind: z.literal('receipt'),
+        receipt: ReceiptSummarySchema,
+        reason: NeedsYouReasonSchema,
+      }),
+    ),
+  })
+  .openapi('Inbox');
+
 export const ReceiptListSchema = z
   .object({
     receipts: z.array(ReceiptSummarySchema),

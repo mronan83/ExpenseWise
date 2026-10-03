@@ -70,7 +70,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   receipts: {
     about:
-      'A captured file: where it is stored, its fingerprint, and whether it has been read. It stays linked to the expense it proves (FR-EXP-08, ADR-0022).',
+      'A captured file: where it is stored, its fingerprint, and whether it has been read. It stays linked to the expense it proves (FR-EXP-08, ADR-0022). Home lists those that need a look or failed by status within the organization; at hundreds of receipts that needs no index of its own.',
   },
   extraction_runs: {
     about:

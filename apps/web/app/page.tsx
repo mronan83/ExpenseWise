@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { connection } from 'next/server';
 import { flags } from '../lib/flags';
+import { NeedsYou } from './needs-you';
 
-/** Phase 0 app shell: the inbox layout, with no data behind it yet. The tab bar is the layout's. */
+/** Home is the Needs you inbox (FR-EXP-02). The tab bar is the layout's. */
 export default async function HomePage() {
   // Flags are read per request, so turning one on needs no redeploy.
   await connection();
@@ -25,18 +26,7 @@ export default async function HomePage() {
 
       <main className="flex flex-1 flex-col gap-4">
         <h1 className="text-2xl font-bold">Needs you</h1>
-        <section
-          aria-labelledby="inbox-empty"
-          className="rounded-xl border border-rule bg-sheet p-5"
-        >
-          <h2 id="inbox-empty" className="font-semibold">
-            Nothing needs you right now
-          </h2>
-          <p className="mt-1 text-sm text-ink-2">
-            Receipts you capture are read automatically. Only the ones ExpenseWise isn&apos;t sure
-            about will show up here.
-          </p>
-        </section>
+        <NeedsYou />
       </main>
     </div>
   );

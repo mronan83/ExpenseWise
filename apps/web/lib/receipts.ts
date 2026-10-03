@@ -98,6 +98,62 @@ export const FIELD_LABELS: Record<CorrectableField, string> = {
   tip: 'Tip',
 };
 
+/** Why a receipt is in the Needs you inbox (FR-EXP-02). */
+export interface NeedsYouReason {
+  code: 'failed' | 'fallback' | 'differ' | 'checks' | 'unsure';
+  fields: string[];
+  checks: ReadingCheck[];
+  error: string | null;
+  by: string | null;
+}
+
+export interface InboxItem {
+  kind: 'receipt';
+  receipt: ReceiptSummary;
+  reason: NeedsYouReason;
+}
+
+const CHECK_REASONS: Record<ReadingCheck, string> = {
+  sums: 'Its parts don’t come to its total.',
+  future_date: 'It’s dated after the day it was uploaded.',
+  old_date: 'It’s dated more than a year before it was uploaded.',
+};
+const KEY_ERRORS = ['no_key', 'unreadable_key', 'key_rejected'];
+
+/** What an inbox item says, and the one thing to do about it. */
+export function needsYou(item: InboxItem): { text: string; action: string; href: string } {
+  const { reason, receipt } = item;
+  const check = { action: 'Check it', href: `/receipts/${receipt.id}` };
+  switch (reason.code) {
+    case 'failed': {
+      // Every model refused or couldn't make sense of it: say so of them all, not one.
+      const text =
+        reason.error && !reason.error.startsWith('model_')
+          ? describeReadingError(reason.error)
+          : 'No model could read it.';
+      // A key is fixed in Settings; an outage by reading it again; anything else by hand.
+      if (KEY_ERRORS.some((e) => reason.error?.startsWith(e))) {
+        return { text, action: 'Open settings', href: '/settings/ai' };
+      }
+      const open = reason.error?.startsWith('unavailable') ? 'Open it' : 'Fill it in';
+      return { text, action: open, href: `/receipts/${receipt.id}` };
+    }
+    case 'fallback':
+      return { text: `Only ${reason.by ?? 'the fallback'} could read it.`, ...check };
+    case 'differ': {
+      const fields = reason.fields.map(
+        (f) => FIELD_LABELS[f as CorrectableField]?.toLowerCase() ?? f,
+      );
+      const list = new Intl.ListFormat('en', { type: 'conjunction' }).format(fields);
+      return { text: `The models read the ${list} differently.`, ...check };
+    }
+    case 'checks':
+      return { text: reason.checks.map((c) => CHECK_REASONS[c]).join(' '), ...check };
+    case 'unsure':
+      return { text: 'A model wasn’t sure of it, or couldn’t read it.', ...check };
+  }
+}
+
 export interface ModelStats {
   model: string;
   label: string;

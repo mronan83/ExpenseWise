@@ -181,6 +181,10 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none' },
     source: 'Roadmap increment 1, design DP2',
     affects: ['FR-EXP-02', 'FR-GOV-12', 'F-10'],
+    done: {
+      date: '2026-10-03',
+      in: 'PR #41; returned reports join it with #24, missing receipts with card transactions',
+    },
   },
 
   {
