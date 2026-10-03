@@ -18,6 +18,26 @@ import {
 import type { ObjectStore } from '@expensewise/storage';
 import type { KeyProblem, ReceiptReadingPorts } from './receipts.ts';
 
+/**
+ * The database as a workflow uses it: checked once, before the first query, to be a role row
+ * security applies to, then each piece of work runs inside one organization.
+ */
+export function checkedDatabase(db: Database) {
+  let checked: Promise<void> | undefined;
+  const safe = () =>
+    (checked ??= assertRowSecurityApplies(db).catch((error: unknown) => {
+      checked = undefined;
+      throw error;
+    }));
+  return {
+    safe,
+    inOrg: async <T>(orgId: string, work: Parameters<typeof withOrg<T>>[2]) => {
+      await safe();
+      return withOrg(db, orgId, work);
+    },
+  };
+}
+
 export interface ReceiptReadingDeps {
   /** As expensewise_app: every read and write is scoped to the event's organization. */
   readonly db: Database;
@@ -35,16 +55,7 @@ export interface ReceiptReadingDeps {
  * workflow runner retries the step instead.
  */
 export function receiptReadingPorts(deps: ReceiptReadingDeps): ReceiptReadingPorts {
-  let checked: Promise<void> | undefined;
-  const safe = () =>
-    (checked ??= assertRowSecurityApplies(deps.db).catch((error: unknown) => {
-      checked = undefined;
-      throw error;
-    }));
-  const inOrg = async <T>(orgId: string, work: Parameters<typeof withOrg<T>>[2]) => {
-    await safe();
-    return withOrg(deps.db, orgId, work);
-  };
+  const { inOrg } = checkedDatabase(deps.db);
 
   return {
     loadReceipt: (orgId, receiptId) => inOrg(orgId, (tx) => getReceipt(tx, receiptId)),

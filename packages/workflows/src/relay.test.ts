@@ -1,6 +1,12 @@
 import type { ClaimedOutboxEvent } from '@expensewise/db';
 import { describe, expect, it } from 'vitest';
-import { relayOutbox, toWorkflowEvent, type RelayPorts, type WorkflowEvent } from './relay.ts';
+import {
+  committedWorkflowEvent,
+  relayOutbox,
+  toWorkflowEvent,
+  type RelayPorts,
+  type WorkflowEvent,
+} from './relay.ts';
 
 const ORG = '0192f7a0-0000-7000-8000-000000000001';
 
@@ -61,6 +67,22 @@ describe('toWorkflowEvent', () => {
   it('never lets the payload override the organization or outbox id', () => {
     const e = { ...outboxEvent(1), payload: { orgId: 'someone-else', outboxId: 'forged' } };
     expect(toWorkflowEvent(e).data).toEqual({ orgId: ORG, outboxId: e.id });
+  });
+});
+
+describe('committedWorkflowEvent', () => {
+  it('sends an event just committed under its outbox id, as the relay would', () => {
+    const event = committedWorkflowEvent({
+      outboxId: 'ob-1',
+      orgId: ORG,
+      topic: 'receipt.uploaded',
+      payload: { receiptId: 'r1' },
+    });
+    expect(event).toMatchObject({
+      id: 'ob-1',
+      name: 'receipt.uploaded',
+      data: { receiptId: 'r1', orgId: ORG, outboxId: 'ob-1' },
+    });
   });
 });
 

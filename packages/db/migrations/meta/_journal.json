@@ -99,6 +99,20 @@
       "when": 1791023565922,
       "tag": "0013_expense_trip_pinned",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1791054629118,
+      "tag": "0014_inbound_emails",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1791054630134,
+      "tag": "0015_inbound_emails_rls",
+      "breakpoints": true
     }
   ]
 }

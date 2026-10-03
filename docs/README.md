@@ -53,6 +53,7 @@ ExpenseWise is a receipt-first, automation-first expense, receipt, mileage and t
 | D-25 | Expenses file to the trip their date falls in until a person chooses its trip; on a shared day the trip that ends first keeps it; submitted expenses never move | [ADR-0023](adr/0023-expenses-file-to-trips-by-date.md) | Accepted (filing by date required by FR-EXP-04; choice, shared-day and submitted rules recommended, no objection) |
 | D-26 | Email-in arrives through Bird's inbound service; we verify the webhook and check the sender's DKIM alignment ourselves | [ADR-0024](adr/0024-inbound-email-through-bird.md) | Accepted (vendor decided by product owner; sender and webhook checks recommended, no objection) |
 | D-27 | No staging environment in Phase 1; a changed screen is checked on an iPhone in production right after its release | [ADR-0025](adr/0025-no-staging-in-phase-1.md) | Accepted (decided by product owner) |
+| D-28 | Email-in reads a Bird agent mailbox: the webhook verifies and hands off, and a workflow fetches the raw message, checks its DKIM alignment and files its attachments | [ADR-0026](adr/0026-email-in-through-a-bird-mailbox.md) | Accepted (mailbox and allowlist set up by product owner; how it is read and checked recommended, no objection) |
 
 ## Visual version
 

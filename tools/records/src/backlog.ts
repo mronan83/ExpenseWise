@@ -312,12 +312,29 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Email-in: receipts and purchase summaries by email',
     type: 'Feature',
     detail:
-      'A personal address that takes receipts and purchase summaries, emailed or forwarded, and reads the body and any PDF or image like a receipt. Only mail from the person’s own sign-in addresses is read; anything else is dropped. The only automatic route for travel receipts (ADR-0011). It comes in through Bird, your choice of Oct 3 (ADR-0024): an address on Bird’s inbound domain needs no domain of ours. Bird reports SPF and DKIM but not DMARC yet, so we check that the DKIM signature belongs to the From domain ourselves,. Bird signs each webhook to the Standard Webhooks scheme: `webhook-id`, `webhook-timestamp` and an HMAC-SHA256 `webhook-signature` under the endpoint’s `whsec_` secret. We verify it, refuse one older than 5 minutes, and drop a repeated id; Bird retries 8 times over about 27 hours. Your setup is done (Oct 3): the address is jpdf7j4q5ukxcliugqji@inbox.ai, and `BIRD_API_KEY` and `BIRD_WEBHOOK_SECRET` are in Vercel for Production only. Q16 asks whether the address is a forwarding address or a mailbox, which decides the event the webhook listens for. Your answer to Q10: a purchase summary always waits for review; a receipt follows the photo rule.',
-    priority: 'P2',
+      'A personal address that takes receipts and purchase summaries, emailed or forwarded, and reads the body and any PDF or image like a receipt. Only mail from the person’s own sign-in addresses is read; anything else is dropped. The only automatic route for travel receipts (ADR-0011). It comes in through Bird, your choice of Oct 3 (ADR-0024), at the agent mailbox jpdf7j4q5ukxcliugqji@inbox.ai with its allowlist on (Q16). The webhook checks Bird’s Standard Webhooks signature and hands the email on; a workflow fetches it as it arrived, proves the sender by a DKIM signature aligned with the From domain, and files each PDF or photo like an upload (ADR-0026). Forwarding by hand works; an automatic forwarding rule keeps the merchant’s From address, so it doesn’t. Reading the body itself, and purchase summaries, is #58.',
+    priority: 'P1',
     effort: 'L',
     severity: 'Medium',
-    blocker: { kind: 'none', note: 'None to build it; switching it on takes your Bird setup' },
-    source: 'Roadmap increment 2, ADR-0024',
+    blocker: { kind: 'none' },
+    source: 'Roadmap increment 2, ADR-0024, ADR-0026',
+    affects: ['FR-CAP-02', 'F-16'],
+    done: {
+      date: '2026-10-03',
+      in: 'PR #44, for attachments; email bodies and purchase summaries are #58',
+    },
+  },
+  {
+    num: 58,
+    title: 'Email-in: read the body, and purchase summaries',
+    type: 'Feature',
+    detail:
+      'The second half of #19. An email with no receipt attached, such as an Uber or airline email, is read from its body, which is already kept for every proved sender (at most 64 KiB). Your answer to Q10: a purchase summary always waits for review, marked as one; a receipt in the body follows the photo rule. Emails kept before this lands are read once it does. Also shows, on Home, an email that came from your address but couldn’t be proved, so a forward that fails the check doesn’t vanish.',
+    priority: 'P1',
+    effort: 'L',
+    severity: 'Medium',
+    blocker: { kind: 'none' },
+    source: 'Product owner Oct 3 (FR-CAP-02), split from #19',
     affects: ['FR-CAP-02', 'F-16'],
   },
   {
@@ -800,7 +817,7 @@ export const BACKLOG: readonly BacklogItem[] = [
 
 /** How to order the open work, beyond priority. */
 export const SEQUENCING: readonly string[] = [
-  'Your order, Oct 3: the Home dashboard (#28, done), then email-in (#19), then reports drafted after a trip (#23), which bring reports to finish to Home (Q15). #19 needs your answer to Q16 before it is switched on, not before it is built.',
+  'Your order, Oct 3: the Home dashboard (#28, done), then email-in (#19, attachments done; its second half, the body and purchase summaries, is #58), then reports drafted after a trip (#23), which bring reports to finish to Home (Q15).',
   '#48 needs you, not code: it keeps a leaked key from erasing the backups; any time this month. #4 can wait: the OpenAI fallback reads receipts meanwhile, and #21 waits on it. #52 and #55 are unblocked by your answers.',
   'Mileage (#17) adds business miles to Home.',
   '#8 is security, not polish: it should land before #24, which needs it, and before anyone else is invited (#29). So should #50, which keeps each member’s records their own.',

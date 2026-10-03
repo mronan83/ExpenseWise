@@ -408,6 +408,53 @@ export const receiptReviews = pgTable(
   ],
 );
 
+export const inboundEmailStatus = pgEnum('inbound_email_status', [
+  'filed',
+  'no_attachments',
+  'unverified',
+]);
+
+/**
+ * An email a member sent to the receipts address (FR-CAP-02, ADR-0026): who sent it, what it
+ * was about, and what came of it. Kept once per provider message, so a retried delivery adds
+ * nothing. Mail from anyone who doesn't sign in here is never kept.
+ */
+export const inboundEmails = pgTable(
+  'inbound_emails',
+  {
+    id: id(),
+    orgId: orgId(),
+    memberId: uuid('member_id').notNull(),
+    /** Who delivered it, and their id for the message: bird, rem_… */
+    provider: text('provider').notNull(),
+    providerMessageId: text('provider_message_id').notNull(),
+    fromAddress: text('from_address').notNull(),
+    subject: text('subject'),
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    /**
+     * filed: its attachments became receipts. no_attachments: its body waits to be read (#58).
+     * unverified: no DKIM signature proved the sender, so nothing was filed and no body kept.
+     */
+    status: inboundEmailStatus('status').notNull(),
+    /** The email's own text, at most 64 KiB, for reading a receipt in the body (#58). */
+    bodyText: text('body_text'),
+    /** How many receipts it filed; a file already filed before is not counted again. */
+    receiptCount: integer('receipt_count').notNull().default(0),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('inbound_emails_org_id_id_key').on(t.orgId, t.id),
+    unique('inbound_emails_message_key').on(t.orgId, t.provider, t.providerMessageId),
+    foreignKey({
+      name: 'inbound_emails_member_fk',
+      columns: [t.orgId, t.memberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    check('inbound_emails_receipt_count', sql`${t.receiptCount} >= 0`),
+    index('inbound_emails_member_idx').on(t.orgId, t.memberId, t.createdAt),
+  ],
+);
+
 export const mileageLogs = pgTable(
   'mileage_logs',
   {

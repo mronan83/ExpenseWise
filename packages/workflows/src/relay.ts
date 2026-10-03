@@ -1,4 +1,4 @@
-import type { ClaimedOutboxEvent } from '@expensewise/db';
+import type { ClaimedOutboxEvent, CommittedEvent } from '@expensewise/db';
 
 /** An outbox event on its way to the workflow runner. */
 export interface WorkflowEvent {
@@ -47,6 +47,21 @@ export function toWorkflowEvent(event: ClaimedOutboxEvent): WorkflowEvent {
     data: { ...event.payload, orgId: event.orgId, outboxId: event.id },
     ts: Date.parse(event.createdAt),
   };
+}
+
+/**
+ * An event just committed to the outbox, sent straight away rather than by the relay. Its id
+ * is the outbox id, so the relay's later copy is dropped as a duplicate (ADR-0017).
+ */
+export function committedWorkflowEvent(event: CommittedEvent): WorkflowEvent {
+  return toWorkflowEvent({
+    id: event.outboxId,
+    orgId: event.orgId,
+    topic: event.topic,
+    payload: { ...event.payload },
+    createdAt: new Date().toISOString(),
+    attempts: 0,
+  });
 }
 
 /**

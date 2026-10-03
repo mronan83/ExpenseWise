@@ -1,15 +1,19 @@
 import { createDatabase } from '@expensewise/db';
 import {
+  emailReadingFunction,
+  emailReadingPorts,
   outboxRelayFunction,
   receiptReadingFunction,
   receiptReadingPorts,
   relayPorts,
+  type EmailReadingPorts,
   type ReceiptReadingPorts,
   type RelayPorts,
 } from '@expensewise/workflows';
 import { serve } from 'inngest/next';
 import {
   appDatabase,
+  birdApiKey,
   providerKeyReader,
   receiptFiles,
   workflowClient,
@@ -48,10 +52,29 @@ function readingPorts(): ReceiptReadingPorts {
   return reading;
 }
 
+let emails: EmailReadingPorts | undefined;
+function emailPorts(): EmailReadingPorts {
+  if (emails) return emails;
+  const db = appDatabase();
+  const files = receiptFiles();
+  const apiKey = birdApiKey();
+  if (!db || !files || !apiKey) {
+    throw new Error(
+      'Reading emails needs DATABASE_URL, NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SECRET_KEY and BIRD_API_KEY',
+    );
+  }
+  emails = emailReadingPorts({ db, files, birdApiKey: apiKey });
+  return emails;
+}
+
 const handler = workflowsServed
   ? serve({
       client: workflowClient,
-      functions: [...relayFunctions, receiptReadingFunction(workflowClient, readingPorts)],
+      functions: [
+        ...relayFunctions,
+        receiptReadingFunction(workflowClient, readingPorts),
+        emailReadingFunction(workflowClient, emailPorts),
+      ],
     })
   : undefined;
 
@@ -71,5 +94,6 @@ export const GET = handler?.GET ?? notConfigured;
 export const POST = handler?.POST ?? notConfigured;
 export const PUT = handler?.PUT ?? notConfigured;
 
-// A reading step calls the model with a 50-second limit.
+// A reading step calls the model with a 50-second limit; keeping an email fetches it (30
+// seconds at most), stores up to ten files and writes them in one transaction.
 export const maxDuration = 60;

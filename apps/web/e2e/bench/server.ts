@@ -123,6 +123,10 @@ const store = {
   signedDownloadUrl: (path: string) =>
     Promise.resolve(`http://127.0.0.1:${BENCH_PORT}/files/${encodeURIComponent(path)}`),
   download: (path: string) => Promise.resolve(files.get(path) ?? null),
+  save: (path: string, bytes: Uint8Array) => {
+    files.set(path, bytes);
+    return Promise.resolve();
+  },
 };
 
 /** What each model answers for a receipt: a reading, or nothing usable. */

@@ -106,6 +106,16 @@ export function supabaseStorage(options: SupabaseStorageOptions): ObjectStore {
       return `${base}${signed.startsWith('/') ? '' : '/'}${signed}`;
     },
 
+    async save(path, bytes, contentType) {
+      await ensureBucket();
+      const res = await doFetch(`${base}/object/${objectPath(path)}`, {
+        method: 'POST',
+        headers: { ...headers, 'content-type': contentType, 'x-upsert': 'true' },
+        body: new Uint8Array(bytes),
+      });
+      if (!res.ok) return fail('Saving an object', res);
+    },
+
     async download(path) {
       const res = await call(`/object/authenticated/${objectPath(path)}`);
       if (res.ok) return new Uint8Array(await res.arrayBuffer());

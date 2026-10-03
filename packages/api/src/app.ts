@@ -12,6 +12,7 @@ import type { SecretBox } from './secret-box.ts';
 import { registerExpenseRoutes } from './expense-routes.ts';
 import type { HomeStore } from './home.ts';
 import { registerHomeRoutes } from './home-routes.ts';
+import { registerInboundRoutes, type InboundRouteOptions } from './inbound-routes.ts';
 import type { ExpenseStore } from './expenses.ts';
 import { registerReceiptRoutes, type ReceiptRouteOptions } from './receipt-routes.ts';
 import { registerTripRoutes } from './trip-routes.ts';
@@ -19,7 +20,10 @@ import type { TripStore } from './trips.ts';
 import { registerWorkspaceRoutes } from './workspace-routes.ts';
 import type { WorkspaceStore } from './workspace.ts';
 
-export interface ApiOptions extends Pick<ReceiptRouteOptions, 'receipts' | 'files' | 'dispatch'> {
+export interface ApiOptions
+  extends
+    Pick<ReceiptRouteOptions, 'receipts' | 'files' | 'dispatch'>,
+    Pick<InboundRouteOptions, 'birdWebhookSecret' | 'receiveEmail'> {
   /** Deployed commit SHA, or "dev". */
   readonly version: string;
   /** Verifies access tokens. Without one, protected routes answer 503 auth_not_configured. */
@@ -143,6 +147,7 @@ export function createApi(options: ApiOptions) {
   registerExpenseRoutes(app, options);
   registerTripRoutes(app, options);
   registerHomeRoutes(app, options);
+  registerInboundRoutes(app, options);
 
   app.doc31('/v1/openapi.json', OPENAPI_INFO);
 

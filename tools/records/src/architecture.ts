@@ -43,8 +43,8 @@ export const PRINCIPLES: readonly Principle[] = [
     id: 'AP3',
     name: 'Async by default',
     built:
-      'Filing a receipt commits the receipt, its expense, an outbox event and the audit event in one transaction and answers at once. The reading runs on Inngest, retried step by step, and settles the receipt whatever happens.',
-    refs: ['ADR-0003', 'ADR-0017'],
+      'Filing a receipt commits the receipt, its expense, an outbox event and the audit event in one transaction and answers at once. The reading runs on Inngest, retried step by step, and settles the receipt whatever happens. An arriving email is handed straight to Inngest instead, since its organization is unknown until its sender is proved; Bird’s redelivery does the outbox’s job (ADR-0026).',
+    refs: ['ADR-0003', 'ADR-0017', 'ADR-0026'],
   },
   {
     id: 'AP4',
@@ -76,8 +76,8 @@ export const PRINCIPLES: readonly Principle[] = [
     id: 'AP7',
     name: 'Buy the commodity',
     built:
-      'Sign-in, storage and Postgres are Supabase; workflows are Inngest; reading is Anthropic, with OpenAI as fallback; errors go to Sentry and flags to PostHog. Each sits behind an interface of ours (`ObjectStore`, `Extractor`, the flag client).',
-    refs: ['ADR-0003', 'ADR-0013', 'ADR-0020'],
+      'Sign-in, storage and Postgres are Supabase; workflows are Inngest; reading is Anthropic, with OpenAI as fallback; email-in is a Bird mailbox; errors go to Sentry and flags to PostHog. Each sits behind an interface of ours (`ObjectStore`, `Extractor`, the email ports, the flag client).',
+    refs: ['ADR-0003', 'ADR-0013', 'ADR-0020', 'ADR-0026'],
   },
   {
     id: 'AP8',
@@ -110,7 +110,7 @@ export const COMPONENTS: readonly Component[] = [
     name: 'API',
     technology: 'Hono with zod-openapi; jose for tokens',
     responsibility:
-      'Verifies the sign-in token, finds the caller’s membership, and serves every operation, including Home, read in one transaction: the Needs you inbox, which says why each item needs the person, then their trip, month and recent trips. Generates the OpenAPI contract and answers errors as problem documents.',
+      'Verifies the sign-in token, finds the caller’s membership, and serves every operation, including Home, read in one transaction: the Needs you inbox, which says why each item needs the person, then their trip, month and recent trips. Takes Bird’s signed email webhook, checked against the exact bytes before anything parses them. Generates the OpenAPI contract and answers errors as problem documents.',
     where: ['packages/api'],
   },
   {
@@ -138,14 +138,14 @@ export const COMPONENTS: readonly Component[] = [
     name: 'Workflows',
     technology: 'Inngest',
     responsibility:
-      'Reads receipts and relays the outbox. Each step retries on its own; a failed run still settles its receipt.',
+      'Reads receipts, reads emailed receipts and relays the outbox. An email is fetched as it arrived, its sender proved by a DKIM signature aligned with the From domain (mailauth), its parts read (postal-mime) and its attachments filed like uploads. Each step retries on its own; a failed run still settles its receipt.',
     where: ['packages/workflows'],
   },
   {
     name: 'File storage',
     technology: 'Supabase Storage over its REST API',
     responsibility:
-      'The private receipts bucket: one-time signed uploads, short-lived signed reads, size and type limits.',
+      'The private receipts bucket: one-time signed uploads, short-lived signed reads, server-side saves for emailed files, size and type limits.',
     where: ['packages/storage'],
   },
   {
@@ -181,6 +181,10 @@ export const SERVICES: readonly { readonly name: string; readonly role: string }
   { name: 'Inngest', role: 'Runs the workflows, with retries and a schedule.' },
   { name: 'Anthropic', role: 'Claude models read receipts, with each organization’s own key.' },
   { name: 'OpenAI', role: 'The fallback reader when no Claude model could read (ADR-0020).' },
+  {
+    name: 'Bird',
+    role: 'The agent mailbox emailed receipts arrive at, on inbox.ai, with an allowlist of senders; signs its webhooks and keeps each message as it arrived for 30 days (ADR-0026).',
+  },
   { name: 'Sentry', role: 'Error tracking and traces.' },
   { name: 'PostHog', role: 'Feature flags.' },
   {
@@ -212,6 +216,9 @@ export const CONTEXT_DIAGRAM = `flowchart LR
   I -->|"run steps"| W
   W -->|"read receipt"| AN["Anthropic"]
   W -.->|"fallback"| OA["OpenAI"]
+  E["Email from a member"] --> BI["Bird mailbox<br/>allowlist"]
+  BI -->|"signed webhook"| W
+  W -->|"fetch as it arrived"| BI
   W -.-> SE["Sentry"]
   W -.-> PH["PostHog"]
   GH["GitHub Actions"] -->|"migrate"| PG
@@ -264,6 +271,39 @@ export const FLOWS: readonly Flow[] = [
   W->>A: GET /v1/home, with the person’s own day
   A-->>W: What needs them, their trip, month and recent trips`,
     refs: ['ADR-0017', 'ADR-0020', 'ADR-0022', 'ADR-0023', 'FR-INT-04'],
+  },
+  {
+    id: 'email-in',
+    title: 'An emailed receipt',
+    about:
+      'The webhook only checks Bird’s signature and hands the email on; who sent it is proved in the workflow, from the message as it arrived. Nothing is kept unless the From address is a member’s sign-in, and nothing is filed unless a DKIM signature aligned with that address’s domain covers the whole message. Every id comes from the message, so a repeat delivery or a retried step files nothing twice.',
+    diagram: `sequenceDiagram
+  actor P as Member
+  participant B as Bird mailbox
+  participant A as API
+  participant I as Inngest
+  participant DB as Postgres
+  participant S as Storage
+  P->>B: Emails or forwards a receipt
+  Note over B: Allowlist on the envelope sender
+  B->>A: POST /v1/inbound/bird, signed
+  A->>A: Standard Webhooks signature, within 5 minutes
+  A->>I: email/received, id = the message id
+  A-->>B: 202 (503 and Bird retries if the hand-off fails)
+  I->>A: Read an emailed receipt (/api/inngest)
+  A->>B: The message as it arrived (RFC 5322)
+  A->>A: DKIM: one From, a passing signature, aligned, whole body
+  A->>DB: member_for_sign_in_email(From): ids only
+  alt Not a member
+    Note over A: Dropped, nothing kept
+  else A member, proved
+    A->>S: Save each PDF or photo under its derived id
+    A->>DB: One transaction: email, receipts, expenses, outbox events, audit
+    A->>I: receipt.uploaded for each, as an upload sends
+  else A member, not proved
+    A->>DB: Email kept as unverified, nothing filed
+  end`,
+    refs: ['ADR-0024', 'ADR-0026', 'FR-CAP-02'],
   },
   {
     id: 'request',
@@ -393,6 +433,18 @@ export const SETTINGS: readonly Setting[] = [
     use: 'Sending events, and proving that calls to `/api/inngest` come from Inngest.',
   },
   {
+    names: ['BIRD_WEBHOOK_SECRET'],
+    kind: 'Secret',
+    where: 'Vercel, Production only',
+    use: 'Checks that calls to `/api/v1/inbound/bird` come from Bird (Standard Webhooks, `whsec_…`). Without it, the webhook answers 503.',
+  },
+  {
+    names: ['BIRD_API_KEY'],
+    kind: 'Secret',
+    where: 'Vercel, Production only',
+    use: 'Fetches an arrived email as it was received, with the `mailbox:read` scope; its `bk_us1_` prefix picks the region.',
+  },
+  {
     names: ['INNGEST_DEV'],
     kind: 'Tooling',
     where: 'Local only',
@@ -503,6 +555,8 @@ export const WORKFLOWS: Readonly<Record<string, string>> = {
 export const BACKGROUND: Readonly<Record<string, string>> = {
   'receipt-reading':
     'Reads a receipt when it is uploaded or read again: checks the file, reads it with each compared model in parallel steps, falls back to OpenAI when none could, then settles the receipt, its expense and its trip.',
+  'email-reading':
+    'Reads an email that arrived at the receipts address: fetches it from Bird as it was received, proves its sender by DKIM, finds the member who signs in with that address, then stores and files each PDF or photo as a receipt and hands their reading on. Mail from anyone else is dropped with nothing kept (ADR-0026).',
   'outbox-relay':
     'Every five minutes and on demand, sends committed outbox events that the request didn’t manage to send. The event id is the outbox id, so a duplicate is dropped.',
 };

@@ -5,6 +5,7 @@ export * from './connection.ts';
 export * from './data-api.ts';
 export * from './expenses.ts';
 export * from './home.ts';
+export * from './inbound.ts';
 export * from './members.ts';
 export * from './role-passwords.ts';
 export * from './outbox.ts';
