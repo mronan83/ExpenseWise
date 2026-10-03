@@ -343,7 +343,7 @@ export const SETTINGS: readonly Setting[] = [
     names: ['DATABASE_URL'],
     kind: 'Secret',
     where: 'Vercel; locally from `pnpm db:up`',
-    use: 'The app’s connection, as `expensewise_app`. Tests use it as a superuser to build throwaway databases.',
+    use: 'The app’s connection, as `expensewise_app`. Tests use it as a superuser to build throwaway databases, and the end-to-end bench to build its own.',
   },
   {
     names: ['RELAY_DATABASE_URL'],
@@ -482,7 +482,7 @@ export const SETTINGS: readonly Setting[] = [
 /** What each GitHub workflow is for, by file. */
 export const WORKFLOWS: Readonly<Record<string, string>> = {
   'ci.yml':
-    'The quality gates on every pull request and push to main: static checks, unit and property tests with coverage, integration and contract against a real Postgres, security, then build and end-to-end with accessibility checks.',
+    'The quality gates on every pull request and push to main: static checks, unit and property tests with coverage, integration and contract against a real Postgres, security, then build and end-to-end, signed out and, against the real API on its own database, signed in, with layout and accessibility checks.',
   'codeql.yml': 'Static analysis for security on every pull request, push and week.',
   'release.yml':
     'Runs when main changes: migrate, set role passwords where needed, then promote the commit’s build. One at a time, never cancelled.',
@@ -551,9 +551,9 @@ export const QUALITY: readonly Quality[] = [
   },
   {
     attribute: 'Accessibility and fit on a phone',
-    how: 'axe checks WCAG 2.2 AA in gate G5, light and dark, in desktop Chromium and iPhone-size WebKit. Colour tokens meet AA contrast, small links have 44-point touch areas, and date fields are drawn without the native look so iOS can’t widen them out of their card.',
+    how: 'Gate G5 opens every screen, signed out and signed in against the real API, in desktop Chromium and iPhone WebKit at three phone widths, light and dark, and checks layout and WCAG 2.2 AA. Colour tokens meet AA contrast, small links have 44-point touch areas, focus stops above the tab bar, and date fields are drawn without the native look so iOS can’t widen them out of their card.',
     short:
-      'The gate sees signed-out screens only, and its WebKit is not iOS Safari, which is how overlapping date fields reached an iPhone (GAP-21, #54).',
-    refs: ['NFR-UX-01', 'NFR-UX-02', 'GAP-21', '#54'],
+      'Its WebKit is not iOS Safari, so an iOS-only quirk other than native date fields would still reach a phone first (GAP-22, #57).',
+    refs: ['NFR-UX-01', 'NFR-UX-02', 'GAP-22', '#57'],
   },
 ];

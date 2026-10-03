@@ -108,6 +108,17 @@ jobs:
     name: G5 · Build & end-to-end
     runs-on: ubuntu-latest
     needs: static
+    # The signed-in checks run the real API on its own database (apps/web/e2e/bench).
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -116,10 +127,15 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Built against a stand-in Supabase project that never answers, so the signed-in checks
+      # can hold a session; the tests answer its requests themselves (e2e/bench/config.ts).
       - run: pnpm build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://e2e.supabase.invalid
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_e2e
       - name: Install browsers
         run: pnpm --filter @expensewise/web exec playwright install --with-deps chromium webkit
-      - name: Journeys and accessibility (desktop Chromium, iPhone WebKit)
+      - name: Journeys, layout and accessibility, signed out and in (desktop Chromium, iPhone WebKit)
         run: pnpm --filter @expensewise/web test:e2e
       - uses: actions/upload-artifact@v7
         if: failure()

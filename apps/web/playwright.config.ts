@@ -1,12 +1,16 @@
 import { defineConfig, devices } from '@playwright/test';
+import { BENCH_URL } from './e2e/bench/config';
 
 const port = Number(process.env.E2E_PORT ?? 3100);
 const baseURL = process.env.E2E_BASE_URL ?? `http://127.0.0.1:${port}`;
 // Lets a sandbox with preinstalled browsers skip `playwright install`.
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined;
+// A deployed preview has no bench API, so its run checks signed-out screens only.
+const deployed = !!process.env.E2E_BASE_URL;
 
 export default defineConfig({
   testDir: 'e2e',
+  testIgnore: deployed ? ['signed-in.spec.ts'] : [],
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: 0, // A flaky test is a bug to fix, not a retry to add.
@@ -21,12 +25,21 @@ export default defineConfig({
     { name: 'iphone-webkit', use: { ...devices['iPhone 15'] } },
   ],
   // Against a deployed preview (E2E_BASE_URL) no local server is started.
-  webServer: process.env.E2E_BASE_URL
+  webServer: deployed
     ? undefined
-    : {
-        command: `pnpm start --port ${port}`,
-        url: `${baseURL}/api/v1/health`,
-        reuseExistingServer: !process.env.CI,
-        timeout: 60_000,
-      },
+    : [
+        {
+          command: `pnpm start --port ${port}`,
+          url: `${baseURL}/api/v1/health`,
+          reuseExistingServer: !process.env.CI,
+          timeout: 60_000,
+        },
+        {
+          // The real API on its own database, for the signed-in checks (e2e/bench/server.ts).
+          command: 'pnpm exec tsx e2e/bench/server.ts',
+          url: `${BENCH_URL}/api/v1/health`,
+          reuseExistingServer: !process.env.CI,
+          timeout: 120_000,
+        },
+      ],
 });

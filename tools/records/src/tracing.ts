@@ -40,6 +40,20 @@ export const GAPS: readonly Gap[] = [
       'CI has no signed-in user, so its accessibility and layout checks load each screen’s sign-in prompt, never the forms and lists people use. Its iPhone run is WebKit on Linux, which has no native date picker. On Oct 3 you found From and To overlapping on Trips on your iPhone; a sweep of every signed-in screen then found the same in four more forms, and a colour-contrast failure on receipts whose readings differ.',
     fix: 'A signed-in run in CI: the real API on a test database with a test sign-in, every screen in each state, at phone and desktop widths, in light and dark, with the layout and accessibility checks (#54).',
     backlog: 54,
+    closed: {
+      date: '2026-10-03',
+      note: 'Gate G5 now opens 26 signed-in screens and states, seeded through the real API and reading workflow, in desktop Chromium and iPhone WebKit at 375, 393 and 440 px, light and dark, checking layout and WCAG 2.2 AA (PR #38). Put back, the overlapping date fields and the contrast failure of Oct 3 both fail it. That the engine is not iOS Safari is GAP-22.',
+    },
+  },
+  {
+    id: 'GAP-22',
+    title: 'No automated check runs on iOS Safari itself.',
+    affects: ['NFR-UX-02'],
+    severity: 'Low',
+    evidence:
+      'Gate G5’s iPhone run is WebKit on Linux, which draws form controls its own way. Since PR #38 it fails any date field still drawn natively, the cause of the Oct 3 overlap, but another iOS-only quirk would still reach a phone first.',
+    fix: 'Open a changed screen on an iPhone through the preview before merging (the pull request template asks for it), and decide whether a device cloud run is worth its cost (#57).',
+    backlog: 57,
   },
   {
     id: 'GAP-20',
@@ -378,6 +392,12 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-03',
+    change:
+      'PR #38, at your direction (#54): gate G5 checks every signed-in screen. A bench runs the real API on its own database, seeded through the real reading workflow, and 26 screens and states are opened in desktop Chromium and iPhone WebKit at 375 to 440 px, in light and dark, for layout and WCAG 2.2 AA. Put back, the date overlap and contrast failure you found both fail it. GAP-21 is closed and NFR-UX-01 Verified; NFR-UX-02 stays Partial because the engine isn’t iOS Safari (GAP-22, #57). Found on the way: the tab bar could hide a focused link, so focus now stops above it (WCAG 2.4.11).',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-03',
     change:
