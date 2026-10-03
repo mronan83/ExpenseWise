@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Request } from '@playwright/test';
 import {
   BENCH_URL,
   E2E_SESSION_KEY,
@@ -141,7 +141,38 @@ test.beforeEach(async ({ context }) => {
   );
 });
 
-async function open(page: Page, path: string, steps: Step[]): Promise<void> {
+/**
+ * Counts the page's requests in flight. `settled()` waits until there have been none for a
+ * moment. Next.js loads linked screens in the background as their links scroll into view;
+ * navigating while one is loading cancels it, and WebKit logs a cancelled request as a console
+ * error. Waiting first means every error the test sees is a real one.
+ */
+function requestsInFlight(page: Page) {
+  const pending = new Set<Request>();
+  page.on('request', (r) => pending.add(r));
+  page.on('requestfinished', (r) => pending.delete(r));
+  page.on('requestfailed', (r) => pending.delete(r));
+  return async function settled(): Promise<void> {
+    const quietFor = 300;
+    const deadline = Date.now() + 15_000;
+    let quietSince: number | null = null;
+    while (Date.now() < deadline) {
+      if (pending.size > 0) quietSince = null;
+      else if (quietSince === null) quietSince = Date.now();
+      else if (Date.now() - quietSince >= quietFor) return;
+      await page.waitForTimeout(50);
+    }
+    throw new Error(`Requests still loading: ${[...pending].map((r) => r.url()).join(', ')}`);
+  };
+}
+
+async function open(
+  page: Page,
+  path: string,
+  steps: Step[],
+  settled: () => Promise<void>,
+): Promise<void> {
+  await settled();
   await page.goto(path, { waitUntil: 'networkidle' });
   await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
   await expect(
@@ -164,12 +195,13 @@ for (const [title, path, steps, at] of SCREENS) {
     page.on('console', (message) => {
       if (message.type() === 'error') errors.push(message.text());
     });
+    const settled = requestsInFlight(page);
     const size = page.viewportSize()!;
     if (at) await page.clock.setFixedTime(new Date(at));
 
     for (const colorScheme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme });
-      await open(page, path(seeded), steps);
+      await open(page, path(seeded), steps, settled);
       const where = `${colorScheme}, ${size.width}px`;
       expect(await layoutProblems(page), where).toEqual([]);
       // The tab bar covers whatever is scrolled under it until the person scrolls on; that
@@ -188,11 +220,13 @@ for (const [title, path, steps, at] of SCREENS) {
     if (testInfo.project.name === 'iphone-webkit') {
       await page.emulateMedia({ colorScheme: 'light' });
       for (const width of OTHER_PHONE_WIDTHS) {
+        await settled();
         await page.setViewportSize({ width, height: size.height });
-        await open(page, path(seeded), steps);
+        await open(page, path(seeded), steps, settled);
         expect(await layoutProblems(page), `light, ${width}px`).toEqual([]);
       }
     }
+    await settled();
     expect(errors, 'errors in the console').toEqual([]);
   });
 }
