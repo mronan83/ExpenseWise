@@ -16,7 +16,8 @@
     "contract:check": "bash scripts/check-schema-drift.sh",
     "test": "vitest run --config vitest.unit.config.ts",
     "roles:set-passwords": "tsx src/set-role-passwords.ts",
-    "snapshot": "tsx scripts/snapshot-schema.ts"
+    "snapshot": "tsx scripts/snapshot-schema.ts",
+    "restore:check": "tsx scripts/restore-check.ts"
   },
   "dependencies": {
     "@expensewise/domain": "workspace:*",

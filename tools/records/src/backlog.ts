@@ -116,7 +116,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'No backup has ever been restored',
     type: 'Ops',
     detail:
-      'A backup nobody has restored is only a hope. Backups run nightly since Oct 3 (#2). A monthly workflow restores the latest one into a throwaway database and checks migrations, row counts, row-level security and image checksums against what the dump recorded.',
+      'A backup nobody has restored is only a hope. The monthly drill is built (PR #35, F-41) and passed against a stand-in; this closes when it first passes on production’s backup. That run needs nothing set up: Actions → Restore drill → Run workflow, on main.',
     priority: 'P1',
     effort: 'M',
     severity: 'High',

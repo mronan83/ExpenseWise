@@ -353,6 +353,12 @@ export const CHANGE_LOG: readonly ChangeLogEntry[] = [
   {
     date: '2026-10-03',
     change:
+      'PR #35: the monthly restore drill (F-41; NFR-REL-02 and NFR-REL-03 Partial until it passes on production’s backup, #10). Its first rehearsals found three things that would have broken a real recovery, all fixed: a restore needs Supabase’s auth and storage services, not the bare database image; the dump repeats a grant and empty tables that a new project’s postgres role may not restore, so a new step prepares the files (the runbook uses it too); and a restore quietly hands Supabase’s Data API roles every table and function again, so every release now takes those grants back (NFR-SEC-03).',
+    by: 'Claude, at your direction',
+  },
+  {
+    date: '2026-10-03',
+    change:
       'From your answers to Q7–Q10: categories and types are two trees, the category filtering the types (FR-EXP-11; #51 can start). Any AI model can be primary, and OpenAI is no longer a fallback (FR-INT-16; new Q11 on what the other models that are on do). Time and address go on the receipt and the expense, with a time zone from the address or set by you (FR-INT-17; #53 can start). A purchase summary always waits for review (FR-CAP-02).',
     by: 'Claude, at your direction',
   },

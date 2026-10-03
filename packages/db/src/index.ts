@@ -2,6 +2,7 @@ export * from './ai-keys.ts';
 export * from './audit.ts';
 export * from './client.ts';
 export * from './connection.ts';
+export * from './data-api.ts';
 export * from './expenses.ts';
 export * from './members.ts';
 export * from './role-passwords.ts';

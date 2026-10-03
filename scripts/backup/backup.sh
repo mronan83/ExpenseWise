@@ -4,7 +4,8 @@
 # 1. Writes the heartbeat, so the Free plan never sees the project as idle. It comes first,
 #    so a later failure, such as Backblaze being down, can't stop it.
 # 2. Dumps the database with Supabase's documented procedure: roles, schema, then data,
-#    auth users included, with row counts recorded for the restore drill.
+#    auth users included, with row counts and the Postgres version recorded for the restore
+#    drill (scripts/backup/restore-drill.sh).
 # 3. Encrypts the dump on this machine and uploads it to the private Backblaze B2 bucket:
 #    db/daily/<date> every night, db/monthly/<month> on the month's first good night.
 #    It then downloads that copy again and checks that it decrypts to the same bytes.
@@ -119,6 +120,7 @@ for part in "roles.sql --role-only" "schema.sql" "data.sql --use-copy --data-onl
 done
 
 database_bytes=$(sql "select pg_database_size(current_database())")
+server_version=$(sql "show server_version")
 rows=$(sql "
   select coalesce(json_object_agg(t.table_schema || '.' || t.table_name, (
            xpath('/row/n/text()', query_to_xml(
@@ -134,12 +136,14 @@ jq -n \
   --arg date "$TODAY" \
   --arg at "$(date -u +%FT%TZ)" \
   --argjson databaseBytes "$database_bytes" \
+  --arg serverVersion "$server_version" \
   --argjson rows "$rows" \
   --argjson migrations "$migrations" \
   --arg roles "$(sha256sum "$work/db/roles.sql" | cut -d' ' -f1)" \
   --arg schema "$(sha256sum "$work/db/schema.sql" | cut -d' ' -f1)" \
   --arg data "$(sha256sum "$work/db/data.sql" | cut -d' ' -f1)" \
-  '{date: $date, dumpedAt: $at, databaseBytes: $databaseBytes, migrations: $migrations,
+  '{date: $date, dumpedAt: $at, databaseBytes: $databaseBytes, serverVersion: $serverVersion,
+    migrations: $migrations,
     rows: $rows, sha256: {"roles.sql": $roles, "schema.sql": $schema, "data.sql": $data}}' \
   >"$work/db/manifest.json"
 tar -C "$work/db" -czf "$work/db.tar.gz" roles.sql schema.sql data.sql manifest.json

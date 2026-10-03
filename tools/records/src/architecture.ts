@@ -124,7 +124,7 @@ export const COMPONENTS: readonly Component[] = [
     name: 'Data access',
     technology: 'Drizzle ORM on node-postgres',
     responsibility:
-      'The schema and migrations, `withOrg()` and every query and write, each with its audit event. Runs migrations and the data steps on release.',
+      'The schema and migrations, `withOrg()` and every query and write, each with its audit event. Runs migrations and the data steps on release, one of which takes back anything Supabase’s Data API roles hold. Holds the restore drill’s database checks.',
     where: ['packages/db'],
   },
   {
@@ -183,8 +183,14 @@ export const SERVICES: readonly { readonly name: string; readonly role: string }
   { name: 'OpenAI', role: 'The fallback reader when no Claude model could read (ADR-0020).' },
   { name: 'Sentry', role: 'Error tracking and traces.' },
   { name: 'PostHog', role: 'Feature flags.' },
-  { name: 'GitHub Actions', role: 'CI gates G1–G5, the release, the nightly backup.' },
-  { name: 'Backblaze B2', role: 'The encrypted off-site backup, locked for 30 days.' },
+  {
+    name: 'GitHub Actions',
+    role: 'CI gates G1–G5, the release, the nightly backup and the monthly restore drill.',
+  },
+  {
+    name: 'Backblaze B2',
+    role: 'The encrypted off-site backup, locked for 30 days, and restored from every month.',
+  },
 ];
 
 export const CONTEXT_DIAGRAM = `flowchart LR
@@ -210,7 +216,8 @@ export const CONTEXT_DIAGRAM = `flowchart LR
   W -.-> PH["PostHog"]
   GH["GitHub Actions"] -->|"migrate"| PG
   GH -->|"promote"| V
-  GH -->|"nightly"| B2["Backblaze B2<br/>encrypted backup"]`;
+  GH -->|"nightly"| B2["Backblaze B2<br/>encrypted backup"]
+  B2 -.->|"monthly<br/>restore drill"| GH`;
 
 export interface Flow {
   readonly id: string;
@@ -304,6 +311,21 @@ export const FLOWS: readonly Flow[] = [
   B --> RI["Copy new<br/>receipt images"]
   RI --> Q["Check Free plan quotas<br/>alert at 70%"]`,
     refs: ['ADR-0014', 'NFR-REL-01'],
+  },
+  {
+    id: 'restore-drill',
+    title: 'Monthly restore drill',
+    about:
+      'Proves the newest backup restores the way a recovery would: into a new Supabase project, here a throwaway one on the runner with the same auth and storage services. It reads only the bucket; it never connects to production.',
+    diagram: `flowchart LR
+  T["2nd of the month<br/>11:43 UTC"] --> DL["Download the newest dump<br/>decrypt, check checksums"]
+  DL --> S["Throwaway Supabase<br/>Postgres, auth, storage"]
+  S --> R["Restore roles,<br/>schema, then data"]
+  R --> F["Bring forward as the<br/>release would"]
+  F --> C["Row counts, migrations,<br/>schema, isolation"]
+  C --> I["Receipt images match<br/>their SHA-256"]
+  I --> O["Recovery point 24 h,<br/>recovery time 4 h"]`,
+    refs: ['ADR-0014', 'NFR-REL-02', 'NFR-REL-03'],
   },
 ];
 
@@ -435,19 +457,25 @@ export const SETTINGS: readonly Setting[] = [
     names: ['BACKUP_DATABASE_URL', 'BACKUP_PASSPHRASE'],
     kind: 'Secret',
     where: 'GitHub `backup` environment',
-    use: 'The backup’s database connection, and the passphrase that encrypts each dump. The product owner keeps a copy of the passphrase.',
+    use: 'The backup’s database connection, and the passphrase that encrypts each dump and that the restore drill decrypts with. The product owner keeps a copy of the passphrase. The drill is given the passphrase only, never the connection.',
   },
   {
     names: ['B2_KEY_ID', 'B2_APPLICATION_KEY', 'B2_BUCKET'],
     kind: 'Secret',
     where: 'GitHub `backup` environment',
-    use: 'Writing to the Backblaze bucket. The key can delete after the 30-day lock (GAP-18, #48).',
+    use: 'Writing to the Backblaze bucket, and reading it back for the restore drill. The key can delete after the 30-day lock (GAP-18, #48).',
   },
   {
     names: ['SUPABASE_S3_ACCESS_KEY_ID', 'SUPABASE_S3_SECRET_ACCESS_KEY'],
     kind: 'Secret',
     where: 'GitHub `backup` environment',
     use: 'Reading new receipt images from Supabase Storage for the backup.',
+  },
+  {
+    names: ['RESTORE_DATABASE_URL', 'DRILL_MANIFEST'],
+    kind: 'Tooling',
+    where: '`scripts/backup/restore-drill.sh`',
+    use: 'The throwaway database the drill restored into, and the dump’s manifest, for its database checks. They refuse any database not on the runner.',
   },
 ];
 
@@ -460,6 +488,8 @@ export const WORKFLOWS: Readonly<Record<string, string>> = {
     'Runs when main changes: migrate, set role passwords where needed, then promote the commit’s build. One at a time, never cancelled.',
   'backup.yml':
     'The nightly encrypted backup to Backblaze B2, with the heartbeat and quota alerts.',
+  'restore-drill.yml':
+    'On the 2nd of each month and on demand, restores the newest backup into a throwaway Supabase stack and checks row counts, migrations, the schema, tenant isolation, receipt images, and the recovery point and time.',
   'advisory-watch.yml':
     'Every Monday, fails once an ignored dependency advisory has a fix, so the ignore can go (GAP-19).',
 };
@@ -482,7 +512,7 @@ export interface Quality {
 export const QUALITY: readonly Quality[] = [
   {
     attribute: 'Security',
-    how: 'Forced row-level security, a runtime role that can’t bypass it, verified tokens, encrypted provider keys, a private bucket, invite-only sign-in, security headers.',
+    how: 'Forced row-level security, a runtime role that can’t bypass it, Supabase’s Data API roles stripped on every release, verified tokens, encrypted provider keys, a private bucket, invite-only sign-in, security headers.',
     short:
       'Members aren’t yet kept to their own records (GAP-20); preview builds hold production credentials (GAP-02); no second factor (#8).',
     refs: ['NFR-SEC-01', 'GAP-20', 'GAP-02', '#8'],
@@ -501,9 +531,10 @@ export const QUALITY: readonly Quality[] = [
   },
   {
     attribute: 'Recoverability',
-    how: 'Nightly encrypted backups to a second vendor, locked for 30 days. Recovery point 24 hours.',
-    short: 'No restore has been rehearsed against production’s backup yet (#10).',
-    refs: ['NFR-REL-01', '#10'],
+    how: 'Nightly encrypted backups to a second vendor, locked for 30 days, and a monthly drill that restores the newest one and checks it. Recovery point 24 hours, recovery time 4 hours.',
+    short:
+      'The drill has run on a stand-in, not yet on production’s backup (#10). Its recovery time covers the restore and checks, not pointing Vercel at a new project.',
+    refs: ['NFR-REL-01', 'NFR-REL-02', 'NFR-REL-03', '#10'],
   },
   {
     attribute: 'Operability',
