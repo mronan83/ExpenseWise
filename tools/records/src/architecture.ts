@@ -299,8 +299,9 @@ export const FLOWS: readonly Flow[] = [
   MG --> RP["Set role passwords<br/>where needed"]
   RP --> PR2["Promote this commit's<br/>build to production"]
   PR2 --> H["/api/v1/health<br/>reports the commit"]
-  H --> PG["Pages republished"]`,
-    refs: ['ADR-0018', 'ADR-0019'],
+  H --> PG["Pages republished"]
+  H --> IP["A changed screen checked<br/>on an iPhone in production"]`,
+    refs: ['ADR-0018', 'ADR-0019', 'ADR-0025'],
   },
   {
     id: 'backup',

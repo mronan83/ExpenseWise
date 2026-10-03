@@ -32,7 +32,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
     capabilities: ['Capture · Email-in forwarding'],
     features: ['F-16'],
     backlog: [19],
-    note: 'Your requirement of Oct 3 widened it from travel emails to any receipt or purchase summary; your answer to Q10 (C) says which wait for review. It comes in through Bird (ADR-0024).',
+    note: 'Your requirement of Oct 3 widened it from travel emails to any receipt or purchase summary; your answer to Q10 (C) says which wait for review. It comes in through Bird (ADR-0024), which signs its webhooks to the Standard Webhooks scheme.',
   },
   {
     id: 'FR-CAP-03',
@@ -165,7 +165,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
       'workflows/receipts › asks for a look when both read a date after the upload',
       'api/receipts › names the checks each reading fails: its sums, and a date after the upload',
     ],
-    note: 'The parts must make the total within a minor unit per tax or tip line, each being rounded on its own; prices that include their tax, as VAT receipts print them, add up too. With no subtotal there is nothing to add up. The date may be a day after the upload, for a merchant ahead of UTC, and no more than a year before it. The receipt says which check failed.',
+    note: 'The parts must make the total within a minor unit per tax or tip line, each being rounded on its own; prices that include their tax, as VAT receipts print them, add up too. With no subtotal there is nothing to add up. The date may be a day after the upload, for a merchant ahead of UTC, and no more than a year before it. The receipt says which check failed. You confirmed these limits on Oct 3.',
   },
   {
     id: 'FR-INT-05',
@@ -312,7 +312,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
     status: 'Planned',
     features: ['F-45'],
     backlog: [52],
-    note: 'Your requirement of Oct 3, and your answers to Q8 (1C, 2A; OpenAI is a model like the others, not a fallback) and Q11 (B; one primary, the rest back-ups). It is how the tier decision (#21) takes effect, and it replaces the fallback rule (FR-INT-09) once built.',
+    note: 'Your requirement of Oct 3, and your answers to Q8 (1C, 2A; OpenAI is a model like the others, not a fallback) and Q11 (B; one primary, the rest back-ups). Any model that is on can be made primary at any time, whatever the eval set says of it (Oct 3). It is how the tier decision (#21) takes effect, and it replaces the fallback rule (FR-INT-09) once built.',
   },
   {
     id: 'FR-INT-17',
@@ -674,14 +674,15 @@ export const FUNCTIONAL: readonly Requirement[] = [
   // Insights
   {
     id: 'FR-INS-01',
-    text: 'A personal dashboard: spent this month, expenses and trips, business miles, and what is awaiting reimbursement.',
-    sources: ['design §5.3', 'capmap P1', 'roadmap inc 3'],
+    text: 'Home is a personal dashboard beneath Needs you: the trip under way, or the next one; this month’s spend, expenses and trips; recent trips and whether each is done; expenses on no trip; receipts still being read; and, as each exists, reports to finish, business miles and what awaits reimbursement. Every figure is the person’s own and opens the list behind it, and a section with nothing to say is hidden.',
+    sources: ['design §5.3', 'capmap P1', 'roadmap inc 3', 'owner 2026-10-03'],
     priority: 'Must',
     phase: 'P1',
     status: 'Planned',
     capabilities: ['Insights · Personal dashboard'],
     features: ['F-22'],
     backlog: [28],
+    note: 'Your requirement of Oct 3 widened it from this month’s figures to a dashboard: current trip, past trips, unprocessed receipts, unassigned expenses and incomplete reports. Receipts that need a look are already in Needs you (FR-EXP-02); whether an expense on no trip needs you is Q14, and when reports join is Q15.',
   },
   {
     id: 'FR-INS-02',
@@ -1335,7 +1336,7 @@ export const NON_FUNCTIONAL: readonly Requirement[] = [
     id: 'NFR-UX-02',
     text: 'Mobile-first and thumb-first: every flow works on a phone, and is tested on iPhone Safari.',
     enforcedBy: 'Gate G5 runs iPhone WebKit as well as desktop Chromium',
-    sources: ['design DP4', 'vision C3'],
+    sources: ['design DP4', 'vision C3', 'ADR-0025'],
     priority: 'Must',
     phase: 'P0',
     status: 'Partial',
@@ -1347,7 +1348,7 @@ export const NON_FUNCTIONAL: readonly Requirement[] = [
     ],
     shortfalls: ['GAP-22'],
     backlog: [57],
-    note: 'Gate G5 checks every signed-in screen at three phone widths in iPhone WebKit (PR #38), but that is WebKit on Linux, not iOS Safari (GAP-22). Date fields overlapped on a real iPhone until PR #36.',
+    note: 'Gate G5 checks every signed-in screen at three phone widths in iPhone WebKit (PR #38), but that is WebKit on Linux, not iOS Safari (GAP-22). Date fields overlapped on a real iPhone until PR #36. A changed screen is checked on an iPhone in production right after its release (your answer to Q13, ADR-0025).',
   },
   {
     id: 'NFR-UX-03',

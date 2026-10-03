@@ -434,7 +434,7 @@ export const FEATURES: readonly Feature[] = [
   },
   {
     id: 'F-22',
-    title: 'Personal dashboard',
+    title: 'Home dashboard, beneath Needs you',
     group: 'Expenses, trips and reports',
     kind: 'product',
     phase: 'P1',

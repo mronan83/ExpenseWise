@@ -312,11 +312,11 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Email-in: receipts and purchase summaries by email',
     type: 'Feature',
     detail:
-      'A personal address that takes receipts and purchase summaries, emailed or forwarded, and reads the body and any PDF or image like a receipt. Only mail from the person’s own sign-in addresses is read; anything else is dropped. The only automatic route for travel receipts (ADR-0011). It comes in through Bird, your choice of Oct 3 (ADR-0024): an address on Bird’s inbound domain needs no domain of ours. Bird reports SPF and DKIM but not DMARC yet, so we check that the DKIM signature belongs to the From domain ourselves, and the build starts by confirming how Bird signs its webhooks. Your answer to Q10: a purchase summary always waits for review; a receipt follows the photo rule.',
+      'A personal address that takes receipts and purchase summaries, emailed or forwarded, and reads the body and any PDF or image like a receipt. Only mail from the person’s own sign-in addresses is read; anything else is dropped. The only automatic route for travel receipts (ADR-0011). It comes in through Bird, your choice of Oct 3 (ADR-0024): an address on Bird’s inbound domain needs no domain of ours. Bird reports SPF and DKIM but not DMARC yet, so we check that the DKIM signature belongs to the From domain ourselves,. Bird signs each webhook to the Standard Webhooks scheme: `webhook-id`, `webhook-timestamp` and an HMAC-SHA256 `webhook-signature` under the endpoint’s `whsec_` secret. We verify it, refuse one older than 5 minutes, and drop a repeated id; Bird retries 8 times over about 27 hours. Your setup, in the Bird dashboard: a forwarding address on `us1.inbound.bird.com` now; a read-only API key and the webhook to `/api/v1/inbound/bird` once the endpoint is built, both kept in Vercel for Production only. Your answer to Q10: a purchase summary always waits for review; a receipt follows the photo rule.',
     priority: 'P2',
     effort: 'L',
     severity: 'Medium',
-    blocker: { kind: 'owner', ask: 'A Bird account from you, US region' },
+    blocker: { kind: 'none', note: 'None to build it; switching it on takes your Bird setup' },
     source: 'Roadmap increment 2, ADR-0024',
     affects: ['FR-CAP-02', 'F-16'],
   },
@@ -467,15 +467,16 @@ export const BACKLOG: readonly BacklogItem[] = [
   },
   {
     num: 28,
-    title: 'Personal dashboard',
+    title: 'Home dashboard, beneath Needs you',
     type: 'Feature',
-    detail: 'Spent this month, expenses and trips, business miles, awaiting reimbursement.',
-    priority: 'P3',
+    detail:
+      'Your requirement of Oct 3. Needs you stays first. Beneath it: the trip under way (its day, spend so far, Add a receipt) or the next within 14 days; this month’s spend, expenses, trips and how many are ready; expenses on no trip as a figure; receipts being read as one quiet line; the last three trips, each with whether all its expenses are Ready. One request, `GET /v1/home`, built from the same views as Expenses and Trips, the person’s own figures only. Reports to finish join with #23, business miles with #17, money awaiting reimbursement when payouts exist. Design: https://claude.ai/artifact/F7Z3J245BXqftu17hWwzYh',
+    priority: 'P1',
     effort: 'M',
     severity: 'Low',
     blocker: { kind: 'none' },
-    source: 'Roadmap increment 3',
-    affects: ['FR-INS-01', 'F-22'],
+    source: 'Roadmap increment 3, product owner Oct 3',
+    affects: ['FR-INS-01', 'F-22', 'FR-EXP-02'],
   },
   {
     num: 29,
@@ -492,16 +493,16 @@ export const BACKLOG: readonly BacklogItem[] = [
   },
   {
     num: 30,
-    title: 'No staging environment',
+    title: 'No staging environment, by your decision',
     type: 'Ops',
     detail:
-      'The delivery lifecycle runs previews and the release candidate on a second, free Supabase project with synthetic data. It doesn’t exist yet. Since #3, previews hold no production credentials and so no data: a signed-in screen on a preview shows nothing to check, on an iPhone or anywhere (Q13).',
+      'The delivery lifecycle runs previews and the release candidate on a second, free Supabase project with synthetic data. It doesn’t exist yet. Since #3, previews hold no production credentials and so no data: a signed-in screen on a preview shows nothing to check. You chose not to set one up (Q13, ADR-0025): a changed screen is checked on an iPhone in production after its release. Revisit before a second organization holds data, or when gate G6 is built.',
     priority: 'P3',
     effort: 'M',
     severity: 'Medium',
-    blocker: { kind: 'owner', ask: 'Your action: create the second Supabase project' },
+    blocker: { kind: 'owner', ask: 'Your call to revisit; declined for Phase 1 on Oct 3' },
     source: 'Roadmap increment 4, delivery §7.3',
-    affects: ['NFR-SEC-13'],
+    affects: ['NFR-SEC-13', 'NFR-UX-02'],
   },
   {
     num: 31,
@@ -665,7 +666,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Turn AI models on and off',
     type: 'Feature',
     detail:
-      'A switch for each AI model in Settings and a choice of exactly one primary, for owners and finance admins, recorded in the audit trail, plus an operator switch per model as a flag. The primary reads every receipt; models that are on but not primary are back-ups, read in the order set only when the primary can’t (your answer to Q11). Any model can be primary, OpenAI’s included, and the fallback rule goes (Q8). With every model off, receipts are filed for a person to fill in; a model with no key stays off; read again uses the settings as they are then. Ready then rests on one confident reading, not two that agree, which needs a decision record replacing ADR-0017. Proposed, for you to confirm: a model can be made primary only once it meets the eval bar on the receipt set.',
+      'A switch for each AI model in Settings and a choice of exactly one primary, for owners and finance admins, recorded in the audit trail, plus an operator switch per model as a flag. The primary reads every receipt; models that are on but not primary are back-ups, read in the order set only when the primary can’t (your answer to Q11). Any model can be primary, OpenAI’s included, and the fallback rule goes (Q8). With every model off, receipts are filed for a person to fill in; a model with no key stays off; read again uses the settings as they are then. Ready then rests on one confident reading, not two that agree, which needs a decision record replacing ADR-0017. Any model that is on can be made primary at any time (your answer, Oct 3); Settings shows how each has read your receipts beside the choice, so it is an informed one.',
     priority: 'P2',
     effort: 'M',
     severity: 'Medium',
@@ -795,9 +796,9 @@ export const BACKLOG: readonly BacklogItem[] = [
 
 /** How to order the open work, beyond priority. */
 export const SEQUENCING: readonly string[] = [
-  'Your order, Oct 3: #47, then #16, then #10, all done, and then #54, so every signed-in screen is checked in CI before more screens are built. #52 and #55 are unblocked by your answers to Q11 and Q12.',
-  '#3 needs you, not code. So does #48, which keeps a leaked key from erasing the backups; any time this month. #4 can wait: the OpenAI fallback reads receipts meanwhile, and #21 waits on it.',
-  'With #6 and #16 done, the rest of increment 2 (#17–#19), reports drafted after a trip (#23) and the dashboard (#28) are open. #9 should come soon: receipts and expenses that need a look have nowhere to gather yet. #7 is small and touches the same code.',
+  'Done Oct 3: #47, #16, #10, #54, #3, #7 and #9. Next, by your requirement of Oct 3, the Home dashboard (#28): its first slice uses only what already exists. Then email-in (#19), now on Bird, which can be built before your Bird setup and switched on after it.',
+  '#48 needs you, not code: it keeps a leaked key from erasing the backups; any time this month. #4 can wait: the OpenAI fallback reads receipts meanwhile, and #21 waits on it. #52 and #55 are unblocked by your answers.',
+  'Reports drafted after a trip (#23) feed the dashboard’s reports to finish; Q15 asks whether they move up. Mileage (#17) adds business miles to it.',
   '#8 is security, not polish: it should land before #24, which needs it, and before anyone else is invited (#29). So should #50, which keeps each member’s records their own.',
   '#11–#15 are small, independent and each closes a gap; take them between features.',
 ];
