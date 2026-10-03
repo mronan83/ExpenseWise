@@ -401,6 +401,15 @@ export const FEATURES: readonly Feature[] = [
     backlog: 53,
   },
   {
+    id: 'F-48',
+    title: 'Possible duplicates in review: merge, delete or keep both',
+    group: 'Receipts',
+    kind: 'product',
+    phase: 'P1',
+    status: 'Planned',
+    backlog: 60,
+  },
+  {
     id: 'F-43',
     title: 'Expense categories and types',
     group: 'Expenses, trips and reports',

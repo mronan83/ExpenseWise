@@ -344,6 +344,18 @@ export const FUNCTIONAL: readonly Requirement[] = [
     note: 'Your requirement of Oct 3 and your answer to Q9. Claude’s assumption, yours to overturn: a different time or address on the expense shows against its receipt, as other fields do, but doesn’t by itself reject it at review, which checks what is claimed (FR-GOV-10).',
   },
   {
+    id: 'FR-INT-18',
+    text: 'A receipt that reads like another of the same person’s, with the same currency and total, dated within a day of it and from a similar merchant, is a possible duplicate: it waits in Needs you, never Ready on its own, until the person decides. Delete removes the copy, its expense and its file. Merge: the person chooses which is primary; the other fills the primary’s missing fields, or the person picks which of its fields to take, and is then deleted the same way. Not a duplicate keeps both and never flags the pair again. Each deletion leaves a record in the audit trail; a submitted or approved expense is never deleted.',
+    sources: ['owner 2026-10-03'],
+    priority: 'Must',
+    phase: 'P1',
+    status: 'Planned',
+    capabilities: ['Intelligence · Near-duplicate detection'],
+    features: ['F-48'],
+    backlog: [60],
+    note: 'Your requirement of Oct 3, after the same Uber receipt forwarded several times was filed as several receipts: each forward differed slightly, so the file’s fingerprint (FR-INT-03) didn’t match. Duplicates are judged on what was read instead. Your answers the same day: no reference copy is kept; a merge keeps the primary you choose, takes its missing or chosen fields from the other, and deletes the other. Built next, before #23.',
+  },
+  {
     id: 'FR-INT-13',
     text: 'Anomaly and fraud signals.',
     sources: ['capmap P4', 'roadmap P4'],
