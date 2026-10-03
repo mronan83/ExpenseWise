@@ -33,6 +33,9 @@ export interface ReceiptSummary {
 /** compared: weighed by the tier decision. fallback: read only because Claude couldn't. */
 export type ReadingRole = 'compared' | 'fallback';
 
+/** A check a reading's sums or date fails, which keeps it from being Ready (FR-INT-04). */
+export type ReadingCheck = 'sums' | 'future_date' | 'old_date';
+
 export interface Reading {
   model: string;
   label: string;
@@ -55,6 +58,7 @@ export interface Reading {
     cardLastFour: TextField | null;
   } | null;
   problems: string[];
+  checks: ReadingCheck[];
 }
 
 /** The fields a person can correct before filing (FR-INT-15). */
@@ -128,6 +132,32 @@ export function formatMoney(money: Pick<MoneyField, 'decimal' | 'currency'>): st
   } catch {
     return `${money.decimal} ${money.currency}`;
   }
+}
+
+/**
+ * Why the sums or date of these readings can't be filed as read, a sentence for each check
+ * that fails. Readings that fail the same way say it once.
+ */
+export function describeChecks(readings: readonly Reading[]): string[] {
+  const said = new Set<string>();
+  for (const { fields: f, checks } of readings) {
+    if (!f) continue;
+    for (const check of checks) {
+      if (check === 'sums' && f.subtotal && f.total) {
+        const parts = [
+          formatMoney(f.subtotal),
+          ...(f.taxTotal && !f.taxTotal.assumed ? [`${formatMoney(f.taxTotal)} tax`] : []),
+          ...(f.tip && !f.tip.assumed ? [`${formatMoney(f.tip)} tip`] : []),
+        ];
+        said.add(`${parts.join(' + ')} doesn’t come to the ${formatMoney(f.total)} total.`);
+      } else if (check === 'future_date' && f.date) {
+        said.add(`It’s dated ${f.date.value}, after the day it was uploaded.`);
+      } else if (check === 'old_date' && f.date) {
+        said.add(`It’s dated ${f.date.value}, more than a year before it was uploaded.`);
+      }
+    }
+  }
+  return [...said];
 }
 
 /** Micro-dollars as dollars, e.g. 4521 → "$0.0045". Display only. */

@@ -363,6 +363,26 @@ describe('reading receipts side by side', () => {
     expect(haiku!.fields.subtotal).toBeNull();
   });
 
+  it('names the checks each reading fails: its sums, and a date after the upload', async () => {
+    const s = setup();
+    const id = await filed(s);
+    s.read(id, ['6.50', '6.50'], 'needs_review');
+    // Uploaded Oct 2: the subtotal and tax make 6.20, not 6.50; then dated Oct 9.
+    const outputs = [
+      {
+        ...reading('6.50'),
+        subtotal: { value: '5.70', confidence: 'high' },
+        taxes: [{ label: 'Sales tax', value: '0.50', confidence: 'high' }],
+      },
+      { ...reading('6.50'), date: { value: '2026-10-09', confidence: 'high' } },
+    ];
+    const first = s.runs.length - 2;
+    outputs.forEach((output, i) => (s.runs[first + i] = { ...s.runs[first + i]!, output }));
+    const { body } = await s.call('GET', `/v1/receipts/${id}`, 'riley');
+    const readings = body.readings as { checks: string[] }[];
+    expect(readings.map((r) => r.checks)).toEqual([['sums'], ['future_date']]);
+  });
+
   it('keeps a running comparison of the two models', async () => {
     const s = setup();
     const id = await filed(s);

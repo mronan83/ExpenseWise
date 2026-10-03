@@ -74,7 +74,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   extraction_runs: {
     about:
-      'One model’s reading of one receipt for one request, with its outcome, confidence, timing and cost. Each request is read once per model, so a retry adds nothing (ADR-0017, NFR-DAT-06).',
+      'One model’s reading of one receipt for one request, with its outcome, confidence, timing and cost. Its outcome is confident only when the reading would be Ready on its own, its sums and date included (FR-INT-04). Each request is read once per model, so a retry adds nothing (ADR-0017, NFR-DAT-06).',
   },
   receipt_reviews: {
     about:

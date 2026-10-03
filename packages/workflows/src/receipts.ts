@@ -33,6 +33,8 @@ export interface ReceiptFile {
   readonly contentType: string;
   readonly byteSize: number;
   readonly sha256: string;
+  /** When it was uploaded: a receipt can't be dated much after that (FR-INT-04). */
+  readonly createdAt: Date;
 }
 
 /** Why a reading could not start: the organization has no usable key for the provider. */
@@ -123,11 +125,15 @@ export function permanentFailure(error: unknown): string | undefined {
 /** The extractor column: which provider's reader produced the reading. */
 const extractorOf = (model: ModelId) => (MODELS[model].provider === 'openai' ? 'openai' : 'claude');
 
-/** A reading in the shape it is stored, from what the extractor returned. */
+/**
+ * A reading in the shape it is stored, from what the extractor returned. Confident means it
+ * would be Ready on its own, its sums and date included, for a receipt uploaded then.
+ */
 export function toStoredRun(
   receiptId: string,
   requestId: string,
   run: ExtractionRun,
+  uploadedAt: Date,
 ): NewExtractionRun {
   const normalized =
     run.outcome === 'extracted' && run.extraction ? normalizeExtraction(run.extraction) : null;
@@ -138,7 +144,7 @@ export function toStoredRun(
     model: run.model,
     promptVersion: run.promptVersion,
     schemaVersion: SCHEMA_VERSION,
-    outcome: normalized ? (isAutoReady(normalized) ? 'confident' : 'unsure') : 'failed',
+    outcome: normalized ? (isAutoReady(normalized, uploadedAt) ? 'confident' : 'unsure') : 'failed',
     output: run.extraction,
     fieldConfidence: normalized
       ? {
@@ -209,11 +215,10 @@ export async function readWith(
   if (typeof extractor === 'string') return save(failedRun(receiptId, requestId, model, extractor));
   const receipt = await ports.loadReceipt(orgId, receiptId);
   const bytes = receipt && (await ports.fetchFile(receipt.storageKey));
-  if (!bytes) return save(failedRun(receiptId, requestId, model, 'not_uploaded'));
+  if (!receipt || !bytes) return save(failedRun(receiptId, requestId, model, 'not_uploaded'));
   try {
-    return await save(
-      toStoredRun(receiptId, requestId, await extractor.extract({ bytes, mediaType })),
-    );
+    const run = await extractor.extract({ bytes, mediaType });
+    return await save(toStoredRun(receiptId, requestId, run, receipt.createdAt));
   } catch (error) {
     const permanent = permanentFailure(error);
     if (!permanent) throw error;
@@ -245,8 +250,9 @@ function readingOf(run: ExtractionRunRecord | undefined): NormalizedExtraction |
 
 /**
  * Decides the receipt's status from the readings stored for this request. Until the tier
- * decision a receipt is Ready only when both models read it with confidence and agree on
- * merchant, date, currency and total; anything less needs a look. A model with no stored
+ * decision a receipt is Ready only when both models read it with confidence, agree on
+ * merchant, date, currency and total, and their sums and date pass the checks (FR-INT-04);
+ * anything less needs a look. A model with no stored
  * reading counts as failed. When no Claude model read it, the fallback reading counts: it
  * can make a receipt Needs a look, never Ready, because one reading by a model nobody has
  * measured on these receipts is not the evidence Ready stands for (ADR-0020).
@@ -258,6 +264,7 @@ export async function settleReading(
 ): Promise<{ status: ReceiptStatus; differences: string[] }> {
   const { orgId, receiptId, requestId } = request;
   const runs = await ports.runs(orgId, receiptId, requestId);
+  const uploadedAt = (await ports.loadReceipt(orgId, receiptId))?.createdAt ?? new Date();
   const byModel = COMPARISON_MODELS.map((model) => runs.find((r) => r.model === model));
   const readings = byModel.map(readingOf);
   const fallbackRun = runs.find((r) => r.model === FALLBACK_MODEL);
@@ -268,7 +275,11 @@ export async function settleReading(
     ? 'needs_review'
     : !readings.some(Boolean)
       ? 'failed'
-      : first && second && differences.length === 0 && isAutoReady(first) && isAutoReady(second)
+      : first &&
+          second &&
+          differences.length === 0 &&
+          isAutoReady(first, uploadedAt) &&
+          isAutoReady(second, uploadedAt)
         ? 'extracted'
         : 'needs_review';
   // The expense is filed with the most capable reading there is, else the fallback's (ADR-0022).

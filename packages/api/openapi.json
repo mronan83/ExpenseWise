@@ -1082,6 +1082,18 @@
             "items": {
               "type": "string"
             }
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "sums",
+                "future_date",
+                "old_date"
+              ]
+            },
+            "description": "Checks this reading fails (FR-INT-04). sums: the subtotal, taxes and tip don’t make the total, allowing a minor unit per tax or tip line. future_date: dated more than a day after the upload. old_date: dated more than a year before it."
           }
         },
         "required": [
@@ -1095,7 +1107,8 @@
           "inputTokens",
           "outputTokens",
           "fields",
-          "problems"
+          "problems",
+          "checks"
         ]
       },
       "ReceiptConfirmation": {

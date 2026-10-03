@@ -131,7 +131,7 @@ export const COMPONENTS: readonly Component[] = [
     name: 'Receipt reading',
     technology: 'Anthropic SDK; OpenAI over HTTPS',
     responsibility:
-      'Turns an image or PDF into fields with a confidence each, through one prompt and one schema. Compares two Claude models and falls back to OpenAI; checks a reading against the expense.',
+      'Turns an image or PDF into fields with a confidence each, through one prompt and one schema. Compares two Claude models and falls back to OpenAI; checks that a reading’s sums make its total and its date is plausible before it can be Ready; checks a reading against the expense.',
     where: ['packages/extraction'],
   },
   {
@@ -257,9 +257,10 @@ export const FLOWS: readonly Flow[] = [
   opt No Claude model could read it
     A->>M: OpenAI fallback
   end
+  Note over A: Ready needs confident readings that agree,<br/>sums that make the total and a plausible date
   A->>DB: One transaction: receipt settles, expense follows, files to its trip by date
   Note over DB: Ready only when the receipt is Ready and the claim is complete`,
-    refs: ['ADR-0017', 'ADR-0020', 'ADR-0022', 'ADR-0023'],
+    refs: ['ADR-0017', 'ADR-0020', 'ADR-0022', 'ADR-0023', 'FR-INT-04'],
   },
   {
     id: 'request',

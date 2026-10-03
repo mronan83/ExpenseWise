@@ -138,7 +138,7 @@ export const FEATURES: readonly Feature[] = [
     kind: 'product',
     phase: 'P1',
     status: 'Verified',
-    delivered: 'PR #9, PR #16',
+    delivered: 'PR #9, PR #16, PR #40',
     decisions: ['ADR-0006', 'ADR-0017'],
     code: [
       'packages/extraction/src',
@@ -156,6 +156,7 @@ export const FEATURES: readonly Feature[] = [
       'extraction/anthropic',
       'extraction/normalize',
       'extraction/review',
+      'extraction/checks',
       'api/receipts › shows both readings, where they differ, and money as minor units',
       "api/receipts › shows tax and tip the receipt doesn't print as zero, marked as assumed",
       'db/receipts.int › records each model once per request, then settles once',
@@ -350,7 +351,7 @@ export const FEATURES: readonly Feature[] = [
       '.github/workflows/ci.yml',
     ],
     checks: ['e2e/signed-in'],
-    note: 'A bench runs the real API on its own database with a test sign-in, seeded through the API and the real reading workflow with scripted answers; its receipt images are drawn, never real. 26 screens and states, desktop Chromium at 1280 px and iPhone WebKit at 375, 393 and 440 px, light and dark. Put back on Oct 3, the date overlap and the contrast failure both failed it.',
+    note: 'A bench runs the real API on its own database with a test sign-in, seeded through the API and the real reading workflow with scripted answers; its receipt images are drawn, never real. 28 screens and states, desktop Chromium at 1280 px and iPhone WebKit at 375, 393 and 440 px, light and dark. Put back on Oct 3, the date overlap and the contrast failure both failed it.',
   },
   {
     id: 'F-46',

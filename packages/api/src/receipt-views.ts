@@ -6,6 +6,7 @@ import {
   FALLBACK_MODEL,
   MODELS,
   normalizeExtraction,
+  readingChecks,
   readingDifferences,
   ReceiptExtractionSchema,
   type CorrectableField,
@@ -64,10 +65,12 @@ export type ReadingRole = 'compared' | 'fallback';
 const roleOf = (model: ModelId): ReadingRole =>
   model === FALLBACK_MODEL ? 'fallback' : 'compared';
 
+/** One model's reading of a receipt uploaded at `uploadedAt`, as the receipt shows it. */
 export function readingView(
   model: ModelId,
   run: ExtractionRunRecord | undefined,
   pending: boolean,
+  uploadedAt: Date,
 ) {
   const n = pending ? null : normalized(run);
   const assumed = n ? assumedZeros(n) : [];
@@ -105,6 +108,7 @@ export function readingView(
         }
       : null,
     problems: n ? [...n.problems] : [],
+    checks: n ? readingChecks(n, uploadedAt) : [],
   };
 }
 
@@ -124,9 +128,10 @@ export function readingsOf(receipt: ReceiptRecord, runs: readonly ExtractionRunR
         model,
         latest.find((r) => r.model === model),
         pending,
+        receipt.createdAt,
       ),
     ),
-    ...(fallback ? [readingView(FALLBACK_MODEL, fallback, pending)] : []),
+    ...(fallback ? [readingView(FALLBACK_MODEL, fallback, pending, receipt.createdAt)] : []),
   ];
 }
 

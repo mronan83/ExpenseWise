@@ -61,6 +61,7 @@ function world(answers: Partial<Record<ModelId, Behaviour>>, file: Uint8Array | 
         contentType: 'image/jpeg',
         byteSize: JPEG.byteLength,
         sha256: createHash('sha256').update(JPEG).digest('hex'),
+        createdAt: new Date('2026-09-24T18:00:00Z'),
       }),
     fetchFile: () => Promise.resolve(file),
     extractor: (_org, model) => {
@@ -177,6 +178,26 @@ describe('reading a receipt with both models', () => {
     expect(result).toEqual({ status: 'needs_review', differences: ['total'] });
     // Its expense starts from the more capable model's reading.
     expect(w.settled[0]?.values).toEqual(COFFEE);
+  });
+
+  it('asks for a look when both agree on parts that don’t make the total', async () => {
+    // 5.50 + 0.49 tax is 5.99; the tip that made 6.50 was missed by both.
+    const short = reading({
+      subtotal: { value: '5.50', confidence: 'high' },
+      taxes: [{ label: 'Sales tax', value: '0.49', confidence: 'high' }],
+    });
+    const w = world({ 'claude-haiku-4-5': short, 'claude-sonnet-5-5': short });
+    const { result } = await run(w);
+    expect(result).toEqual({ status: 'needs_review', differences: [] });
+    // Neither reading would be Ready on its own, which the comparison counts.
+    expect(w.runs.map((r) => r.outcome)).toEqual(['unsure', 'unsure']);
+  });
+
+  it('asks for a look when both read a date after the upload', async () => {
+    const later = reading({ date: { value: '2026-10-24', confidence: 'high' } });
+    const w = world({ 'claude-haiku-4-5': later, 'claude-sonnet-5-5': later });
+    const { result } = await run(w);
+    expect(result).toEqual({ status: 'needs_review', differences: [] });
   });
 
   it('records a missing key as a failed reading, and calls no model', async () => {
