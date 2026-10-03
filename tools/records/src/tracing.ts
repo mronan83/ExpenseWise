@@ -268,12 +268,22 @@ export const QUESTIONS: readonly Question[] = [
     why: 'An exact rule rejects honest partial claims; a loose one lets over-claims through. A rejection at review costs a full round trip, which catching it before submission avoids; the approval flow already checks receipts on submit (journeys §4.4).',
     recommendation:
       'Merchant (loosely), date and currency must match. The amount may be lower than the receipt’s only with a reason, never higher, and expenses split from one receipt may not add up to more than it. Show a mismatch as soon as the expense is edited, refuse to submit one without a reason, and let review return the whole report for any mismatch it finds.',
-    affects: ['FR-GOV-10', 'FR-EXP-09'],
+    affects: ['FR-GOV-10', 'FR-EXP-09', 'FR-EXP-10', 'FR-GOV-13'],
+    answer: {
+      date: '2026-10-03',
+      text: '1B and 2B, as recommended. An expense may claim less than its receipt with a reason, never more (FR-EXP-10). A difference shows as soon as the expense is edited, and a report can’t be submitted while one has no reason (FR-GOV-13); review still returns the whole report for any mismatch.',
+    },
   },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-03',
+    change:
+      'From your answer to Q6 (1B, 2B): an expense may claim less than its receipt with a reason, never more (FR-EXP-10), and a report can’t be submitted while a difference has no reason (FR-GOV-13). Both join #24, now effort L. The difference already shows when an expense is edited (F-09).',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-03',
     change:

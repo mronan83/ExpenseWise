@@ -416,6 +416,17 @@ export const FUNCTIONAL: readonly Requirement[] = [
       'domain/expense-values',
     ],
   },
+  {
+    id: 'FR-EXP-10',
+    text: 'An expense may claim less than its receipt, with a reason such as a personal item removed or a receipt split across expenses, but never more. Expenses split from one receipt may not add up to more than it.',
+    sources: ['owner 2026-10-03'],
+    priority: 'Must',
+    phase: 'P1',
+    status: 'Planned',
+    features: ['F-18'],
+    backlog: [24],
+    note: 'Your answer to Q6, 1B.',
+  },
 
   // Governance
   {
@@ -530,7 +541,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
     status: 'Planned',
     features: ['F-18'],
     backlog: [24],
-    note: 'What counts as matching, and whether a mismatch is caught before submission too, is Q6.',
+    note: 'Matching, per your answer to Q6: merchant (loosely), date and currency the same; the amount the same, or lower with a reason (FR-EXP-10).',
   },
   {
     id: 'FR-GOV-11',
@@ -551,6 +562,17 @@ export const FUNCTIONAL: readonly Requirement[] = [
     status: 'Planned',
     features: ['F-10', 'F-18'],
     backlog: [9, 24],
+  },
+  {
+    id: 'FR-GOV-13',
+    text: 'A report can’t be submitted while an expense on it differs from its receipt without a reason. The difference shows as soon as the expense is edited.',
+    sources: ['owner 2026-10-03', 'journeys §4.4'],
+    priority: 'Must',
+    phase: 'P1',
+    status: 'Planned',
+    features: ['F-18'],
+    backlog: [24],
+    note: 'Your answer to Q6, 2B. Showing the difference is built (F-09); refusing the submission arrives with reports.',
   },
 
   // Settlement
