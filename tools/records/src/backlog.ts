@@ -18,7 +18,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     severity: 'High',
     blocker: { kind: 'none', note: 'None to build it; it runs once #2 is done' },
     source: 'GAP-01, ADR-0014',
-    affects: ['GAP-01', 'NFR-REL-01', 'NFR-REL-05', 'F-37'],
+    affects: ['GAP-01', 'NFR-REL-01', 'NFR-REL-05', 'F-37', 'F-42'],
     done: { date: '2026-10-02', in: 'PR #23' },
   },
   {
@@ -35,7 +35,11 @@ export const BACKLOG: readonly BacklogItem[] = [
       ask: 'Your setup: runbook section 5, steps 5–8, about 15 minutes',
     },
     source: 'ADR-0014',
-    affects: ['GAP-01', 'NFR-REL-01', 'NFR-REL-05', 'F-37'],
+    affects: ['GAP-01', 'NFR-REL-01', 'NFR-REL-05', 'F-37', 'F-42'],
+    done: {
+      date: '2026-10-03',
+      in: 'Your setup; the first run backed up 51 tables and the receipt image',
+    },
   },
   {
     num: 3,
@@ -160,11 +164,11 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'No backup has ever been restored',
     type: 'Ops',
     detail:
-      'A backup nobody has restored is only a hope. Restore the first backup into a throwaway database and check row counts, row-level security and image checksums; then monthly.',
+      'A backup nobody has restored is only a hope. Backups run nightly since Oct 3 (#2). A monthly workflow restores the latest one into a throwaway database and checks migrations, row counts, row-level security and image checksums against what the dump recorded.',
     priority: 'P1',
-    effort: 'S',
+    effort: 'M',
     severity: 'High',
-    blocker: { kind: 'items', items: [2] },
+    blocker: { kind: 'none' },
     source: 'ADR-0014',
     affects: ['NFR-REL-02', 'NFR-REL-03', 'F-41'],
   },
@@ -324,6 +328,22 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'owner', ask: 'Your answer: done, or ten minutes in Vercel' },
     source: 'Roadmap Phase 0 exit',
     affects: ['NFR-DEL-05'],
+  },
+  {
+    num: 48,
+    title: 'The backup key can delete the backups',
+    type: 'Security',
+    detail:
+      'The Backblaze key is Read and Write, which includes deleting. Object Lock stops that for each file’s first 30 days only, so anyone holding the key could then erase the monthly dumps and every older receipt image. The nightly job never deletes. Replace the key with one that can list, read and write but not delete, made with the Backblaze command-line tool (the web console can’t), then run the backup once to prove it.',
+    priority: 'P2',
+    effort: 'S',
+    severity: 'Medium',
+    blocker: {
+      kind: 'owner',
+      ask: 'About 15 minutes: a new key from the Backblaze command-line tool, then swap two secrets',
+    },
+    source: 'GAP-18',
+    affects: ['GAP-18', 'NFR-REL-01', 'F-37'],
   },
 
   // P3: this quarter
@@ -633,7 +653,7 @@ export const BACKLOG: readonly BacklogItem[] = [
 
 /** How to order the open work, beyond priority. */
 export const SEQUENCING: readonly string[] = [
-  '#2, #3 and #4 need you, not code. #2 turns the backup on, so it comes first.',
+  '#3 and #4 need you, not code. So does #48, which keeps a leaked key from erasing the backups; any time this month.',
   '#10 comes before anything else Claude builds: until a backup has been restored, it is only a hope. #47 comes straight after, since today a receipt that needs a look can’t be acted on.',
   '#6 unblocks most of increment 2 (#16–#19) and the dashboard (#28). #7 and #9 are small and touch the same code, so they ride with it.',
   '#8 is security, not polish: it should land before #24, which needs it, and before anyone else is invited (#29).',

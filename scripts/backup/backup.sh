@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # Nightly off-site backup (ADR-0014; setup in docs/runbooks/environment-setup.md section 5).
 #
-# 1. Dumps the database with Supabase's documented procedure: roles, schema, then data,
+# 1. Writes the heartbeat, so the Free plan never sees the project as idle. It comes first,
+#    so a later failure, such as Backblaze being down, can't stop it.
+# 2. Dumps the database with Supabase's documented procedure: roles, schema, then data,
 #    auth users included, with row counts recorded for the restore drill.
-# 2. Encrypts the dump on this machine and uploads it to the private Backblaze B2 bucket:
+# 3. Encrypts the dump on this machine and uploads it to the private Backblaze B2 bucket:
 #    db/daily/<date> every night, db/monthly/<month> on the month's first good night.
 #    It then downloads that copy again and checks that it decrypts to the same bytes.
-# 3. Copies receipt images added since the last run, each encrypted, to receipts/.
+# 4. Copies receipt images added since the last run, each encrypted, to receipts/.
 #    Images are never deleted from the copy.
-# 4. Writes the heartbeat, so the Free plan never sees the project as idle.
 # 5. Fails if the database or file storage has passed 70% of its Free plan limit.
 #
 # The repository is public, and so are its logs. This prints steps, counts, sizes and
@@ -40,8 +41,11 @@ started=$(date +%s)
 
 step() { printf '%s  %s\n' "$(date -u +%H:%M:%S)" "$*"; }
 mb() { awk -v b="$1" 'BEGIN { printf "%.1f MB", b / 1048576 }'; }
+# A small dump would read as 0.0 MB, which looks like an empty one.
+size() { awk -v b="$1" 'BEGIN { if (b < 1048576) printf "%.0f KB", b / 1024; else printf "%.1f MB", b / 1048576 }'; }
 # Error text from a tool may quote a connection string; never let a password through.
 redact() { sed -E 's#://[^/@[:space:]]+@#://***@#g'; }
+sql() { psql "$BACKUP_DATABASE_URL" -X -q -tA -v ON_ERROR_STOP=1 -c "$1" 2> >(redact >&2); }
 
 # Supabase's S3 endpoint and region come from the session-pooler address, so the backup
 # needs no extra settings: postgres.<ref>@aws-N-<region>.pooler.supabase.com.
@@ -54,6 +58,11 @@ if [ -z "${SUPABASE_S3_ENDPOINT:-}" ]; then
   SUPABASE_S3_ENDPOINT="https://${BASH_REMATCH[2]}.supabase.co/storage/v1/s3"
   SUPABASE_S3_REGION=${BASH_REMATCH[3]}
 fi
+
+# 1. Heartbeat
+sql "insert into ops.heartbeat (id, beat_at, source) values (1, now(), 'nightly-backup')
+     on conflict (id) do update set beat_at = excluded.beat_at, source = excluded.source"
+step "Heartbeat written"
 
 # Backblaze reports the bucket's S3 endpoint when the key signs in.
 if [ -z "${B2_S3_ENDPOINT:-}" ]; then
@@ -95,9 +104,8 @@ decrypt() {
   gpg --batch --yes --quiet --pinentry-mode loopback --passphrase-fd 3 --decrypt \
     --output "$2" "$1" 3<<<"$BACKUP_PASSPHRASE"
 }
-sql() { psql "$BACKUP_DATABASE_URL" -X -q -tA -v ON_ERROR_STOP=1 -c "$1" 2> >(redact >&2); }
 
-# 1. The database
+# 2. The database
 step "Dumping the database (roles, schema, data)"
 for part in "roles.sql --role-only" "schema.sql" "data.sql --use-copy --data-only"; do
   read -r file flags <<<"$part"
@@ -136,8 +144,9 @@ jq -n \
   >"$work/db/manifest.json"
 tar -C "$work/db" -czf "$work/db.tar.gz" roles.sql schema.sql data.sql manifest.json
 encrypt "$work/db.tar.gz" "$work/db.tar.gz.gpg"
-step "Dump ready: $(mb "$(stat -c %s "$work/db.tar.gz.gpg")") encrypted, $(jq 'length' <<<"$rows") tables"
+step "Dump ready: $(size "$(stat -c %s "$work/db.tar.gz.gpg")") encrypted, $(jq 'length' <<<"$rows") tables"
 
+# 3. The off-site copies
 daily="db/daily/$TODAY.tar.gz.gpg"
 b2 s3 cp "$work/db.tar.gz.gpg" "s3://$B2_BUCKET/$daily" --only-show-errors
 step "Uploaded the daily copy"
@@ -158,7 +167,7 @@ if ! cmp -s "$work/check.tar.gz" "$work/db.tar.gz" || ! tar -tzf "$work/check.ta
 fi
 step "Checked: the uploaded copy decrypts to the same dump"
 
-# 2. Receipt images: copy each one not yet in the backup.
+# 4. Receipt images: copy each one not yet in the backup.
 supabase_s3 s3api list-objects-v2 --bucket "$RECEIPT_BUCKET" --output json \
   --query 'Contents[].[Key, Size]' | jq -r '.[]? | @tsv' >"$work/source.tsv"
 b2 s3api list-objects-v2 --bucket "$B2_BUCKET" --prefix receipts/ --output json \
@@ -176,12 +185,7 @@ while IFS=$'\t' read -r -u 4 key _size; do
 done 4<"$work/source.tsv"
 step "Receipt images: $copied new, $(wc -l <"$work/source.tsv") in storage"
 
-# 3. Heartbeat
-sql "insert into ops.heartbeat (id, beat_at, source) values (1, now(), 'nightly-backup')
-     on conflict (id) do update set beat_at = excluded.beat_at, source = excluded.source"
-step "Heartbeat written"
-
-# 4. Free plan limits, across every bucket
+# 5. Free plan limits, across every bucket
 storage_bytes=0
 while read -r bucket; do
   [ -n "$bucket" ] || continue
