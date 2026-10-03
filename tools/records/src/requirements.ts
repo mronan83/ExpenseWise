@@ -295,6 +295,17 @@ export const FUNCTIONAL: readonly Requirement[] = [
     ],
   },
   {
+    id: 'FR-INT-16',
+    text: 'Owners and finance admins turn each AI model on or off for their organization, and only models that are on read its receipts. Every change records who made it.',
+    sources: ['owner 2026-10-03'],
+    priority: 'Must',
+    phase: 'P1',
+    status: 'Planned',
+    features: ['F-45'],
+    backlog: [52],
+    note: 'Your requirement of Oct 3. Who switches what, and what happens when every model is off, is open as Q8. It is also how the tier decision (#21) takes effect.',
+  },
+  {
     id: 'FR-INT-13',
     text: 'Anomaly and fraud signals.',
     sources: ['capmap P4', 'roadmap P4'],
@@ -435,6 +446,17 @@ export const FUNCTIONAL: readonly Requirement[] = [
     features: ['F-18'],
     backlog: [24],
     note: 'Your answer to Q6, 1B.',
+  },
+  {
+    id: 'FR-EXP-11',
+    text: 'An organization defines its own expense categories and types. Every expense has a type, and every type belongs to one category.',
+    sources: ['owner 2026-10-03'],
+    priority: 'Must',
+    phase: 'P1',
+    status: 'Planned',
+    features: ['F-43'],
+    backlog: [51],
+    note: 'Your requirement of Oct 3. What a type is beside a category is open as Q7.',
   },
 
   // Governance

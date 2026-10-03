@@ -260,11 +260,12 @@ export const BACKLOG: readonly BacklogItem[] = [
     num: 18,
     title: 'Category suggestions',
     type: 'Feature',
-    detail: 'Suggest a category for each expense, marked as a suggestion until confirmed.',
+    detail:
+      'Suggest a type, and so a category, for each expense, marked as a suggestion until confirmed. It suggests from the categories and types an organization defines (#51).',
     priority: 'P2',
     effort: 'M',
     severity: 'Low',
-    blocker: { kind: 'none' },
+    blocker: { kind: 'items', items: [51] },
     source: 'Roadmap increment 2',
     affects: ['FR-INT-10', 'F-15'],
   },
@@ -342,7 +343,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Choose the model tier: Haiku or Sonnet',
     type: 'Decision',
     detail:
-      'Proposed rule: Haiku if it agrees with Sonnet on at least 95% of receipts and is never confidently wrong where Sonnet was right; otherwise Sonnet. Needs about 20 of your receipts read by both, so it waits on #4.',
+      'Proposed rule: Haiku if it agrees with Sonnet on at least 95% of receipts and is never confidently wrong where Sonnet was right; otherwise Sonnet. Needs about 20 of your receipts read by both, so it waits on #4. The decision takes effect by turning the other model off (#52).',
     priority: 'P3',
     effort: 'S',
     severity: 'Medium',
@@ -607,6 +608,32 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none' },
     source: 'GAP-20',
     affects: ['GAP-20', 'FR-GOV-01'],
+  },
+  {
+    num: 51,
+    title: 'Categories and types an organization defines',
+    type: 'Feature',
+    detail:
+      'Owners and finance admins define expense categories and the types inside them, and every expense gets a type. An organization starts from a ready-made set it can rename, add to or retire; a type in use is retired, never deleted, so old claims keep it. Its shape waits on your answer to Q7.',
+    priority: 'P2',
+    effort: 'M',
+    severity: 'Medium',
+    blocker: { kind: 'owner', ask: 'Your answer to Q7: what a type is beside a category' },
+    source: 'Product owner, Oct 3',
+    affects: ['FR-EXP-11', 'F-43', 'FR-INT-10', 'F-15'],
+  },
+  {
+    num: 52,
+    title: 'Turn AI models on and off',
+    type: 'Feature',
+    detail:
+      'A switch for each AI model in Settings, for owners and finance admins, recorded in the audit trail. The reading workflow asks only the models that are on; a model with no key stays off. Read again uses the switches as they are then. Its shape waits on your answer to Q8.',
+    priority: 'P2',
+    effort: 'M',
+    severity: 'Medium',
+    blocker: { kind: 'owner', ask: 'Your answer to Q8: what turning a model off covers' },
+    source: 'Product owner, Oct 3',
+    affects: ['FR-INT-16', 'F-45', 'FR-INT-08', 'FR-INT-09'],
   },
   // Done
   {
