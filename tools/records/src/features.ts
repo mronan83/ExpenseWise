@@ -307,6 +307,15 @@ export const FEATURES: readonly Feature[] = [
     backlog: 20,
   },
   {
+    id: 'F-43',
+    title: 'Expense categories and types',
+    group: 'Expenses, trips and reports',
+    kind: 'product',
+    phase: 'P1',
+    status: 'Planned',
+    backlog: 51,
+  },
+  {
     id: 'F-15',
     title: 'Category suggestions',
     group: 'Expenses, trips and reports',

@@ -274,10 +274,25 @@ export const QUESTIONS: readonly Question[] = [
       text: '1B and 2B, as recommended. An expense may claim less than its receipt with a reason, never more (FR-EXP-10). A difference shows as soon as the expense is edited, and a report can’t be submitted while one has no reason (FR-GOV-13); review still returns the whole report for any mismatch.',
     },
   },
+  {
+    id: 'Q7',
+    title: 'What a type is, beside a category',
+    ask: 'Expenses need categories and types (FR-EXP-11). Which shape? A: one tree. A category such as Travel holds types such as Airfare, Lodging and Taxi; a person picks the type and its category follows. B: two separate choices on every expense, a type for what was bought and a category for where finance books it. C: something else.',
+    why: 'It decides what a person picks on each expense, what the reader suggests (#18), what reports and the accountant’s year-end summary total by (FR-INS-03), and where rules attach: meals need attendees, mileage has a rate, some types need a receipt above a limit.',
+    recommendation:
+      'A. The type says what was bought and carries its rules; the category carries the GL and tax codes and is what summaries total. A person picks one thing, never two, and the reader suggests one thing. Each organization starts from a ready-made set that owners and finance admins can rename, add to or retire.',
+    affects: ['FR-EXP-11', 'FR-INT-10', 'FR-INS-03'],
+  },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-03',
+    change:
+      'From your message: an organization defines its own expense categories and types, and every expense has a type (FR-EXP-11, F-43, #51). New Q7: what a type is beside a category. Category suggestions (#18) now wait on #51, since they suggest from what an organization defines.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-03',
     change:

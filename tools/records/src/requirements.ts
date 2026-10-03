@@ -427,6 +427,17 @@ export const FUNCTIONAL: readonly Requirement[] = [
     backlog: [24],
     note: 'Your answer to Q6, 1B.',
   },
+  {
+    id: 'FR-EXP-11',
+    text: 'An organization defines its own expense categories and types. Every expense has a type, and every type belongs to one category.',
+    sources: ['owner 2026-10-03'],
+    priority: 'Must',
+    phase: 'P1',
+    status: 'Planned',
+    features: ['F-43'],
+    backlog: [51],
+    note: 'Your requirement of Oct 3. What a type is beside a category is open as Q7.',
+  },
 
   // Governance
   {

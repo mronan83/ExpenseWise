@@ -259,11 +259,12 @@ export const BACKLOG: readonly BacklogItem[] = [
     num: 18,
     title: 'Category suggestions',
     type: 'Feature',
-    detail: 'Suggest a category for each expense, marked as a suggestion until confirmed.',
+    detail:
+      'Suggest a type, and so a category, for each expense, marked as a suggestion until confirmed. It suggests from the categories and types an organization defines (#51).',
     priority: 'P2',
     effort: 'M',
     severity: 'Low',
-    blocker: { kind: 'none' },
+    blocker: { kind: 'items', items: [51] },
     source: 'Roadmap increment 2',
     affects: ['FR-INT-10', 'F-15'],
   },
@@ -593,6 +594,19 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none', note: 'Waits on an upstream fix; Advisory watch says when' },
     source: 'GAP-19',
     affects: ['GAP-19', 'NFR-SEC-12'],
+  },
+  {
+    num: 51,
+    title: 'Categories and types an organization defines',
+    type: 'Feature',
+    detail:
+      'Owners and finance admins define expense categories and the types inside them, and every expense gets a type. An organization starts from a ready-made set it can rename, add to or retire; a type in use is retired, never deleted, so old claims keep it. Its shape waits on your answer to Q7.',
+    priority: 'P2',
+    effort: 'M',
+    severity: 'Medium',
+    blocker: { kind: 'owner', ask: 'Your answer to Q7: what a type is beside a category' },
+    source: 'Product owner, Oct 3',
+    affects: ['FR-EXP-11', 'F-43', 'FR-INT-10', 'F-15'],
   },
   // Done
   {
