@@ -70,7 +70,12 @@ function fakeReceipts() {
       events.push(event);
       return Promise.resolve({ status: 'filed', receipt, event });
     },
-    list: () => Promise.resolve({ receipts, runs, reviews }),
+    list: (_org, _limit, statuses) =>
+      Promise.resolve({
+        receipts: statuses ? receipts.filter((r) => statuses.includes(r.status)) : receipts,
+        runs,
+        reviews,
+      }),
     get: (_org, id) => {
       const receipt = receipts.find((r) => r.id === id);
       return Promise.resolve(receipt ? { receipt, runs, reviews } : undefined);
@@ -633,5 +638,95 @@ describe('confirming a receipt that needs a look', () => {
         .status,
     ).toBe(401);
     expect((await confirm(s, id, { model: 'gpt-5.6-luna' }, 'mallory')).status).toBe(403);
+  });
+});
+
+describe('the Needs you inbox', () => {
+  /** Files a receipt with its own file, so several can be filed. */
+  const fileAs = async (s: ReturnType<typeof setup>, sha256: string) => {
+    const file = { ...s.file, sha256 };
+    const { body: ticket } = await s.call('POST', '/v1/receipts/uploads', 'riley', file);
+    await s.call('POST', '/v1/receipts', 'riley', {
+      id: ticket.receiptId,
+      source: 'camera',
+      ...file,
+    });
+    return ticket.receiptId as string;
+  };
+  /** Stands in for the workflow when no key is saved: nothing could read it. */
+  const failWithoutKey = (s: ReturnType<typeof setup>, id: string) => {
+    for (const model of ['claude-haiku-4-5', 'claude-sonnet-5-5'] as const) {
+      s.runs.push({
+        id: `run-${s.runs.length}`,
+        receiptId: id,
+        requestId: s.events.at(-1)!.outboxId,
+        model,
+        promptVersion: 'extract-v1',
+        outcome: 'failed',
+        output: null,
+        error: 'no_key',
+        latencyMs: null,
+        inputTokens: null,
+        outputTokens: null,
+        costMicroUsd: null,
+        createdAt: new Date(NOW.getTime() + s.runs.length),
+      });
+    }
+    const at = s.receipts.findIndex((r) => r.id === id);
+    s.receipts[at] = { ...s.receipts[at]!, status: 'failed' };
+  };
+
+  it('lists what needs a look or could not be read, newest first, each with why', async () => {
+    const s = setup();
+    const ready = await fileAs(s, 'a'.repeat(64));
+    s.read(ready, ['6.50', '6.50'], 'extracted');
+    const differ = await fileAs(s, 'b'.repeat(64));
+    s.read(differ, ['65.00', '6.50'], 'needs_review');
+    const fallback = await fileAs(s, 'c'.repeat(64));
+    s.readByFallback(fallback);
+    await fileAs(s, 'd'.repeat(64)); // still being read
+    const failed = await fileAs(s, 'e'.repeat(64));
+    failWithoutKey(s, failed);
+
+    const { status, body } = await s.call('GET', '/v1/inbox', 'riley');
+    expect(status).toBe(200);
+    const items = body.items as {
+      kind: string;
+      receipt: { id: string; merchant: string | null };
+      reason: { code: string; fields: string[]; error: string | null; by: string | null };
+    }[];
+    expect(items.map((i) => [i.kind, i.receipt.id, i.reason.code])).toEqual([
+      ['receipt', failed, 'failed'],
+      ['receipt', fallback, 'fallback'],
+      ['receipt', differ, 'differ'],
+    ]);
+    expect(items[0]!.reason.error).toBe('no_key');
+    expect(items[1]!.reason.by).toBe('GPT-5.6 Luna');
+    expect(items[2]!.reason.fields).toEqual(['total']);
+    expect(items[2]!.receipt.merchant).toBe('Blue Bottle Coffee');
+  });
+
+  it('says which check failed when the models agree', async () => {
+    const s = setup();
+    const id = await fileAs(s, 'f'.repeat(64));
+    s.read(id, ['6.50', '6.50'], 'needs_review');
+    const first = s.runs.length - 2;
+    for (const i of [first, first + 1]) {
+      s.runs[i] = {
+        ...s.runs[i]!,
+        output: { ...reading('6.50'), date: { value: '2026-10-09', confidence: 'high' } },
+      };
+    }
+    const { body } = await s.call('GET', '/v1/inbox', 'riley');
+    expect((body.items as { reason: unknown }[]).map((i) => i.reason)).toEqual([
+      { code: 'checks', fields: [], checks: ['future_date'], error: null, by: null },
+    ]);
+  });
+
+  it('is empty when nothing needs the person, and needs a signed-in member', async () => {
+    const s = setup();
+    expect((await s.call('GET', '/v1/inbox', 'riley')).body).toEqual({ items: [] });
+    expect((await s.call('GET', '/v1/inbox')).status).toBe(401);
+    expect((await s.call('GET', '/v1/inbox', 'mallory')).status).toBe(403);
   });
 });

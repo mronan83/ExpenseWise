@@ -6,6 +6,7 @@ import {
   FALLBACK_MODEL,
   MODELS,
   normalizeExtraction,
+  READING_CHECKS,
   readingChecks,
   readingDifferences,
   ReceiptExtractionSchema,
@@ -13,6 +14,7 @@ import {
   type Field,
   type ModelId,
   type NormalizedExtraction,
+  type ReadingCheck,
 } from '@expensewise/extraction';
 
 const moneyView = (field: Field<Money> | null) =>
@@ -216,6 +218,46 @@ export function receiptSummary(
     total: confirmed ? confirmed.total : (best?.total ?? null),
     expenseId: receipt.expenseId,
   };
+}
+
+/**
+ * Why a receipt needs the person, for the Needs you inbox (FR-EXP-02). failed: no model
+ * could read it, with the first compared reading's error. fallback: only the fallback read
+ * it. differ: the compared models read the filing fields differently. checks: they agree,
+ * and the sums or date fail a check (FR-INT-04). unsure: a model wasn't confident, or one
+ * couldn't read it. Null when it doesn't need the person.
+ */
+export function needsYouReason(receipt: ReceiptRecord, runs: readonly ExtractionRunRecord[]) {
+  if (receipt.status !== 'needs_review' && receipt.status !== 'failed') return null;
+  const readings = readingsOf(receipt, runs);
+  const compared = readings.filter((r) => r.role === 'compared');
+  const fallback = readings.find((r) => r.role === 'fallback' && r.fields);
+  const none = { fields: [] as string[], checks: [] as ReadingCheck[], error: null, by: null };
+  if (receipt.status === 'failed') {
+    return {
+      ...none,
+      code: 'failed' as const,
+      error: compared.find((r) => r.error)?.error ?? null,
+    };
+  }
+  if (fallback) return { ...none, code: 'fallback' as const, by: fallback.label };
+  const differences = differencesOf(receipt, runs);
+  if (differences.length > 0) return { ...none, code: 'differ' as const, fields: differences };
+  const checks = READING_CHECKS.filter((c) => compared.some((r) => r.checks.includes(c)));
+  if (checks.length > 0) return { ...none, code: 'checks' as const, checks };
+  return { ...none, code: 'unsure' as const };
+}
+
+/** One thing in the Needs you inbox: a receipt, and why it needs the person. */
+export function inboxItem(
+  receipt: ReceiptRecord,
+  runs: readonly ExtractionRunRecord[],
+  reviews: readonly ReceiptReviewRecord[],
+) {
+  const reason = needsYouReason(receipt, runs);
+  return reason
+    ? { kind: 'receipt' as const, receipt: receiptSummary(receipt, runs, reviews), reason }
+    : null;
 }
 
 export function receiptDetail(

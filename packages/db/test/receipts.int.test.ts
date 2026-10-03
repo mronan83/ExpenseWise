@@ -96,6 +96,40 @@ describe('filing a receipt', () => {
     );
     expect(theirs.status).toBe('filed');
   });
+
+  it('lists only the receipts in the statuses asked for, newest first', async () => {
+    const acme = await seedOrg(app.db, 'acme-receipt-statuses');
+    const filed = [];
+    for (const n of [41, 42, 43]) {
+      const result = await withOrg(app.db, acme.orgId, (tx) =>
+        fileReceipt(tx, acme.orgId, receipt(acme.memberId, n), acme.userId),
+      );
+      if (result.status !== 'filed') throw new Error('not filed');
+      filed.push(result);
+    }
+    const [needsLook, stillReading, failed] = filed;
+    for (const [result, status] of [
+      [needsLook!, 'needs_review'],
+      [failed!, 'failed'],
+    ] as const) {
+      await withOrg(app.db, acme.orgId, (tx) =>
+        settleReceipt(tx, acme.orgId, result.receipt.id, {
+          status,
+          requestId: result.event.outboxId,
+          detail: {},
+        }),
+      );
+    }
+    const listed = await withOrg(app.db, acme.orgId, (tx) =>
+      listReceipts(tx, 10, ['needs_review', 'failed']),
+    );
+    expect(listed.map((r) => [r.id, r.status])).toEqual([
+      [failed!.receipt.id, 'failed'],
+      [needsLook!.receipt.id, 'needs_review'],
+    ]);
+    expect((await withOrg(app.db, acme.orgId, (tx) => listReceipts(tx, 10))).length).toBe(3);
+    expect(stillReading!.receipt.status).toBe('processing');
+  });
 });
 
 describe('reading a receipt', () => {

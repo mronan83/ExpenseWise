@@ -110,7 +110,7 @@ export const COMPONENTS: readonly Component[] = [
     name: 'API',
     technology: 'Hono with zod-openapi; jose for tokens',
     responsibility:
-      'Verifies the sign-in token, finds the caller’s membership, and serves every operation. Generates the OpenAPI contract and answers errors as problem documents.',
+      'Verifies the sign-in token, finds the caller’s membership, and serves every operation, including the Needs you inbox, which says why each item needs the person. Generates the OpenAPI contract and answers errors as problem documents.',
     where: ['packages/api'],
   },
   {
@@ -259,7 +259,10 @@ export const FLOWS: readonly Flow[] = [
   end
   Note over A: Ready needs confident readings that agree,<br/>sums that make the total and a plausible date
   A->>DB: One transaction: receipt settles, expense follows, files to its trip by date
-  Note over DB: Ready only when the receipt is Ready and the claim is complete`,
+  Note over DB: Ready only when the receipt is Ready and the claim is complete
+  P->>W: Opens Home
+  W->>A: GET /v1/inbox
+  A-->>W: What needs a look or couldn’t be read, each with why`,
     refs: ['ADR-0017', 'ADR-0020', 'ADR-0022', 'ADR-0023', 'FR-INT-04'],
   },
   {

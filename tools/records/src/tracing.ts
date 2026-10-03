@@ -411,6 +411,12 @@ export const CHANGE_LOG: readonly ChangeLogEntry[] = [
   {
     date: '2026-10-03',
     change:
+      'PR #41, at your direction (#9): Home is the Needs you inbox, with real items. Each receipt that needs a look or couldn’t be read is listed, newest first, with why and one action: Check it, Fill it in, or Open settings when a key is the problem. With nothing to do, it says so. F-10 is Verified; FR-EXP-02 is Partial until returned reports (#24) and missing receipts (with card transactions) join it.',
+    by: 'Claude, at your direction',
+  },
+  {
+    date: '2026-10-03',
+    change:
       'PR #40, at your direction (#7): a receipt is Ready only when its sums and date are plausible, as well as read with confidence and agreed. The subtotal, taxes and tip must make the total, a cent allowed per tax or tip line; prices that include VAT add up too. The date may be a day after the upload and no more than a year before it. A receipt that fails says why, such as “$45.50 + $4.43 tax doesn’t come to the $58.43 total.” GAP-04 is closed and FR-INT-04 Verified. Receipts read before today keep their status.',
     by: 'Claude, at your direction',
   },

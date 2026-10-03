@@ -703,6 +703,96 @@
           "readingAvailable"
         ]
       },
+      "Inbox": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "receipt"
+                  ]
+                },
+                "receipt": {
+                  "$ref": "#/components/schemas/ReceiptSummary"
+                },
+                "reason": {
+                  "$ref": "#/components/schemas/NeedsYouReason"
+                }
+              },
+              "required": [
+                "kind",
+                "receipt",
+                "reason"
+              ]
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "NeedsYouReason": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "failed",
+              "fallback",
+              "differ",
+              "checks",
+              "unsure"
+            ],
+            "description": "failed: no model could read it. fallback: only the fallback model read it. differ: the compared models read the filing fields differently. checks: its sums or date fail a check (FR-INT-04). unsure: a model was not confident, or one could not read it."
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "differ: the filing fields read differently."
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "sums",
+                "future_date",
+                "old_date"
+              ]
+            },
+            "description": "checks: the checks the readings fail."
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "failed: why the first compared model could not read it, such as no_key."
+          },
+          "by": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "fallback: the model that read it.",
+            "example": "GPT-5.6 Luna"
+          }
+        },
+        "required": [
+          "code",
+          "fields",
+          "checks",
+          "error",
+          "by"
+        ]
+      },
       "ReceiptDetail": {
         "allOf": [
           {
@@ -2844,6 +2934,62 @@
           },
           "503": {
             "description": "Sign-in, the database or file storage is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/inbox": {
+      "get": {
+        "tags": [
+          "Inbox"
+        ],
+        "summary": "What needs the person: the Needs you inbox",
+        "description": "Receipts that need a look or that no model could read, newest first, each with why (FR-EXP-02). Missing receipts and returned reports join it as they are built.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Up to 100 items, newest first. Empty when nothing needs the person.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Inbox"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
             "content": {
               "application/problem+json": {
                 "schema": {

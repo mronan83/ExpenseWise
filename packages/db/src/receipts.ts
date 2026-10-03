@@ -102,9 +102,16 @@ export async function findReceiptBySha256(
   return row;
 }
 
-/** The newest receipts first. Call inside withOrg(). */
-export function listReceipts(tx: Transaction, limit: number): Promise<ReceiptRecord[]> {
-  return withUploader(tx).orderBy(desc(receipts.createdAt), desc(receipts.id)).limit(limit);
+/** The newest receipts first, only those in `statuses` when given. Call inside withOrg(). */
+export function listReceipts(
+  tx: Transaction,
+  limit: number,
+  statuses?: readonly ReceiptStatus[],
+): Promise<ReceiptRecord[]> {
+  const query = withUploader(tx);
+  return (statuses ? query.where(inArray(receipts.status, [...statuses])) : query)
+    .orderBy(desc(receipts.createdAt), desc(receipts.id))
+    .limit(limit);
 }
 
 /** These receipts, in no particular order. Call inside withOrg(). */

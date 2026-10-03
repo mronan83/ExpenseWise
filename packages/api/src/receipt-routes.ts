@@ -5,8 +5,10 @@ import { receiptPath, RECEIPT_BUCKET, type ObjectStore } from '@expensewise/stor
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
 import { ProblemError } from './problem.ts';
+import { inboxRoute } from './routes/inbox.ts';
 import {
   comparisonSummary,
+  inboxItem,
   latestRuns,
   normalized,
   receiptDetail,
@@ -51,6 +53,7 @@ export function registerReceiptRoutes(
       getReceiptRoute,
       readReceiptAgainRoute,
       confirmReceiptRoute,
+      inboxRoute,
     ].map((r) => r.getRoutingPath()),
   );
   for (const path of paths) app.use(path, auth);
@@ -166,6 +169,16 @@ export function registerReceiptRoutes(
       },
       200,
     );
+  });
+
+  app.openapi(inboxRoute, async (c) => {
+    const who = await member(c.var.identity.userId);
+    const { receipts, runs, reviews } = await stores().receipts.list(who.orgId, LIST_LIMIT, [
+      'needs_review',
+      'failed',
+    ]);
+    const items = receipts.map((r) => inboxItem(r, runs, reviews)).filter((item) => item !== null);
+    return c.json({ items }, 200);
   });
 
   app.openapi(getReceiptRoute, async (c) => {
