@@ -303,10 +303,34 @@ export const QUESTIONS: readonly Question[] = [
       '1C: each organization chooses in Settings, and you keep an operator switch per model, as a flag, for outages. 2A: every model may be off, since a receipt can always be filled in by hand (ADR-0022). 3A: the fallback is a switch like the others, on by default.',
     affects: ['FR-INT-16', 'FR-INT-08', 'FR-INT-09'],
   },
+  {
+    id: 'Q9',
+    title: 'Where a receipt’s time and address live',
+    ask: 'Time and address from the receipt (FR-INT-17). 1, where: A, on the receipt’s reading and confirmation, the proof, and shown on its expense; B, also on the expense, editable like merchant and date. 2, the address: A, as printed, plus the city and country picked out of it; B, as printed only. 3, the time: A, the local time as printed, with no time zone, as dates are kept; B, a moment in UTC, which needs the time zone of where you were.',
+    why: 'The time settles which trip a shared day’s expense belongs to and, later, which meal it was; the city can suggest the trip, and the country the currency. An editable copy on the expense adds a field that review must check against the receipt (FR-GOV-10).',
+    recommendation:
+      '1A: they are evidence, so they stay with the proof, and a wrong one is corrected on the receipt like any other field. 2A: the printed text keeps the evidence, and the city and country make it useful. 3A: a receipt prints local time and rarely a zone; guessing one would invent data.',
+    affects: ['FR-INT-17', 'FR-INT-01'],
+  },
+  {
+    id: 'Q10',
+    title: 'Whether an emailed receipt always waits for review',
+    ask: 'Email-in (FR-CAP-02): you asked for an emailed receipt or purchase summary to arrive as a pending receipt for review. A: every emailed one waits for you, whatever the reading. B: the same rule as a photo, Ready when the models are sure and Needs a look otherwise. C: B for receipts, A for purchase summaries such as order confirmations.',
+    why: 'Most emailed receipts are typed by a system, so they read cleanly; holding each for review adds a touch per receipt, against fewer than one (BO-1). A purchase summary is weaker proof: it shows what was ordered, not always what was charged.',
+    recommendation:
+      'C. A purchase summary always waits for review, marked as a summary rather than a receipt; a receipt follows the photo rule. Either way, only mail from an address you sign in with is read.',
+    affects: ['FR-CAP-02', 'FR-INT-02'],
+  },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-03',
+    change:
+      'From your messages: a reading also captures the time of purchase and the merchant’s address, either of which may be blank (FR-INT-17, F-46, #53; Q9 on where they live). Email-in now takes any receipt or purchase summary, not only travel emails, and reads only mail from your own addresses (FR-CAP-02, #19; Q10 on whether each waits for review).',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-03',
     change:
