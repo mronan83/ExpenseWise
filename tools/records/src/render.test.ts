@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { BACKLOG } from './backlog.ts';
 import { FEATURES } from './features.ts';
+import { DOMAINS, RULES } from './data-model.ts';
+import { schemaSnapshot } from './schema.ts';
+import { COMPONENTS, SETTINGS } from './architecture.ts';
+import { renderArchitecture } from './render/architecture.ts';
 import { renderBacklog } from './render/backlog.ts';
+import { renderDataModel } from './render/data-model.ts';
 import { inline, type PageContext } from './render/shared.ts';
 import { renderTraceability } from './render/traceability.ts';
 import { REQUIREMENTS } from './requirements.ts';
@@ -65,5 +70,55 @@ describe('inline text', () => {
     expect(inline(ctx, 'backlog', 'See #3 and PR #20, not `#4` or <x>')).toBe(
       'See <a class="ref" href="#item-3">#3</a> and <a href="https://github.com/mronan83/ExpenseWise/pull/20" target="_blank" rel="noopener">PR #20</a>, not <code>#4</code> or &lt;x&gt;',
     );
+  });
+});
+
+describe('the architecture page', () => {
+  const html = renderArchitecture(ctx);
+
+  it('names itself and shows the written half beside what it read', () => {
+    expect(html).toMatch(/^<title>ExpenseWise Technical Architecture<\/title>/);
+    for (const c of COMPONENTS) expect(html).toContain(`<b>${c.name}</b>`);
+    for (const s of SETTINGS) for (const n of s.names) expect(html).toContain(`<code>${n}</code>`);
+  });
+
+  it('lists every API operation in the contract', () => {
+    expect(html).toContain('<code>/v1/trips/{tripId}</code>');
+    expect(html).toContain('<td class="method m-delete">DELETE</td>');
+  });
+
+  it('draws its diagrams for the viewer to render', () => {
+    expect(html).toContain('<pre class="mermaid">flowchart LR');
+    expect(html).toContain('sequenceDiagram');
+  });
+
+  it('says what changed since the last release', () => {
+    expect(html).toContain('Changed in this release');
+  });
+});
+
+describe('the data model page', () => {
+  const html = renderDataModel(ctx);
+  const snapshot = schemaSnapshot();
+
+  it('has a block for every table, in its domain', () => {
+    expect(html).toMatch(/^<title>ExpenseWise Data Model<\/title>/);
+    for (const t of snapshot.tables) {
+      expect(html).toContain(`id="t-${t.name.replace(/\./g, '-')}"`);
+    }
+    for (const d of DOMAINS) expect(html).toContain(`data-filter="${d.name}"`);
+  });
+
+  it('shows each rule with the objects that enforce it', () => {
+    for (const r of RULES) for (const o of r.objects) expect(html).toContain(`<code>${o}</code>`);
+  });
+
+  it('draws the lifecycles from the domain’s own rules', () => {
+    expect(html).toContain('submitted --&gt; approved: report approved');
+    expect(html).toContain('inapproval --&gt; open: return, withdraw');
+  });
+
+  it('notes a column from the comment above it in the schema', () => {
+    expect(html).toContain('A person chose its trip, or chose no trip.');
   });
 });

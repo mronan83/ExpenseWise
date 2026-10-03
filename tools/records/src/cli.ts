@@ -4,13 +4,16 @@ import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { problems } from './integrity.ts';
 import { PAGE_URLS, PRODUCTION_URL, REPOSITORY } from './pages.ts';
+import { renderArchitecture } from './render/architecture.ts';
 import { renderBacklog } from './render/backlog.ts';
+import { renderDataModel } from './render/data-model.ts';
 import type { PageContext } from './render/shared.ts';
 import { renderTraceability } from './render/traceability.ts';
 import { REPO_ROOT } from './repo.ts';
 
 /**
- * Builds both pages for publication after a successful release:
+ * Builds the four pages for publication after a successful release: traceability, backlog,
+ * technical architecture and data model.
  *
  *   pnpm records:pages --out <dir> [--since <previous production commit>]
  *
@@ -35,7 +38,7 @@ const git = (...args: string[]) =>
   execFileSync('git', args, { cwd: REPO_ROOT, encoding: 'utf8' }).trim();
 
 async function main() {
-  if (!values.out) throw new Error('Pass --out <dir> for the two pages.');
+  if (!values.out) throw new Error('Pass --out <dir> for the pages.');
   const found = problems();
   if (found.length > 0) {
     throw new Error(`The records disagree with the code:\n  ${found.join('\n  ')}`);
@@ -83,8 +86,10 @@ async function main() {
   mkdirSync(out, { recursive: true });
   writeFileSync(join(out, 'traceability.html'), renderTraceability(ctx));
   writeFileSync(join(out, 'backlog.html'), renderBacklog(ctx));
+  writeFileSync(join(out, 'architecture.html'), renderArchitecture(ctx));
+  writeFileSync(join(out, 'data-model.html'), renderDataModel(ctx));
   console.log(
-    `Built both pages in ${out}: production ${productionSha.slice(0, 7)}, records ${recordsSha.slice(0, 7)}.`,
+    `Built four pages in ${out}: production ${productionSha.slice(0, 7)}, records ${recordsSha.slice(0, 7)}.`,
   );
 }
 

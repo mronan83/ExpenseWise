@@ -20,6 +20,7 @@
     "db:up": "bash scripts/dev-postgres.sh start",
     "db:down": "bash scripts/dev-postgres.sh stop",
     "db:migrate": "pnpm --filter @expensewise/db migrate",
+    "db:snapshot": "pnpm --filter @expensewise/db snapshot",
     "records:pages": "pnpm --filter @expensewise/records pages"
   },
   "devDependencies": {

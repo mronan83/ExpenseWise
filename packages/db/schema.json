@@ -1,0 +1,2453 @@
+{
+  "tables": [
+    {
+      "name": "ai_provider_keys",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "provider",
+          "type": "ai_provider",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "ciphertext",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "key_hint",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "auth_scheme",
+          "type": "ai_auth_scheme",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "verified_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "updated_by_member_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "ai_provider_keys_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "ai_provider_keys_updated_by_fk",
+          "columns": [
+            "org_id",
+            "updated_by_member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "ai_provider_keys_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "ai_provider_keys_org_provider_key",
+          "columns": [
+            "org_id",
+            "provider"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "ai_provider_keys_hint_short",
+          "definition": "CHECK ((length(key_hint) <= 4))"
+        }
+      ],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "approval_steps",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "report_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "sequence",
+          "type": "integer",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "approver_member_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "decision",
+          "type": "approval_decision",
+          "nullable": false,
+          "default": "'pending'::approval_decision"
+        },
+        {
+          "name": "comment",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "decided_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "approval_steps_approver_fk",
+          "columns": [
+            "org_id",
+            "approver_member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "approval_steps_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "approval_steps_report_fk",
+          "columns": [
+            "org_id",
+            "report_id"
+          ],
+          "table": "reports",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "approval_steps_report_sequence_key",
+          "columns": [
+            "org_id",
+            "report_id",
+            "sequence"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "approval_steps_return_needs_comment",
+          "definition": "CHECK (((decision <> 'returned'::approval_decision) OR (length(TRIM(BOTH FROM COALESCE(comment, ''::text))) > 0)))"
+        }
+      ],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "audit_events",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "sequence",
+          "type": "bigint",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "actor_type",
+          "type": "actor_type",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "actor_id",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "entity_type",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "entity_id",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "action",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "payload",
+          "type": "jsonb",
+          "nullable": false,
+          "default": "'{}'::jsonb"
+        },
+        {
+          "name": "occurred_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "prev_hash",
+          "type": "character(64)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "hash",
+          "type": "character(64)",
+          "nullable": false,
+          "default": null
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "audit_events_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "audit_events_hash_key",
+          "columns": [
+            "hash"
+          ]
+        },
+        {
+          "name": "audit_events_org_sequence_key",
+          "columns": [
+            "org_id",
+            "sequence"
+          ]
+        }
+      ],
+      "checks": [],
+      "indexes": [
+        {
+          "name": "audit_events_entity_idx",
+          "definition": "CREATE INDEX audit_events_entity_idx ON public.audit_events USING btree (org_id, entity_type, entity_id)"
+        }
+      ],
+      "policies": [
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "audit_events_append_only",
+          "definition": "CREATE TRIGGER audit_events_append_only BEFORE DELETE OR UPDATE ON public.audit_events FOR EACH ROW EXECUTE FUNCTION reject_audit_mutation()"
+        },
+        {
+          "name": "audit_events_no_truncate",
+          "definition": "CREATE TRIGGER audit_events_no_truncate BEFORE TRUNCATE ON public.audit_events FOR EACH STATEMENT EXECUTE FUNCTION reject_audit_mutation()"
+        }
+      ],
+      "grants": {
+        "expensewise_app": [
+          "INSERT",
+          "SELECT"
+        ]
+      }
+    },
+    {
+      "name": "categories",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "gl_code",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "tax_code",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "active",
+          "type": "boolean",
+          "nullable": false,
+          "default": "true"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "categories_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "categories_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "categories_org_name_key",
+          "columns": [
+            "org_id",
+            "name"
+          ]
+        }
+      ],
+      "checks": [],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "expenses",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "member_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "trip_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "report_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "category_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "expense_status",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "source",
+          "type": "expense_source",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "merchant",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "transaction_date",
+          "type": "date",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "amount_minor",
+          "type": "bigint",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "currency",
+          "type": "character(3)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "home_amount_minor",
+          "type": "bigint",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "fx_rate",
+          "type": "numeric(20,10)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "fx_rate_date",
+          "type": "date",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "fx_source",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "notes",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "version",
+          "type": "integer",
+          "nullable": false,
+          "default": "1"
+        },
+        {
+          "name": "reversal_of_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "edited_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "trip_pinned",
+          "type": "boolean",
+          "nullable": false,
+          "default": "false"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "expenses_category_fk",
+          "columns": [
+            "org_id",
+            "category_id"
+          ],
+          "table": "categories",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "expenses_member_fk",
+          "columns": [
+            "org_id",
+            "member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "expenses_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "expenses_report_fk",
+          "columns": [
+            "org_id",
+            "report_id"
+          ],
+          "table": "reports",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "expenses_reversal_fk",
+          "columns": [
+            "org_id",
+            "reversal_of_id"
+          ],
+          "table": "expenses",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "expenses_trip_fk",
+          "columns": [
+            "org_id",
+            "trip_id"
+          ],
+          "table": "trips",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "expenses_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "expenses_complete_when_ready",
+          "definition": "CHECK (((status = ANY (ARRAY['processing'::expense_status, 'needs_review'::expense_status])) OR ((amount_minor IS NOT NULL) AND (currency IS NOT NULL) AND (transaction_date IS NOT NULL))))"
+        },
+        {
+          "name": "expenses_currency_iso",
+          "definition": "CHECK (((currency IS NULL) OR (currency ~ '^[A-Z]{3}$'::text)))"
+        },
+        {
+          "name": "expenses_fx_complete",
+          "definition": "CHECK ((((fx_rate IS NULL) AND (fx_rate_date IS NULL) AND (fx_source IS NULL)) OR ((fx_rate IS NOT NULL) AND (fx_rate_date IS NOT NULL) AND (fx_source IS NOT NULL) AND (home_amount_minor IS NOT NULL))))"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "expenses_member_date_idx",
+          "definition": "CREATE INDEX expenses_member_date_idx ON public.expenses USING btree (org_id, member_id, transaction_date)"
+        },
+        {
+          "name": "expenses_report_idx",
+          "definition": "CREATE INDEX expenses_report_idx ON public.expenses USING btree (org_id, report_id)"
+        },
+        {
+          "name": "expenses_status_idx",
+          "definition": "CREATE INDEX expenses_status_idx ON public.expenses USING btree (org_id, status)"
+        },
+        {
+          "name": "expenses_trip_idx",
+          "definition": "CREATE INDEX expenses_trip_idx ON public.expenses USING btree (org_id, trip_id)"
+        }
+      ],
+      "policies": [
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "extraction_runs",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "receipt_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "extractor",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "model",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "prompt_version",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "schema_version",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "outcome",
+          "type": "extraction_outcome",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "output",
+          "type": "jsonb",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "field_confidence",
+          "type": "jsonb",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "error",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "latency_ms",
+          "type": "integer",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "input_tokens",
+          "type": "integer",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "output_tokens",
+          "type": "integer",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "cost_micro_usd",
+          "type": "bigint",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "request_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "extraction_runs_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "extraction_runs_receipt_fk",
+          "columns": [
+            "org_id",
+            "receipt_id"
+          ],
+          "table": "receipts",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "extraction_runs_request_key",
+          "columns": [
+            "org_id",
+            "receipt_id",
+            "model",
+            "request_id"
+          ]
+        }
+      ],
+      "checks": [],
+      "indexes": [
+        {
+          "name": "extraction_runs_receipt_idx",
+          "definition": "CREATE INDEX extraction_runs_receipt_idx ON public.extraction_runs USING btree (org_id, receipt_id)"
+        }
+      ],
+      "policies": [
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "member_sign_ins",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "member_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "user_id",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "member_sign_ins_member_fk",
+          "columns": [
+            "org_id",
+            "member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "member_sign_ins_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "member_sign_ins_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "member_sign_ins_user_key",
+          "columns": [
+            "user_id"
+          ]
+        }
+      ],
+      "checks": [],
+      "indexes": [
+        {
+          "name": "member_sign_ins_member_idx",
+          "definition": "CREATE INDEX member_sign_ins_member_idx ON public.member_sign_ins USING btree (org_id, member_id)"
+        }
+      ],
+      "policies": [
+        {
+          "name": "own_sign_ins",
+          "command": "SELECT",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(user_id = app_current_user())",
+          "check": null
+        },
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT"
+        ]
+      }
+    },
+    {
+      "name": "members",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "user_id",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "email",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "display_name",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "role",
+          "type": "member_role",
+          "nullable": false,
+          "default": "'member'::member_role"
+        },
+        {
+          "name": "manager_member_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "members_manager_fk",
+          "columns": [
+            "org_id",
+            "manager_member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "members_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "members_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "members_org_user_key",
+          "columns": [
+            "org_id",
+            "user_id"
+          ]
+        }
+      ],
+      "checks": [],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "own_memberships",
+          "command": "SELECT",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(EXISTS ( SELECT 1\n   FROM member_sign_ins s\n  WHERE ((s.org_id = members.org_id) AND (s.member_id = members.id) AND (s.user_id = app_current_user()))))",
+          "check": null
+        },
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "mileage_logs",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "expense_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "method",
+          "type": "mileage_method",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "travel_date",
+          "type": "date",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "purpose",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "origin",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "destination",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "waypoints",
+          "type": "jsonb",
+          "nullable": false,
+          "default": "'[]'::jsonb"
+        },
+        {
+          "name": "distance",
+          "type": "numeric(10,2)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "unit",
+          "type": "distance_unit",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "rate_currency",
+          "type": "character(3)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "rate_per_unit",
+          "type": "numeric(12,4)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "rate_effective_from",
+          "type": "date",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "rate_source",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "mileage_logs_expense_fk",
+          "columns": [
+            "org_id",
+            "expense_id"
+          ],
+          "table": "expenses",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "mileage_logs_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "mileage_logs_expense_key",
+          "columns": [
+            "org_id",
+            "expense_id"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "mileage_logs_distance_nonnegative",
+          "definition": "CHECK ((distance >= (0)::numeric))"
+        },
+        {
+          "name": "mileage_logs_rate_currency_iso",
+          "definition": "CHECK ((rate_currency ~ '^[A-Z]{3}$'::text))"
+        }
+      ],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "ops.heartbeat",
+      "rls": {
+        "enabled": true,
+        "forced": false
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "smallint",
+          "nullable": false,
+          "default": "1"
+        },
+        {
+          "name": "beat_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "source",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [],
+      "uniques": [],
+      "checks": [
+        {
+          "name": "heartbeat_id_check",
+          "definition": "CHECK ((id = 1))"
+        }
+      ],
+      "indexes": [],
+      "policies": [],
+      "triggers": [],
+      "grants": {}
+    },
+    {
+      "name": "organizations",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "home_currency",
+          "type": "character(3)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [],
+      "uniques": [],
+      "checks": [
+        {
+          "name": "organizations_home_currency_iso",
+          "definition": "CHECK ((home_currency ~ '^[A-Z]{3}$'::text))"
+        }
+      ],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(id = app_current_org())",
+          "check": "(id = app_current_org())"
+        }
+      ],
+      "triggers": [],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "outbox_events",
+      "rls": {
+        "enabled": true,
+        "forced": false
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "topic",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "payload",
+          "type": "jsonb",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "claimed_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "published_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "attempts",
+          "type": "integer",
+          "nullable": false,
+          "default": "0"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "outbox_events_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        }
+      ],
+      "uniques": [],
+      "checks": [],
+      "indexes": [
+        {
+          "name": "outbox_events_unpublished_idx",
+          "definition": "CREATE INDEX outbox_events_unpublished_idx ON public.outbox_events USING btree (created_at) WHERE (published_at IS NULL)"
+        }
+      ],
+      "policies": [
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [],
+      "grants": {
+        "expensewise_app": [
+          "INSERT",
+          "SELECT"
+        ]
+      }
+    },
+    {
+      "name": "receipt_reviews",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "receipt_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "member_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "request_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "model",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "merchant",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "transaction_date",
+          "type": "date",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "currency",
+          "type": "character(3)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "total_minor",
+          "type": "bigint",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "tax_minor",
+          "type": "bigint",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "tip_minor",
+          "type": "bigint",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "corrections",
+          "type": "jsonb",
+          "nullable": false,
+          "default": "'[]'::jsonb"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "receipt_reviews_member_fk",
+          "columns": [
+            "org_id",
+            "member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "receipt_reviews_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "receipt_reviews_receipt_fk",
+          "columns": [
+            "org_id",
+            "receipt_id"
+          ],
+          "table": "receipts",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "receipt_reviews_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "receipt_reviews_amounts_not_negative",
+          "definition": "CHECK (((total_minor >= 0) AND (COALESCE(tax_minor, (0)::bigint) >= 0) AND (COALESCE(tip_minor, (0)::bigint) >= 0)))"
+        },
+        {
+          "name": "receipt_reviews_currency_code",
+          "definition": "CHECK ((currency ~ '^[A-Z]{3}$'::text))"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "receipt_reviews_receipt_idx",
+          "definition": "CREATE INDEX receipt_reviews_receipt_idx ON public.receipt_reviews USING btree (org_id, receipt_id)"
+        }
+      ],
+      "policies": [
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [],
+      "grants": {
+        "expensewise_app": [
+          "INSERT",
+          "SELECT"
+        ]
+      }
+    },
+    {
+      "name": "receipts",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "member_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "expense_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "source",
+          "type": "expense_source",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "storage_key",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "content_type",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "byte_size",
+          "type": "integer",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "sha256",
+          "type": "character(64)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "perceptual_hash",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "receipt_status",
+          "nullable": false,
+          "default": "'processing'::receipt_status"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "receipts_expense_fk",
+          "columns": [
+            "org_id",
+            "expense_id"
+          ],
+          "table": "expenses",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "receipts_member_fk",
+          "columns": [
+            "org_id",
+            "member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "receipts_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "receipts_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "receipts_org_sha256_key",
+          "columns": [
+            "org_id",
+            "sha256"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "receipts_byte_size_positive",
+          "definition": "CHECK ((byte_size > 0))"
+        },
+        {
+          "name": "receipts_sha256_hex",
+          "definition": "CHECK ((sha256 ~ '^[0-9a-f]{64}$'::text))"
+        }
+      ],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "reports",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "member_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "trip_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "title",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "report_status",
+          "nullable": false,
+          "default": "'open'::report_status"
+        },
+        {
+          "name": "currency",
+          "type": "character(3)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "submitted_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "approved_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "settled_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "reports_member_fk",
+          "columns": [
+            "org_id",
+            "member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "reports_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "reports_trip_fk",
+          "columns": [
+            "org_id",
+            "trip_id"
+          ],
+          "table": "trips",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "reports_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "reports_currency_iso",
+          "definition": "CHECK ((currency ~ '^[A-Z]{3}$'::text))"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "reports_member_status_idx",
+          "definition": "CREATE INDEX reports_member_status_idx ON public.reports USING btree (org_id, member_id, status)"
+        }
+      ],
+      "policies": [
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "trips",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "member_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "purpose",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "start_date",
+          "type": "date",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "end_date",
+          "type": "date",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "primary_city",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "trip_status",
+          "nullable": false,
+          "default": "'planned'::trip_status"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "trips_member_fk",
+          "columns": [
+            "org_id",
+            "member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "trips_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "trips_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "trips_dates_ordered",
+          "definition": "CHECK ((end_date >= start_date))"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "trips_member_dates_idx",
+          "definition": "CREATE INDEX trips_member_dates_idx ON public.trips USING btree (org_id, member_id, start_date)"
+        }
+      ],
+      "policies": [
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    }
+  ],
+  "views": [],
+  "enums": [
+    {
+      "name": "actor_type",
+      "values": [
+        "user",
+        "system"
+      ]
+    },
+    {
+      "name": "ai_auth_scheme",
+      "values": [
+        "api_key",
+        "bearer"
+      ]
+    },
+    {
+      "name": "ai_provider",
+      "values": [
+        "anthropic",
+        "openai"
+      ]
+    },
+    {
+      "name": "approval_decision",
+      "values": [
+        "pending",
+        "approved",
+        "returned"
+      ]
+    },
+    {
+      "name": "distance_unit",
+      "values": [
+        "mi",
+        "km"
+      ]
+    },
+    {
+      "name": "expense_source",
+      "values": [
+        "camera",
+        "upload",
+        "email",
+        "card",
+        "manual",
+        "mileage"
+      ]
+    },
+    {
+      "name": "expense_status",
+      "values": [
+        "processing",
+        "needs_review",
+        "ready",
+        "submitted",
+        "approved",
+        "settled"
+      ]
+    },
+    {
+      "name": "extraction_outcome",
+      "values": [
+        "confident",
+        "unsure",
+        "failed"
+      ]
+    },
+    {
+      "name": "member_role",
+      "values": [
+        "member",
+        "approver",
+        "finance_admin",
+        "owner",
+        "auditor"
+      ]
+    },
+    {
+      "name": "mileage_method",
+      "values": [
+        "manual",
+        "route",
+        "gps"
+      ]
+    },
+    {
+      "name": "receipt_status",
+      "values": [
+        "processing",
+        "extracted",
+        "needs_review",
+        "failed"
+      ]
+    },
+    {
+      "name": "report_status",
+      "values": [
+        "open",
+        "submitted",
+        "in_approval",
+        "approved",
+        "settled"
+      ]
+    },
+    {
+      "name": "trip_status",
+      "values": [
+        "planned",
+        "active",
+        "closed"
+      ]
+    }
+  ],
+  "functions": [
+    {
+      "name": "app_current_org",
+      "arguments": "",
+      "returns": "uuid",
+      "security": "invoker",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
+    },
+    {
+      "name": "app_current_user",
+      "arguments": "",
+      "returns": "text",
+      "security": "invoker",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
+    },
+    {
+      "name": "claim_outbox_batch",
+      "arguments": "batch_size integer",
+      "returns": "SETOF outbox_events",
+      "security": "definer",
+      "volatility": "volatile",
+      "executableBy": [
+        "expensewise_relay"
+      ]
+    },
+    {
+      "name": "mark_outbox_published",
+      "arguments": "event_ids uuid[]",
+      "returns": "integer",
+      "security": "definer",
+      "volatility": "volatile",
+      "executableBy": [
+        "expensewise_relay"
+      ]
+    },
+    {
+      "name": "reject_audit_mutation",
+      "arguments": "",
+      "returns": "trigger",
+      "security": "invoker",
+      "volatility": "volatile",
+      "executableBy": []
+    }
+  ],
+  "roles": [
+    {
+      "name": "expensewise_app",
+      "superuser": false,
+      "bypassRls": false
+    },
+    {
+      "name": "expensewise_relay",
+      "superuser": false,
+      "bypassRls": false
+    }
+  ]
+}

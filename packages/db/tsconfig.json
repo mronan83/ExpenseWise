@@ -4,5 +4,12 @@
     "lib": ["ES2023", "DOM"],
     "types": ["node"]
   },
-  "include": ["drizzle.config.ts", "src", "test", "vitest.config.ts", "vitest.unit.config.ts"]
+  "include": [
+    "drizzle.config.ts",
+    "scripts",
+    "src",
+    "test",
+    "vitest.config.ts",
+    "vitest.unit.config.ts"
+  ]
 }

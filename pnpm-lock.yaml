@@ -256,6 +256,9 @@ importers:
 
   tools/records:
     dependencies:
+      '@expensewise/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@expensewise/flags':
         specifier: workspace:*
         version: link:../../packages/flags
