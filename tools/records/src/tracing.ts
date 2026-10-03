@@ -293,6 +293,10 @@ export const QUESTIONS: readonly Question[] = [
     recommendation:
       'A. The type says what was bought and carries its rules; the category carries the GL and tax codes and is what summaries total. A person picks one thing, never two, and the reader suggests one thing. Each organization starts from a ready-made set that owners and finance admins can rename, add to or retire.',
     affects: ['FR-EXP-11', 'FR-INT-10', 'FR-INS-03'],
+    answer: {
+      date: '2026-10-03',
+      text: 'Two trees: categories and types are separate lists, and a category filters the types available to choose from (FR-EXP-11).',
+    },
   },
   {
     id: 'Q8',
@@ -302,6 +306,10 @@ export const QUESTIONS: readonly Question[] = [
     recommendation:
       '1C: each organization chooses in Settings, and you keep an operator switch per model, as a flag, for outages. 2A: every model may be off, since a receipt can always be filled in by hand (ADR-0022). 3A: the fallback is a switch like the others, on by default.',
     affects: ['FR-INT-16', 'FR-INT-08', 'FR-INT-09'],
+    answer: {
+      date: '2026-10-03',
+      text: '1C and 2A: each organization switches models in Settings and you keep an operator switch; every model may be off. OpenAI is no longer a fallback but a model like the others, on or off, and any model can be set as primary (FR-INT-16). New Q11: what a model that is on but not primary does.',
+    },
   },
   {
     id: 'Q9',
@@ -311,6 +319,10 @@ export const QUESTIONS: readonly Question[] = [
     recommendation:
       '1A: they are evidence, so they stay with the proof, and a wrong one is corrected on the receipt like any other field. 2A: the printed text keeps the evidence, and the city and country make it useful. 3A: a receipt prints local time and rarely a zone; guessing one would invent data.',
     affects: ['FR-INT-17', 'FR-INT-01'],
+    answer: {
+      date: '2026-10-03',
+      text: 'On the receipt and on the expense; the address as printed, with its city and country (2A); the time as printed, with its time zone worked out from the address where possible, and set by the person where it can’t be, if they want (FR-INT-17).',
+    },
   },
   {
     id: 'Q10',
@@ -320,11 +332,30 @@ export const QUESTIONS: readonly Question[] = [
     recommendation:
       'C. A purchase summary always waits for review, marked as a summary rather than a receipt; a receipt follows the photo rule. Either way, only mail from an address you sign in with is read.',
     affects: ['FR-CAP-02', 'FR-INT-02'],
+    answer: {
+      date: '2026-10-03',
+      text: 'C: a purchase summary always waits for review; a receipt follows the photo rule (FR-CAP-02).',
+    },
+  },
+  {
+    id: 'Q11',
+    title: 'What a model that is on, but not primary, does',
+    ask: 'AI model switches (FR-INT-16), after your answer to Q8: the primary reads every receipt. A model that is on but not primary: A, also reads every receipt, and a receipt is Ready only when it agrees with the primary, as the two Claude models do today; B, reads only when the primary can’t, in an order you set; C, does nothing until it is made primary.',
+    why: 'A pays for a second reading of every receipt; B costs nothing until the primary fails, from an outage or no credit, and keeps receipts moving; C is simplest, but a primary outage leaves every receipt for you to fill in.',
+    recommendation:
+      'B, with A as a setting you turn on while choosing a primary (#21), so the comparison stays available without paying for it every day.',
+    affects: ['FR-INT-16', 'FR-INT-02', 'FR-INT-08'],
   },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-03',
+    change:
+      'From your answers to Q7–Q10: categories and types are two trees, the category filtering the types (FR-EXP-11; #51 can start). Any AI model can be primary, and OpenAI is no longer a fallback (FR-INT-16; new Q11 on what the other models that are on do). Time and address go on the receipt and the expense, with a time zone from the address or set by you (FR-INT-17; #53 can start). A purchase summary always waits for review (FR-CAP-02).',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-03',
     change:
