@@ -542,6 +542,14 @@
               "confidence",
               "assumed"
             ]
+          },
+          "expenseId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The expense this receipt proves (FR-EXP-08)."
           }
         },
         "required": [
@@ -554,7 +562,8 @@
           "createdAt",
           "merchant",
           "date",
-          "total"
+          "total",
+          "expenseId"
         ]
       },
       "FileReceipt": {
@@ -1354,6 +1363,278 @@
         "required": [
           "model"
         ]
+      },
+      "ExpenseList": {
+        "type": "object",
+        "properties": {
+          "expenses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExpenseSummary"
+            }
+          }
+        },
+        "required": [
+          "expenses"
+        ]
+      },
+      "ExpenseSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "processing",
+              "needs_review",
+              "ready",
+              "submitted",
+              "approved",
+              "settled"
+            ],
+            "description": "processing while its receipt is read; ready when its receipt is Ready and merchant, date, currency and amount are filled in; needs_review otherwise. Submitted, approved and settled follow its report; approved is locked (FR-EXP-03)."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "camera",
+              "upload",
+              "email",
+              "card",
+              "manual",
+              "mileage"
+            ]
+          },
+          "owner": {
+            "type": "string",
+            "description": "The member whose expense it is."
+          },
+          "merchant": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "amount": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "amountMinor": {
+                "type": "integer",
+                "description": "Integer minor units, e.g. cents."
+              },
+              "currency": {
+                "type": "string",
+                "example": "USD"
+              },
+              "decimal": {
+                "type": "string",
+                "example": "6.50",
+                "description": "The same amount, for display."
+              }
+            },
+            "required": [
+              "amountMinor",
+              "currency",
+              "decimal"
+            ]
+          },
+          "receiptId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Its receipt, the proof."
+          },
+          "matchesReceipt": {
+            "type": [
+              "boolean",
+              "null"
+            ],
+            "description": "Whether merchant, date, currency and amount match what its receipt shows. Null without a receipt."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "source",
+          "owner",
+          "merchant",
+          "date",
+          "amount",
+          "receiptId",
+          "matchesReceipt",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "ExpenseDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ExpenseSummary"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "editable": {
+                "type": "boolean",
+                "description": "Whether it can be edited now: while it needs review or is Ready."
+              },
+              "editedAt": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time",
+                "description": "When a person last edited it. A reading never overwrites an edit."
+              },
+              "proof": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "receiptId": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "processing",
+                      "extracted",
+                      "needs_review",
+                      "failed"
+                    ]
+                  },
+                  "confirmedBy": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Who confirmed the receipt’s reading, if anyone."
+                  },
+                  "merchant": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "date": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "amount": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "amountMinor": {
+                        "type": "integer",
+                        "description": "Integer minor units, e.g. cents."
+                      },
+                      "currency": {
+                        "type": "string",
+                        "example": "USD"
+                      },
+                      "decimal": {
+                        "type": "string",
+                        "example": "6.50",
+                        "description": "The same amount, for display."
+                      }
+                    },
+                    "required": [
+                      "amountMinor",
+                      "currency",
+                      "decimal"
+                    ]
+                  },
+                  "differences": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "merchant",
+                        "date",
+                        "currency",
+                        "amount"
+                      ]
+                    },
+                    "description": "Where the expense differs from its receipt."
+                  }
+                },
+                "required": [
+                  "receiptId",
+                  "status",
+                  "confirmedBy",
+                  "merchant",
+                  "date",
+                  "amount",
+                  "differences"
+                ],
+                "description": "What its receipt shows (FR-EXP-08)."
+              }
+            },
+            "required": [
+              "editable",
+              "editedAt",
+              "proof"
+            ]
+          }
+        ]
+      },
+      "EditExpense": {
+        "type": "object",
+        "properties": {
+          "merchant": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "The merchant.",
+            "example": "Blue Bottle Coffee"
+          },
+          "date": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "The transaction date, YYYY-MM-DD.",
+            "example": "2026-09-24"
+          },
+          "currency": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "An ISO 4217 code. The amount keeps its written value.",
+            "example": "USD"
+          },
+          "amount": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "A plain decimal in the expense’s currency.",
+            "example": "6.50"
+          }
+        },
+        "additionalProperties": false
       }
     },
     "parameters": {}
@@ -2519,6 +2800,242 @@
           },
           "503": {
             "description": "Sign-in, the database or file storage is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/expenses": {
+      "get": {
+        "tags": [
+          "Expenses"
+        ],
+        "summary": "The organization’s expenses, newest first",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The newest 100 expenses.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenseList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/expenses/{expenseId}": {
+      "get": {
+        "tags": [
+          "Expenses"
+        ],
+        "summary": "One expense, with what its receipt shows",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The expense.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenseDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such expense in this organization.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Expenses"
+        ],
+        "summary": "Edit an expense",
+        "description": "FR-EXP-09, ADR-0022. Changes the fields sent and records who changed what. A reading of the receipt never overwrites an edit; where the expense now differs from its receipt, proof.differences says so.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditExpense"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The expense as it is now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenseDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such expense in this organization.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It can’t be edited now: its receipt is being read, or it is submitted or later.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not valid; field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
             "content": {
               "application/problem+json": {
                 "schema": {

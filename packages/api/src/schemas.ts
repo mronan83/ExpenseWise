@@ -189,6 +189,11 @@ export const ReceiptSummarySchema = z
     merchant: z.string().nullable(),
     date: z.string().nullable(),
     total: MoneyFieldSchema,
+    expenseId: z
+      .string()
+      .uuid()
+      .nullable()
+      .openapi({ description: 'The expense this receipt proves (FR-EXP-08).' }),
   })
   .openapi('ReceiptSummary');
 
@@ -357,3 +362,95 @@ export const FileReceiptSchema = z
     ...ReceiptFileSchema,
   })
   .openapi('FileReceipt');
+
+// Expenses (FR-EXP-01, FR-EXP-08, FR-EXP-09, ADR-0022)
+
+export const ExpenseStatusSchema = z
+  .enum(['processing', 'needs_review', 'ready', 'submitted', 'approved', 'settled'])
+  .openapi({
+    description:
+      'processing while its receipt is read; ready when its receipt is Ready and merchant, ' +
+      'date, currency and amount are filled in; needs_review otherwise. Submitted, approved ' +
+      'and settled follow its report; approved is locked (FR-EXP-03).',
+  });
+
+const ExpenseAmountSchema = z
+  .object({
+    amountMinor: z.number().int().openapi({ description: 'Integer minor units, e.g. cents.' }),
+    currency: z.string().openapi({ example: 'USD' }),
+    decimal: z.string().openapi({ example: '6.50', description: 'The same amount, for display.' }),
+  })
+  .nullable();
+
+const ExpenseFieldSchema = z.enum(['merchant', 'date', 'currency', 'amount']);
+
+export const ExpenseSummarySchema = z
+  .object({
+    id: z.string().uuid(),
+    status: ExpenseStatusSchema,
+    source: z.enum(['camera', 'upload', 'email', 'card', 'manual', 'mileage']),
+    owner: z.string().openapi({ description: 'The member whose expense it is.' }),
+    merchant: z.string().nullable(),
+    date: z.string().nullable(),
+    amount: ExpenseAmountSchema,
+    receiptId: z.string().uuid().nullable().openapi({ description: 'Its receipt, the proof.' }),
+    matchesReceipt: z
+      .boolean()
+      .nullable()
+      .openapi({
+        description:
+          'Whether merchant, date, currency and amount match what its receipt shows. Null without ' +
+          'a receipt.',
+      }),
+    createdAt: z.string().datetime(),
+    updatedAt: z.string().datetime(),
+  })
+  .openapi('ExpenseSummary');
+
+export const ExpenseDetailSchema = ExpenseSummarySchema.extend({
+  editable: z
+    .boolean()
+    .openapi({ description: 'Whether it can be edited now: while it needs review or is Ready.' }),
+  editedAt: z
+    .string()
+    .datetime()
+    .nullable()
+    .openapi({ description: 'When a person last edited it. A reading never overwrites an edit.' }),
+  proof: z
+    .object({
+      receiptId: z.string().uuid(),
+      status: ReceiptStatusSchema,
+      confirmedBy: z
+        .string()
+        .nullable()
+        .openapi({ description: 'Who confirmed the receipt’s reading, if anyone.' }),
+      merchant: z.string().nullable(),
+      date: z.string().nullable(),
+      amount: ExpenseAmountSchema,
+      differences: z
+        .array(ExpenseFieldSchema)
+        .openapi({ description: 'Where the expense differs from its receipt.' }),
+    })
+    .nullable()
+    .openapi({ description: 'What its receipt shows (FR-EXP-08).' }),
+}).openapi('ExpenseDetail');
+
+export const ExpenseListSchema = z
+  .object({ expenses: z.array(ExpenseSummarySchema) })
+  .openapi('ExpenseList');
+
+const edited = (description: string, example: string) =>
+  z.string().max(200).optional().openapi({ description, example });
+
+export const EditExpenseSchema = z
+  .object({
+    merchant: edited('The merchant.', 'Blue Bottle Coffee'),
+    date: edited('The transaction date, YYYY-MM-DD.', '2026-09-24'),
+    currency: edited('An ISO 4217 code. The amount keeps its written value.', 'USD'),
+    amount: edited('A plain decimal in the expense’s currency.', '6.50'),
+  })
+  .strict()
+  .refine((e) => Object.values(e).some((v) => v !== undefined), {
+    message: 'Change at least one field.',
+  })
+  .openapi('EditExpense');

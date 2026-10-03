@@ -234,6 +234,9 @@ importers:
       '@expensewise/db':
         specifier: workspace:*
         version: link:../db
+      '@expensewise/domain':
+        specifier: workspace:*
+        version: link:../domain
       '@expensewise/extraction':
         specifier: workspace:*
         version: link:../extraction

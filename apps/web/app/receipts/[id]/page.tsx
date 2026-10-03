@@ -138,7 +138,7 @@ export default function ReceiptPage() {
         {receipt ? (
           <>
             <Verdict receipt={receipt} stale={reading && stale} />
-            {receipt.status === 'needs_review' ? (
+            {receipt.status === 'needs_review' || receipt.status === 'failed' ? (
               <Review
                 key={receipt.readings.map((r) => r.model + r.state).join()}
                 receipt={receipt}
@@ -156,6 +156,14 @@ export default function ReceiptPage() {
               >
                 {busy ? 'Working…' : 'Read again'}
               </button>
+              {receipt.expenseId ? (
+                <Link
+                  href={`/expenses/${receipt.expenseId}`}
+                  className="text-sm font-semibold text-carbon underline"
+                >
+                  Its expense
+                </Link>
+              ) : null}
               <span className="text-xs text-ink-2">
                 Added by {receipt.uploadedBy}, {new Date(receipt.createdAt).toLocaleString()}
               </span>
@@ -285,7 +293,8 @@ function Review({
   // Start from the reading the headline shows: the most capable compared model, else fallback.
   const preferred =
     [...choices].reverse().find((r) => r.role === 'compared') ?? choices[0] ?? undefined;
-  const [model, setModel] = useState(preferred?.model ?? '');
+  // With no reading to start from, any model's failed reading stands in: every field is typed.
+  const [model, setModel] = useState(preferred?.model ?? receipt.readings[0]?.model ?? '');
   const chosen = choices.find((r) => r.model === model);
   const [editing, setEditing] = useState(choices.length === 0);
   const [draft, setDraft] = useState(() => draftOf(chosen));

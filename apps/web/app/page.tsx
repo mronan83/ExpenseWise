@@ -4,7 +4,7 @@ import { flags } from '../lib/flags';
 
 const destinations = [
   { label: 'Home', current: true },
-  { label: 'Expenses' },
+  { label: 'Expenses', href: '/expenses' },
   { label: 'Capture', primary: true },
   { label: 'Trips' },
   { label: 'Reports' },
@@ -62,6 +62,10 @@ export default async function HomePage() {
                 <span className="sr-only">{d.label}</span>
               </Link>
             </span>
+          ) : 'href' in d ? (
+            <Link key={d.label} href={d.href} className="font-semibold text-ink-2">
+              {d.label}
+            </Link>
           ) : (
             <span
               key={d.label}

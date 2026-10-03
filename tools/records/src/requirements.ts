@@ -311,11 +311,15 @@ export const FUNCTIONAL: readonly Requirement[] = [
     sources: ['journeys §4.6', 'journeys §4.5', 'roadmap inc 1'],
     priority: 'Must',
     phase: 'P1',
-    status: 'Planned',
+    status: 'Partial',
     capabilities: ['Expense management · Expenses'],
     features: ['F-09', 'F-26'],
-    backlog: [6],
-    note: "Increment 1's exit test: a receipt is filed as an expense within 30 seconds.",
+    checks: [
+      'db/expenses.int › is Ready with the reading when the receipt is Ready, together with its audit event',
+      'db/expenses.int › needs review, filled in as read, while its receipt needs a look; failed leaves it empty',
+    ],
+    shortfalls: ['#16'],
+    note: "Increment 1's exit test: a receipt is filed as an expense within 30 seconds. Filing to the trip arrives with trips (#16).",
   },
   {
     id: 'FR-EXP-02',
@@ -336,7 +340,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
     phase: 'P1',
     status: 'Planned',
     features: ['F-26'],
-    backlog: [6],
+    backlog: [24],
     note: 'The lifecycle rules are built and tested (F-26); no expense uses them yet.',
   },
   {
@@ -391,9 +395,12 @@ export const FUNCTIONAL: readonly Requirement[] = [
     sources: ['owner 2026-10-03'],
     priority: 'Must',
     phase: 'P1',
-    status: 'Planned',
+    status: 'Verified',
     features: ['F-09'],
-    backlog: [6],
+    checks: [
+      'db/expenses.int › exists from capture, processing and linked to its receipt as proof',
+      'api/expenses › edits an expense and shows where it now differs from its receipt',
+    ],
   },
   {
     id: 'FR-EXP-09',
@@ -401,9 +408,13 @@ export const FUNCTIONAL: readonly Requirement[] = [
     sources: ['owner 2026-10-03', 'journeys §4.5'],
     priority: 'Must',
     phase: 'P1',
-    status: 'Planned',
+    status: 'Verified',
     features: ['F-09'],
-    backlog: [6],
+    checks: [
+      'db/expenses.int › keeps a person’s edit over any later reading, and is Ready once the receipt is',
+      'api/expenses › refuses an edit while the receipt is read, or once submitted',
+      'domain/expense-values',
+    ],
   },
 
   // Governance
@@ -1260,8 +1271,8 @@ export const NON_FUNCTIONAL: readonly Requirement[] = [
     priority: 'Should',
     phase: 'P1',
     status: 'Planned',
-    backlog: [6],
-    note: 'Readings already say why a receipt is Ready or needs a look.',
+    backlog: [9],
+    note: 'Readings say why a receipt is Ready or needs a look, and each expense why it is (#6); the inbox gathers them (#9).',
   },
   {
     id: 'NFR-UX-05',

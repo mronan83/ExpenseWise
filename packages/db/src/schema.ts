@@ -225,6 +225,11 @@ export const expenses = pgTable(
     fxRateDate: date('fx_rate_date', { mode: 'string' }),
     fxSource: text('fx_source'),
     notes: text('notes'),
+    /**
+     * When a person last edited the values. From then on a reading of the receipt never
+     * overwrites them (ADR-0022); a difference from the receipt shows instead.
+     */
+    editedAt: timestamp('edited_at', { withTimezone: true }),
     /** Corrections to approved expenses are a reversal plus a new version. */
     version: integer('version').notNull().default(1),
     reversalOfId: uuid('reversal_of_id'),

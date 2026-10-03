@@ -1,3 +1,4 @@
+import type { ExpenseValues } from '@expensewise/domain';
 import { createHash } from 'node:crypto';
 import {
   RECEIPT_READ_REQUESTED,
@@ -8,20 +9,21 @@ import {
 } from '@expensewise/db';
 import {
   COMPARISON_MODELS,
+  type DocumentMediaType,
+  type ExtractionRun,
+  type Extractor,
   FALLBACK_MODEL,
   isAutoReady,
+  type ModelId,
   MODELS,
+  type NormalizedExtraction,
   normalizeExtraction,
   PROMPT_VERSION,
   ProviderHttpError,
   readingDifferences,
   ReceiptExtractionSchema,
   SCHEMA_VERSION,
-  type DocumentMediaType,
-  type ExtractionRun,
-  type Extractor,
-  type ModelId,
-  type NormalizedExtraction,
+  valuesOfReading,
 } from '@expensewise/extraction';
 import { NonRetriableError, type Inngest } from 'inngest';
 
@@ -46,7 +48,13 @@ export interface ReceiptReadingPorts {
   settle(
     orgId: string,
     receiptId: string,
-    outcome: { status: ReceiptStatus; requestId: string; detail: Record<string, unknown> },
+    outcome: {
+      status: ReceiptStatus;
+      requestId: string;
+      detail: Record<string, unknown>;
+      /** What the reading would file the receipt's expense with (ADR-0022). */
+      values: ExpenseValues | null;
+    },
   ): Promise<void>;
 }
 
@@ -263,9 +271,13 @@ export async function settleReading(
       : first && second && differences.length === 0 && isAutoReady(first) && isAutoReady(second)
         ? 'extracted'
         : 'needs_review';
+  // The expense is filed with the most capable reading there is, else the fallback's (ADR-0022).
+  const best =
+    [...readings].reverse().find(Boolean) ?? (usedFallback ? readingOf(fallbackRun) : null);
   await ports.settle(orgId, receiptId, {
     status,
     requestId,
+    values: best ? valuesOfReading(best) : null,
     detail: {
       differences,
       readings: Object.fromEntries([

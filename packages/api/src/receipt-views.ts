@@ -209,6 +209,7 @@ export function receiptSummary(
     merchant: confirmed ? confirmed.merchant : (best?.merchant?.value ?? null),
     date: confirmed ? confirmed.date : (best?.date?.value ?? null),
     total: confirmed ? confirmed.total : (best?.total ?? null),
+    expenseId: receipt.expenseId,
   };
 }
 

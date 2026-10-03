@@ -85,6 +85,13 @@
       "when": 1790989759587,
       "tag": "0011_receipt_reviews_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1790994945019,
+      "tag": "0012_expense_edited_at",
+      "breakpoints": true
     }
   ]
 }

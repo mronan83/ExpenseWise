@@ -57,6 +57,7 @@ function fakeReceipts() {
         ...input,
         uploadedBy: 'riley',
         status: 'processing',
+        expenseId: null,
         createdAt: NOW,
       };
       receipts.unshift(receipt);
@@ -77,7 +78,9 @@ function fakeReceipts() {
     confirm: (_org, id, review) => {
       const i = receipts.findIndex((r) => r.id === id);
       if (i === -1) return Promise.resolve('missing');
-      if (receipts[i]!.status !== 'needs_review') return Promise.resolve('not_waiting');
+      if (!['needs_review', 'failed'].includes(receipts[i]!.status)) {
+        return Promise.resolve('not_waiting');
+      }
       const latest = runs
         .filter((r) => r.receiptId === id)
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
@@ -562,6 +565,27 @@ describe('confirming a receipt that needs a look', () => {
     const fixed = await confirm(s, id, { model: 'gpt-5.6-luna', corrections: { total: '7.25' } });
     expect(fixed.status).toBe(200);
     expect(s.reviews).toHaveLength(1);
+  });
+
+  it('lets a receipt no model could read be filled in by hand', async () => {
+    const s = setup();
+    const id = await filed(s);
+    s.readByFallback(id);
+    const luna = s.runs.findIndex((r) => r.model === 'gpt-5.6-luna');
+    s.runs[luna] = { ...s.runs[luna]!, outcome: 'failed', output: null, error: 'unreadable' };
+    s.receipts[0] = { ...s.receipts[0]!, status: 'failed' };
+    expect(await confirm(s, id, { model: 'gpt-5.6-luna' })).toMatchObject({
+      status: 422,
+      body: { code: 'missing_fields', fields: ['merchant', 'date', 'currency', 'total'] },
+    });
+    const res = await confirm(s, id, {
+      model: 'gpt-5.6-luna',
+      corrections: { merchant: 'Corner Store', date: '2026-10-01', currency: 'USD', total: '4.20' },
+    });
+    expect(res).toMatchObject({
+      status: 200,
+      body: { status: 'extracted', merchant: 'Corner Store', total: { decimal: '4.20' } },
+    });
   });
 
   it('starts over when the receipt is read again', async () => {

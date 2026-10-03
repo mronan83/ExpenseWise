@@ -26,6 +26,8 @@ export interface ReceiptSummary {
   merchant: string | null;
   date: string | null;
   total: MoneyField | null;
+  /** The expense this receipt proves (FR-EXP-08). */
+  expenseId: string | null;
 }
 
 /** compared: weighed by the tier decision. fallback: read only because Claude couldn't. */

@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@expensewise/db": "workspace:*",
+    "@expensewise/domain": "workspace:*",
     "@expensewise/extraction": "workspace:*",
     "@expensewise/storage": "workspace:*",
     "inngest": "^4.21.1"

@@ -1,5 +1,6 @@
 import {
   createHttpApp,
+  dbExpenseStore,
   dbReceiptStore,
   dbWorkspaceStore,
   providerKeyVerifier,
@@ -26,6 +27,7 @@ const handler = handle(
     // Tenant data as expensewise_app; the pool connects on first use.
     workspace: db && dbWorkspaceStore(db),
     receipts: db && dbReceiptStore(db),
+    expenses: db && dbExpenseStore(db),
     files: receiptFiles(),
     dispatch: dispatchEvents,
     secrets: secretBox(),

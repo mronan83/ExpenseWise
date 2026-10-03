@@ -198,7 +198,9 @@ export function registerReceiptRoutes(
     const { receipts } = stores();
     const found = await receipts.get(who.orgId, receiptId);
     if (!found) throw notFound();
-    if (found.receipt.status !== 'needs_review') throw notWaiting(false);
+    if (found.receipt.status !== 'needs_review' && found.receipt.status !== 'failed') {
+      throw notWaiting(false);
+    }
     const run = latestRuns(receiptId, found.runs).find((r) => r.model === body.model);
     if (!run) {
       throw unprocessable('no_such_reading', 'This receipt has no such reading', {
