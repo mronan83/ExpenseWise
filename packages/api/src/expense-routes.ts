@@ -1,10 +1,16 @@
 import type { Membership } from '@expensewise/db';
+import { amountMatches } from '@expensewise/domain';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
-import { expenseDetail, expenseSummary } from './expense-views.ts';
+import { expenseDetail, expenseSummaries } from './expense-views.ts';
 import type { ExpenseStore } from './expenses.ts';
 import { ProblemError } from './problem.ts';
-import { editExpenseRoute, getExpenseRoute, listExpensesRoute } from './routes/expenses.ts';
+import {
+  editExpenseRoute,
+  getExpenseRoute,
+  listExpensesRoute,
+  setExpenseTripRoute,
+} from './routes/expenses.ts';
 import type { WorkspaceStore } from './workspace.ts';
 
 export interface ExpenseRouteOptions {
@@ -21,7 +27,9 @@ export function registerExpenseRoutes(
 ) {
   const auth = requireIdentity(options.verifyToken);
   const paths = new Set(
-    [listExpensesRoute, getExpenseRoute, editExpenseRoute].map((r) => r.getRoutingPath()),
+    [listExpensesRoute, getExpenseRoute, editExpenseRoute, setExpenseTripRoute].map((r) =>
+      r.getRoutingPath(),
+    ),
   );
   for (const path of paths) app.use(path, auth);
 
@@ -58,15 +66,11 @@ export function registerExpenseRoutes(
 
   app.openapi(listExpensesRoute, async (c) => {
     const who = await member(c.var.identity.userId);
-    const { expenses, receipts, runs, reviews } = await stores().expenses.list(
-      who.orgId,
-      LIST_LIMIT,
-    );
-    const proofOf = (receiptId: string | null) => {
-      const receipt = receipts.find((r) => r.id === receiptId);
-      return receipt ? { receipt, runs, reviews } : null;
-    };
-    return c.json({ expenses: expenses.map((e) => expenseSummary(e, proofOf(e.receiptId))) }, 200);
+    const { amount, ...search } = c.req.valid('query');
+    // The schema admits only plain decimals, which always read in some currency.
+    const amounts = amount === undefined ? undefined : (amountMatches(amount) ?? []);
+    const found = await stores().expenses.list(who.orgId, LIST_LIMIT, { ...search, amounts });
+    return c.json({ expenses: expenseSummaries(found) }, 200);
   });
 
   app.openapi(getExpenseRoute, async (c) => {
@@ -98,6 +102,34 @@ export function registerExpenseRoutes(
         code: 'invalid_value',
         detail: result.problem.message,
         field: result.problem.field,
+      });
+    }
+    const found = await expenses.get(who.orgId, expenseId);
+    if (!found) throw notFound();
+    return c.json(expenseDetail(found.expense, found.proof), 200);
+  });
+
+  app.openapi(setExpenseTripRoute, async (c) => {
+    const caller = c.var.identity;
+    const who = await member(caller.userId);
+    const { expenseId } = c.req.valid('param');
+    const { expenses } = stores();
+    const result = await expenses.setTrip(who.orgId, expenseId, c.req.valid('json'), caller.userId);
+    if (result.status === 'missing') throw notFound();
+    if (result.status === 'not_movable') {
+      throw new ProblemError(409, 'not-movable', 'This expense can’t move to another trip now', {
+        code: 'locked',
+        detail: 'It is submitted or later, so it stays with its report.',
+      });
+    }
+    if (result.status === 'no_such_trip' || result.status === 'other_member') {
+      const missing = result.status === 'no_such_trip';
+      throw new ProblemError(422, 'invalid-trip', 'That trip can’t take this expense', {
+        code: missing ? 'no_such_trip' : 'other_members_trip',
+        detail: missing
+          ? 'There is no such trip in this organization.'
+          : 'The trip is another member’s. An expense goes on its owner’s trips.',
+        field: 'tripId',
       });
     }
     const found = await expenses.get(who.orgId, expenseId);

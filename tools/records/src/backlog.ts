@@ -108,7 +108,8 @@ export const BACKLOG: readonly BacklogItem[] = [
     severity: 'Medium',
     blocker: { kind: 'none' },
     source: 'Roadmap increment 2',
-    affects: ['FR-EXP-04', 'FR-INS-02', 'F-12'],
+    affects: ['FR-EXP-01', 'FR-EXP-04', 'FR-INS-02', 'F-12'],
+    done: { date: '2026-10-03', in: 'PR #30' },
   },
   {
     num: 10,
@@ -358,7 +359,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     priority: 'P3',
     effort: 'L',
     severity: 'Medium',
-    blocker: { kind: 'items', items: [16] },
+    blocker: { kind: 'none' },
     source: 'Roadmap increment 3',
     affects: ['FR-EXP-05', 'F-17'],
   },
@@ -446,7 +447,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     priority: 'P3',
     effort: 'M',
     severity: 'Medium',
-    blocker: { kind: 'items', items: [27] },
+    blocker: { kind: 'items', items: [27, 50] },
     source: 'Roadmap increment 4',
     affects: ['FR-PLT-07', 'FR-GOV-01', 'F-23'],
   },
@@ -594,6 +595,19 @@ export const BACKLOG: readonly BacklogItem[] = [
     source: 'GAP-19',
     affects: ['GAP-19', 'NFR-SEC-12'],
   },
+  {
+    num: 50,
+    title: 'Members see and change only their own records',
+    type: 'Security',
+    detail:
+      'Inside an organization, a member sees and changes only their own receipts, expenses and trips. An approver sees the reports they approve, finance admins see everything, and auditors read it. Must land before anyone is invited (#29).',
+    priority: 'P2',
+    effort: 'M',
+    severity: 'Medium',
+    blocker: { kind: 'none' },
+    source: 'GAP-20',
+    affects: ['GAP-20', 'FR-GOV-01'],
+  },
   // Done
   {
     num: 40,
@@ -677,9 +691,9 @@ export const BACKLOG: readonly BacklogItem[] = [
 
 /** How to order the open work, beyond priority. */
 export const SEQUENCING: readonly string[] = [
-  'Your order, Oct 3: #47, then #16, then #10, with #6 before #16 because trips need expenses. #47 and #6 are done, so #16 is next, then #10. Claude’s recommendation was #10 first, since until a backup has been restored it is only a hope; keep the paper or email originals until it passes.',
+  'Your order, Oct 3: #47, then #16, then #10, with #6 before #16 because trips need expenses. #47, #6 and #16 are done, so #10 is next. Claude’s recommendation was #10 first, since until a backup has been restored it is only a hope; keep the paper or email originals until it passes.',
   '#3 needs you, not code. So does #48, which keeps a leaked key from erasing the backups; any time this month. #4 can wait: the OpenAI fallback reads receipts meanwhile, and #21 waits on it.',
-  'With #6 done, increment 2 (#16–#19) and the dashboard (#28) are open. #9 should come soon: receipts and expenses that need a look have nowhere to gather yet. #7 is small and touches the same code.',
-  '#8 is security, not polish: it should land before #24, which needs it, and before anyone else is invited (#29).',
+  'With #6 and #16 done, the rest of increment 2 (#17–#19), reports drafted after a trip (#23) and the dashboard (#28) are open. #9 should come soon: receipts and expenses that need a look have nowhere to gather yet. #7 is small and touches the same code.',
+  '#8 is security, not polish: it should land before #24, which needs it, and before anyone else is invited (#29). So should #50, which keeps each member’s records their own.',
   '#11–#15 are small, independent and each closes a gap; take them between features.',
 ];

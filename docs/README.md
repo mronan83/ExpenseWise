@@ -50,6 +50,7 @@ ExpenseWise is a receipt-first, automation-first expense, receipt, mileage and t
 | D-22 | When neither Claude model can read a receipt, GPT-5.6 Luna reads it on the organization's OpenAI key; its reading can't make a receipt Ready | [ADR-0020](adr/0020-openai-fallback-reader.md) | Accepted (fallback decided by product owner; model and Ready rule recommended, no objection) |
 | D-23 | A receipt that needs a look is confirmed as read or corrected by a person, which makes it Ready; corrections keep what the model read | [ADR-0021](adr/0021-confirming-a-reading.md) | Accepted (actions requested by product owner; storage and rules recommended, no objection) |
 | D-24 | Every receipt has an expense from capture, linked as its proof; the expense follows the receipt until a person edits it, and is Ready only when its receipt is | [ADR-0022](adr/0022-expense-follows-its-receipt.md) | Accepted (proof and editing decided by product owner; filing rules recommended, no objection) |
+| D-25 | Expenses file to the trip their date falls in until a person chooses its trip; on a shared day the trip that ends first keeps it; submitted expenses never move | [ADR-0023](adr/0023-expenses-file-to-trips-by-date.md) | Accepted (filing by date required by FR-EXP-04; choice, shared-day and submitted rules recommended, no objection) |
 
 ## Visual version
 

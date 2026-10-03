@@ -21,6 +21,10 @@ export interface ExpenseSummary {
   amount: ExpenseAmount | null;
   /** Its receipt, the proof (FR-EXP-08). */
   receiptId: string | null;
+  /** The trip it is filed to (FR-EXP-04), or null. */
+  trip: { id: string; name: string } | null;
+  /** person: someone chose its trip, or no trip, and filing by date leaves it there. */
+  tripFiledBy: 'date' | 'person';
   /** Null without a receipt. */
   matchesReceipt: boolean | null;
   createdAt: string;

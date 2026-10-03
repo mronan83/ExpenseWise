@@ -12,6 +12,8 @@ import type { SecretBox } from './secret-box.ts';
 import { registerExpenseRoutes } from './expense-routes.ts';
 import type { ExpenseStore } from './expenses.ts';
 import { registerReceiptRoutes, type ReceiptRouteOptions } from './receipt-routes.ts';
+import { registerTripRoutes } from './trip-routes.ts';
+import type { TripStore } from './trips.ts';
 import { registerWorkspaceRoutes } from './workspace-routes.ts';
 import type { WorkspaceStore } from './workspace.ts';
 
@@ -28,6 +30,8 @@ export interface ApiOptions extends Pick<ReceiptRouteOptions, 'receipts' | 'file
   readonly workspace?: WorkspaceStore;
   /** Expenses, each with its receipt as proof. Without it, those routes answer 503. */
   readonly expenses?: ExpenseStore;
+  /** Trips and the expenses filed to them. Without it, those routes answer 503. */
+  readonly trips?: TripStore;
   /** Encrypts AI provider keys at rest. Without it, saving or testing a key answers 503. */
   readonly secrets?: SecretBox;
   /** Checks AI provider keys with a free call to the provider. */
@@ -133,6 +137,7 @@ export function createApi(options: ApiOptions) {
   registerWorkspaceRoutes(app, options);
   registerReceiptRoutes(app, options);
   registerExpenseRoutes(app, options);
+  registerTripRoutes(app, options);
 
   app.doc31('/v1/openapi.json', OPENAPI_INFO);
 

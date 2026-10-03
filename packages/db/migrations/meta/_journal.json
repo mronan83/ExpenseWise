@@ -92,6 +92,13 @@
       "when": 1790994945019,
       "tag": "0012_expense_edited_at",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791023565922,
+      "tag": "0013_expense_trip_pinned",
+      "breakpoints": true
     }
   ]
 }

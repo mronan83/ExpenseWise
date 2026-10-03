@@ -12,3 +12,4 @@ export * from './lifecycle/report.ts';
 export * from './mileage.ts';
 export * from './money.ts';
 export * from './result.ts';
+export * from './trips.ts';

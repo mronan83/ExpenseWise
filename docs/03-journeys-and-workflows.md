@@ -122,7 +122,7 @@ This is where "automated submission" actually lives. Each rule has a guardrail, 
 
 | When | ExpenseWise | Guardrail | Phase |
 | --- | --- | --- | --- |
-| A receipt is read with high confidence | Creates a Ready expense and files it to the matching trip | Per-field confidence threshold; arithmetic and date validation must pass | P1 |
+| A receipt is read with high confidence | Creates a Ready expense and files it to the matching trip | Per-field confidence threshold; arithmetic and date validation must pass; a trip a person chose for it wins ([ADR-0023](adr/0023-expenses-file-to-trips-by-date.md)) | P1 |
 | A trip's end date passes plus 48 h | Assembles a draft report and notifies the traveler | Skips trips with no expenses; traveler can reopen | P1 |
 | The scheduled submit time arrives (trip end, weekly or monthly) | Submits the report automatically | Only when nothing needs review and no receipt is missing | P2 |
 | A card transaction still has no receipt after 24 h | Nudges by email with a one-tap capture link (push joins in P3) | At most one nudge a day; quiet hours respected | P2 |
