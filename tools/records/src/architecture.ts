@@ -518,4 +518,11 @@ export const QUALITY: readonly Quality[] = [
       'Phase 0 tables nothing uses yet (categories, mileage, reports, approvals) may change shape before first use.',
     refs: ['FR-EXP-11'],
   },
+  {
+    attribute: 'Accessibility and fit on a phone',
+    how: 'axe checks WCAG 2.2 AA in gate G5, light and dark, in desktop Chromium and iPhone-size WebKit. Colour tokens meet AA contrast, small links have 44-point touch areas, and date fields are drawn without the native look so iOS can’t widen them out of their card.',
+    short:
+      'The gate sees signed-out screens only, and its WebKit is not iOS Safari, which is how overlapping date fields reached an iPhone (GAP-21, #54).',
+    refs: ['NFR-UX-01', 'NFR-UX-02', 'GAP-21', '#54'],
+  },
 ];
