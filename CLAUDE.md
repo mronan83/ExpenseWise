@@ -7,7 +7,7 @@ Expense, receipt, mileage and trip app. A pnpm + Turborepo TypeScript monorepo, 
 - `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm format:check`: run all of these before any commit.
 - `pnpm test:integration` needs `DATABASE_URL`. The SessionStart hook starts a local Postgres and exports it; otherwise run `pnpm db:up`.
 - `pnpm contract:check` checks that `packages/api/openapi.json` and the db migrations match the code.
-- `pnpm build && pnpm test:e2e`: Playwright. Locally, run `--project=desktop-chromium` with `PLAYWRIGHT_CHROMIUM_EXECUTABLE` set by the hook.
+- `pnpm build && pnpm test:e2e`: Playwright. Locally, run `--project=desktop-chromium` with `PLAYWRIGHT_CHROMIUM_EXECUTABLE` set by the hook. The signed-in checks (`e2e/signed-in.spec.ts`) need `DATABASE_URL` for their bench API and a build made with `NEXT_PUBLIC_SUPABASE_URL=https://e2e.supabase.invalid NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_e2e`, as CI does.
 - `pnpm records:pages --out <dir> --since <previous production commit>`: builds the requirements and backlog pages. It refuses while the records disagree with the code.
 
 ## Invariants: don't break these

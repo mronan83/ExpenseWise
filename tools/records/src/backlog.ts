@@ -183,13 +183,27 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Check every signed-in screen in CI',
     type: 'Gap',
     detail:
-      'Gate G5 sees only sign-in prompts (GAP-21). Run the real API on a test database with a test sign-in, seed every state a screen can be in, and check each at 375, 390, 440 and 1280 px in light and dark: nothing off-screen or overlapping, values not cut off, AA contrast and axe. The sweep that found the Oct 3 issues does this by hand and is the starting point. Real iOS Safari stays a manual check before each release that changes a form, until a device cloud is worth paying for.',
+      'Gate G5 saw only sign-in prompts (GAP-21). Now a bench runs the real API on its own database with a test sign-in, seeded through the real reading workflow, and every signed-in screen is opened in each state, at 375, 393, 440 and 1280 px in light and dark: nothing off-screen or overlapping, values not cut off, no date field drawn natively, targets big enough to tap, and WCAG 2.2 AA. Real iOS Safari is #57.',
     priority: 'P1',
     effort: 'M',
     severity: 'Medium',
     blocker: { kind: 'none' },
     source: 'GAP-21',
     affects: ['GAP-21', 'NFR-UX-01', 'NFR-UX-02'],
+    done: { date: '2026-10-03', in: 'PR #38' },
+  },
+  {
+    num: 57,
+    title: 'Check changed screens on iOS Safari',
+    type: 'Gap',
+    detail:
+      'Gate G5’s iPhone engine is WebKit on Linux, not iOS Safari (GAP-22). Until something better, a pull request that changes a screen is opened on an iPhone through its preview before merging, as the pull request template asks. A device cloud (BrowserStack, Sauce Labs) would run the signed-in checks on real iPhones for a monthly fee: worth it once more than one person relies on the app.',
+    priority: 'P3',
+    effort: 'S',
+    severity: 'Low',
+    blocker: { kind: 'owner', ask: 'Whether a device cloud is worth paying for, and when' },
+    source: 'GAP-22',
+    affects: ['GAP-22', 'NFR-UX-02'],
   },
 
   // P2: this month

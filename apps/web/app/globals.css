@@ -52,6 +52,14 @@
   --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
 }
 
+/*
+ * The tab bar stays at the bottom of the screen while the page scrolls under it. Anything
+ * focused, or scrolled to, stops above it rather than behind it (WCAG 2.4.11).
+ */
+html {
+  scroll-padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+}
+
 body {
   background: var(--paper);
   color: var(--ink);
