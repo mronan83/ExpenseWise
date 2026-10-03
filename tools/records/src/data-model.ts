@@ -24,8 +24,8 @@ export const DOMAINS: readonly Domain[] = [
   {
     name: 'Receipts and reading',
     about:
-      'The proof: each captured file, every model’s reading of it, and what a person confirmed.',
-    tables: ['receipts', 'extraction_runs', 'receipt_reviews'],
+      'The proof: each captured file, every model’s reading of it, what a person confirmed, and the emails receipts arrived in.',
+    tables: ['receipts', 'extraction_runs', 'receipt_reviews', 'inbound_emails'],
   },
   {
     name: 'Expenses and trips',
@@ -80,6 +80,10 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
     about:
       'A person confirming a reading that needed a look, as read or corrected. Append-only; each correction keeps what the model read (ADR-0021).',
   },
+  inbound_emails: {
+    about:
+      'An email a member sent to the receipts address, kept once per provider message: who sent it, its subject, whether its sender was proved, how many receipts it filed and, when proved, its text (at most 64 KiB) for reading purchase summaries later (#58). Mail from anyone who is not a member is never kept (ADR-0026, FR-CAP-02).',
+  },
   expenses: {
     about:
       'What is claimed: merchant, date, amount and currency, its status, and the trip it is filed to. It follows its receipt until a person edits it (ADR-0022) and files to trips by date until a person chooses (ADR-0023). Home sums a member’s month through the member-and-date index, so it needs no index of its own.',
@@ -128,6 +132,8 @@ export const FUNCTIONS: Readonly<Record<string, string>> = {
   claim_outbox_batch:
     'Hands the relay a batch of unpublished outbox events, locking them so two sweeps never take the same one. Runs as its owner, so the relay role needs no table rights.',
   mark_outbox_published: 'Marks events the relay has sent, so they are not sent again.',
+  member_for_sign_in_email:
+    'Which member signs in with an email address, case aside, and that sign-in’s user, for an arriving email that names no organization yet. Runs as its owner and returns ids only, so the app still can’t read sign-ins outside an organization (ADR-0026).',
   reject_audit_mutation:
     'Fires on any UPDATE, DELETE or TRUNCATE of audit_events and refuses it, whoever asks.',
 };
@@ -246,6 +252,13 @@ export const RULES: readonly Rule[] = [
       'An identity provider subject is unique across all organizations; a person sees their own sign-ins and memberships before choosing an organization.',
     objects: ['member_sign_ins_user_key', 'own_sign_ins', 'own_memberships'],
     refs: ['ADR-0016'],
+  },
+  {
+    rule: 'An email is kept once, and only for a member.',
+    mechanism:
+      'One row per organization, provider and message id; the workflow derives every id from the message, so a repeat delivery or a retried step files nothing twice. The sender is found through one owner-run function that answers with ids, and the row points at its member by a composite key.',
+    objects: ['inbound_emails_message_key', 'member_for_sign_in_email', 'inbound_emails_member_fk'],
+    refs: ['ADR-0026', 'NFR-DAT-06'],
   },
   {
     rule: 'The relay can do one thing.',

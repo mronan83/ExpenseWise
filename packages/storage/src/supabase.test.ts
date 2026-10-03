@@ -108,6 +108,19 @@ describe('supabaseStorage', () => {
     expect(await s.download('orgs/o/receipts/missing')).toBeNull();
   });
 
+  it('saves bytes the server has, replacing what was there', async () => {
+    const { fetch, seen } = fakeFetch(() => json({ Key: `receipts/${path}` }));
+    await store(fetch).save(path, new Uint8Array([37, 80, 68, 70]), 'application/pdf');
+    const saved = seen.at(-1)!;
+    expect(saved.method).toBe('POST');
+    expect(saved.url).toBe(`https://proj.supabase.co/storage/v1/object/receipts/${path}`);
+    expect(saved.headers).toMatchObject({
+      authorization: 'Bearer sb_secret_test',
+      'content-type': 'application/pdf',
+      'x-upsert': 'true',
+    });
+  });
+
   it('fails loudly on anything else', async () => {
     const { fetch } = fakeFetch(() => json({ error: 'Unauthorized', message: 'Invalid key' }, 403));
     await expect(store(fetch).download(path)).rejects.toBeInstanceOf(StorageError);

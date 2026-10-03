@@ -441,11 +441,21 @@ export const QUESTIONS: readonly Question[] = [
     recommendation:
       'Keep whichever it is. If it is a mailbox, set its receive policy to allowlist your sign-in addresses, a second gate before ours, and point the webhook at email_mailbox.message_received.',
     affects: ['FR-CAP-02'],
+    answer: {
+      date: '2026-10-03',
+      text: 'A mailbox, made under Mailboxes; there is no domain of ours, so the address stays on inbox.ai. Its receive policy is now allowlist. Email-in reads it through the mailbox API (ADR-0026).',
+    },
   },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-03',
+    change:
+      'PR #44, at your direction (#19): email or forward a receipt to the Bird mailbox and each PDF or photo attached is filed and read like an upload. Bird’s webhook is checked against its signature; the email is fetched as it arrived, and only a DKIM signature by the sender’s own domain proves who sent it. The address must be one you sign in with; mail from anyone else is dropped with nothing kept. Your answer to Q16: it is a mailbox, with its allowlist on (ADR-0026). FR-CAP-02 and F-16 are Partial until #58 reads the body itself and purchase summaries, which comes before #23.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-03',
     change:

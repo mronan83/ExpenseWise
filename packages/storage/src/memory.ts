@@ -14,5 +14,9 @@ export function memoryObjectStore(): ObjectStore & {
     signedDownloadUrl: (path, expiresInSeconds) =>
       Promise.resolve(`memory://${path}?expires=${expiresInSeconds}`),
     download: (path) => Promise.resolve(objects.get(path) ?? null),
+    save: (path, bytes) => {
+      objects.set(path, bytes);
+      return Promise.resolve();
+    },
   };
 }

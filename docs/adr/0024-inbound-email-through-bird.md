@@ -2,7 +2,7 @@
 
 Email-in receipts arrive through Bird's inbound email service, not Postmark's.
 
-- **Status:** Accepted (vendor decided by product owner; sender and webhook checks recommended, no objection)
+- **Status:** Accepted (vendor decided by product owner; sender and webhook checks recommended, no objection); Amended by [ADR-0026](0026-email-in-through-a-bird-mailbox.md) (an agent mailbox, the raw message fetched and checked in a workflow, no outbox in the webhook)
 - **Date:** 2026-10-03
 - **Deciders:** Product owner (vendor); Claude (principal architect), for the controls
 - **Decision register:** D-26

@@ -683,3 +683,35 @@ export const HomeSchema = z
       .openapi({ description: 'The last trips to end before the day, latest first.' }),
   })
   .openapi('Home');
+
+const PROVIDER_ID = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
+
+/** A Bird webhook: the Standard Webhooks envelope, with only what email-in reads from it. */
+export const BirdWebhookSchema = z
+  .object({
+    type: z.string().openapi({ example: 'email_mailbox.message_received' }),
+    timestamp: z.string().optional(),
+    data: z
+      .object({
+        message_id: PROVIDER_ID.optional().openapi({ example: 'rem_01k6x3n2ab' }),
+        thread_id: PROVIDER_ID.optional().openapi({ example: 'thr_01k6x3n2cd' }),
+        mailbox_id: z.string().optional().openapi({ example: 'mbx_01m414nd2jf769jm8rs7rb3cjv' }),
+      })
+      .openapi({ description: 'Other fields are ignored; the email itself is fetched later.' }),
+  })
+  .superRefine((body, ctx) => {
+    if (body.type !== 'email_mailbox.message_received') return;
+    for (const key of ['message_id', 'thread_id'] as const) {
+      if (!body.data[key])
+        ctx.addIssue({ code: 'custom', path: ['data', key], message: 'Required' });
+    }
+  })
+  .openapi('BirdWebhook');
+
+export const WebhookReceiptSchema = z
+  .object({
+    status: z.enum(['accepted', 'ignored']).openapi({
+      description: 'accepted: the email will be read. ignored: an event email-in does not use.',
+    }),
+  })
+  .openapi('WebhookReceipt');

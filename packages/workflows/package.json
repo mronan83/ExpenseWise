@@ -16,7 +16,9 @@
     "@expensewise/domain": "workspace:*",
     "@expensewise/extraction": "workspace:*",
     "@expensewise/storage": "workspace:*",
-    "inngest": "^4.21.1"
+    "inngest": "^4.21.1",
+    "mailauth": "^7.1.0",
+    "postal-mime": "^4.0.2"
   },
   "devDependencies": {
     "@inngest/test": "^1.0.0",

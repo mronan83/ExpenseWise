@@ -2205,6 +2205,58 @@
           "reading",
           "recentTrips"
         ]
+      },
+      "WebhookReceipt": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "ignored"
+            ],
+            "description": "accepted: the email will be read. ignored: an event email-in does not use."
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "BirdWebhook": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "example": "email_mailbox.message_received"
+          },
+          "timestamp": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "message_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,100}$",
+                "example": "rem_01k6x3n2ab"
+              },
+              "thread_id": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{1,100}$",
+                "example": "thr_01k6x3n2cd"
+              },
+              "mailbox_id": {
+                "type": "string",
+                "example": "mbx_01m414nd2jf769jm8rs7rb3cjv"
+              }
+            },
+            "description": "Other fields are ignored; the email itself is fetched later."
+          }
+        },
+        "required": [
+          "type",
+          "data"
+        ]
       }
     },
     "parameters": {}
@@ -4362,6 +4414,109 @@
           },
           "503": {
             "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/inbound/bird": {
+      "post": {
+        "tags": [
+          "Email-in"
+        ],
+        "summary": "Bird calls this when an email arrives at the receipts address",
+        "description": "Signed by Bird with the Standard Webhooks scheme; the signature, not a sign-in, is what lets it in, and a delivery more than 5 minutes off is refused. An arriving email is handed to a background workflow, which fetches it, checks its sender and files its attachments as receipts (FR-CAP-02, ADR-0026). Other events are acknowledged and ignored.",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "description": "The same on every retry."
+            },
+            "required": true,
+            "description": "The same on every retry.",
+            "name": "webhook-id",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "Unix seconds, per attempt."
+            },
+            "required": true,
+            "description": "Unix seconds, per attempt.",
+            "name": "webhook-timestamp",
+            "in": "header"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "description": "v1,<base64 HMAC-SHA256>"
+            },
+            "required": true,
+            "description": "v1,<base64 HMAC-SHA256>",
+            "name": "webhook-signature",
+            "in": "header"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BirdWebhook"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "An event email-in does not use; nothing was done.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookReceipt"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "The email will be read in the background.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WebhookReceipt"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The event is not one Bird would send.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "The signature is missing, wrong or too old.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Email-in is not configured here, or the hand-off failed; Bird tries again.",
             "content": {
               "application/problem+json": {
                 "schema": {

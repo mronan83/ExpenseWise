@@ -1,4 +1,4 @@
-import { createSecretBox, storedKeyReader } from '@expensewise/api';
+import { createSecretBox, storedKeyReader, type ArrivedEmail } from '@expensewise/api';
 import { createDatabase, type Database } from '@expensewise/db';
 import { SUPPORTED_MEDIA_TYPES } from '@expensewise/extraction';
 import {
@@ -7,7 +7,11 @@ import {
   supabaseStorage,
   type ObjectStore,
 } from '@expensewise/storage';
-import { createWorkflowClient, toWorkflowEvent } from '@expensewise/workflows';
+import {
+  committedWorkflowEvent,
+  createWorkflowClient,
+  EMAIL_RECEIVED,
+} from '@expensewise/workflows';
 import type { CommittedEvent } from '@expensewise/db';
 
 /*
@@ -88,20 +92,29 @@ export const workflowClient = createWorkflowClient({
 export const dispatchEvents =
   workflowsDev || eventKey
     ? async (events: readonly CommittedEvent[]) => {
-        await workflowClient.send(
-          events.map((e) =>
-            toWorkflowEvent({
-              id: e.outboxId,
-              orgId: e.orgId,
-              topic: e.topic,
-              payload: { ...e.payload },
-              createdAt: new Date().toISOString(),
-              attempts: 0,
-            }),
-          ),
-        );
+        await workflowClient.send(events.map(committedWorkflowEvent));
       }
     : undefined;
+
+/**
+ * Hands an arriving email to the email workflow (ADR-0026). The event id is the provider's
+ * message id, so a second delivery of the same message within a day starts nothing; after
+ * that, the workflow finds the email already kept. Undefined when this server can't send
+ * events, and then the webhook answers 503 and Bird tries again later.
+ */
+export const handOffEmail =
+  workflowsDev || eventKey
+    ? async (email: ArrivedEmail) => {
+        await workflowClient.send({
+          id: `${email.provider}-${email.messageId}`,
+          name: EMAIL_RECEIVED,
+          data: email,
+        });
+      }
+    : undefined;
+
+/** Bird's API key for reading mailbox messages (mailbox:read). Server-only. */
+export const birdApiKey = () => env('BIRD_API_KEY');
 
 /**
  * Decrypts an organization's stored key for a provider, for the receipt workflow: Anthropic

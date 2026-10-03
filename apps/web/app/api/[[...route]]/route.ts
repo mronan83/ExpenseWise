@@ -11,7 +11,13 @@ import {
 import { createReadinessProbe } from '@expensewise/db';
 import * as Sentry from '@sentry/nextjs';
 import { handle } from 'hono/vercel';
-import { appDatabase, dispatchEvents, receiptFiles, secretBox } from '../../../lib/server';
+import {
+  appDatabase,
+  dispatchEvents,
+  handOffEmail,
+  receiptFiles,
+  secretBox,
+} from '../../../lib/server';
 
 // The whole versioned API lives in @expensewise/api; Next.js only hands it requests under /api.
 // One source for the project URL: it is public, so a server-only copy (such as a Sensitive
@@ -35,6 +41,9 @@ const handler = handle(
     files: receiptFiles(),
     dispatch: dispatchEvents,
     secrets: secretBox(),
+    // Email-in (ADR-0026): Bird's webhook is checked with this secret, then handed off.
+    birdWebhookSecret: process.env.BIRD_WEBHOOK_SECRET || undefined,
+    receiveEmail: handOffEmail,
     verifyProviderKey: providerKeyVerifier(),
     // Unexpected errors go to error tracking (a no-op until NEXT_PUBLIC_SENTRY_DSN is set).
     reportError: (error) => Sentry.captureException(error),
