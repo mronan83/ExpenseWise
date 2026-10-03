@@ -18,6 +18,16 @@ export interface AuditEntry {
 }
 
 /**
+ * Takes the organization's write lock until the transaction ends. Every audit append takes it,
+ * so every change already holds it from its first event to its commit. A change that must see
+ * the others settled first, such as filing expenses to trips (ADR-0023), takes it before it
+ * locks or reads any rows: that adds no new waiting and no new lock order.
+ */
+export async function lockOrgWrites(tx: Transaction, orgId: string): Promise<void> {
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`audit:${orgId}`}, 0))`);
+}
+
+/**
  * Appends the next event to the organization's hash chain, inside the caller's transaction,
  * so the audit event commits or rolls back together with the change it records.
  */
@@ -27,7 +37,7 @@ export async function appendAuditEvent(
   entry: AuditEntry,
 ): Promise<ChainedAuditEvent> {
   // Serialize appends per organization so two writers never claim the same sequence.
-  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`audit:${orgId}`}, 0))`);
+  await lockOrgWrites(tx, orgId);
   const [last] = await tx
     .select({ sequence: auditEvents.sequence, hash: auditEvents.hash })
     .from(auditEvents)

@@ -31,6 +31,17 @@ export const GAPS: readonly Gap[] = [
     backlog: 48,
   },
   {
+    id: 'GAP-20',
+    title:
+      'Within an organization, any member can see and change every member’s receipts, expenses and trips.',
+    affects: ['FR-GOV-01'],
+    severity: 'Medium',
+    evidence:
+      'Row-level security keeps organizations apart, but inside one the API checks only that the caller is a member. Found while building trips (#16), which follow the same rule as expenses. Harmless while every organization has one person; the first invite (#29) would show a new member their colleagues’ spending.',
+    fix: 'A member sees and changes their own; an approver sees what they approve; finance admins see everything, and auditors read it. Enforced in the API, with a test for each role, before anyone is invited (#50).',
+    backlog: 50,
+  },
+  {
     id: 'GAP-19',
     title:
       'The dependency audit lets one high advisory through: braces (GHSA-vfj7-8cjw-p6xm), which has no fixed version yet.',
@@ -278,6 +289,12 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-03',
+    change:
+      'PR #30: trips, trip history and search (F-12, ADR-0023, D-25). Expenses file to the trip their date falls in, and a person can choose another trip or none. #16 is done, so #23 is open; FR-EXP-01, FR-EXP-04 and FR-INS-02 are Verified. Found on the way: any member can change any other member’s records (GAP-20, #50), to fix before the first invite. One change from what Claude first told you: on a day two trips share, the trip that ends first keeps it, because that day’s hotel bill belongs to it.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-03',
     change:

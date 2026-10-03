@@ -1,0 +1,1 @@
+ALTER TABLE "expenses" ADD COLUMN "trip_pinned" boolean DEFAULT false NOT NULL;

@@ -3,7 +3,9 @@ import {
   EditExpenseSchema,
   ExpenseDetailSchema,
   ExpenseListSchema,
+  ExpenseSearchSchema,
   ProblemSchema,
+  SetExpenseTripSchema,
 } from '../schemas.ts';
 
 const problem = (description: string) => ({
@@ -30,14 +32,19 @@ export const listExpensesRoute = createRoute({
   method: 'get',
   path: '/v1/expenses',
   tags: ['Expenses'],
-  summary: 'The organization’s expenses, newest first',
+  summary: 'The organization’s expenses, newest first, or those that match a search',
+  description:
+    'FR-INS-02. Every search term given must match: part of the merchant, a date range, an ' +
+    'amount, a trip.',
   ...secured,
+  request: { query: ExpenseSearchSchema },
   responses: {
     200: {
-      description: 'The newest 100 expenses.',
+      description: 'The newest 100 expenses that match.',
       content: { 'application/json': { schema: ExpenseListSchema } },
     },
     ...common,
+    400: problem('A search term is not valid.'),
   },
 });
 
@@ -81,5 +88,30 @@ export const editExpenseRoute = createRoute({
     404: problem('No such expense in this organization.'),
     409: problem('It can’t be edited now: its receipt is being read, or it is submitted or later.'),
     422: problem('A value is not valid; field names which.'),
+  },
+});
+
+export const setExpenseTripRoute = createRoute({
+  method: 'put',
+  path: '/v1/expenses/{expenseId}/trip',
+  tags: ['Expenses'],
+  summary: 'Choose an expense’s trip',
+  description:
+    'ADR-0023. Puts the expense on one of its owner’s trips, or on none ({"tripId": null}); ' +
+    'filing by date leaves it there from then on. {"byDate": true} files it by date again.',
+  ...secured,
+  request: {
+    params: expenseParam,
+    body: { content: { 'application/json': { schema: SetExpenseTripSchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The expense as it is now.',
+      content: { 'application/json': { schema: ExpenseDetailSchema } },
+    },
+    ...common,
+    404: problem('No such expense in this organization.'),
+    409: problem('It is submitted or later, so it stays with its report.'),
+    422: problem('No such trip, or the trip is another member’s.'),
   },
 });

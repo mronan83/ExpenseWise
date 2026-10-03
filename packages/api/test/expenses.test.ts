@@ -1,4 +1,5 @@
 import type {
+  ExpenseFilter,
   ExpenseRecord,
   ExtractionRunRecord,
   Membership,
@@ -19,6 +20,8 @@ const RECEIPT = '0192f7a0-0000-7000-8000-0000000000d1';
 const EXPENSE = '0192f7a0-0000-7000-8000-0000000000e1';
 const TYPED = '0192f7a0-0000-7000-8000-0000000000e2';
 const REQUEST = '0192f7a0-0000-7000-8000-0000000000f1';
+const TRIP = '0192f7a0-0000-7000-8000-0000000000c1';
+const THEIR_TRIP = '0192f7a0-0000-7000-8000-0000000000c2';
 const NOW = new Date('2026-10-03T12:00:00.000Z');
 
 const identity = (userId: string): Identity => ({
@@ -85,6 +88,9 @@ function setup() {
     currency: 'USD',
     amountMinor: 725,
     receiptId: RECEIPT,
+    tripId: null,
+    tripName: null,
+    tripPinned: false,
     editedAt: null,
     createdAt: NOW,
     updatedAt: NOW,
@@ -101,8 +107,16 @@ function setup() {
       receiptId: null,
     }),
   ];
+  const filters: ExpenseFilter[] = [];
+  const trips: Record<string, { name: string; memberId: string }> = {
+    [TRIP]: { name: 'Houston · Acme onsite', memberId: MEMBER },
+    [THEIR_TRIP]: { name: 'Denver', memberId: 'someone-else' },
+  };
   const store: ExpenseStore = {
-    list: () => Promise.resolve({ expenses, receipts: [receipt], runs, reviews }),
+    list: (_org, _limit, filter = {}) => {
+      filters.push(filter);
+      return Promise.resolve({ expenses, receipts: [receipt], runs, reviews });
+    },
     get: (_org, id) => {
       const found = expenses.find((e) => e.id === id);
       return Promise.resolve(
@@ -123,6 +137,24 @@ function setup() {
       if (result.value.changes.length === 0) return Promise.resolve({ status: 'unchanged' });
       expenses[i] = { ...current, ...result.value.values, editedAt: NOW };
       return Promise.resolve({ status: 'edited', changes: result.value.changes });
+    },
+    setTrip: (_org, id, choice) => {
+      const i = expenses.findIndex((e) => e.id === id);
+      if (i === -1) return Promise.resolve({ status: 'missing' });
+      const current = expenses[i]!;
+      if (['submitted', 'approved', 'settled'].includes(current.status)) {
+        return Promise.resolve({ status: 'not_movable', current: current.status });
+      }
+      // The fake's trips cover no expense's date, so filing by date puts it on none.
+      const tripId = 'byDate' in choice ? null : choice.tripId;
+      const trip = tripId === null ? null : trips[tripId];
+      if (trip === undefined) return Promise.resolve({ status: 'no_such_trip' });
+      if (trip && trip.memberId !== current.memberId) {
+        return Promise.resolve({ status: 'other_member' });
+      }
+      const pinned = !('byDate' in choice);
+      expenses[i] = { ...current, tripId, tripName: trip?.name ?? null, tripPinned: pinned };
+      return Promise.resolve({ status: 'set', tripId, pinned });
     },
   };
   const memberships: Record<string, Membership> = {
@@ -150,7 +182,7 @@ function setup() {
       body: (await res.json().catch(() => null)) as Record<string, unknown>,
     };
   };
-  return { call, expenses, receipt, reviews };
+  return { call, expenses, receipt, reviews, filters };
 }
 
 describe('expenses', () => {
@@ -166,10 +198,50 @@ describe('expenses', () => {
         merchant: 'Blue Bottle Coffee',
         amount: { amountMinor: 725, currency: 'USD', decimal: '7.25' },
         receiptId: RECEIPT,
+        trip: null,
+        tripFiledBy: 'date',
         matchesReceipt: true,
       }),
       expect.objectContaining({ id: TYPED, receiptId: null, matchesReceipt: null }),
     ]);
+  });
+
+  it('searches by merchant, dates, amount in any currency, and trip (FR-INS-02)', async () => {
+    const { call, filters } = setup();
+    const res = await call(
+      'GET',
+      `/v1/expenses?q=bottle&from=2026-09-01&to=2026-09-30&amount=18.92&tripId=${TRIP}`,
+      'riley',
+    );
+    expect(res.status).toBe(200);
+    expect(filters.at(-1)).toMatchObject({
+      q: 'bottle',
+      from: '2026-09-01',
+      to: '2026-09-30',
+      tripId: TRIP,
+    });
+    const amounts = filters.at(-1)!.amounts!;
+    expect(amounts.find((m) => m.currencies.includes('USD'))?.amountMinor).toBe(1892);
+    expect(amounts.find((m) => m.currencies.includes('KWD'))?.amountMinor).toBe(18920);
+    expect(amounts.some((m) => m.currencies.includes('JPY'))).toBe(false);
+
+    await call('GET', '/v1/expenses', 'riley');
+    expect(filters.at(-1)).toEqual({ amounts: undefined });
+  });
+
+  it.each([
+    'amount=1,000',
+    'amount=-5',
+    'amount=12.3456',
+    'from=2026-02-30',
+    'to=yesterday',
+    'tripId=houston',
+  ])('refuses the search %s', async (query) => {
+    const { call } = setup();
+    expect(await call('GET', `/v1/expenses?${query}`, 'riley')).toMatchObject({
+      status: 400,
+      body: { code: 'invalid_request' },
+    });
   });
 
   it('shows what its receipt shows, as its proof', async () => {
@@ -229,6 +301,43 @@ describe('expenses', () => {
       await call('PATCH', `/v1/expenses/${EXPENSE}`, 'riley', { amount: '1.00' }),
     ).toMatchObject({ status: 409, body: { code: 'locked' } });
     expect((await call('GET', `/v1/expenses/${EXPENSE}`, 'riley')).body.editable).toBe(false);
+  });
+
+  it('puts an expense on a trip a person chose, on none, or back to filing by date', async () => {
+    const { call } = setup();
+    const put = (body: unknown) => call('PUT', `/v1/expenses/${EXPENSE}/trip`, 'riley', body);
+    expect(await put({ tripId: TRIP })).toMatchObject({
+      status: 200,
+      body: {
+        id: EXPENSE,
+        trip: { id: TRIP, name: 'Houston · Acme onsite' },
+        tripFiledBy: 'person',
+      },
+    });
+    expect((await put({ tripId: null })).body).toMatchObject({ trip: null, tripFiledBy: 'person' });
+    expect((await put({ byDate: true })).body).toMatchObject({ trip: null, tripFiledBy: 'date' });
+  });
+
+  it('refuses another member’s trip, a trip that doesn’t exist, and a submitted expense', async () => {
+    const { call, expenses } = setup();
+    const put = (body: unknown) => call('PUT', `/v1/expenses/${EXPENSE}/trip`, 'riley', body);
+    expect(await put({ tripId: THEIR_TRIP })).toMatchObject({
+      status: 422,
+      body: { code: 'other_members_trip', field: 'tripId' },
+    });
+    expect(await put({ tripId: '0192f7a0-0000-7000-8000-0000000000c9' })).toMatchObject({
+      status: 422,
+      body: { code: 'no_such_trip' },
+    });
+    for (const body of [{}, { byDate: false }, { tripId: TRIP, byDate: true }, { tripId: 'x' }]) {
+      expect((await put(body)).status).toBe(400);
+    }
+    expenses[0] = { ...expenses[0]!, status: 'submitted' };
+    expect(await put({ tripId: TRIP })).toMatchObject({ status: 409, body: { code: 'locked' } });
+    const missing = '0192f7a0-0000-7000-8000-0000000000e9';
+    expect(
+      (await call('PUT', `/v1/expenses/${missing}/trip`, 'riley', { tripId: null })).status,
+    ).toBe(404);
   });
 
   it('answers 404 for an expense it does not have, and needs a signed-in member', async () => {

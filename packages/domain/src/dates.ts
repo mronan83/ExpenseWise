@@ -20,3 +20,13 @@ export function assertIsoDate(value: string): IsoDate {
   }
   return value;
 }
+
+const dayNumber = (value: IsoDate): number => {
+  const [y = 0, m = 1, d = 1] = assertIsoDate(value).split('-').map(Number);
+  return Date.UTC(y, m - 1, d) / 86_400_000;
+};
+
+/** Whole days from one date to another: 2026-09-22 to 2026-09-25 is 3. Negative if earlier. */
+export function daysBetween(from: IsoDate, to: IsoDate): number {
+  return dayNumber(to) - dayNumber(from);
+}

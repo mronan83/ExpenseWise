@@ -7,6 +7,7 @@ import {
   type ExpenseValues,
 } from '@expensewise/domain';
 import { proofDifferences } from '@expensewise/extraction';
+import type { ExpensesWithProof } from './expenses.ts';
 import { currentReview, receiptSummary } from './receipt-views.ts';
 import type { ReceiptWithReadings } from './receipts.ts';
 
@@ -47,6 +48,8 @@ export function expenseSummary(expense: ExpenseRecord, proof: ReceiptWithReading
     date: expense.transactionDate,
     amount: amountView(expense.amountMinor, expense.currency),
     receiptId: expense.receiptId,
+    trip: expense.tripId ? { id: expense.tripId, name: expense.tripName ?? '' } : null,
+    tripFiledBy: expense.tripPinned ? ('person' as const) : ('date' as const),
     matchesReceipt: shown ? proofDifferences(expense, shown.values).length === 0 : null,
     createdAt: expense.createdAt.toISOString(),
     updatedAt: expense.updatedAt.toISOString(),
@@ -71,4 +74,13 @@ export function expenseDetail(expense: ExpenseRecord, proof: ReceiptWithReadings
         }
       : null,
   };
+}
+
+/** Each expense's summary, with whether it matches its receipt. */
+export function expenseSummaries(found: ExpensesWithProof) {
+  const { expenses, receipts, runs, reviews } = found;
+  return expenses.map((e) => {
+    const receipt = receipts.find((r) => r.id === e.receiptId);
+    return expenseSummary(e, receipt ? { receipt, runs, reviews } : null);
+  });
 }

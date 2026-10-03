@@ -1,4 +1,4 @@
-import { SUPPORTED_CURRENCIES } from '@expensewise/domain';
+import { isIsoDate, SUPPORTED_CURRENCIES } from '@expensewise/domain';
 import { CORRECTABLE_FIELDS } from '@expensewise/extraction';
 import { z } from '@hono/zod-openapi';
 
@@ -394,6 +394,15 @@ export const ExpenseSummarySchema = z
     date: z.string().nullable(),
     amount: ExpenseAmountSchema,
     receiptId: z.string().uuid().nullable().openapi({ description: 'Its receipt, the proof.' }),
+    trip: z
+      .object({ id: z.string().uuid(), name: z.string() })
+      .nullable()
+      .openapi({ description: 'The trip it is filed to (FR-EXP-04), or null for none.' }),
+    tripFiledBy: z.enum(['date', 'person']).openapi({
+      description:
+        'date: it files to the trip its date falls in, and moves when the dates do. person: a ' +
+        'person chose its trip, or chose none, and filing by date leaves it there (ADR-0023).',
+    }),
     matchesReceipt: z
       .boolean()
       .nullable()
@@ -454,3 +463,126 @@ export const EditExpenseSchema = z
     message: 'Change at least one field.',
   })
   .openapi('EditExpense');
+
+/** A calendar date, YYYY-MM-DD, that exists. */
+const isoDate = () =>
+  z
+    .string()
+    .refine(isIsoDate, 'Enter a date that exists, as YYYY-MM-DD.')
+    .openapi({ format: 'date', example: '2026-09-22' });
+
+export const ExpenseSearchSchema = z.object({
+  q: z
+    .string()
+    .max(200)
+    .optional()
+    .openapi({ description: 'Part of the merchant’s name, in any case.', example: 'uber' }),
+  from: isoDate().optional().openapi({ description: 'Dated on or after this day.' }),
+  to: isoDate().optional().openapi({ description: 'Dated on or before this day.' }),
+  amount: z
+    .string()
+    .regex(/^\d{1,15}(\.\d{1,3})?$/, 'Enter an amount such as 18.92.')
+    .optional()
+    .openapi({
+      description:
+        'The amount, as a plain decimal. It matches in every currency it can be written in: ' +
+        '18.92 finds 18.92 dollars or euros and 18.920 dinars, never yen.',
+      example: '18.92',
+    }),
+  tripId: z.string().uuid().optional().openapi({ description: 'On this trip.' }),
+});
+
+export const SetExpenseTripSchema = z
+  .union([
+    z
+      .object({
+        tripId: z
+          .string()
+          .uuid()
+          .nullable()
+          .openapi({ description: 'The trip to put it on, or null for no trip.' }),
+      })
+      .strict(),
+    z
+      .object({
+        byDate: z
+          .literal(true)
+          .openapi({ description: 'File it to the trip its date falls in again.' }),
+      })
+      .strict(),
+  ])
+  .openapi('SetExpenseTrip');
+
+// Trips (FR-EXP-04, FR-INS-02, ADR-0023)
+
+const TripTotalSchema = z.object({
+  amountMinor: z.number().int(),
+  currency: z.string(),
+  decimal: z.string().openapi({ example: '1257.60' }),
+});
+
+export const TripSummarySchema = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string().openapi({ example: 'Houston · Acme onsite' }),
+    purpose: z.string().nullable().openapi({ example: 'Client onsite' }),
+    primaryCity: z.string().nullable().openapi({ example: 'Houston' }),
+    startDate: isoDate(),
+    endDate: isoDate().openapi({ description: 'The last day, included.' }),
+    days: z.number().int().openapi({ description: 'Days it covers, both ends included.' }),
+    owner: z.string().openapi({ description: 'The member whose trip it is.' }),
+    expenseCount: z.number().int(),
+    readyCount: z
+      .number()
+      .int()
+      .openapi({ description: 'Expenses that are Ready, or further along: submitted or later.' }),
+    needsReviewCount: z.number().int(),
+    totals: z.array(TripTotalSchema).openapi({
+      description:
+        'What its expenses add up to, one total per currency, never converted. Expenses with ' +
+        'no amount yet count in none.',
+    }),
+    createdAt: z.string().datetime(),
+  })
+  .openapi('TripSummary');
+
+export const TripDetailSchema = TripSummarySchema.extend({
+  expenses: z
+    .array(ExpenseSummarySchema)
+    .openapi({ description: 'In date order; those with no date yet last.' }),
+}).openapi('TripDetail');
+
+export const TripListSchema = z.object({ trips: z.array(TripSummarySchema) }).openapi('TripList');
+
+export const TripSearchSchema = z.object({
+  q: z.string().max(200).optional().openapi({
+    description: 'Part of the name, purpose or city, or of a merchant on the trip.',
+    example: 'houston',
+  }),
+  from: isoDate().optional().openapi({ description: 'Trips that end on or after this day.' }),
+  to: isoDate().optional().openapi({ description: 'Trips that start on or before this day.' }),
+});
+
+const tripText = (description: string, example: string) =>
+  z.string().max(1000).openapi({ description, example });
+
+export const CreateTripSchema = z
+  .object({
+    name: tripText('Up to 120 characters.', 'Houston · Acme onsite'),
+    purpose: tripText('Why you went. Up to 500 characters.', 'Client onsite').nullable().optional(),
+    primaryCity: tripText('Where. Up to 120 characters.', 'Houston').nullable().optional(),
+    startDate: z.string().max(40).openapi({ description: 'YYYY-MM-DD.', example: '2026-09-22' }),
+    endDate: z.string().max(40).openapi({
+      description: 'YYYY-MM-DD, the last day, included. A trip is at most 366 days.',
+      example: '2026-09-25',
+    }),
+  })
+  .strict()
+  .openapi('CreateTrip');
+
+export const EditTripSchema = CreateTripSchema.partial()
+  .strict()
+  .refine((t) => Object.values(t).some((v) => v !== undefined), {
+    message: 'Change at least one field.',
+  })
+  .openapi('EditTrip');
