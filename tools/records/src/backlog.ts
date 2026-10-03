@@ -19,19 +19,23 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none', note: 'None to build it; it runs once #2 is done' },
     source: 'GAP-01, ADR-0014',
     affects: ['GAP-01', 'NFR-REL-01', 'NFR-REL-05', 'F-37'],
+    done: { date: '2026-10-02', in: 'PR #23' },
   },
   {
     num: 2,
     title: 'The backup has nowhere to go yet',
     type: 'Ops',
     detail:
-      'Runbook section 5: a Backblaze B2 account in US West, a private bucket with Object Lock, a key limited to that bucket, a backup passphrase in your password manager, a Supabase S3 key, and a GitHub environment `backup` with its seven secrets. About 20 minutes.',
+      'The backup is built (#1). Runbook section 5: the Backblaze account and bucket key are done; still to do are the backup passphrase in your password manager, a Supabase S3 key, and the GitHub environment `backup` with its seven secrets. Then run **Nightly backup** once from Actions (step 8). Never paste a key into the conversation.',
     priority: 'P1',
     effort: 'S',
     severity: 'High',
-    blocker: { kind: 'owner', ask: 'Your setup: runbook section 5, about 20 minutes' },
+    blocker: {
+      kind: 'owner',
+      ask: 'Your setup: runbook section 5, steps 5–8, about 15 minutes',
+    },
     source: 'ADR-0014',
-    affects: ['GAP-01', 'NFR-REL-01'],
+    affects: ['GAP-01', 'NFR-REL-01', 'NFR-REL-05', 'F-37'],
   },
   {
     num: 3,
@@ -160,9 +164,9 @@ export const BACKLOG: readonly BacklogItem[] = [
     priority: 'P1',
     effort: 'S',
     severity: 'High',
-    blocker: { kind: 'items', items: [1, 2] },
+    blocker: { kind: 'items', items: [2] },
     source: 'ADR-0014',
-    affects: ['NFR-REL-02', 'NFR-REL-03'],
+    affects: ['NFR-REL-02', 'NFR-REL-03', 'F-41'],
   },
 
   // P2: this month
@@ -629,8 +633,8 @@ export const BACKLOG: readonly BacklogItem[] = [
 
 /** How to order the open work, beyond priority. */
 export const SEQUENCING: readonly string[] = [
-  '#2, #3, #4 and #46 need you, not code, and #1 is useless without #2. They are the best use of your next half hour. Do #46 before #4: the fallback only reads while Claude can’t.',
-  '#1 and #10 come before anything else Claude builds: real receipts exist, and so far only in one place. #47 comes straight after, since today a receipt that needs a look can’t be acted on.',
+  '#2, #3 and #4 need you, not code. #2 turns the backup on, so it comes first.',
+  '#10 comes before anything else Claude builds: until a backup has been restored, it is only a hope. #47 comes straight after, since today a receipt that needs a look can’t be acted on.',
   '#6 unblocks most of increment 2 (#16–#19) and the dashboard (#28). #7 and #9 are small and touch the same code, so they ride with it.',
   '#8 is security, not polish: it should land before #24, which needs it, and before anyone else is invited (#29).',
   '#11–#15 are small, independent and each closes a gap; take them between features.',

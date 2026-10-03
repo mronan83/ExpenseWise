@@ -26,7 +26,7 @@ The `postgres` role has BYPASSRLS. Its connection string lives only in GitHub se
 2. **Settings → JWT Keys:** confirm the current key is asymmetric (ES256 or RS256). New projects default to this.
 3. **Settings → API Keys:** note the publishable key (`sb_publishable_…`) and the secret key (`sb_secret_…`).
 4. **Connect** (top of the project page) **→ Connection string → Method: Session pooler:** copy the string for the `postgres` role. It looks like `postgresql://postgres.<project-ref>:[YOUR-PASSWORD]@aws-N-<region>.pooler.supabase.com:5432/postgres`; copy the host exactly. The `<region>` must match `regions` in `apps/web/vercel.json` (production is us-west-2 and `pdx1`); if it doesn't, update one or the other first.
-   - Replace `[YOUR-PASSWORD]`, brackets included, with the database password chosen when the project was created. If it is lost, reset it under **Database → Settings → Reset database password**; nothing else uses it yet.
+   - Replace `[YOUR-PASSWORD]`, brackets included, with the database password chosen when the project was created. If it is lost, reset it under **Database → Settings → Reset database password**, then update every secret that already holds it: `DATABASE_MIGRATION_URL` in `production` (section 2) and `BACKUP_DATABASE_URL` in `backup` (section 5).
    - A password with `@ : / ? # %` must be percent-encoded in the URL. Resetting to a long letters-and-digits password avoids that.
    - Use the session pooler, not the direct connection: the direct host is IPv6-only and GitHub's runners are IPv4-only. Use port 5432, not 6543: migrations need a whole session.
    - Leave out `sslmode`; our code verifies TLS against Supabase's root CA.
@@ -98,7 +98,7 @@ Supabase's built-in email covers password resets and the owner's own notificatio
 
 ## 5. Off-site backups (Backblaze B2)
 
-The Free plan keeps no backups, so a nightly workflow keeps our own ([ADR-0014](../adr/0014-supabase-free-plan.md)). Set this up before real use starts on Oct 15. The workflow itself arrives in increment 1 and uses the names below.
+The Free plan keeps no backups, so a nightly workflow keeps our own ([ADR-0014](../adr/0014-supabase-free-plan.md)): **Nightly backup** (`.github/workflows/backup.yml`, running `scripts/backup/backup.sh`) at 02:17 California time. It needs the secrets below and nothing else; it works out the Backblaze and Supabase S3 addresses itself.
 
 1. **Create a Backblaze B2 account** at <https://www.backblaze.com/sign-up/cloud-storage> and choose the **US West** region. The region can't be changed later. The first 10 GB are free and no card is needed, but B2 verifies a phone number by text message.
 2. **Buckets → Create a Bucket:**
@@ -127,13 +127,32 @@ The Free plan keeps no backups, so a nightly workflow keeps our own ([ADR-0014](
 
      | Secret | Value |
      | --- | --- |
-     | `BACKUP_DATABASE_URL` | The same session-pooler string as `DATABASE_MIGRATION_URL` (step 1.4) |
+     | `BACKUP_DATABASE_URL` | The same session-pooler string as `DATABASE_MIGRATION_URL`. GitHub never shows a saved secret again, so build it afresh from step 1.4 and your password manager |
      | `SUPABASE_S3_ACCESS_KEY_ID` | From step 6 |
      | `SUPABASE_S3_SECRET_ACCESS_KEY` | From step 6 |
      | `B2_KEY_ID` | `keyID` from step 4 |
      | `B2_APPLICATION_KEY` | `applicationKey` from step 4 |
      | `B2_BUCKET` | The bucket name from step 2 |
      | `BACKUP_PASSPHRASE` | From step 5 |
+
+8. **Run it once now: Actions → Nightly backup → Run workflow** (branch `main`). It takes a minute or two. A green run ends with `Done in … s`, after lines for the dump, the daily and monthly copies, the check that the uploaded copy decrypts, the receipt images, the heartbeat and the two Free plan limits. A red run names what is wrong, such as a missing secret or a key Backblaze refused, and never prints a secret. After that it runs every night, and GitHub emails you when a run fails.
+9. **Check your copy of the passphrase, once.** The nightly check, and the restore drill once it exists, decrypt with the secret, so neither can tell whether the passphrase in your password manager matches it; a stray space pasted into either would surface only during a real restore. Download that first `db/daily/…` file from the bucket (**Browse Files**) and decrypt it as in step 1 below, pasting the passphrase from your password manager. If it decrypts, your copy is good. If not, set `BACKUP_PASSPHRASE` again from the password manager and repeat step 8.
+
+### Restoring from the off-site backup
+
+The monthly restore drill automates this (backlog #10). By hand, on any machine with Docker, the AWS CLI, `gpg`, `psql` and the Supabase CLI:
+
+1. Download the dump you want from the bucket, such as `db/daily/2026-10-02.tar.gz.gpg`, and decrypt it with the passphrase from your password manager: `gpg --decrypt --output db.tar.gz <file>`, then `tar -xzf db.tar.gz`. It holds `roles.sql`, `schema.sql`, `data.sql` and `manifest.json`, which records the row count of every table and each file's SHA-256.
+2. Into a new or empty Supabase project, as its `postgres` role, using the session-pooler address, run Supabase's documented restore:
+   ```sh
+   psql --single-transaction --variable ON_ERROR_STOP=1 \
+     --file roles.sql --file schema.sql \
+     --command 'SET session_replication_role = replica' --file data.sql \
+     --dbname "<session-pooler URL>"
+   ```
+3. Check the row counts against `manifest.json`.
+4. Copy the images back: each `receipts/<path>.gpg` in the bucket decrypts to the object `<path>` in the `receipts` storage bucket. Its SHA-256 must equal the `sha256` column of the receipt whose `storage_key` is `<path>`.
+5. Follow "After a restore or in a new project" below. The runtime roles come back without passwords, so the Release run sets them again.
 
 ## 6. Workflows, error tracking and feature flags
 

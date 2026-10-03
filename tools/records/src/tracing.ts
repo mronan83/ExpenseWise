@@ -12,9 +12,9 @@ export const GAPS: readonly Gap[] = [
     affects: ['NFR-REL-01', 'NFR-REL-02', 'NFR-REL-03', 'NFR-REL-05', 'BO-4'],
     severity: 'High',
     evidence:
-      'No backup workflow in `.github/workflows/`. ADR-0014 and the roadmap make the nightly backup a precondition of real use; real receipts have been captured since Oct 2.',
-    fix: 'Build the nightly encrypted backup to Backblaze B2 (#1), set up its storage and secrets (#2), then restore it once (#10).',
-    backlog: 1,
+      'ADR-0014 and the roadmap make the nightly backup a precondition of real use; real receipts have been captured since Oct 2. The backup is built (#1, PR #23) but has no secrets yet, so it has never run.',
+    fix: 'Set up its storage and secrets and run it once (#2), then restore it (#10).',
+    backlog: 2,
   },
   {
     id: 'GAP-02',
@@ -236,6 +236,12 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-02',
+    change:
+      'PR #23: the nightly encrypted backup to Backblaze B2, with the heartbeat and quota alerts (F-37, #1 done). Rehearsed against a stand-in, including a full restore. NFR-REL-01 and NFR-REL-05 are Partial until its secrets are set and it runs (#2); GAP-01 now closes with #2. The restore drill is its own feature, F-41 (#10).',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-02',
     change:
