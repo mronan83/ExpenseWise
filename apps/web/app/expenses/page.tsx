@@ -14,8 +14,22 @@ type Load =
   | { state: 'error'; message: string }
   | { state: 'ready'; expenses: ExpenseSummary[]; searched: boolean };
 
-type Search = { q: string; from: string; to: string; amount: string };
-const NO_SEARCH: Search = { q: '', from: '', to: '', amount: '' };
+/** onTrip: 'no' for expenses on no trip, as Home's "Not on a trip" opens them. */
+type Search = { q: string; from: string; to: string; amount: string; onTrip: '' | 'yes' | 'no' };
+const NO_SEARCH: Search = { q: '', from: '', to: '', amount: '', onTrip: '' };
+
+/** A search a link asked for, such as one of Home's figures. */
+function searchInLink(): Search {
+  const params = new URLSearchParams(window.location.search);
+  const onTrip = params.get('onTrip');
+  return {
+    q: params.get('q') ?? '',
+    from: params.get('from') ?? '',
+    to: params.get('to') ?? '',
+    amount: params.get('amount') ?? '',
+    onTrip: onTrip === 'yes' || onTrip === 'no' ? onTrip : '',
+  };
+}
 
 const describeError = (error: unknown) =>
   error instanceof ApiProblem
@@ -52,9 +66,11 @@ export default function ExpensesPage() {
   }, []);
 
   useEffect(() => {
-    // Loading reads the browser's session, so it can only start after mounting.
+    // Loading reads the browser's session and the link, so it can only start after mounting.
+    const linked = searchInLink();
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    void refresh(NO_SEARCH);
+    setSearch(linked);
+    void refresh(linked);
   }, [refresh]);
 
   const searchFor = (terms: Search) => {
@@ -148,6 +164,7 @@ function SearchExpenses({ search, onSearch }: { search: Search; onSearch: (s: Se
       from: formText(form, 'from'),
       to: formText(form, 'to'),
       amount: formText(form, 'amount'),
+      onTrip: search.onTrip,
     });
   };
   const searching = Object.values(search).some((v) => v !== '');
@@ -197,6 +214,11 @@ function SearchExpenses({ search, onSearch }: { search: Search; onSearch: (s: Se
           <input name="to" type="date" defaultValue={search.to} className={field} />
         </label>
       </div>
+      {search.onTrip === 'no' ? (
+        <p className="text-xs text-ink-2">Only expenses on no trip.</p>
+      ) : search.onTrip === 'yes' ? (
+        <p className="text-xs text-ink-2">Only expenses on a trip.</p>
+      ) : null}
       <div className="flex flex-wrap gap-3">
         <button
           type="submit"

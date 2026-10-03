@@ -102,14 +102,25 @@ export async function findReceiptBySha256(
   return row;
 }
 
-/** The newest receipts first, only those in `statuses` when given. Call inside withOrg(). */
+/** Which receipts to list: only those in `statuses`, only `memberId`'s, when given. */
+export interface ReceiptFilter {
+  readonly statuses?: readonly ReceiptStatus[];
+  readonly memberId?: string;
+}
+
+/** The newest receipts first. Call inside withOrg(). */
 export function listReceipts(
   tx: Transaction,
   limit: number,
-  statuses?: readonly ReceiptStatus[],
+  filter: ReceiptFilter = {},
 ): Promise<ReceiptRecord[]> {
-  const query = withUploader(tx);
-  return (statuses ? query.where(inArray(receipts.status, [...statuses])) : query)
+  return withUploader(tx)
+    .where(
+      and(
+        filter.statuses ? inArray(receipts.status, [...filter.statuses]) : undefined,
+        filter.memberId ? eq(receipts.memberId, filter.memberId) : undefined,
+      ),
+    )
     .orderBy(desc(receipts.createdAt), desc(receipts.id))
     .limit(limit);
 }

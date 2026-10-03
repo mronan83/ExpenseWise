@@ -10,6 +10,8 @@ import { readyRoute } from './routes/ready.ts';
 import type { Readiness } from './schemas.ts';
 import type { SecretBox } from './secret-box.ts';
 import { registerExpenseRoutes } from './expense-routes.ts';
+import type { HomeStore } from './home.ts';
+import { registerHomeRoutes } from './home-routes.ts';
 import type { ExpenseStore } from './expenses.ts';
 import { registerReceiptRoutes, type ReceiptRouteOptions } from './receipt-routes.ts';
 import { registerTripRoutes } from './trip-routes.ts';
@@ -32,6 +34,8 @@ export interface ApiOptions extends Pick<ReceiptRouteOptions, 'receipts' | 'file
   readonly expenses?: ExpenseStore;
   /** Trips and the expenses filed to them. Without it, those routes answer 503. */
   readonly trips?: TripStore;
+  /** What Home shows, read at once. Without it, Home answers 503. */
+  readonly home?: HomeStore;
   /** Encrypts AI provider keys at rest. Without it, saving or testing a key answers 503. */
   readonly secrets?: SecretBox;
   /** Checks AI provider keys with a free call to the provider. */
@@ -138,6 +142,7 @@ export function createApi(options: ApiOptions) {
   registerReceiptRoutes(app, options);
   registerExpenseRoutes(app, options);
   registerTripRoutes(app, options);
+  registerHomeRoutes(app, options);
 
   app.doc31('/v1/openapi.json', OPENAPI_INFO);
 

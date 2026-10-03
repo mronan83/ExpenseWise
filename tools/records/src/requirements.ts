@@ -366,7 +366,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
       'api/receipts › is empty when nothing needs the person, and needs a signed-in member',
     ],
     shortfalls: ['#24'],
-    note: 'Receipts to check are in it, each with why and one action, and it says when nothing needs you (PR #41). Returned reports join it with approval (#24). Missing receipts join with card transactions (FR-CAP-06), the first way to know a receipt is missing.',
+    note: 'Receipts to check are in it, each with why and one action, and it says when nothing needs you (PR #41). Since PR #43 it lists only the person’s own receipts, and Home shows the newest three with the rest a tap away. Returned reports join it with approval (#24). Missing receipts join with card transactions (FR-CAP-06), the first way to know a receipt is missing.',
   },
   {
     id: 'FR-EXP-03',
@@ -678,11 +678,17 @@ export const FUNCTIONAL: readonly Requirement[] = [
     sources: ['design §5.3', 'capmap P1', 'roadmap inc 3', 'owner 2026-10-03'],
     priority: 'Must',
     phase: 'P1',
-    status: 'Planned',
+    status: 'Partial',
     capabilities: ['Insights · Personal dashboard'],
     features: ['F-22'],
-    backlog: [28],
-    note: 'Your requirement of Oct 3 widened it from this month’s figures to a dashboard: current trip, past trips, unprocessed receipts, unassigned expenses and incomplete reports. Receipts that need a look are already in Needs you (FR-EXP-02); whether an expense on no trip needs you is Q14, and when reports join is Q15.',
+    checks: [
+      'db/home.int',
+      'api/home',
+      'api/expenses › finds the expenses on no trip, or on some trip (Home’s figures open them)',
+      'e2e/signed-in',
+    ],
+    shortfalls: ['#23', '#17'],
+    note: 'Your requirement of Oct 3 widened it from this month’s figures to a dashboard: current trip, past trips, unprocessed receipts, unassigned expenses and incomplete reports. Receipts that need a look are already in Needs you (FR-EXP-02); your answers to Q14 (A: information only) and Q15 (B: reports join with #23) settle the rest. Built in PR #43; reports to finish join with #23, business miles with #17, and money awaiting reimbursement when payouts exist.',
   },
   {
     id: 'FR-INS-02',
@@ -695,7 +701,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
     features: ['F-12'],
     checks: [
       'db/trips.int › finds trips by name, purpose, city or a merchant on them, and by dates',
-      'db/trips.int › finds expenses by merchant, dates, amount in any currency, or trip',
+      'db/trips.int › finds expenses by merchant, dates, amount in any currency, trip, or on no trip',
       'api/expenses › searches by merchant, dates, amount in any currency, and trip (FR-INS-02)',
       'domain/trips › amountMatches',
     ],

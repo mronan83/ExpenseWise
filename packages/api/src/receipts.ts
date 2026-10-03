@@ -17,8 +17,8 @@ import {
   type NewReceipt,
   type NewReceiptReview,
   type ReceiptRecord,
+  type ReceiptFilter,
   type ReceiptReviewRecord,
-  type ReceiptStatus,
 } from '@expensewise/db';
 
 /** A receipt with everything shown about it: its readings and any confirmations. */
@@ -35,11 +35,11 @@ export interface ReceiptWithReadings {
 export interface ReceiptStore {
   findBySha256(orgId: string, sha256: string): Promise<string | undefined>;
   file(orgId: string, input: NewReceipt, actorUserId: string): Promise<FileReceiptResult>;
-  /** The newest receipts with their readings, only those in `statuses` when given. */
+  /** The newest receipts with their readings, filtered by status or member when asked. */
   list(
     orgId: string,
     limit: number,
-    statuses?: readonly ReceiptStatus[],
+    filter?: ReceiptFilter,
   ): Promise<{
     receipts: ReceiptRecord[];
     runs: ExtractionRunRecord[];
@@ -77,9 +77,9 @@ export function dbReceiptStore(db: Database): ReceiptStore {
     findBySha256: (orgId, sha256) =>
       inOrg(orgId, async (tx) => (await findReceiptBySha256(tx, sha256))?.id),
     file: (orgId, input, actor) => inOrg(orgId, (tx) => fileReceipt(tx, orgId, input, actor)),
-    list: (orgId, limit, statuses) =>
+    list: (orgId, limit, filter) =>
       inOrg(orgId, async (tx) => {
-        const receipts = await listReceipts(tx, limit, statuses);
+        const receipts = await listReceipts(tx, limit, filter);
         const ids = receipts.map((r) => r.id);
         const runs = await listExtractionRuns(tx, ids);
         const reviews = await listReceiptReviews(tx, ids);

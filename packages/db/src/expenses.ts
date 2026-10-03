@@ -12,7 +12,19 @@ import {
   type ExpenseValues,
   type AmountMatch,
 } from '@expensewise/domain';
-import { and, desc, eq, gte, inArray, lte, or, sql, type SQL } from 'drizzle-orm';
+import {
+  and,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  or,
+  sql,
+  type SQL,
+} from 'drizzle-orm';
 import { appendAuditEvent, lockOrgWrites, type AuditEntry } from './audit.ts';
 import type { Transaction } from './client.ts';
 import { expenses, members, receipts, trips } from './schema.ts';
@@ -77,6 +89,8 @@ export interface ExpenseFilter {
   /** The amount, as it is in each currency it could be (amountMatches in the domain). */
   readonly amounts?: readonly AmountMatch[];
   readonly tripId?: string;
+  /** true: on some trip. false: on none. */
+  readonly onTrip?: boolean;
 }
 
 const matching = (filter: ExpenseFilter): SQL | undefined => {
@@ -91,6 +105,9 @@ const matching = (filter: ExpenseFilter): SQL | undefined => {
     where.push(or(...amounts) ?? sql`false`);
   }
   if (filter.tripId) where.push(eq(expenses.tripId, filter.tripId));
+  if (filter.onTrip !== undefined) {
+    where.push(filter.onTrip ? isNotNull(expenses.tripId) : isNull(expenses.tripId));
+  }
   return and(...where);
 };
 

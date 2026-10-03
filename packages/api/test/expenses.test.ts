@@ -229,6 +229,14 @@ describe('expenses', () => {
     expect(filters.at(-1)).toEqual({ amounts: undefined });
   });
 
+  it('finds the expenses on no trip, or on some trip (Home’s figures open them)', async () => {
+    const { call, filters } = setup();
+    await call('GET', '/v1/expenses?onTrip=no&from=2026-10-01&to=2026-10-31', 'riley');
+    expect(filters.at(-1)).toMatchObject({ onTrip: false, from: '2026-10-01' });
+    await call('GET', '/v1/expenses?onTrip=yes', 'riley');
+    expect(filters.at(-1)).toMatchObject({ onTrip: true });
+  });
+
   it.each([
     'amount=1,000',
     'amount=-5',
@@ -236,6 +244,7 @@ describe('expenses', () => {
     'from=2026-02-30',
     'to=yesterday',
     'tripId=houston',
+    'onTrip=maybe',
   ])('refuses the search %s', async (query) => {
     const { call } = setup();
     expect(await call('GET', `/v1/expenses?${query}`, 'riley')).toMatchObject({

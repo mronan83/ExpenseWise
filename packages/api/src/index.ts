@@ -4,6 +4,7 @@ export * from './schemas.ts';
 export * from './redact.ts';
 export * from './ai-providers.ts';
 export * from './expenses.ts';
+export * from './home.ts';
 export * from './provider-keys.ts';
 export * from './receipts.ts';
 export * from './secret-box.ts';

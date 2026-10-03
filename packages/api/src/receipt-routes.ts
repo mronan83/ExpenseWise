@@ -173,10 +173,11 @@ export function registerReceiptRoutes(
 
   app.openapi(inboxRoute, async (c) => {
     const who = await member(c.var.identity.userId);
-    const { receipts, runs, reviews } = await stores().receipts.list(who.orgId, LIST_LIMIT, [
-      'needs_review',
-      'failed',
-    ]);
+    // What needs this person: their own receipts (FR-EXP-02).
+    const { receipts, runs, reviews } = await stores().receipts.list(who.orgId, LIST_LIMIT, {
+      statuses: ['needs_review', 'failed'],
+      memberId: who.memberId,
+    });
     const items = receipts.map((r) => inboxItem(r, runs, reviews)).filter((item) => item !== null);
     return c.json({ items }, 200);
   });

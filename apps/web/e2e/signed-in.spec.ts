@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page, type Request } from '@playwright/test';
 import {
   BENCH_URL,
   E2E_SESSION_KEY,
@@ -29,9 +29,15 @@ const fill =
   (page) =>
     page.getByLabel(label, { exact: true }).first().fill(value);
 
-/** Each screen and state: what it shows, where it is, and what a person does to get there. */
-const SCREENS: [string, (s: Seeded) => string, Step[]][] = [
+/**
+ * Each screen and state: what it shows, where it is, what a person does to get there, and,
+ * where the day decides what shows, the day it is on the person's clock.
+ */
+const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
   ['Home', () => '/', []],
+  ['Home during a trip', () => '/', [], '2026-10-21T12:00:00'],
+  ['Home with a trip coming up', () => '/', [], '2026-11-01T12:00:00'],
+  ['Home with everything in Needs you open', () => '/', [press('Show all')]],
   ['Receipts', () => '/receipts', []],
   ['a Ready receipt', (s) => `/receipts/${s.receipts.coffee}`, []],
   ['a receipt the models read differently', (s) => `/receipts/${s.receipts.folio}`, []],
@@ -43,6 +49,11 @@ const SCREENS: [string, (s: Seeded) => string, Step[]][] = [
   ['a receipt dated after it was uploaded', (s) => `/receipts/${s.receipts.future}`, []],
   ['a receipt being read', (s) => `/receipts/${s.receipts.processing}`, []],
   ['Expenses', () => '/expenses', []],
+  [
+    'expenses on no trip, opened from Home',
+    () => '/expenses?from=2026-10-01&to=2026-10-31&onTrip=no',
+    [],
+  ],
   [
     'searching expenses',
     () => '/expenses',
@@ -97,7 +108,8 @@ const session = {
   refresh_token: E2E_USER,
   token_type: 'bearer',
   expires_in: 86_400,
-  expires_at: Math.floor(Date.now() / 1000) + 86_400,
+  // Far off, so a screen seen on a later day of the clock still holds a live session.
+  expires_at: Math.floor(Date.now() / 1000) + 10 * 365 * 86_400,
   user: {
     id: E2E_USER,
     aud: 'authenticated',
@@ -129,7 +141,38 @@ test.beforeEach(async ({ context }) => {
   );
 });
 
-async function open(page: Page, path: string, steps: Step[]): Promise<void> {
+/**
+ * Counts the page's requests in flight. `settled()` waits until there have been none for a
+ * moment. Next.js loads linked screens in the background as their links scroll into view;
+ * navigating while one is loading cancels it, and WebKit logs a cancelled request as a console
+ * error. Waiting first means every error the test sees is a real one.
+ */
+function requestsInFlight(page: Page) {
+  const pending = new Set<Request>();
+  page.on('request', (r) => pending.add(r));
+  page.on('requestfinished', (r) => pending.delete(r));
+  page.on('requestfailed', (r) => pending.delete(r));
+  return async function settled(): Promise<void> {
+    const quietFor = 300;
+    const deadline = Date.now() + 15_000;
+    let quietSince: number | null = null;
+    while (Date.now() < deadline) {
+      if (pending.size > 0) quietSince = null;
+      else if (quietSince === null) quietSince = Date.now();
+      else if (Date.now() - quietSince >= quietFor) return;
+      await page.waitForTimeout(50);
+    }
+    throw new Error(`Requests still loading: ${[...pending].map((r) => r.url()).join(', ')}`);
+  };
+}
+
+async function open(
+  page: Page,
+  path: string,
+  steps: Step[],
+  settled: () => Promise<void>,
+): Promise<void> {
+  await settled();
   await page.goto(path, { waitUntil: 'networkidle' });
   await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
   await expect(
@@ -142,7 +185,7 @@ async function open(page: Page, path: string, steps: Step[]): Promise<void> {
   }
 }
 
-for (const [title, path, steps] of SCREENS) {
+for (const [title, path, steps, at] of SCREENS) {
   test(`${title}: fits the screen and passes WCAG 2.2 AA, in light and dark`, async ({
     page,
   }, testInfo) => {
@@ -152,11 +195,13 @@ for (const [title, path, steps] of SCREENS) {
     page.on('console', (message) => {
       if (message.type() === 'error') errors.push(message.text());
     });
+    const settled = requestsInFlight(page);
     const size = page.viewportSize()!;
+    if (at) await page.clock.setFixedTime(new Date(at));
 
     for (const colorScheme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme });
-      await open(page, path(seeded), steps);
+      await open(page, path(seeded), steps, settled);
       const where = `${colorScheme}, ${size.width}px`;
       expect(await layoutProblems(page), where).toEqual([]);
       // The tab bar covers whatever is scrolled under it until the person scrolls on; that
@@ -175,11 +220,13 @@ for (const [title, path, steps] of SCREENS) {
     if (testInfo.project.name === 'iphone-webkit') {
       await page.emulateMedia({ colorScheme: 'light' });
       for (const width of OTHER_PHONE_WIDTHS) {
+        await settled();
         await page.setViewportSize({ width, height: size.height });
-        await open(page, path(seeded), steps);
+        await open(page, path(seeded), steps, settled);
         expect(await layoutProblems(page), `light, ${width}px`).toEqual([]);
       }
     }
+    await settled();
     expect(errors, 'errors in the console').toEqual([]);
   });
 }

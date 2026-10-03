@@ -110,7 +110,7 @@ export const COMPONENTS: readonly Component[] = [
     name: 'API',
     technology: 'Hono with zod-openapi; jose for tokens',
     responsibility:
-      'Verifies the sign-in token, finds the caller’s membership, and serves every operation, including the Needs you inbox, which says why each item needs the person. Generates the OpenAPI contract and answers errors as problem documents.',
+      'Verifies the sign-in token, finds the caller’s membership, and serves every operation, including Home, read in one transaction: the Needs you inbox, which says why each item needs the person, then their trip, month and recent trips. Generates the OpenAPI contract and answers errors as problem documents.',
     where: ['packages/api'],
   },
   {
@@ -261,8 +261,8 @@ export const FLOWS: readonly Flow[] = [
   A->>DB: One transaction: receipt settles, expense follows, files to its trip by date
   Note over DB: Ready only when the receipt is Ready and the claim is complete
   P->>W: Opens Home
-  W->>A: GET /v1/inbox
-  A-->>W: What needs a look or couldn’t be read, each with why`,
+  W->>A: GET /v1/home, with the person’s own day
+  A-->>W: What needs them, their trip, month and recent trips`,
     refs: ['ADR-0017', 'ADR-0020', 'ADR-0022', 'ADR-0023', 'FR-INT-04'],
   },
   {
