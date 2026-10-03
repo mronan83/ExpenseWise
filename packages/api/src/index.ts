@@ -7,4 +7,5 @@ export * from './expenses.ts';
 export * from './provider-keys.ts';
 export * from './receipts.ts';
 export * from './secret-box.ts';
+export * from './trips.ts';
 export * from './workspace.ts';

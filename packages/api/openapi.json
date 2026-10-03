@@ -1458,6 +1458,34 @@
             "format": "uuid",
             "description": "Its receipt, the proof."
           },
+          "trip": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ],
+            "description": "The trip it is filed to (FR-EXP-04), or null for none."
+          },
+          "tripFiledBy": {
+            "type": "string",
+            "enum": [
+              "date",
+              "person"
+            ],
+            "description": "date: it files to the trip its date falls in, and moves when the dates do. person: a person chose its trip, or chose none, and filing by date leaves it there (ADR-0023)."
+          },
           "matchesReceipt": {
             "type": [
               "boolean",
@@ -1483,6 +1511,8 @@
           "date",
           "amount",
           "receiptId",
+          "trip",
+          "tripFiledBy",
           "matchesReceipt",
           "createdAt",
           "updatedAt"
@@ -1632,6 +1662,267 @@
             "maxLength": 200,
             "description": "A plain decimal in the expense’s currency.",
             "example": "6.50"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SetExpenseTrip": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "tripId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid",
+                "description": "The trip to put it on, or null for no trip."
+              }
+            },
+            "required": [
+              "tripId"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "byDate": {
+                "type": "boolean",
+                "enum": [
+                  true
+                ],
+                "description": "File it to the trip its date falls in again."
+              }
+            },
+            "required": [
+              "byDate"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "TripList": {
+        "type": "object",
+        "properties": {
+          "trips": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TripSummary"
+            }
+          }
+        },
+        "required": [
+          "trips"
+        ]
+      },
+      "TripSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Houston · Acme onsite"
+          },
+          "purpose": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "Client onsite"
+          },
+          "primaryCity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "Houston"
+          },
+          "startDate": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-09-22"
+          },
+          "endDate": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-09-22",
+            "description": "The last day, included."
+          },
+          "days": {
+            "type": "integer",
+            "description": "Days it covers, both ends included."
+          },
+          "owner": {
+            "type": "string",
+            "description": "The member whose trip it is."
+          },
+          "expenseCount": {
+            "type": "integer"
+          },
+          "readyCount": {
+            "type": "integer",
+            "description": "Expenses that are Ready, or further along: submitted or later."
+          },
+          "needsReviewCount": {
+            "type": "integer"
+          },
+          "totals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "amountMinor": {
+                  "type": "integer"
+                },
+                "currency": {
+                  "type": "string"
+                },
+                "decimal": {
+                  "type": "string",
+                  "example": "1257.60"
+                }
+              },
+              "required": [
+                "amountMinor",
+                "currency",
+                "decimal"
+              ]
+            },
+            "description": "What its expenses add up to, one total per currency, never converted. Expenses with no amount yet count in none."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "purpose",
+          "primaryCity",
+          "startDate",
+          "endDate",
+          "days",
+          "owner",
+          "expenseCount",
+          "readyCount",
+          "needsReviewCount",
+          "totals",
+          "createdAt"
+        ]
+      },
+      "TripDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/TripSummary"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "expenses": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ExpenseSummary"
+                },
+                "description": "In date order; those with no date yet last."
+              }
+            },
+            "required": [
+              "expenses"
+            ]
+          }
+        ]
+      },
+      "CreateTrip": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Up to 120 characters.",
+            "example": "Houston · Acme onsite"
+          },
+          "purpose": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1000,
+            "description": "Why you went. Up to 500 characters.",
+            "example": "Client onsite"
+          },
+          "primaryCity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1000,
+            "description": "Where. Up to 120 characters.",
+            "example": "Houston"
+          },
+          "startDate": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "YYYY-MM-DD.",
+            "example": "2026-09-22"
+          },
+          "endDate": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "YYYY-MM-DD, the last day, included. A trip is at most 366 days.",
+            "example": "2026-09-25"
+          }
+        },
+        "required": [
+          "name",
+          "startDate",
+          "endDate"
+        ],
+        "additionalProperties": false
+      },
+      "EditTrip": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Up to 120 characters.",
+            "example": "Houston · Acme onsite"
+          },
+          "purpose": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1000,
+            "description": "Why you went. Up to 500 characters.",
+            "example": "Client onsite"
+          },
+          "primaryCity": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1000,
+            "description": "Where. Up to 120 characters.",
+            "example": "Houston"
+          },
+          "startDate": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "YYYY-MM-DD.",
+            "example": "2026-09-22"
+          },
+          "endDate": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "YYYY-MM-DD, the last day, included. A trip is at most 366 days.",
+            "example": "2026-09-25"
           }
         },
         "additionalProperties": false
@@ -2816,19 +3107,91 @@
         "tags": [
           "Expenses"
         ],
-        "summary": "The organization’s expenses, newest first",
+        "summary": "The organization’s expenses, newest first, or those that match a search",
+        "description": "FR-INS-02. Every search term given must match: part of the merchant, a date range, an amount, a trip.",
         "security": [
           {
             "bearerAuth": []
           }
         ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "description": "Part of the merchant’s name, in any case.",
+              "example": "uber"
+            },
+            "required": false,
+            "description": "Part of the merchant’s name, in any case.",
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "example": "2026-09-22",
+              "description": "Dated on or after this day."
+            },
+            "required": false,
+            "description": "Dated on or after this day.",
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "example": "2026-09-22",
+              "description": "Dated on or before this day."
+            },
+            "required": false,
+            "description": "Dated on or before this day.",
+            "name": "to",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{1,15}(\\.\\d{1,3})?$",
+              "description": "The amount, as a plain decimal. It matches in every currency it can be written in: 18.92 finds 18.92 dollars or euros and 18.920 dinars, never yen.",
+              "example": "18.92"
+            },
+            "required": false,
+            "description": "The amount, as a plain decimal. It matches in every currency it can be written in: 18.92 finds 18.92 dollars or euros and 18.920 dinars, never yen.",
+            "name": "amount",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "description": "On this trip."
+            },
+            "required": false,
+            "description": "On this trip.",
+            "name": "tripId",
+            "in": "query"
+          }
+        ],
         "responses": {
           "200": {
-            "description": "The newest 100 expenses.",
+            "description": "The newest 100 expenses that match.",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ExpenseList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A search term is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
                 }
               }
             }
@@ -3026,6 +3389,540 @@
           },
           "422": {
             "description": "A value is not valid; field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/expenses/{expenseId}/trip": {
+      "put": {
+        "tags": [
+          "Expenses"
+        ],
+        "summary": "Choose an expense’s trip",
+        "description": "ADR-0023. Puts the expense on one of its owner’s trips, or on none ({\"tripId\": null}); filing by date leaves it there from then on. {\"byDate\": true} files it by date again.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetExpenseTrip"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The expense as it is now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenseDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such expense in this organization.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It is submitted or later, so it stays with its report.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "No such trip, or the trip is another member’s.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/trips": {
+      "get": {
+        "tags": [
+          "Trips"
+        ],
+        "summary": "Trips, latest first, or those that match a search",
+        "description": "FR-EXP-04, FR-INS-02. Every search term given must match.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 200,
+              "description": "Part of the name, purpose or city, or of a merchant on the trip.",
+              "example": "houston"
+            },
+            "required": false,
+            "description": "Part of the name, purpose or city, or of a merchant on the trip.",
+            "name": "q",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "example": "2026-09-22",
+              "description": "Trips that end on or after this day."
+            },
+            "required": false,
+            "description": "Trips that end on or after this day.",
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "example": "2026-09-22",
+              "description": "Trips that start on or before this day."
+            },
+            "required": false,
+            "description": "Trips that start on or before this day.",
+            "name": "to",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The latest 200 trips that match.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripList"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A search term is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Trips"
+        ],
+        "summary": "Make a trip",
+        "description": "FR-EXP-04, ADR-0023. A trip of the caller’s. Their expenses dated in it file to it, unless a person chose their trip or they are submitted or later.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTrip"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The trip, with the expenses now on it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not valid; field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/trips/{tripId}": {
+      "get": {
+        "tags": [
+          "Trips"
+        ],
+        "summary": "One trip, with its expenses",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "tripId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The trip.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such trip in this organization.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Trips"
+        ],
+        "summary": "Edit a trip",
+        "description": "Changes the fields sent and records who changed what. New dates file its owner’s expenses again: those now in it join, those now outside it leave.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "tripId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditTrip"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The trip as it is now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TripDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such trip in this organization.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not valid; field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Trips"
+        ],
+        "summary": "Delete a trip",
+        "description": "Its expenses file by date to any other trip that covers them, including ones a person had put on it.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "tripId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted."
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such trip in this organization.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "A submitted expense or a report rests on it.",
             "content": {
               "application/problem+json": {
                 "schema": {

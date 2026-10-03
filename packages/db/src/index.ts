@@ -10,3 +10,4 @@ export * from './readiness.ts';
 export * from './receipts.ts';
 export * from './schema.ts';
 export * from './sign-ins.ts';
+export * from './trips.ts';

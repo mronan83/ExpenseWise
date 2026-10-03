@@ -10,11 +10,13 @@ import {
   type ExpenseSource,
   type ExpenseStatus,
   type ExpenseValues,
+  type AmountMatch,
 } from '@expensewise/domain';
-import { and, desc, eq } from 'drizzle-orm';
-import { appendAuditEvent, type AuditEntry } from './audit.ts';
+import { and, desc, eq, gte, inArray, lte, or, sql, type SQL } from 'drizzle-orm';
+import { appendAuditEvent, lockOrgWrites, type AuditEntry } from './audit.ts';
 import type { Transaction } from './client.ts';
-import { expenses, members, receipts } from './schema.ts';
+import { expenses, members, receipts, trips } from './schema.ts';
+import { containing, fileExpenseToTrip } from './trips.ts';
 
 export interface ExpenseRecord extends ExpenseValues {
   readonly id: string;
@@ -24,6 +26,11 @@ export interface ExpenseRecord extends ExpenseValues {
   readonly source: ExpenseSource;
   /** The receipt that proves it (FR-EXP-08); null for an expense typed in by hand. */
   readonly receiptId: string | null;
+  /** The trip it is filed to (FR-EXP-04), and its name; null for none. */
+  readonly tripId: string | null;
+  readonly tripName: string | null;
+  /** A person chose its trip, or chose none: filing by date leaves it there (ADR-0023). */
+  readonly tripPinned: boolean;
   readonly editedAt: Date | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -40,6 +47,9 @@ const expenseColumns = {
   currency: expenses.currency,
   amountMinor: expenses.amountMinor,
   receiptId: receipts.id,
+  tripId: expenses.tripId,
+  tripName: trips.name,
+  tripPinned: expenses.tripPinned,
   editedAt: expenses.editedAt,
   createdAt: expenses.createdAt,
   updatedAt: expenses.updatedAt,
@@ -53,11 +63,54 @@ const withProof = (tx: Transaction) =>
     .leftJoin(
       receipts,
       and(eq(receipts.orgId, expenses.orgId), eq(receipts.expenseId, expenses.id)),
-    );
+    )
+    .leftJoin(trips, and(eq(trips.orgId, expenses.orgId), eq(trips.id, expenses.tripId)));
 
-/** The newest expenses first. Call inside withOrg(). */
-export function listExpenses(tx: Transaction, limit: number): Promise<ExpenseRecord[]> {
-  return withProof(tx).orderBy(desc(expenses.createdAt), desc(expenses.id)).limit(limit);
+/** Narrows a list of expenses (FR-INS-02). Every part given must match. */
+export interface ExpenseFilter {
+  /** Part of the merchant's name, in any case. */
+  readonly q?: string;
+  /** Dated on or after this day. */
+  readonly from?: string;
+  /** Dated on or before this day. */
+  readonly to?: string;
+  /** The amount, as it is in each currency it could be (amountMatches in the domain). */
+  readonly amounts?: readonly AmountMatch[];
+  readonly tripId?: string;
+}
+
+const matching = (filter: ExpenseFilter): SQL | undefined => {
+  const where: SQL[] = [];
+  if (filter.q?.trim()) where.push(sql`${expenses.merchant} ilike ${containing(filter.q)}`);
+  if (filter.from) where.push(gte(expenses.transactionDate, filter.from));
+  if (filter.to) where.push(lte(expenses.transactionDate, filter.to));
+  if (filter.amounts) {
+    const amounts = filter.amounts.map((m) =>
+      and(eq(expenses.amountMinor, m.amountMinor), inArray(expenses.currency, [...m.currencies])),
+    );
+    where.push(or(...amounts) ?? sql`false`);
+  }
+  if (filter.tripId) where.push(eq(expenses.tripId, filter.tripId));
+  return and(...where);
+};
+
+/** The newest expenses first, those that match. Call inside withOrg(). */
+export function listExpenses(
+  tx: Transaction,
+  limit: number,
+  filter: ExpenseFilter = {},
+): Promise<ExpenseRecord[]> {
+  return withProof(tx)
+    .where(matching(filter))
+    .orderBy(desc(expenses.createdAt), desc(expenses.id))
+    .limit(limit);
+}
+
+/** A trip's expenses in date order, undated last. Call inside withOrg(). */
+export function listTripExpenses(tx: Transaction, tripId: string): Promise<ExpenseRecord[]> {
+  return withProof(tx)
+    .where(eq(expenses.tripId, tripId))
+    .orderBy(sql`${expenses.transactionDate} asc nulls last`, expenses.createdAt, expenses.id);
 }
 
 /** One expense, or undefined. Call inside withOrg(). */
@@ -95,6 +148,8 @@ export async function fileReceiptExpense(
   offered: ExpenseValues | null,
   actor: AuditEntry['actor'],
 ): Promise<void> {
+  // Before any expense is locked, so filing it to a trip sees every trip settled (ADR-0023).
+  await lockOrgWrites(tx, orgId);
   const [receipt] = await tx
     .select({
       status: receipts.status,
@@ -126,6 +181,7 @@ export async function fileReceiptExpense(
       action: 'expense.created',
       payload: { receiptId, status },
     });
+    await fileExpenseToTrip(tx, orgId, id, actor);
     return;
   }
 
@@ -160,6 +216,7 @@ export async function fileReceiptExpense(
     action: 'expense.filed',
     payload: { receiptId, status, previous: expense.status, refreshed },
   });
+  if (refreshed) await fileExpenseToTrip(tx, orgId, receipt.expenseId, actor);
 }
 
 export type EditExpenseResult =
@@ -183,6 +240,7 @@ export async function editExpense(
   edit: ExpenseEdit,
   actorUserId: string,
 ): Promise<EditExpenseResult> {
+  await lockOrgWrites(tx, orgId);
   const [expense] = await tx
     .select({
       status: expenses.status,
@@ -224,5 +282,8 @@ export async function editExpense(
     action: 'expense.edited',
     payload: { changes, status, previous: expense.status },
   });
+  if (changes.some((c) => c.field === 'date')) {
+    await fileExpenseToTrip(tx, orgId, expenseId, { type: 'user', id: actorUserId });
+  }
   return { status: 'edited', changes };
 }

@@ -6,7 +6,7 @@ const destinations = [
   { label: 'Home', current: true },
   { label: 'Expenses', href: '/expenses' },
   { label: 'Capture', primary: true },
-  { label: 'Trips' },
+  { label: 'Trips', href: '/trips' },
   { label: 'Reports' },
 ] as const;
 

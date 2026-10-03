@@ -230,6 +230,11 @@ export const expenses = pgTable(
      * overwrites them (ADR-0022); a difference from the receipt shows instead.
      */
     editedAt: timestamp('edited_at', { withTimezone: true }),
+    /**
+     * A person chose its trip, or chose no trip. From then on filing by date never moves it
+     * (ADR-0023).
+     */
+    tripPinned: boolean('trip_pinned').notNull().default(false),
     /** Corrections to approved expenses are a reversal plus a new version. */
     version: integer('version').notNull().default(1),
     reversalOfId: uuid('reversal_of_id'),

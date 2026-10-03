@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { api, ApiProblem } from '../../../lib/api';
 import {
   EXPENSE_FIELD_LABELS,
@@ -12,6 +12,7 @@ import {
 } from '../../../lib/expenses';
 import { formatMoney, RECEIPT_STATUS } from '../../../lib/receipts';
 import { supabase } from '../../../lib/supabase';
+import { tripDates, type TripSummary } from '../../../lib/trips';
 
 type Load =
   | { state: 'loading' }
@@ -78,6 +79,10 @@ export default function ExpensePage() {
             <Verdict expense={expense} />
             <Claim
               key={expense.updatedAt}
+              expense={expense}
+              onSaved={(next) => setLoad({ state: 'ready', expense: next })}
+            />
+            <TripChoice
               expense={expense}
               onSaved={(next) => setLoad({ state: 'ready', expense: next })}
             />
@@ -307,6 +312,165 @@ function Proof({ expense }: { expense: ExpenseDetail }) {
       <Link href={`/receipts/${proof.receiptId}`} className="font-semibold text-carbon underline">
         Open the receipt
       </Link>
+    </section>
+  );
+}
+
+const daysApart = (a: string, b: string) =>
+  Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86_400_000;
+
+/** How far a trip is from a date: zero inside it. */
+const distance = (trip: TripSummary, date: string) =>
+  date < trip.startDate
+    ? daysApart(date, trip.startDate)
+    : date > trip.endDate
+      ? daysApart(trip.endDate, date)
+      : 0;
+
+/**
+ * The trip it is filed to. It files by its date on its own; a person can put it on another
+ * trip, such as a flight booked weeks ahead, or on none, and dates never move it again
+ * (ADR-0023).
+ */
+function TripChoice({
+  expense,
+  onSaved,
+}: {
+  expense: ExpenseDetail;
+  onSaved: (expense: ExpenseDetail) => void;
+}) {
+  const [trips, setTrips] = useState<TripSummary[] | null>(null);
+  const [choice, setChoice] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const movable = expense.status === 'processing' || expense.editable;
+  const current = expense.tripFiledBy === 'date' ? 'date' : expense.trip ? expense.trip.id : 'none';
+
+  async function open() {
+    setBusy(true);
+    setError(null);
+    try {
+      const { trips: all } = await api<{ trips: TripSummary[] }>('/v1/trips');
+      const date = expense.date;
+      const mine = all.filter((t) => t.owner === expense.owner);
+      setTrips(date ? mine.sort((a, b) => distance(a, date) - distance(b, date)) : mine);
+      setChoice(current);
+    } catch (e) {
+      setError(describeError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    if (choice === current) {
+      setTrips(null);
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    const body =
+      choice === 'date' ? { byDate: true } : { tripId: choice === 'none' ? null : choice };
+    try {
+      onSaved(
+        await api<ExpenseDetail>(`/v1/expenses/${expense.id}/trip`, {
+          method: 'PUT',
+          body: JSON.stringify(body),
+        }),
+      );
+      setTrips(null);
+    } catch (e) {
+      setError(describeError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  let where: ReactNode;
+  if (expense.trip) {
+    where = (
+      <>
+        On{' '}
+        <Link href={`/trips/${expense.trip.id}`} className="font-semibold text-carbon underline">
+          {expense.trip.name}
+        </Link>
+        {expense.tripFiledBy === 'date' ? ', by its date.' : ', put there by hand.'}
+      </>
+    );
+  } else if (expense.tripFiledBy === 'person') {
+    where = 'Not on a trip, by choice. Dates won’t file it to one.';
+  } else if (expense.date) {
+    where = 'Not on a trip. No trip of yours covers its date.';
+  } else {
+    where = 'Not on a trip yet. It files to one once its date is known.';
+  }
+
+  return (
+    <section
+      aria-labelledby="trip-title"
+      className="flex flex-col gap-3 rounded-xl border border-rule bg-sheet p-4 text-sm"
+    >
+      <h2 id="trip-title" className="text-base font-semibold">
+        Trip
+      </h2>
+      <p>{where}</p>
+      {trips ? (
+        <form onSubmit={(e) => void save(e)} className="flex flex-col gap-3">
+          <label className="flex flex-col gap-1 text-xs font-medium text-ink-2">
+            Put it on
+            <select
+              name="trip"
+              value={choice}
+              onChange={(e) => setChoice(e.target.value)}
+              className="rounded-lg border border-rule bg-paper px-3 py-2 text-base text-ink"
+            >
+              <option value="date">The trip its date falls in</option>
+              <option value="none">No trip</option>
+              {trips.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} ({tripDates(t)})
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="submit"
+              disabled={busy}
+              className="rounded-lg bg-carbon px-4 py-2 text-sm font-semibold text-carbon-ink disabled:opacity-60"
+            >
+              {busy ? 'Moving…' : 'Move it'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setTrips(null);
+                setError(null);
+              }}
+              className="rounded-lg border border-rule px-4 py-2 text-sm font-semibold"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : movable ? (
+        <div>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void open()}
+            className="rounded-lg border border-rule px-4 py-2 text-sm font-semibold disabled:opacity-60"
+          >
+            Change trip
+          </button>
+        </div>
+      ) : null}
+      {error ? (
+        <p role="alert" className="text-sm text-warn">
+          {error}
+        </p>
+      ) : null}
     </section>
   );
 }
