@@ -856,8 +856,10 @@ export const NON_FUNCTIONAL: readonly Requirement[] = [
     sources: ['delivery §7.4', 'ADR-0010'],
     priority: 'Must',
     phase: 'P0',
-    status: 'Verified',
+    status: 'Partial',
     checks: ['ci:security', 'ci:codeql'],
+    shortfalls: ['GAP-19'],
+    note: 'One high advisory with no fix yet, reached only through lint tooling, is let through; a weekly watch fails once it has one.',
   },
   {
     id: 'NFR-SEC-13',

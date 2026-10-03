@@ -42,31 +42,6 @@ export const BACKLOG: readonly BacklogItem[] = [
     },
   },
   {
-    num: 3,
-    title: 'Preview builds hold production credentials',
-    type: 'Security',
-    detail:
-      '`DATABASE_URL` and `SUPABASE_SECRET_KEY` are set for Preview as well as Production, so every branch push builds unreviewed code that could read production data and every stored receipt. Previews sit behind Vercel’s sign-in, which limits the damage. Untick Preview on both. CI tests against its own database, so nothing is lost; previews get data again with staging (#30).',
-    priority: 'P1',
-    effort: 'S',
-    severity: 'High',
-    blocker: { kind: 'owner', ask: 'Your go-ahead, or five minutes in Vercel' },
-    source: 'GAP-02',
-    affects: ['GAP-02', 'NFR-SEC-13'],
-  },
-  {
-    num: 4,
-    title: 'Claude can’t read receipts: the Anthropic account has no credit',
-    type: 'Ops',
-    detail:
-      'Every reading fails with “Your credit balance is too low”. Buy credits in the Claude Console under Settings → Billing; $5 covers about 250 receipts with both models. Then press Read again on each receipt that failed.',
-    priority: 'P1',
-    effort: 'S',
-    severity: 'High',
-    blocker: { kind: 'owner', ask: 'Your action: buy Anthropic credits' },
-    affects: ['FR-INT-08', 'NFR-AI-04', 'F-07'],
-  },
-  {
     num: 5,
     title: 'The OpenAI fallback waits on your merge',
     type: 'Feature',
@@ -121,6 +96,45 @@ export const BACKLOG: readonly BacklogItem[] = [
     affects: ['FR-EXP-01', 'FR-EXP-03', 'NFR-UX-04', 'F-09'],
   },
   {
+    num: 16,
+    title: 'Trips, trip history and search',
+    type: 'Feature',
+    detail:
+      'Trips with dates and a purpose; expenses file to the trip whose dates they fall in; past trips can be browsed and searched. Raised to P1 on Oct 3 at your direction. It needs expenses to exist first (#6).',
+    priority: 'P1',
+    effort: 'L',
+    severity: 'Medium',
+    blocker: { kind: 'items', items: [6] },
+    source: 'Roadmap increment 2',
+    affects: ['FR-EXP-04', 'FR-INS-02', 'F-12'],
+  },
+  {
+    num: 10,
+    title: 'No backup has ever been restored',
+    type: 'Ops',
+    detail:
+      'A backup nobody has restored is only a hope. Backups run nightly since Oct 3 (#2). A monthly workflow restores the latest one into a throwaway database and checks migrations, row counts, row-level security and image checksums against what the dump recorded.',
+    priority: 'P1',
+    effort: 'M',
+    severity: 'High',
+    blocker: { kind: 'none' },
+    source: 'ADR-0014',
+    affects: ['NFR-REL-02', 'NFR-REL-03', 'F-41'],
+  },
+  {
+    num: 3,
+    title: 'Preview builds hold production credentials',
+    type: 'Security',
+    detail:
+      '`DATABASE_URL` and `SUPABASE_SECRET_KEY` are set for Preview as well as Production, so every branch push builds unreviewed code that could read production data and every stored receipt. Previews sit behind Vercel’s sign-in, which limits the damage. Untick Preview on both. CI tests against its own database, so nothing is lost; previews get data again with staging (#30).',
+    priority: 'P1',
+    effort: 'S',
+    severity: 'High',
+    blocker: { kind: 'owner', ask: 'Your go-ahead, or five minutes in Vercel' },
+    source: 'GAP-02',
+    affects: ['GAP-02', 'NFR-SEC-13'],
+  },
+  {
     num: 7,
     title: 'Sums and dates aren’t checked before Ready',
     type: 'Gap',
@@ -158,19 +172,6 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none' },
     source: 'Roadmap increment 1, design DP2',
     affects: ['FR-EXP-02', 'F-10'],
-  },
-  {
-    num: 10,
-    title: 'No backup has ever been restored',
-    type: 'Ops',
-    detail:
-      'A backup nobody has restored is only a hope. Backups run nightly since Oct 3 (#2). A monthly workflow restores the latest one into a throwaway database and checks migrations, row counts, row-level security and image checksums against what the dump recorded.',
-    priority: 'P1',
-    effort: 'M',
-    severity: 'High',
-    blocker: { kind: 'none' },
-    source: 'ADR-0014',
-    affects: ['NFR-REL-02', 'NFR-REL-03', 'F-41'],
   },
 
   // P2: this month
@@ -240,19 +241,6 @@ export const BACKLOG: readonly BacklogItem[] = [
     affects: ['GAP-09', 'NFR-DEL-03', 'F-36'],
   },
   {
-    num: 16,
-    title: 'Trips, trip history and search',
-    type: 'Feature',
-    detail:
-      'Trips with dates and a purpose; expenses file to the trip whose dates they fall in; past trips can be browsed and searched.',
-    priority: 'P2',
-    effort: 'L',
-    severity: 'Medium',
-    blocker: { kind: 'items', items: [6] },
-    source: 'Roadmap increment 2',
-    affects: ['FR-EXP-04', 'FR-INS-02', 'F-12'],
-  },
-  {
     num: 17,
     title: 'Manual mileage',
     type: 'Feature',
@@ -304,19 +292,6 @@ export const BACKLOG: readonly BacklogItem[] = [
     affects: ['FR-CAP-04', 'F-14'],
   },
   {
-    num: 21,
-    title: 'Choose the model tier: Haiku or Sonnet',
-    type: 'Decision',
-    detail:
-      'Proposed rule: Haiku if it agrees with Sonnet on at least 95% of receipts and is never confidently wrong where Sonnet was right; otherwise Sonnet. Needs about 20 of your receipts read by both.',
-    priority: 'P2',
-    effort: 'S',
-    severity: 'Medium',
-    blocker: { kind: 'items', items: [4], then: 'about 20 receipts, then your decision' },
-    source: 'ADR-0017',
-    affects: ['FR-INT-08', 'NFR-AI-04', 'F-07'],
-  },
-  {
     num: 22,
     title: 'Was Phase 0’s flagged change switched on in production?',
     type: 'Verify',
@@ -347,6 +322,31 @@ export const BACKLOG: readonly BacklogItem[] = [
   },
 
   // P3: this quarter
+  {
+    num: 4,
+    title: 'Claude can’t read receipts: the Anthropic account has no credit',
+    type: 'Ops',
+    detail:
+      'Every reading fails with “Your credit balance is too low”. Buy credits in the Claude Console under Settings → Billing; $5 covers about 250 receipts with both models. Then press Read again on each receipt that failed. Lowered on Oct 3 at your direction: GPT-5.6 Luna reads every receipt meanwhile, and each one waits in Needs a look until you confirm it (#47). The model-tier decision (#21) waits on this.',
+    priority: 'P3',
+    effort: 'S',
+    severity: 'Medium',
+    blocker: { kind: 'owner', ask: 'Your action: buy Anthropic credits' },
+    affects: ['FR-INT-08', 'NFR-AI-04', 'F-07'],
+  },
+  {
+    num: 21,
+    title: 'Choose the model tier: Haiku or Sonnet',
+    type: 'Decision',
+    detail:
+      'Proposed rule: Haiku if it agrees with Sonnet on at least 95% of receipts and is never confidently wrong where Sonnet was right; otherwise Sonnet. Needs about 20 of your receipts read by both, so it waits on #4.',
+    priority: 'P3',
+    effort: 'S',
+    severity: 'Medium',
+    blocker: { kind: 'items', items: [4], then: 'about 20 receipts, then your decision' },
+    source: 'ADR-0017',
+    affects: ['FR-INT-08', 'NFR-AI-04', 'F-07'],
+  },
   {
     num: 23,
     title: 'Reports drafted 48 hours after a trip',
@@ -570,6 +570,19 @@ export const BACKLOG: readonly BacklogItem[] = [
     affects: ['NFR-AI-01'],
   },
 
+  {
+    num: 49,
+    title: 'One dependency advisory is let through until it has a fix',
+    type: 'Security',
+    detail:
+      'braces’ high advisory (GHSA-vfj7-8cjw-p6xm) has no fixed version, so the audit ignores it (pnpm-workspace.yaml). It reaches us only through lint tooling. When Advisory watch fails on a Monday, a fix exists: update to it, remove the ignore and close GAP-19.',
+    priority: 'P3',
+    effort: 'S',
+    severity: 'Low',
+    blocker: { kind: 'none', note: 'Waits on an upstream fix; Advisory watch says when' },
+    source: 'GAP-19',
+    affects: ['GAP-19', 'NFR-SEC-12'],
+  },
   // Done
   {
     num: 40,
@@ -653,8 +666,8 @@ export const BACKLOG: readonly BacklogItem[] = [
 
 /** How to order the open work, beyond priority. */
 export const SEQUENCING: readonly string[] = [
-  '#3 and #4 need you, not code. So does #48, which keeps a leaked key from erasing the backups; any time this month.',
-  '#10 comes before anything else Claude builds: until a backup has been restored, it is only a hope. #47 comes straight after, since today a receipt that needs a look can’t be acted on.',
+  'Your order, Oct 3: #47, then #16, then #10. #16 needs expenses first, so #6 comes before it: #47 → #6 → #16 → #10. Claude’s recommendation was #10 first, since until a backup has been restored it is only a hope; keep the paper or email originals until it passes.',
+  '#3 needs you, not code. So does #48, which keeps a leaked key from erasing the backups; any time this month. #4 can wait: the OpenAI fallback reads receipts meanwhile, and #21 waits on it.',
   '#6 unblocks most of increment 2 (#16–#19) and the dashboard (#28). #7 and #9 are small and touch the same code, so they ride with it.',
   '#8 is security, not polish: it should land before #24, which needs it, and before anyone else is invited (#29).',
   '#11–#15 are small, independent and each closes a gap; take them between features.',

@@ -547,7 +547,7 @@ export const FEATURES: readonly Feature[] = [
     decisions: ['ADR-0014'],
     code: ['.github/workflows/backup.yml', 'scripts/backup/backup.sh'],
     shortfalls: ['#10', 'GAP-18'],
-    note: 'Runs every night since Oct 3; each run downloads its upload again and checks it decrypts to the same dump. Rehearsed on Oct 2 against Supabase’s Postgres 17 image: the dump restored with every row count, the auth user and both image checksums matching. Not yet restored from production (#10).',
+    note: 'Runs every night since Oct 3; each run downloads its upload again and checks it decrypts to the same dump. Rehearsed on Oct 2 against Supabase’s Postgres 17 image: the dump restored with every row count, the auth user and both image checksums matching. On Oct 3 you decrypted the first copy with the passphrase from your password manager. Not yet restored from production (#10).',
   },
   {
     id: 'F-42',
@@ -564,7 +564,7 @@ export const FEATURES: readonly Feature[] = [
       '.github/workflows/backup.yml',
     ],
     checks: ['db/heartbeat.int'],
-    note: 'The nightly job writes the heartbeat before anything else, then fails at 70% of the 500 MB database or 1 GB storage limit, and GitHub emails the owner. The quota alert was rehearsed by hand, not in CI.',
+    note: 'The nightly job writes the heartbeat before anything else, then fails at 70% of the 500 MB database or 1 GB storage limit, and GitHub emails the owner; that email reached you for the first, failed run on Oct 3. The quota alert was rehearsed by hand, not in CI.',
   },
   {
     id: 'F-41',
