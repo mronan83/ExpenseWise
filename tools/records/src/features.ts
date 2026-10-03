@@ -231,7 +231,7 @@ export const FEATURES: readonly Feature[] = [
   },
   {
     id: 'F-16',
-    title: 'Email-in forwarding address for travel and ride receipts',
+    title: 'Email-in: receipts and purchase summaries by email',
     group: 'Receipts',
     kind: 'product',
     phase: 'P1',
@@ -333,6 +333,15 @@ export const FEATURES: readonly Feature[] = [
     phase: 'P1',
     status: 'Planned',
     backlog: 52,
+  },
+  {
+    id: 'F-46',
+    title: 'Time and address from the receipt',
+    group: 'Receipts',
+    kind: 'product',
+    phase: 'P1',
+    status: 'Planned',
+    backlog: 53,
   },
   {
     id: 'F-43',

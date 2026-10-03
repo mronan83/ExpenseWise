@@ -271,10 +271,10 @@ export const BACKLOG: readonly BacklogItem[] = [
   },
   {
     num: 19,
-    title: 'Email-in forwarding address',
+    title: 'Email-in: receipts and purchase summaries by email',
     type: 'Feature',
     detail:
-      'A personal address that takes forwarded airline, hotel and ride emails and reads the body and any PDF like a receipt. The only automatic route for travel receipts (ADR-0011).',
+      'A personal address that takes receipts and purchase summaries, emailed or forwarded, and reads the body and any PDF or image like a receipt. Only mail from the person’s own sign-in addresses is read; anything else is dropped. The only automatic route for travel receipts (ADR-0011). Postmark’s inbound address works without a domain of ours. Whether each one waits for review is Q10.',
     priority: 'P2',
     effort: 'L',
     severity: 'Medium',
@@ -634,6 +634,19 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'owner', ask: 'Your answer to Q8: what turning a model off covers' },
     source: 'Product owner, Oct 3',
     affects: ['FR-INT-16', 'F-45', 'FR-INT-08', 'FR-INT-09'],
+  },
+  {
+    num: 53,
+    title: 'Read the time and address on a receipt',
+    type: 'Feature',
+    detail:
+      'Add the time of purchase and the merchant’s address to what a reading captures, both optional and each with its confidence: a new schema and prompt version, shown beside the other fields, confirmable and correctable, and labelled in the eval set. Its shape waits on your answer to Q9.',
+    priority: 'P2',
+    effort: 'M',
+    severity: 'Low',
+    blocker: { kind: 'owner', ask: 'Your answer to Q9: where time and address live' },
+    source: 'Product owner, Oct 3',
+    affects: ['FR-INT-17', 'F-46', 'FR-INT-01'],
   },
   // Done
   {
