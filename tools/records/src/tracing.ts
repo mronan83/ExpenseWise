@@ -356,6 +356,10 @@ export const QUESTIONS: readonly Question[] = [
     recommendation:
       'B, with A as a setting you turn on while choosing a primary (#21), so the comparison stays available without paying for it every day.',
     affects: ['FR-INT-16', 'FR-INT-02', 'FR-INT-08'],
+    answer: {
+      date: '2026-10-03',
+      text: 'B: exactly one model is primary and reads every receipt; any other model that is on is a back-up, reading only when the primary can’t, in the order set (FR-INT-16). The optional side-by-side comparison suggested alongside B was not part of your answer, so it is not planned.',
+    },
   },
   {
     id: 'Q12',
@@ -364,12 +368,28 @@ export const QUESTIONS: readonly Question[] = [
     why: 'One format reads faster and avoids 10/3 meaning October 3 to you and 10 March to a European colleague. Forms keep the phone’s date picker whatever is chosen, and a model’s reading table keeps the date exactly as read.',
     recommendation:
       'A everywhere a date is shown, with the time as 1:12 PM where one matters: unambiguous in any country, and already how trips read.',
-    affects: ['NFR-UX-02'],
+    affects: ['NFR-UX-02', 'NFR-UX-06'],
+    answer: {
+      date: '2026-10-03',
+      text: 'A, as recommended: Sep 30, 2026, with the time as 1:12 PM where one matters, everywhere a date is shown (NFR-UX-06, #55).',
+    },
   },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-03',
+    change:
+      'At your request the restore drill ran on production’s backup and passed: the dump 22 minutes old, all 50 tables (137 rows), migrations, schema, row-level security, isolation and all 6 receipt images, in 1 min 11 s. #10 is done; F-41 and NFR-REL-02 are Verified. The restore again gave Supabase’s Data API roles 60 tables and functions, which the release now takes back. NFR-REL-03 stays Partial until a whole recovery is timed (new #56).',
+    by: 'Claude, at your direction',
+  },
+  {
+    date: '2026-10-03',
+    change:
+      'From your answers to Q11 and Q12: exactly one AI model is primary and reads every receipt, and any other model that is on is a back-up for when it can’t (FR-INT-16; #52 can start). With one reading per receipt, Ready rests on the primary’s confident reading rather than on two models agreeing, so the running comparison ends with #52 (FR-INT-02, FR-INT-08). Dates show as Sep 30, 2026 everywhere (new NFR-UX-06, #55).',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-03',
     change:

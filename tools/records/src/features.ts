@@ -644,8 +644,8 @@ export const FEATURES: readonly Feature[] = [
     delivered: 'PR #23',
     decisions: ['ADR-0014'],
     code: ['.github/workflows/backup.yml', 'scripts/backup/backup.sh'],
-    shortfalls: ['#10', 'GAP-18'],
-    note: 'Runs every night since Oct 3; each run downloads its upload again and checks it decrypts to the same dump. Rehearsed on Oct 2 against Supabase’s Postgres 17 image: the dump restored with every row count, the auth user and both image checksums matching. On Oct 3 you decrypted the first copy with the passphrase from your password manager. Not yet restored from production (#10).',
+    shortfalls: ['GAP-18'],
+    note: 'Runs every night since Oct 3; each run downloads its upload again and checks it decrypts to the same dump. On Oct 3 you decrypted the first copy with the passphrase from your password manager, and the restore drill (F-41) restored production’s backup with every check passing.',
   },
   {
     id: 'F-42',
@@ -670,7 +670,7 @@ export const FEATURES: readonly Feature[] = [
     group: 'Platform and operations',
     kind: 'operations',
     phase: 'P1',
-    status: 'Partial',
+    status: 'Verified',
     delivered: 'PR #35',
     decisions: ['ADR-0014', 'ADR-0013'],
     code: [
@@ -681,9 +681,7 @@ export const FEATURES: readonly Feature[] = [
       'packages/db/scripts/restore-check.ts',
     ],
     checks: ['db/restore-drill.int'],
-    shortfalls: ['#10'],
-    backlog: 10,
-    note: 'On the 2nd of each month, restores the newest backup into a throwaway Supabase stack (Postgres, auth and storage, as a new project has) and checks the dump’s checksums, row counts, migrations, the schema against schema.json, row-level security, isolation signed in as expensewise_app, a sample of 100 receipt images, the 24-hour recovery point and the 4-hour recovery time. Rehearsed on Oct 3 end to end against a stand-in backed up by the real nightly script: passed in 37 s, and failed as it should for a missing image, a 30-hour-old dump and a wrong passphrase. Its first rehearsals found three things that would have broken a real restore, all fixed here. Not yet run on production’s backup (#10).',
+    note: 'On the 2nd of each month, restores the newest backup into a throwaway Supabase stack (Postgres, auth and storage, as a new project has) and checks the dump’s checksums, row counts, migrations, the schema against schema.json, row-level security, isolation signed in as expensewise_app, a sample of 100 receipt images, the 24-hour recovery point and the 4-hour recovery time. Rehearsed on Oct 3 end to end against a stand-in backed up by the real nightly script: passed in 37 s, and failed as it should for a missing image, a 30-hour-old dump and a wrong passphrase. Its first rehearsals found three things that would have broken a real restore, all fixed here. First run on production’s backup on Oct 3: the dump 22 minutes old, all 50 tables (137 rows), the schema, isolation and all 6 receipt images matched, in 1 min 11 s.',
   },
   {
     id: 'F-38',
