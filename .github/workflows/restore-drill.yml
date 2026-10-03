@@ -1,0 +1,48 @@
+# Monthly restore drill (ADR-0014): restores the newest nightly backup into a throwaway
+# Supabase stack on the runner and checks it (scripts/backup/restore-drill.sh). GitHub emails
+# the owner when a scheduled run fails.
+#
+# It reads the bucket with the backup's key and decrypts with its passphrase; it is given no
+# production connection. The repository is public, so its logs are too: the script prints
+# steps, counts, table names and timings only, and this workflow uploads no artifacts.
+name: Restore drill
+
+on:
+  schedule:
+    - cron: '43 11 2 * *' # the 2nd of each month, 04:43 in California, after that night's backup
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: restore-drill
+  cancel-in-progress: false
+
+jobs:
+  drill:
+    name: Restore the newest backup and check it
+    runs-on: ubuntu-latest
+    # The backup's environment: only main can use it. Only the four secrets below are read.
+    environment: backup
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The same CLI version as the nightly backup, so the dump and the restore agree. If the
+      # restore names an auth or storage column, raise it here and in backup.yml.
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.119.0
+      - name: Restore and check
+        run: bash scripts/backup/restore-drill.sh
+        env:
+          BACKUP_PASSPHRASE: ${{ secrets.BACKUP_PASSPHRASE }}
+          B2_KEY_ID: ${{ secrets.B2_KEY_ID }}
+          B2_APPLICATION_KEY: ${{ secrets.B2_APPLICATION_KEY }}
+          B2_BUCKET: ${{ secrets.B2_BUCKET }}

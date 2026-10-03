@@ -423,7 +423,7 @@ ${table(
       TRIGGER: 'trigger',
     })[p] ?? p.toLowerCase();
   const security = `<section id="security" aria-labelledby="security-h"><h2 id="security-h">Security model</h2>
-<p>Row-level security is on for every table and forced on every tenant table, so even the table owner’s queries obey it. A tenant policy compares <code>org_id</code> with <code>app_current_org()</code>, which the API sets per transaction from the caller’s membership; with nothing set, no row matches. Supabase’s Data API roles have no rights at all: the API is the only way in (ADR-0013).</p>
+<p>Row-level security is on for every table and forced on every tenant table, so even the table owner’s queries obey it. A tenant policy compares <code>org_id</code> with <code>app_current_org()</code>, which the API sets per transaction from the caller’s membership; with nothing set, no row matches. Supabase’s Data API roles have no rights at all: the API is the only way in (ADR-0013). Every release takes back anything they hold, because a restore into a new project hands them every table again.</p>
 ${table(
   ['Role', 'Bypasses row-level security', 'What it is'],
   roles.map((r) => {

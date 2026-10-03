@@ -136,23 +136,37 @@ The Free plan keeps no backups, so a nightly workflow keeps our own ([ADR-0014](
      | `BACKUP_PASSPHRASE` | From step 5 |
 
 8. **Run it once now: Actions → Nightly backup → Run workflow** (branch `main`). It takes a minute or two. A green run ends with `Done in … s`, after lines for the heartbeat, the dump, the daily and monthly copies, the check that the uploaded copy decrypts, the receipt images and the two Free plan limits. A red run names what is wrong, such as a missing secret or a key Backblaze refused, and never prints a secret. After that it runs every night, and GitHub emails you when a run fails.
-9. **Check your copy of the passphrase, once.** The nightly check, and the restore drill once it exists, decrypt with the secret, so neither can tell whether the passphrase in your password manager matches it; a stray space pasted into either would surface only during a real restore. Download that first `db/daily/…` file from the bucket (**Browse Files**) and decrypt it as in step 1 below, pasting the passphrase from your password manager. If it decrypts, your copy is good. If not, set `BACKUP_PASSPHRASE` again from the password manager and repeat step 8.
+9. **Check your copy of the passphrase, once.** The nightly check and the restore drill decrypt with the secret, so neither can tell whether the passphrase in your password manager matches it; a stray space pasted into either would surface only during a real restore. Download that first `db/daily/…` file from the bucket (**Browse Files**) and decrypt it as in step 1 of "Restoring from the off-site backup" below, pasting the passphrase from your password manager. If it decrypts, your copy is good. If not, set `BACKUP_PASSPHRASE` again from the password manager and repeat step 8.
+
+### The monthly restore drill
+
+**Restore drill** (`.github/workflows/restore-drill.yml`, running `scripts/backup/restore-drill.sh`) runs on the 2nd of each month and on demand: **Actions → Restore drill → Run workflow**, on `main`. It uses the `backup` environment's bucket key and passphrase, and nothing that reaches production. In about five minutes it:
+
+1. downloads the newest daily dump, decrypts it and checks each file against the SHA-256 the backup recorded;
+2. starts a throwaway Supabase stack on the runner (Postgres, auth and storage) and restores into it exactly as below;
+3. checks the row counts against the dump, the migrations against the repository's files, then brings the data forward as the Release run would and compares the schema with `packages/db/schema.json`;
+4. signs in as `expensewise_app` and checks that each organization sees only its own rows, and nothing shows without one;
+5. checks a sample of up to 100 receipt images against their receipts' SHA-256;
+6. fails if the newest dump is more than 24 hours old (the recovery point) or the whole drill took more than 4 hours (the recovery time).
+
+GitHub emails you when it fails. The log names the check and the tables involved, never any data. If the restore names an auth or storage column, production runs newer Supabase services than the pinned CLI: raise the CLI version in `restore-drill.yml` and `backup.yml` together.
 
 ### Restoring from the off-site backup
 
-The monthly restore drill automates this (backlog #10). By hand, on any machine with Docker, the AWS CLI, `gpg`, `psql` and the Supabase CLI:
+By hand, on any machine with the AWS CLI, `gpg`, `psql` and a checkout of the repository:
 
 1. Download the dump you want from the bucket, such as `db/daily/2026-10-02.tar.gz.gpg`, and decrypt it with the passphrase from your password manager: `gpg --decrypt --output db.tar.gz <file>`, then `tar -xzf db.tar.gz`. It holds `roles.sql`, `schema.sql`, `data.sql` and `manifest.json`, which records the row count of every table and each file's SHA-256.
-2. Into a new or empty Supabase project, as its `postgres` role, using the session-pooler address, run Supabase's documented restore:
+2. Prepare it: `scripts/backup/prepare-restore.sh <that directory>`. It writes `roles.restore.sql` and `data.restore.sql`, leaving out the grants Supabase makes to its own roles in every new project and the data blocks of empty tables. The new project's `postgres` role may do neither, and the restore stops at the first refusal.
+3. Restore into a **new Supabase project**, not a bare Postgres or Supabase database image: the project's auth and storage services create the tables production's users and files belong in. As its `postgres` role, using the session-pooler address:
    ```sh
    psql --single-transaction --variable ON_ERROR_STOP=1 \
-     --file roles.sql --file schema.sql \
-     --command 'SET session_replication_role = replica' --file data.sql \
+     --file roles.restore.sql --file schema.sql \
+     --command 'SET session_replication_role = replica' --file data.restore.sql \
      --dbname "<session-pooler URL>"
    ```
-3. Check the row counts against `manifest.json`.
-4. Copy the images back: each `receipts/<path>.gpg` in the bucket decrypts to the object `<path>` in the `receipts` storage bucket. Its SHA-256 must equal the `sha256` column of the receipt whose `storage_key` is `<path>`.
-5. Follow "After a restore or in a new project" below. The runtime roles come back without passwords, so the Release run sets them again.
+4. Check the row counts against `manifest.json`. `auth.schema_migrations` and `storage.migrations` will differ: the dump leaves them out, and the new project writes its own.
+5. Copy the images back: each `receipts/<path>.gpg` in the bucket decrypts to the object `<path>` in the `receipts` storage bucket. Its SHA-256 must equal the `sha256` column of the receipt whose `storage_key` is `<path>`.
+6. Follow "After a restore or in a new project" below **before** pointing Vercel at the new project.
 
 ## 6. Workflows, error tracking and feature flags
 
@@ -185,7 +199,7 @@ The `shell.build-version` flag shows the deployed commit next to "Phase 0 previe
 
 ## After a restore or in a new project
 
-Custom role passwords are not in backups or dumps. Re-run **Release** (step 2.5): it re-applies any missing migrations and sets each role's password from the GitHub secrets when the role can't already sign in with it.
+Custom role passwords are not in backups or dumps. Re-run **Release** (step 2.5): it re-applies any missing migrations and sets each role's password from the GitHub secrets when the role can't already sign in with it. It also takes back everything Supabase's Data API roles hold: a restore gives them every table and function again, because the new project's default privileges grant them each one as the dump recreates it. Until the Release has run, anyone with the new project's publishable key could reach the data through the Data API, so run it before you share that key or point Vercel at the project.
 
 ## If the release run fails
 
