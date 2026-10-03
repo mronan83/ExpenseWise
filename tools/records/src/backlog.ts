@@ -312,7 +312,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Email-in: receipts and purchase summaries by email',
     type: 'Feature',
     detail:
-      'A personal address that takes receipts and purchase summaries, emailed or forwarded, and reads the body and any PDF or image like a receipt. Only mail from the person’s own sign-in addresses is read; anything else is dropped. The only automatic route for travel receipts (ADR-0011). It comes in through Bird, your choice of Oct 3 (ADR-0024): an address on Bird’s inbound domain needs no domain of ours. Bird reports SPF and DKIM but not DMARC yet, so we check that the DKIM signature belongs to the From domain ourselves,. Bird signs each webhook to the Standard Webhooks scheme: `webhook-id`, `webhook-timestamp` and an HMAC-SHA256 `webhook-signature` under the endpoint’s `whsec_` secret. We verify it, refuse one older than 5 minutes, and drop a repeated id; Bird retries 8 times over about 27 hours. Your setup, in the Bird dashboard: a forwarding address on `us1.inbound.bird.com` now; a read-only API key and the webhook to `/api/v1/inbound/bird` once the endpoint is built, both kept in Vercel for Production only. Your answer to Q10: a purchase summary always waits for review; a receipt follows the photo rule.',
+      'A personal address that takes receipts and purchase summaries, emailed or forwarded, and reads the body and any PDF or image like a receipt. Only mail from the person’s own sign-in addresses is read; anything else is dropped. The only automatic route for travel receipts (ADR-0011). It comes in through Bird, your choice of Oct 3 (ADR-0024): an address on Bird’s inbound domain needs no domain of ours. Bird reports SPF and DKIM but not DMARC yet, so we check that the DKIM signature belongs to the From domain ourselves,. Bird signs each webhook to the Standard Webhooks scheme: `webhook-id`, `webhook-timestamp` and an HMAC-SHA256 `webhook-signature` under the endpoint’s `whsec_` secret. We verify it, refuse one older than 5 minutes, and drop a repeated id; Bird retries 8 times over about 27 hours. Your setup is done (Oct 3): the address is jpdf7j4q5ukxcliugqji@inbox.ai, and `BIRD_API_KEY` and `BIRD_WEBHOOK_SECRET` are in Vercel for Production only. Q16 asks whether the address is a forwarding address or a mailbox, which decides the event the webhook listens for. Your answer to Q10: a purchase summary always waits for review; a receipt follows the photo rule.',
     priority: 'P2',
     effort: 'L',
     severity: 'Medium',
@@ -394,13 +394,13 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Reports drafted 48 hours after a trip',
     type: 'Feature',
     detail:
-      'Forty-eight hours after a trip ends, draft its report and tell the traveler. Skip trips with no expenses; the traveler can reopen.',
-    priority: 'P3',
+      'Forty-eight hours after a trip ends, draft its report and tell the traveler. Skip trips with no expenses; the traveler can reopen. Your answer to Q15: it moves up, built after #28 and #19, and brings reports to finish to Home’s dashboard.',
+    priority: 'P1',
     effort: 'L',
     severity: 'Medium',
     blocker: { kind: 'none' },
     source: 'Roadmap increment 3',
-    affects: ['FR-EXP-05', 'F-17'],
+    affects: ['FR-EXP-05', 'F-17', 'FR-INS-01'],
   },
   {
     num: 24,
@@ -477,6 +477,10 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none' },
     source: 'Roadmap increment 3, product owner Oct 3',
     affects: ['FR-INS-01', 'F-22', 'FR-EXP-02'],
+    done: {
+      date: '2026-10-03',
+      in: 'PR #43; reports to finish join with #23, business miles with #17',
+    },
   },
   {
     num: 29,
@@ -796,9 +800,9 @@ export const BACKLOG: readonly BacklogItem[] = [
 
 /** How to order the open work, beyond priority. */
 export const SEQUENCING: readonly string[] = [
-  'Done Oct 3: #47, #16, #10, #54, #3, #7 and #9. Next, by your requirement of Oct 3, the Home dashboard (#28): its first slice uses only what already exists. Then email-in (#19), now on Bird, which can be built before your Bird setup and switched on after it.',
+  'Your order, Oct 3: the Home dashboard (#28, done), then email-in (#19), then reports drafted after a trip (#23), which bring reports to finish to Home (Q15). #19 needs your answer to Q16 before it is switched on, not before it is built.',
   '#48 needs you, not code: it keeps a leaked key from erasing the backups; any time this month. #4 can wait: the OpenAI fallback reads receipts meanwhile, and #21 waits on it. #52 and #55 are unblocked by your answers.',
-  'Reports drafted after a trip (#23) feed the dashboard’s reports to finish; Q15 asks whether they move up. Mileage (#17) adds business miles to it.',
+  'Mileage (#17) adds business miles to Home.',
   '#8 is security, not polish: it should land before #24, which needs it, and before anyone else is invited (#29). So should #50, which keeps each member’s records their own.',
   '#11–#15 are small, independent and each closes a gap; take them between features.',
 ];

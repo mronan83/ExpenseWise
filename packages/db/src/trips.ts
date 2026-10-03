@@ -33,7 +33,8 @@ const tripColumns = {
   createdAt: trips.createdAt,
 };
 
-const withOwner = (tx: Transaction) =>
+/** Trips with their owner's name, to be filtered and ordered. Call inside withOrg(). */
+export const tripsWithOwner = (tx: Transaction) =>
   tx
     .select(tripColumns)
     .from(trips)
@@ -82,7 +83,7 @@ export function listTrips(
   }
   if (filter.from) where.push(gte(trips.endDate, filter.from));
   if (filter.to) where.push(lte(trips.startDate, filter.to));
-  return withOwner(tx)
+  return tripsWithOwner(tx)
     .where(and(...where))
     .orderBy(desc(trips.startDate), desc(trips.createdAt), desc(trips.id))
     .limit(limit);
@@ -90,7 +91,7 @@ export function listTrips(
 
 /** One trip, or undefined. Call inside withOrg(). */
 export async function getTrip(tx: Transaction, tripId: string): Promise<TripRecord | undefined> {
-  const [row] = await withOwner(tx).where(eq(trips.id, tripId));
+  const [row] = await tripsWithOwner(tx).where(eq(trips.id, tripId));
   return row;
 }
 
@@ -124,11 +125,12 @@ export async function tallyTrips(
     .groupBy(expenses.tripId, expenses.status, expenses.currency);
   return rows.map((r) => ({
     ...r,
-    amountMinor: r.amountMinor === null ? null : safe(r.amountMinor),
+    amountMinor: r.amountMinor === null ? null : safeMinor(r.amountMinor),
   }));
 }
 
-const safe = (digits: string): number => {
+/** A summed bigint as a number, refusing one beyond the range money is kept in. */
+export const safeMinor = (digits: string): number => {
   const value = BigInt(digits);
   if (value > BigInt(Number.MAX_SAFE_INTEGER) || value < BigInt(Number.MIN_SAFE_INTEGER)) {
     throw new RangeError('A trip total is beyond the range money is kept in');

@@ -121,7 +121,7 @@ describe('filing a receipt', () => {
       );
     }
     const listed = await withOrg(app.db, acme.orgId, (tx) =>
-      listReceipts(tx, 10, ['needs_review', 'failed']),
+      listReceipts(tx, 10, { statuses: ['needs_review', 'failed'] }),
     );
     expect(listed.map((r) => [r.id, r.status])).toEqual([
       [failed!.receipt.id, 'failed'],

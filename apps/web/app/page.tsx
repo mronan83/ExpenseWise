@@ -1,9 +1,9 @@
 import Link from 'next/link';
 import { connection } from 'next/server';
 import { flags } from '../lib/flags';
-import { NeedsYou } from './needs-you';
+import { HomeDashboard } from './home-dashboard';
 
-/** Home is the Needs you inbox (FR-EXP-02). The tab bar is the layout's. */
+/** Home: the Needs you inbox, then the person's trip, month and recent trips (FR-INS-01). */
 export default async function HomePage() {
   // Flags are read per request, so turning one on needs no redeploy.
   await connection();
@@ -24,9 +24,8 @@ export default async function HomePage() {
         </span>
       </header>
 
-      <main className="flex flex-1 flex-col gap-4">
-        <h1 className="text-2xl font-bold">Needs you</h1>
-        <NeedsYou />
+      <main className="flex flex-1 flex-col gap-4 pb-8">
+        <HomeDashboard />
       </main>
     </div>
   );

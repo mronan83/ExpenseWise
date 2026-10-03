@@ -70,9 +70,13 @@ function fakeReceipts() {
       events.push(event);
       return Promise.resolve({ status: 'filed', receipt, event });
     },
-    list: (_org, _limit, statuses) =>
+    list: (_org, _limit, filter = {}) =>
       Promise.resolve({
-        receipts: statuses ? receipts.filter((r) => statuses.includes(r.status)) : receipts,
+        receipts: receipts.filter(
+          (r) =>
+            (!filter.statuses || filter.statuses.includes(r.status)) &&
+            (!filter.memberId || r.memberId === filter.memberId),
+        ),
         runs,
         reviews,
       }),

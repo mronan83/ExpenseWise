@@ -332,17 +332,15 @@ export const NeedsYouReasonSchema = z
   })
   .openapi('NeedsYouReason');
 
-export const InboxSchema = z
+export const InboxItemSchema = z
   .object({
-    items: z.array(
-      z.object({
-        kind: z.literal('receipt'),
-        receipt: ReceiptSummarySchema,
-        reason: NeedsYouReasonSchema,
-      }),
-    ),
+    kind: z.literal('receipt'),
+    receipt: ReceiptSummarySchema,
+    reason: NeedsYouReasonSchema,
   })
-  .openapi('Inbox');
+  .openapi('InboxItem');
+
+export const InboxSchema = z.object({ items: z.array(InboxItemSchema) }).openapi('Inbox');
 
 export const ReceiptListSchema = z
   .object({
@@ -532,6 +530,10 @@ export const ExpenseSearchSchema = z.object({
       example: '18.92',
     }),
   tripId: z.string().uuid().optional().openapi({ description: 'On this trip.' }),
+  onTrip: z
+    .enum(['yes', 'no'])
+    .optional()
+    .openapi({ description: 'yes: on some trip. no: on none, such as everyday spend.' }),
 });
 
 export const SetExpenseTripSchema = z
@@ -628,3 +630,56 @@ export const EditTripSchema = CreateTripSchema.partial()
     message: 'Change at least one field.',
   })
   .openapi('EditTrip');
+
+// Home (FR-INS-01, FR-EXP-02)
+
+export const HomeQuerySchema = z.object({
+  day: isoDate()
+    .optional()
+    .openapi({
+      param: { name: 'day', in: 'query' },
+      description:
+        'Today on the person’s own calendar, from their device. Decides which trip is under ' +
+        'way and which month is this one. Defaults to today in UTC.',
+    }),
+});
+
+export const HomeSchema = z
+  .object({
+    day: isoDate().openapi({ description: 'The day Home was built for.' }),
+    needsYou: z.object({
+      count: z.number().int().openapi({ description: 'Everything that needs the person.' }),
+      items: z.array(InboxItemSchema).openapi({ description: 'The newest few of them.' }),
+    }),
+    trip: z
+      .object({
+        when: z.enum(['now', 'next']).openapi({
+          description: 'now: its dates include the day. next: it starts within 14 days.',
+        }),
+        day: z.number().int().openapi({ description: 'now: which day of the trip it is.' }),
+        startsIn: z.number().int().openapi({ description: 'next: days until it starts.' }),
+        trip: TripSummarySchema,
+      })
+      .nullable(),
+    month: z.object({
+      from: isoDate().openapi({ description: 'The first day of the month the day is in.' }),
+      expenses: z.number().int().openapi({ description: 'Dated this month.' }),
+      ready: z
+        .number()
+        .int()
+        .openapi({ description: 'Of those, how many are Ready or further along.' }),
+      spent: z
+        .array(TripTotalSchema)
+        .openapi({ description: 'One total per currency, never converted.' }),
+      trips: z.number().int().openapi({ description: 'Trips that overlap the month.' }),
+      notOnTrip: z.object({
+        expenses: z.number().int(),
+        spent: z.array(TripTotalSchema),
+      }),
+    }),
+    reading: z.number().int().openapi({ description: 'Receipts still being read.' }),
+    recentTrips: z
+      .array(TripSummarySchema)
+      .openapi({ description: 'The last trips to end before the day, latest first.' }),
+  })
+  .openapi('Home');

@@ -445,7 +445,7 @@ describe('trip history and search (FR-INS-02)', () => {
     expect(trip).toMatchObject({ owner: 'acme-trip-search', name: 'Denver offsite' });
   });
 
-  it('finds expenses by merchant, dates, amount in any currency, or trip', async () => {
+  it('finds expenses by merchant, dates, amount in any currency, trip, or on no trip', async () => {
     const w = await workspace('acme-expense-search');
     const tripId = await w.trip(houston);
     const lunch = await w.expense('2026-09-23', { merchant: 'Local Foods', amountMinor: 1892 });
@@ -472,6 +472,8 @@ describe('trip history and search (FR-INS-02)', () => {
     expect(await find({ amounts: [] })).toEqual([]);
     expect(await find({ tripId })).toEqual([lunch]);
     expect(await find({ q: 'local', tripId, amounts: amountMatches('18.92')! })).toEqual([lunch]);
+    expect(await find({ onTrip: true })).toEqual([lunch]);
+    expect(await find({ onTrip: false })).toEqual([dinar, yen].sort());
   });
 
   it('lists a trip’s expenses by date and tallies them by currency and status', async () => {

@@ -709,31 +709,34 @@
           "items": {
             "type": "array",
             "items": {
-              "type": "object",
-              "properties": {
-                "kind": {
-                  "type": "string",
-                  "enum": [
-                    "receipt"
-                  ]
-                },
-                "receipt": {
-                  "$ref": "#/components/schemas/ReceiptSummary"
-                },
-                "reason": {
-                  "$ref": "#/components/schemas/NeedsYouReason"
-                }
-              },
-              "required": [
-                "kind",
-                "receipt",
-                "reason"
-              ]
+              "$ref": "#/components/schemas/InboxItem"
             }
           }
         },
         "required": [
           "items"
+        ]
+      },
+      "InboxItem": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "receipt"
+            ]
+          },
+          "receipt": {
+            "$ref": "#/components/schemas/ReceiptSummary"
+          },
+          "reason": {
+            "$ref": "#/components/schemas/NeedsYouReason"
+          }
+        },
+        "required": [
+          "kind",
+          "receipt",
+          "reason"
         ]
       },
       "NeedsYouReason": {
@@ -2029,6 +2032,179 @@
           }
         },
         "additionalProperties": false
+      },
+      "Home": {
+        "type": "object",
+        "properties": {
+          "day": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-09-22",
+            "description": "The day Home was built for."
+          },
+          "needsYou": {
+            "type": "object",
+            "properties": {
+              "count": {
+                "type": "integer",
+                "description": "Everything that needs the person."
+              },
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/InboxItem"
+                },
+                "description": "The newest few of them."
+              }
+            },
+            "required": [
+              "count",
+              "items"
+            ]
+          },
+          "trip": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "when": {
+                "type": "string",
+                "enum": [
+                  "now",
+                  "next"
+                ],
+                "description": "now: its dates include the day. next: it starts within 14 days."
+              },
+              "day": {
+                "type": "integer",
+                "description": "now: which day of the trip it is."
+              },
+              "startsIn": {
+                "type": "integer",
+                "description": "next: days until it starts."
+              },
+              "trip": {
+                "$ref": "#/components/schemas/TripSummary"
+              }
+            },
+            "required": [
+              "when",
+              "day",
+              "startsIn",
+              "trip"
+            ]
+          },
+          "month": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": "string",
+                "format": "date",
+                "example": "2026-09-22",
+                "description": "The first day of the month the day is in."
+              },
+              "expenses": {
+                "type": "integer",
+                "description": "Dated this month."
+              },
+              "ready": {
+                "type": "integer",
+                "description": "Of those, how many are Ready or further along."
+              },
+              "spent": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "amountMinor": {
+                      "type": "integer"
+                    },
+                    "currency": {
+                      "type": "string"
+                    },
+                    "decimal": {
+                      "type": "string",
+                      "example": "1257.60"
+                    }
+                  },
+                  "required": [
+                    "amountMinor",
+                    "currency",
+                    "decimal"
+                  ]
+                },
+                "description": "One total per currency, never converted."
+              },
+              "trips": {
+                "type": "integer",
+                "description": "Trips that overlap the month."
+              },
+              "notOnTrip": {
+                "type": "object",
+                "properties": {
+                  "expenses": {
+                    "type": "integer"
+                  },
+                  "spent": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "amountMinor": {
+                          "type": "integer"
+                        },
+                        "currency": {
+                          "type": "string"
+                        },
+                        "decimal": {
+                          "type": "string",
+                          "example": "1257.60"
+                        }
+                      },
+                      "required": [
+                        "amountMinor",
+                        "currency",
+                        "decimal"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "expenses",
+                  "spent"
+                ]
+              }
+            },
+            "required": [
+              "from",
+              "expenses",
+              "ready",
+              "spent",
+              "trips",
+              "notOnTrip"
+            ]
+          },
+          "reading": {
+            "type": "integer",
+            "description": "Receipts still being read."
+          },
+          "recentTrips": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TripSummary"
+            },
+            "description": "The last trips to end before the day, latest first."
+          }
+        },
+        "required": [
+          "day",
+          "needsYou",
+          "trip",
+          "month",
+          "reading",
+          "recentTrips"
+        ]
       }
     },
     "parameters": {}
@@ -3332,6 +3508,20 @@
             "description": "On this trip.",
             "name": "tripId",
             "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "yes",
+                "no"
+              ],
+              "description": "yes: on some trip. no: on none, such as everyday spend."
+            },
+            "required": false,
+            "description": "yes: on some trip. no: on none, such as everyday spend.",
+            "name": "onTrip",
+            "in": "query"
           }
         ],
         "responses": {
@@ -4082,6 +4272,86 @@
           },
           "409": {
             "description": "A submitted expense or a report rests on it.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/home": {
+      "get": {
+        "tags": [
+          "Home"
+        ],
+        "summary": "Home: what needs the person, then their trip, month and recent trips",
+        "description": "Everything Home shows, read at once so its sections agree, and only the person’s own records (FR-INS-01). Needs you comes first; it is the inbox (FR-EXP-02).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "example": "2026-09-22",
+              "description": "Today on the person’s own calendar, from their device. Decides which trip is under way and which month is this one. Defaults to today in UTC."
+            },
+            "required": false,
+            "description": "Today on the person’s own calendar, from their device. Decides which trip is under way and which month is this one. Defaults to today in UTC.",
+            "name": "day",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Home for the day asked for.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Home"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The day is not a date that exists.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
             "content": {
               "application/problem+json": {
                 "schema": {

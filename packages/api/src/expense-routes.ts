@@ -66,10 +66,14 @@ export function registerExpenseRoutes(
 
   app.openapi(listExpensesRoute, async (c) => {
     const who = await member(c.var.identity.userId);
-    const { amount, ...search } = c.req.valid('query');
+    const { amount, onTrip, ...search } = c.req.valid('query');
     // The schema admits only plain decimals, which always read in some currency.
     const amounts = amount === undefined ? undefined : (amountMatches(amount) ?? []);
-    const found = await stores().expenses.list(who.orgId, LIST_LIMIT, { ...search, amounts });
+    const found = await stores().expenses.list(who.orgId, LIST_LIMIT, {
+      ...search,
+      amounts,
+      onTrip: onTrip === undefined ? undefined : onTrip === 'yes',
+    });
     return c.json({ expenses: expenseSummaries(found) }, 200);
   });
 

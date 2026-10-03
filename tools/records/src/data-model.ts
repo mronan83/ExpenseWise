@@ -70,7 +70,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   receipts: {
     about:
-      'A captured file: where it is stored, its fingerprint, and whether it has been read. It stays linked to the expense it proves (FR-EXP-08, ADR-0022). Home lists those that need a look or failed by status within the organization; at hundreds of receipts that needs no index of its own.',
+      'A captured file: where it is stored, its fingerprint, and whether it has been read. It stays linked to the expense it proves (FR-EXP-08, ADR-0022). Home lists a member’s own that need a look or failed, and counts those still being read.',
   },
   extraction_runs: {
     about:
@@ -82,11 +82,11 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   expenses: {
     about:
-      'What is claimed: merchant, date, amount and currency, its status, and the trip it is filed to. It follows its receipt until a person edits it (ADR-0022) and files to trips by date until a person chooses (ADR-0023).',
+      'What is claimed: merchant, date, amount and currency, its status, and the trip it is filed to. It follows its receipt until a person edits it (ADR-0022) and files to trips by date until a person chooses (ADR-0023). Home sums a member’s month through the member-and-date index, so it needs no index of its own.',
   },
   trips: {
     about:
-      'A member’s trip: a name, a purpose, a city and its first and last days. Expenses dated inside it file to it (FR-EXP-04, ADR-0023).',
+      'A member’s trip: a name, a purpose, a city and its first and last days. Expenses dated inside it file to it (FR-EXP-04, ADR-0023). Home finds the trip under way, the next and the last ones through the member-and-dates index.',
   },
   categories: {
     about:

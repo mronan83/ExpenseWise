@@ -438,8 +438,25 @@ export const FEATURES: readonly Feature[] = [
     group: 'Expenses, trips and reports',
     kind: 'product',
     phase: 'P1',
-    status: 'Planned',
-    backlog: 28,
+    status: 'Partial',
+    delivered: 'PR #43',
+    code: [
+      'apps/web/app/home-dashboard.tsx',
+      'apps/web/lib/home.ts',
+      'packages/api/src/home.ts',
+      'packages/api/src/home-views.ts',
+      'packages/api/src/routes/home.ts',
+      'packages/db/src/home.ts',
+    ],
+    api: ['GET /v1/home'],
+    checks: [
+      'db/home.int',
+      'api/home',
+      'api/expenses › finds the expenses on no trip, or on some trip (Home’s figures open them)',
+      'e2e/signed-in',
+    ],
+    shortfalls: ['#23', '#17'],
+    note: 'Needs you, then the trip under way or next, this month, receipts being read and recent trips, from one request built for the person’s own day. Each figure opens its list; the Expenses page takes the search from the link. Reports to finish join with #23 and business miles with #17.',
   },
 
   // Domain rules: built and tested ahead of the screens that will use them

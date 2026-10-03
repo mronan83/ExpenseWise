@@ -17,6 +17,7 @@ import {
   createSecretBox,
   dbExpenseStore,
   dbReceiptStore,
+  dbHomeStore,
   dbTripStore,
   dbWorkspaceStore,
 } from '@expensewise/api';
@@ -211,6 +212,7 @@ const app = createHttpApp({
   receipts: dbReceiptStore(db),
   expenses: dbExpenseStore(db),
   trips: dbTripStore(db),
+  home: dbHomeStore(db),
   files: store,
   dispatch,
   secrets: createSecretBox('bench-only-secret-0123456789'),

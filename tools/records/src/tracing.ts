@@ -416,6 +416,10 @@ export const QUESTIONS: readonly Question[] = [
     recommendation:
       'A. If a policy later needs every expense on a trip, that rule can make it B for those organizations.',
     affects: ['FR-INS-01', 'FR-EXP-02'],
+    answer: {
+      date: '2026-10-03',
+      text: 'A: information only, a figure that opens those expenses.',
+    },
   },
   {
     id: 'Q15',
@@ -424,11 +428,30 @@ export const QUESTIONS: readonly Question[] = [
     why: 'For one person the trip is the report, and a trip whose expenses are all Ready is ready to claim. Reports start to matter when someone else approves them (#24) or an accountant wants them as documents (#25).',
     recommendation: 'A, unless you are reimbursed from reports this quarter.',
     affects: ['FR-INS-01', 'FR-EXP-05'],
+    answer: {
+      date: '2026-10-03',
+      text: 'B: #23 moves up, built third after #28 and #19, and brings reports to finish to Home as part of it.',
+    },
+  },
+  {
+    id: 'Q16',
+    title: 'Which kind of Bird address you made',
+    ask: 'Your address, jpdf7j4q5ukxcliugqji@inbox.ai, is on inbox.ai, not the us1.inbound.bird.com that Bird’s guide gives for a forwarding address. Bird also makes agent mailboxes on inbox.ai. In the Bird dashboard, was it made under Email → Domains → Forwarding, or under Mailboxes? And which event does the webhook listen for?',
+    why: 'They arrive differently. A forwarding address raises `email.received` and is read through the inbound-messages API; a mailbox raises `email_mailbox.message_received` and is read through threads. The webhook has to listen for the one that fires, and email-in (#19) reads the matching API.',
+    recommendation:
+      'Keep whichever it is. If it is a mailbox, set its receive policy to allowlist your sign-in addresses, a second gate before ours, and point the webhook at email_mailbox.message_received.',
+    affects: ['FR-CAP-02'],
   },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-03',
+    change:
+      'PR #43, at your direction (#28): Home is a dashboard beneath Needs you. It shows the trip under way, with its day and spend so far and Add a receipt, or the next within 14 days; this month’s spend, trips, expenses on no trip and how many are Ready; receipts being read; and the last three trips, each with whether all its expenses are Ready. Every figure opens the list behind it, and only your own records count. Your answers: Q14 A, so expenses on no trip are information only; Q15 B, so #23 moves up and brings reports to finish to Home. The order is #28, #19, #23. Your Bird setup is done; Q16 asks which kind of address it is.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-03',
     change:

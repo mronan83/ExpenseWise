@@ -29,9 +29,15 @@ const fill =
   (page) =>
     page.getByLabel(label, { exact: true }).first().fill(value);
 
-/** Each screen and state: what it shows, where it is, and what a person does to get there. */
-const SCREENS: [string, (s: Seeded) => string, Step[]][] = [
+/**
+ * Each screen and state: what it shows, where it is, what a person does to get there, and,
+ * where the day decides what shows, the day it is on the person's clock.
+ */
+const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
   ['Home', () => '/', []],
+  ['Home during a trip', () => '/', [], '2026-10-21T12:00:00'],
+  ['Home with a trip coming up', () => '/', [], '2026-11-01T12:00:00'],
+  ['Home with everything in Needs you open', () => '/', [press('Show all')]],
   ['Receipts', () => '/receipts', []],
   ['a Ready receipt', (s) => `/receipts/${s.receipts.coffee}`, []],
   ['a receipt the models read differently', (s) => `/receipts/${s.receipts.folio}`, []],
@@ -43,6 +49,11 @@ const SCREENS: [string, (s: Seeded) => string, Step[]][] = [
   ['a receipt dated after it was uploaded', (s) => `/receipts/${s.receipts.future}`, []],
   ['a receipt being read', (s) => `/receipts/${s.receipts.processing}`, []],
   ['Expenses', () => '/expenses', []],
+  [
+    'expenses on no trip, opened from Home',
+    () => '/expenses?from=2026-10-01&to=2026-10-31&onTrip=no',
+    [],
+  ],
   [
     'searching expenses',
     () => '/expenses',
@@ -97,7 +108,8 @@ const session = {
   refresh_token: E2E_USER,
   token_type: 'bearer',
   expires_in: 86_400,
-  expires_at: Math.floor(Date.now() / 1000) + 86_400,
+  // Far off, so a screen seen on a later day of the clock still holds a live session.
+  expires_at: Math.floor(Date.now() / 1000) + 10 * 365 * 86_400,
   user: {
     id: E2E_USER,
     aud: 'authenticated',
@@ -142,7 +154,7 @@ async function open(page: Page, path: string, steps: Step[]): Promise<void> {
   }
 }
 
-for (const [title, path, steps] of SCREENS) {
+for (const [title, path, steps, at] of SCREENS) {
   test(`${title}: fits the screen and passes WCAG 2.2 AA, in light and dark`, async ({
     page,
   }, testInfo) => {
@@ -153,6 +165,7 @@ for (const [title, path, steps] of SCREENS) {
       if (message.type() === 'error') errors.push(message.text());
     });
     const size = page.viewportSize()!;
+    if (at) await page.clock.setFixedTime(new Date(at));
 
     for (const colorScheme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme });
