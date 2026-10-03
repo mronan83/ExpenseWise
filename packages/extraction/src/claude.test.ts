@@ -11,6 +11,7 @@ const parsed: ReceiptExtraction = {
   currency: null,
   total: { value: '10.00', confidence: 'high' },
   subtotal: null,
+  fees: [],
   taxes: [],
   tip: null,
   cardLastFour: null,

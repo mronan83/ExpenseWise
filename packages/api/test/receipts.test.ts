@@ -34,6 +34,7 @@ const reading = (total: string): ReceiptExtraction => ({
   currency: { code: 'USD', confidence: 'high' },
   total: { value: total, confidence: 'high' },
   subtotal: null,
+  fees: [],
   taxes: [],
   tip: null,
   cardLastFour: null,

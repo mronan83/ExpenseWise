@@ -41,6 +41,7 @@ const ROWS: { key: keyof Fields; label: string; filing?: string }[] = [
   { key: 'subtotal', label: 'Subtotal' },
   { key: 'taxTotal', label: 'Tax' },
   { key: 'tip', label: 'Tip' },
+  { key: 'fees', label: 'Fees' },
   { key: 'cardLastFour', label: 'Card' },
   { key: 'documentType', label: 'Type' },
 ];

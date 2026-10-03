@@ -224,6 +224,9 @@ export const ReceiptReadingSchema = z
         subtotal: MoneyFieldSchema,
         taxTotal: MoneyFieldSchema,
         tip: MoneyFieldSchema,
+        fees: MoneyFieldSchema.openapi({
+          description: 'Fees and surcharges that are neither tax nor tip, such as a booking fee.',
+        }),
         cardLastFour: TextFieldSchema,
       })
       .nullable(),
@@ -232,7 +235,8 @@ export const ReceiptReadingSchema = z
       description:
         'Checks this reading fails (FR-INT-04). sums: the subtotal, taxes and tip don’t make ' +
         'the total, allowing a minor unit per tax or tip line. future_date: dated more than a ' +
-        'day after the upload. old_date: dated more than a year before it.',
+        'day after the upload. old_date: dated more than a year before it. summary: a purchase ' +
+        'summary, which shows what was ordered, not what was charged (Q10).',
     }),
   })
   .openapi('ReceiptReading');
@@ -314,7 +318,8 @@ export const NeedsYouReasonSchema = z
       description:
         'failed: no model could read it. fallback: only the fallback model read it. differ: ' +
         'the compared models read the filing fields differently. checks: its sums or date ' +
-        'fail a check (FR-INT-04). unsure: a model was not confident, or one could not read it.',
+        'fail a check, or it is a purchase summary (FR-INT-04). unsure: a model was not ' +
+        'confident, or one could not read it.',
     }),
     fields: z
       .array(z.string())

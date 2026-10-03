@@ -32,6 +32,7 @@ const reading = (over: Partial<ReceiptExtraction> = {}): ReceiptExtraction => ({
   currency: { code: 'USD', confidence: 'high' },
   total: { value: '6.50', confidence: 'high' },
   subtotal: null,
+  fees: [],
   taxes: [],
   tip: null,
   cardLastFour: null,

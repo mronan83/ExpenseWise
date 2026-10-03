@@ -47,6 +47,8 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
   ['a receipt nothing could read', (s) => `/receipts/${s.receipts.failed}`, []],
   ['a receipt whose parts don’t make its total', (s) => `/receipts/${s.receipts.sums}`, []],
   ['a receipt dated after it was uploaded', (s) => `/receipts/${s.receipts.future}`, []],
+  ['a ride receipt with fees', (s) => `/receipts/${s.receipts.uber}`, []],
+  ['a purchase summary', (s) => `/receipts/${s.receipts.summary}`, []],
   ['a receipt being read', (s) => `/receipts/${s.receipts.processing}`, []],
   ['Expenses', () => '/expenses', []],
   [

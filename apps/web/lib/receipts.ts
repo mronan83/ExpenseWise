@@ -33,8 +33,11 @@ export interface ReceiptSummary {
 /** compared: weighed by the tier decision. fallback: read only because Claude couldn't. */
 export type ReadingRole = 'compared' | 'fallback';
 
-/** A check a reading's sums or date fails, which keeps it from being Ready (FR-INT-04). */
-export type ReadingCheck = 'sums' | 'future_date' | 'old_date';
+/**
+ * A check a reading fails, which keeps it from being Ready: its sums or date (FR-INT-04), or
+ * that it is a purchase summary (Q10).
+ */
+export type ReadingCheck = 'sums' | 'future_date' | 'old_date' | 'summary';
 
 export interface Reading {
   model: string;
@@ -55,6 +58,7 @@ export interface Reading {
     subtotal: MoneyField | null;
     taxTotal: MoneyField | null;
     tip: MoneyField | null;
+    fees: MoneyField | null;
     cardLastFour: TextField | null;
   } | null;
   problems: string[];
@@ -117,6 +121,7 @@ const CHECK_REASONS: Record<ReadingCheck, string> = {
   sums: 'Its parts don’t come to its total.',
   future_date: 'It’s dated after the day it was uploaded.',
   old_date: 'It’s dated more than a year before it was uploaded.',
+  summary: 'It’s a purchase summary: check what was charged.',
 };
 const KEY_ERRORS = ['no_key', 'unreadable_key', 'key_rejected'];
 
@@ -191,8 +196,8 @@ export function formatMoney(money: Pick<MoneyField, 'decimal' | 'currency'>): st
 }
 
 /**
- * Why the sums or date of these readings can't be filed as read, a sentence for each check
- * that fails. Readings that fail the same way say it once.
+ * Why these readings can't be filed as read, a sentence for each check that fails: their sums
+ * or date, or being a purchase summary. Readings that fail the same way say it once.
  */
 export function describeChecks(readings: readonly Reading[]): string[] {
   const said = new Set<string>();
@@ -203,6 +208,7 @@ export function describeChecks(readings: readonly Reading[]): string[] {
         const parts = [
           formatMoney(f.subtotal),
           ...(f.taxTotal && !f.taxTotal.assumed ? [`${formatMoney(f.taxTotal)} tax`] : []),
+          ...(f.fees ? [`${formatMoney(f.fees)} fees`] : []),
           ...(f.tip && !f.tip.assumed ? [`${formatMoney(f.tip)} tip`] : []),
         ];
         said.add(`${parts.join(' + ')} doesn’t come to the ${formatMoney(f.total)} total.`);
@@ -210,6 +216,8 @@ export function describeChecks(readings: readonly Reading[]): string[] {
         said.add(`It’s dated ${f.date.value}, after the day it was uploaded.`);
       } else if (check === 'old_date' && f.date) {
         said.add(`It’s dated ${f.date.value}, more than a year before it was uploaded.`);
+      } else if (check === 'summary') {
+        said.add('It’s a purchase summary, which shows what was ordered, not what was charged.');
       }
     }
   }

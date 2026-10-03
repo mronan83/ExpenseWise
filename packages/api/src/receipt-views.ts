@@ -9,7 +9,7 @@ import {
   READING_CHECKS,
   readingChecks,
   readingDifferences,
-  ReceiptExtractionSchema,
+  StoredReadingSchema,
   type CorrectableField,
   type Field,
   type ModelId,
@@ -45,7 +45,7 @@ const textView = (field: Field<string> | null) =>
 
 export function normalized(run: ExtractionRunRecord | undefined): NormalizedExtraction | null {
   if (!run || run.outcome === 'failed') return null;
-  const parsed = ReceiptExtractionSchema.safeParse(run.output);
+  const parsed = StoredReadingSchema.safeParse(run.output);
   return parsed.success ? normalizeExtraction(parsed.data) : null;
 }
 
@@ -106,6 +106,7 @@ export function readingView(
             : assumed.includes('tip') && n.total
               ? assumedZeroView(n.total.value.currency)
               : null,
+          fees: moneyView(n.feeTotal),
           cardLastFour: textView(n.cardLastFour),
         }
       : null,

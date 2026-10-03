@@ -26,6 +26,9 @@ export interface NormalizedExtraction {
   readonly taxTotal: Field<Money> | null;
   /** How many tax lines were read, each rounded on its own (checks.ts allows for that). */
   readonly taxLines: number;
+  /** Fees and surcharges that are neither tax nor tip, such as a booking fee. */
+  readonly feeTotal: Field<Money> | null;
+  readonly feeLines: number;
   readonly tip: Field<Money> | null;
   readonly cardLastFour: Field<string> | null;
   /** Fields that could not be read as valid values; each becomes a Needs review reason. */
@@ -82,10 +85,10 @@ export function normalizeExtraction(
   const total = amount('total', extraction.total);
   const subtotal = amount('subtotal', extraction.subtotal);
   const tip = amount('tip', extraction.tip);
-  const taxes = extraction.taxes.map((t, i) => amount(`taxes[${i}]`, t));
-  const readable = taxes.filter((t): t is Field<Money> => t !== null);
-  const taxTotal =
-    code && taxes.length > 0 && readable.length === taxes.length
+  const lines = (name: string, read: readonly { value: string; confidence: ConfidenceLevel }[]) => {
+    const each = read.map((line, i) => amount(`${name}[${i}]`, line));
+    const readable = each.filter((t): t is Field<Money> => t !== null);
+    return code && each.length > 0 && readable.length === each.length
       ? {
           value: sum(
             code,
@@ -94,6 +97,9 @@ export function normalizeExtraction(
           confidence: lowest(readable.map((t) => t.confidence)),
         }
       : null;
+  };
+  const taxTotal = lines('taxes', extraction.taxes);
+  const feeTotal = lines('fees', extraction.fees);
 
   let date: Field<string> | null = null;
   if (extraction.date) {
@@ -125,7 +131,9 @@ export function normalizeExtraction(
     total,
     subtotal,
     taxTotal,
-    taxLines: taxes.length,
+    taxLines: extraction.taxes.length,
+    feeTotal,
+    feeLines: extraction.fees.length,
     tip,
     cardLastFour,
     problems,

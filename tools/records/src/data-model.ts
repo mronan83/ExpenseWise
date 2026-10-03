@@ -74,7 +74,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   extraction_runs: {
     about:
-      'One model’s reading of one receipt for one request, with its outcome, confidence, timing and cost. Its outcome is confident only when the reading would be Ready on its own, its sums and date included (FR-INT-04). Each request is read once per model, so a retry adds nothing (ADR-0017, NFR-DAT-06).',
+      'One model’s reading of one receipt for one request, with its outcome, confidence, timing and cost. Its outcome is confident only when the reading would be Ready on its own, its sums and date included (FR-INT-04). Readings since `receipt-v2` also read fees and whether a document is a purchase summary; older ones read back as having no fees (ADR-0027). Each request is read once per model, so a retry adds nothing (ADR-0017, NFR-DAT-06).',
   },
   receipt_reviews: {
     about:
@@ -82,7 +82,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   inbound_emails: {
     about:
-      'An email a member sent to the receipts address, kept once per provider message: who sent it, its subject, whether its sender was proved, how many receipts it filed and, when proved, its text (at most 64 KiB) for reading purchase summaries later (#58). Mail from anyone who is not a member is never kept (ADR-0026, FR-CAP-02).',
+      'An email a member sent to the receipts address, kept once per provider message: who sent it, its subject, whether its sender was proved, how many receipts it filed (its attachments, or with none its own text as a PDF) and, when proved, its text (at most 64 KiB). Mail from anyone who is not a member is never kept (ADR-0026, ADR-0027, FR-CAP-02).',
   },
   expenses: {
     about:
