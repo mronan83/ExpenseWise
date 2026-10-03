@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { createDatabase } from './client.ts';
 import { describeConnection, retryWhilePoolerRejectsPassword } from './connection.ts';
+import { lockDownDataApi } from './data-api.ts';
 import { fileMissingReceiptExpenses } from './receipts.ts';
 
 export const migrationsFolder = fileURLToPath(new URL('../migrations', import.meta.url));
@@ -11,12 +12,17 @@ export const migrationsFolder = fileURLToPath(new URL('../migrations', import.me
  * hash-chained audit events. Each data step is safe to run on every release. Run as the
  * schema owner, never as expensewise_app. Returns what the data steps did.
  */
-export async function runMigrations(connectionString: string): Promise<{ filedExpenses: number }> {
+export async function runMigrations(
+  connectionString: string,
+): Promise<{ filedExpenses: number; dataApiObjects: number }> {
   const { db, pool } = createDatabase(connectionString);
   try {
     await migrate(db, { migrationsFolder });
     // Receipts captured before #6 get the expense they prove (ADR-0022).
-    return { filedExpenses: await fileMissingReceiptExpenses(db) };
+    const filedExpenses = await fileMissingReceiptExpenses(db);
+    // Supabase's Data API roles get nothing, even after a restore has given it back (ADR-0013).
+    const dataApiObjects = await lockDownDataApi(db);
+    return { filedExpenses, dataApiObjects };
   } finally {
     await pool.end();
   }
@@ -46,5 +52,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   console.log('Migrations applied.');
   if (done.filedExpenses > 0) {
     console.log(`Filed an expense for ${done.filedExpenses} receipt(s) captured before expenses.`);
+  }
+  if (done.dataApiObjects > 0) {
+    console.log(
+      `Took back ${done.dataApiObjects} table(s), sequence(s) and function(s) Supabase's Data API roles could use.`,
+    );
   }
 }

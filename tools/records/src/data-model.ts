@@ -142,7 +142,7 @@ export const ROLES: Readonly<Record<string, string>> = {
   authenticated:
     'Supabase’s Data API role for signed-in callers. Has no rights to our data either: the API is the only path (NFR-SEC-03).',
   service_role:
-    'Supabase’s privileged Data API role. Stripped of every grant on our tables by migration 0002.',
+    'Supabase’s privileged Data API role. Stripped of every grant on our tables by migration 0002, and again on every release.',
 };
 
 export interface Rule {
@@ -160,6 +160,13 @@ export const RULES: readonly Rule[] = [
       'Every tenant table carries `org_id` and a `tenant_isolation` policy, forced so even the owner’s queries obey it. References are composite `(org_id, id)` foreign keys, so a row can’t point into another organization even though foreign-key checks skip row-level security.',
     objects: ['tenant_isolation', 'app_current_org', 'expenses_trip_fk', 'receipts_expense_fk'],
     refs: ['NFR-SEC-01', 'ADR-0001'],
+  },
+  {
+    rule: 'Supabase’s Data API roles hold nothing in our schema.',
+    mechanism:
+      'Migration 0002 took back their grants and the default privileges that would hand them new objects. Every release does it again (`lockDownDataApi()`), because grants can come back without a migration: a restore into a new project gives them every table and function as it recreates them.',
+    objects: [],
+    refs: ['NFR-SEC-03', 'ADR-0013'],
   },
   {
     rule: 'Money is exact.',

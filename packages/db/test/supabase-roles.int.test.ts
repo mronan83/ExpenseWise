@@ -1,10 +1,10 @@
 import { sql } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
+import { DATA_API_ROLES, lockDownDataApi } from '../src/data-api.ts';
 import { connectAs, expectDbError } from './helpers.ts';
 
 // Supabase's Data API (PostgREST) connects as these roles. ExpenseWise serves data only
 // through its own API, so they must have no way into our tables or functions (ADR-0013).
-const DATA_API_ROLES = ['anon', 'authenticated', 'service_role'] as const;
 
 const owner = connectAs('owner');
 afterAll(() => owner.pool.end());
@@ -49,5 +49,16 @@ describe('Supabase Data API roles', () => {
         /permission denied/,
       );
     }
+  });
+
+  it('lose grants that come back without a migration, as after a restore', async () => {
+    await owner.db.execute(sql`grant select, truncate on expenses to anon`);
+    await owner.db.execute(sql`grant execute on function claim_outbox_batch(integer) to anon`);
+    expect(await lockDownDataApi(owner.db)).toBe(2);
+    const { rows } = await owner.db.execute<{ table: boolean; fn: boolean }>(sql`
+      select has_table_privilege('anon', 'expenses', 'SELECT') as table,
+             has_function_privilege('anon', 'claim_outbox_batch(integer)', 'EXECUTE') as fn`);
+    expect(rows).toEqual([{ table: false, fn: false }]);
+    expect(await lockDownDataApi(owner.db)).toBe(0);
   });
 });
