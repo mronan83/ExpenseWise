@@ -56,7 +56,7 @@ describe('the backlog page', () => {
   });
 
   it('leaves requirement ids as plain text until the traceability page is published', () => {
-    expect(html).toContain('<span class="ref">GAP-01</span>');
+    expect(html).toContain('<span class="ref">GAP-02</span>');
   });
 });
 

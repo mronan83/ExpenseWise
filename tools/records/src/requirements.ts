@@ -1047,8 +1047,8 @@ export const NON_FUNCTIONAL: readonly Requirement[] = [
     phase: 'P1',
     status: 'Partial',
     features: ['F-37'],
-    shortfalls: ['GAP-01'],
-    note: 'Built and rehearsed (F-37); it runs once its storage and secrets are set up (#2).',
+    shortfalls: ['GAP-18'],
+    note: 'Runs every night since Oct 3 (F-37). The bucket’s lifecycle rules keep 30 daily and 12 monthly dumps; after each file’s 30-day lock, the job’s own key could still delete it (GAP-18).',
   },
   {
     id: 'NFR-REL-02',
@@ -1090,10 +1090,9 @@ export const NON_FUNCTIONAL: readonly Requirement[] = [
     sources: ['ADR-0014', 'risks R10'],
     priority: 'Must',
     phase: 'P1',
-    status: 'Partial',
-    features: ['F-37'],
+    status: 'Verified',
+    features: ['F-42'],
     checks: ['db/heartbeat.int › takes the nightly write as one row, however often it runs'],
-    shortfalls: ['#2'],
   },
   {
     id: 'NFR-REL-06',

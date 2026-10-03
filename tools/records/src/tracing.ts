@@ -12,9 +12,23 @@ export const GAPS: readonly Gap[] = [
     affects: ['NFR-REL-01', 'NFR-REL-02', 'NFR-REL-03', 'NFR-REL-05', 'BO-4'],
     severity: 'High',
     evidence:
-      'ADR-0014 and the roadmap make the nightly backup a precondition of real use; real receipts have been captured since Oct 2. The backup is built (#1, PR #23) but has no secrets yet, so it has never run.',
+      'ADR-0014 and the roadmap make the nightly backup a precondition of real use; real receipts have been captured since Oct 2. The backup was built in PR #23 (#1) and needed its storage and secrets (#2).',
     fix: 'Set up its storage and secrets and run it once (#2), then restore it (#10).',
     backlog: 2,
+    closed: {
+      date: '2026-10-03',
+      note: 'The backup ran for real on Oct 3: 51 tables and the one receipt image, encrypted in Backblaze B2, and the uploaded copy decrypted back to the same dump. It runs every night. Restoring it is #10.',
+    },
+  },
+  {
+    id: 'GAP-18',
+    title: 'The backup’s own key can delete the backups once their 30-day Object Lock has passed.',
+    affects: ['NFR-REL-01', 'F-37'],
+    severity: 'Medium',
+    evidence:
+      'Runbook section 5 creates a Read and Write Backblaze key, which includes deleting. Object Lock protects each file for its first 30 days only. After that, a leaked key could erase the monthly dumps and every older receipt image, which ADR-0014 says are never deleted from the copy.',
+    fix: 'A key that can list, read and write but not delete (#48).',
+    backlog: 48,
   },
   {
     id: 'GAP-02',
@@ -192,7 +206,7 @@ export const QUESTIONS: readonly Question[] = [
     id: 'Q1',
     title: 'Real receipts before backups',
     ask: 'Keep capturing real receipts while the backup is built, or pause until the first backup has been restored?',
-    why: 'The roadmap made the backup a precondition of real use (D-14, ADR-0014), and real receipts are already in production with no copy anywhere (GAP-01).',
+    why: 'The roadmap made the backup a precondition of real use (D-14, ADR-0014), and real receipts are in production. Since Oct 3 a copy goes off-site every night (GAP-01 closed), but none has been restored yet (#10).',
     recommendation:
       'Keep capturing, and keep every original (paper or email) until #10 passes. The backup is about a day of work plus your 20-minute setup.',
     affects: ['GAP-01', 'NFR-REL-01'],
@@ -236,6 +250,12 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-03',
+    change:
+      'From your setup: the nightly backup ran for real (51 tables, 1 receipt image), so #2 is done and GAP-01 closed. The heartbeat and quota alerts are now their own feature, F-42, so NFR-REL-05 is Verified; the heartbeat is written first, so a Backblaze outage can’t stop it. F-37 and NFR-REL-01 stay Partial: no restore yet (#10), and the job’s key can delete after the 30-day lock (new GAP-18, #48).',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-02',
     change:

@@ -135,7 +135,7 @@ The Free plan keeps no backups, so a nightly workflow keeps our own ([ADR-0014](
      | `B2_BUCKET` | The bucket name from step 2 |
      | `BACKUP_PASSPHRASE` | From step 5 |
 
-8. **Run it once now: Actions → Nightly backup → Run workflow** (branch `main`). It takes a minute or two. A green run ends with `Done in … s`, after lines for the dump, the daily and monthly copies, the check that the uploaded copy decrypts, the receipt images, the heartbeat and the two Free plan limits. A red run names what is wrong, such as a missing secret or a key Backblaze refused, and never prints a secret. After that it runs every night, and GitHub emails you when a run fails.
+8. **Run it once now: Actions → Nightly backup → Run workflow** (branch `main`). It takes a minute or two. A green run ends with `Done in … s`, after lines for the heartbeat, the dump, the daily and monthly copies, the check that the uploaded copy decrypts, the receipt images and the two Free plan limits. A red run names what is wrong, such as a missing secret or a key Backblaze refused, and never prints a secret. After that it runs every night, and GitHub emails you when a run fails.
 9. **Check your copy of the passphrase, once.** The nightly check, and the restore drill once it exists, decrypt with the secret, so neither can tell whether the passphrase in your password manager matches it; a stray space pasted into either would surface only during a real restore. Download that first `db/daily/…` file from the bucket (**Browse Files**) and decrypt it as in step 1 below, pasting the passphrase from your password manager. If it decrypts, your copy is good. If not, set `BACKUP_PASSPHRASE` again from the password manager and repeat step 8.
 
 ### Restoring from the off-site backup
