@@ -88,13 +88,13 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Ready readings don’t become expenses',
     type: 'Feature',
     detail:
-      'Increment 1 ends when a receipt is filed as an expense within 30 seconds. The expense table, its lifecycle and the money rules exist; the step that turns a settled reading into a Ready or Needs-review expense, with an audit event, does not.',
+      'Increment 1 ends when a receipt is filed as an expense within 30 seconds. The expense table, its lifecycle and the money rules exist; the step that turns a settled reading into a Ready or Needs-review expense, with an audit event, does not. Your rules (Oct 3): the receipt stays linked as the expense’s proof, and the expense can be edited once it exists (FR-EXP-08, FR-EXP-09).',
     priority: 'P1',
     effort: 'L',
     severity: 'Medium',
     blocker: { kind: 'none' },
     source: 'Roadmap increment 1',
-    affects: ['FR-EXP-01', 'FR-EXP-03', 'NFR-UX-04', 'F-09'],
+    affects: ['FR-EXP-01', 'FR-EXP-03', 'FR-EXP-08', 'FR-EXP-09', 'NFR-UX-04', 'F-09'],
   },
   {
     num: 16,
@@ -166,13 +166,13 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'The Needs you inbox shows nothing',
     type: 'Feature',
     detail:
-      'Home has the inbox layout and an empty state only. Start with what exists: receipts that need a look or failed, each with its reason and one action. Missing receipts and returned reports join as trips and reports arrive.',
+      'Home has the inbox layout and an empty state only. Start with what exists: receipts that need a look or failed, each with its reason and one action. Missing receipts and returned reports join as trips and reports arrive; a returned report lists each rejected expense with why (FR-GOV-12).',
     priority: 'P1',
     effort: 'M',
     severity: 'Medium',
     blocker: { kind: 'none' },
     source: 'Roadmap increment 1, design DP2',
-    affects: ['FR-EXP-02', 'F-10'],
+    affects: ['FR-EXP-02', 'FR-GOV-12', 'F-10'],
   },
 
   // P2: this month
@@ -366,13 +366,13 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Single-step approval',
     type: 'Feature',
     detail:
-      'Approve, or return with a comment. A one-person organization self-attests; in a team no one approves their own spend; approving someone else’s needs the second factor.',
+      'Approve, or return with a comment. A one-person organization self-attests; in a team no one approves their own spend; approving someone else’s needs the second factor. Your rules (Oct 3): an expense that doesn’t match its receipt is rejected, one rejected expense returns the whole report, and the rejected ones are surfaced with why (FR-GOV-10–12, Q6).',
     priority: 'P3',
     effort: 'M',
     severity: 'Medium',
     blocker: { kind: 'items', items: [23, 8] },
     source: 'Roadmap increment 3',
-    affects: ['FR-GOV-02', 'FR-GOV-03', 'F-18'],
+    affects: ['FR-GOV-02', 'FR-GOV-03', 'FR-GOV-10', 'FR-GOV-11', 'FR-GOV-12', 'F-18'],
   },
   {
     num: 25,
