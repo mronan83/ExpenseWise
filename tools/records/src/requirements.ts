@@ -49,7 +49,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
       'extraction/checks › always flags a purchase summary, however well it reads',
       'extraction/checks › never makes a purchase summary Ready on its own (Q10)',
     ],
-    note: 'Your requirement of Oct 3 widened it from travel emails to any receipt or purchase summary; your answer to Q10 (C) says which wait for review. It comes in through a Bird agent mailbox (ADR-0024, ADR-0026). Attached PDFs and photos came in PR #44; the email’s own text, filed as a PDF, and purchase summaries in PR #45 (ADR-0027). Q17 asks whether addresses you don’t sign in with may send receipts in.',
+    note: 'Your requirement of Oct 3 widened it from travel emails to any receipt or purchase summary; your answer to Q10 (C) says which wait for review. It comes in through a Bird agent mailbox (ADR-0024, ADR-0026). Attached PDFs and photos came in PR #44; the email’s own text, filed as a PDF, and purchase summaries in PR #45 (ADR-0027). Your answer to Q17: sign-in addresses stay the only senders.',
   },
   {
     id: 'FR-CAP-03',
