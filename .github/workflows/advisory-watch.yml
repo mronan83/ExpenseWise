@@ -1,0 +1,28 @@
+# Weekly: has an advisory that the dependency audit (G4) lets through been fixed? Each ignore
+# in pnpm-workspace.yaml stays only while no fixed version exists (GAP-19). A failed run
+# emails the owner, like any failed scheduled run.
+name: Advisory watch
+
+on:
+  schedule:
+    - cron: '23 16 * * 1' # Mondays, 09:23 in California
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  watch:
+    name: Ignored advisories still have no fix
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      # This job never installs, so no dependency cache (see G4 in ci.yml).
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - name: Check each ignored advisory
+        run: bash scripts/security/advisory-watch.sh

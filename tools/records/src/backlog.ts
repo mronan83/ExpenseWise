@@ -570,6 +570,19 @@ export const BACKLOG: readonly BacklogItem[] = [
     affects: ['NFR-AI-01'],
   },
 
+  {
+    num: 49,
+    title: 'One dependency advisory is let through until it has a fix',
+    type: 'Security',
+    detail:
+      'braces’ high advisory (GHSA-vfj7-8cjw-p6xm) has no fixed version, so the audit ignores it (pnpm-workspace.yaml). It reaches us only through lint tooling. When Advisory watch fails on a Monday, a fix exists: update to it, remove the ignore and close GAP-19.',
+    priority: 'P3',
+    effort: 'S',
+    severity: 'Low',
+    blocker: { kind: 'none', note: 'Waits on an upstream fix; Advisory watch says when' },
+    source: 'GAP-19',
+    affects: ['GAP-19', 'NFR-SEC-12'],
+  },
   // Done
   {
     num: 40,

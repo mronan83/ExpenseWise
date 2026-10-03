@@ -31,6 +31,17 @@ export const GAPS: readonly Gap[] = [
     backlog: 48,
   },
   {
+    id: 'GAP-19',
+    title:
+      'The dependency audit lets one high advisory through: braces (GHSA-vfj7-8cjw-p6xm), which has no fixed version yet.',
+    affects: ['NFR-SEC-12'],
+    severity: 'Low',
+    evidence:
+      'Published on Oct 3 and failed G4 on every branch. braces reaches us only through lint tooling (eslint-config-next, a dev dependency), never the deployed app, and expands only globs written in this repository. No release of braces, micromatch or Next’s lint plugin avoids it yet.',
+    fix: 'Ignored in pnpm-workspace.yaml at your direction on Oct 3. Advisory watch checks every Monday and fails once a fix exists; then update and remove the ignore (#49).',
+    backlog: 49,
+  },
+  {
     id: 'GAP-02',
     title:
       'Preview builds hold production credentials: `DATABASE_URL` and `SUPABASE_SECRET_KEY` are set for Preview as well as Production.',
@@ -250,6 +261,12 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-03',
+    change:
+      'From your decision: braces’ new high advisory (GHSA-vfj7-8cjw-p6xm), which has no fix and reaches us only through lint tooling, is ignored by the audit, so G4 passes again. NFR-SEC-12 is Partial (GAP-19, #49), and a weekly Advisory watch fails once a fix exists.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-03',
     change:
