@@ -1,4 +1,5 @@
 export * from './anthropic.ts';
+export * from './checks.ts';
 export * from './claude.ts';
 export * from './confirm.ts';
 export * from './extractor.ts';

@@ -317,6 +317,19 @@ await capture('fallback', 'upload', {
   [FALLBACK_MODEL]: reading('Verve Coffee Roasters', '2026-10-02', 'USD', '12.25'),
 });
 await capture('failed', 'camera', { [haiku]: 'refuse', [sonnet]: 'refuse' });
+// Read alike and with confidence, but the parts miss the tip, and a date a week from now.
+await capture(
+  'sums',
+  'camera',
+  both(
+    reading('Bayside Grill', '2026-09-24', 'USD', '58.43', {
+      subtotal: { value: '45.50', confidence: 'high' },
+      taxes: [{ label: 'Sales tax', value: '4.43', confidence: 'high' }],
+    }),
+  ),
+);
+const nextWeek = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+await capture('future', 'upload', both(reading('Hyatt Regency Omaha', nextWeek, 'USD', '212.40')));
 await capture('processing', 'upload');
 
 // A confirmed correction, an expense edited away from its receipt, one put on a trip by hand.

@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { api, ApiProblem } from '../../../lib/api';
 import {
+  describeChecks,
   describeReadingError,
   FIELD_LABELS,
   providerOf,
@@ -184,6 +185,7 @@ export default function ReceiptPage() {
 function Verdict({ receipt, stale }: { receipt: ReceiptDetail; stale: boolean }) {
   const status = RECEIPT_STATUS[receipt.status];
   const fallback = receipt.readings.find((r) => r.role === 'fallback');
+  const checks = describeChecks(receipt.readings);
   let text: string;
   if (receipt.status === 'processing') {
     text = stale
@@ -202,9 +204,14 @@ function Verdict({ receipt, stale }: { receipt: ReceiptDetail; stale: boolean })
   } else if (receipt.status === 'failed') {
     text = 'No model could read it. See why below.';
   } else if (fallback?.fields) {
-    text = `Claude couldn't read it, so ${fallback.label} did. One reading, so check it before you rely on it.`;
+    text = [
+      `Claude couldn't read it, so ${fallback.label} did. One reading, so check it before you rely on it.`,
+      ...checks,
+    ].join(' ');
   } else if (receipt.differences.length > 0) {
-    text = `The models disagree on ${receipt.differences.join(', ')}.`;
+    text = [`The models disagree on ${receipt.differences.join(', ')}.`, ...checks].join(' ');
+  } else if (checks.length > 0) {
+    text = checks.join(' ');
   } else {
     text = 'At least one model was unsure or could not read it.';
   }

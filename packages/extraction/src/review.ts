@@ -1,12 +1,21 @@
+import { readingChecks } from './checks.ts';
 import type { NormalizedExtraction } from './normalize.ts';
 
 /** Fields that must be read with high confidence for an expense to skip review. */
 export const READY_FIELDS = ['merchant', 'date', 'currency', 'total'] as const;
 export type ReadyField = (typeof READY_FIELDS)[number];
 
-/** The pipeline would file this reading as Ready, with no human look (ADR-0006). */
-export function isAutoReady(n: NormalizedExtraction): boolean {
-  return n.problems.length === 0 && READY_FIELDS.every((f) => n[f]?.confidence === 'high');
+/**
+ * The pipeline would file this reading as Ready, with no human look (ADR-0006): every value
+ * readable, the filing fields read with high confidence, and its sums and date plausible for
+ * a receipt uploaded then (FR-INT-04).
+ */
+export function isAutoReady(n: NormalizedExtraction, uploadedAt: Date): boolean {
+  return (
+    n.problems.length === 0 &&
+    READY_FIELDS.every((f) => n[f]?.confidence === 'high') &&
+    readingChecks(n, uploadedAt).length === 0
+  );
 }
 
 /** Store and brand names match loosely: case, punctuation and "&" vs "and" don't count. */

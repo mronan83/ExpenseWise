@@ -113,6 +113,10 @@ export const GAPS: readonly Gap[] = [
       '`isAutoReady()` checks confidence and unreadable values only; normalization checks the date’s format, not its plausibility. Two agreeing models make a silent error less likely, not impossible.',
     fix: 'Add reconciliation (subtotal + taxes + tip against the total, with a tolerance for rounding) and a date window to the Ready rule (#7).',
     backlog: 7,
+    closed: {
+      date: '2026-10-03',
+      note: 'A reading is Ready only if its subtotal, taxes and tip make the total, a minor unit allowed per tax or tip line, and its date is no more than a day after the upload and no more than a year before it. A reading that fails says which, on the receipt (PR #40).',
+    },
   },
   {
     id: 'GAP-05',
@@ -404,6 +408,12 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-03',
+    change:
+      'PR #40, at your direction (#7): a receipt is Ready only when its sums and date are plausible, as well as read with confidence and agreed. The subtotal, taxes and tip must make the total, a cent allowed per tax or tip line; prices that include VAT add up too. The date may be a day after the upload and no more than a year before it. A receipt that fails says why, such as “$45.50 + $4.43 tax doesn’t come to the $58.43 total.” GAP-04 is closed and FR-INT-04 Verified. Receipts read before today keep their status.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-03',
     change:

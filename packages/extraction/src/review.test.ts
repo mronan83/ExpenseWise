@@ -17,16 +17,19 @@ const reading = (over: Partial<ReceiptExtraction> = {}): ReceiptExtraction => ({
   ...over,
 });
 const n = (over: Partial<ReceiptExtraction> = {}) => normalizeExtraction(reading(over));
+const UPLOADED = new Date('2026-09-24T18:00:00Z');
 
 describe('isAutoReady', () => {
   it('needs merchant, date, currency and total read with high confidence', () => {
-    expect(isAutoReady(n())).toBe(true);
-    expect(isAutoReady(n({ total: { value: '6.50', confidence: 'medium' } }))).toBe(false);
-    expect(isAutoReady(n({ merchant: null }))).toBe(false);
+    expect(isAutoReady(n(), UPLOADED)).toBe(true);
+    expect(isAutoReady(n({ total: { value: '6.50', confidence: 'medium' } }), UPLOADED)).toBe(
+      false,
+    );
+    expect(isAutoReady(n({ merchant: null }), UPLOADED)).toBe(false);
   });
 
   it('never files a reading with an unreadable value', () => {
-    expect(isAutoReady(n({ total: { value: '6.505', confidence: 'high' } }))).toBe(false);
+    expect(isAutoReady(n({ total: { value: '6.505', confidence: 'high' } }), UPLOADED)).toBe(false);
   });
 });
 

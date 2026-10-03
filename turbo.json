@@ -11,9 +11,14 @@
       "cache": false,
       "persistent": true
     },
-    "lint": {},
-    "typecheck": {},
+    "lint": {
+      "dependsOn": ["^typecheck"]
+    },
+    "typecheck": {
+      "dependsOn": ["^typecheck"]
+    },
     "test": {
+      "dependsOn": ["^typecheck"],
       "outputs": ["coverage/**"]
     },
     "test:integration": {

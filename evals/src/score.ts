@@ -42,6 +42,13 @@ export { sameMerchant };
 
 type Run = Pick<ExtractionRun, 'outcome' | 'extraction'>;
 
+/**
+ * When an eval receipt counts as captured: on the day it is dated, as most receipts are.
+ * Eval receipts are often old, and judging them against today would fail each on its date.
+ */
+const capturedAt = (truth: GroundTruth, n: NormalizedExtraction) =>
+  new Date(`${truth.date ?? n.date?.value ?? '2026-01-01'}T12:00:00Z`);
+
 /** Scores every field the document prints. Fields the truth lacks are not scored. */
 export function scoreDocument(truth: GroundTruth, run: Run): DocumentScore {
   const n: NormalizedExtraction | null =
@@ -89,7 +96,7 @@ export function scoreDocument(truth: GroundTruth, run: Run): DocumentScore {
     .filter((c): c is [FieldName, boolean, ConfidenceLevel | null] => c[1] !== undefined)
     .map(([field, correct, confidence]) => ({ field, correct, confidence }));
   const allCorrect = fields.every((f) => f.correct);
-  const autoReady = n !== null && isAutoReady(n);
+  const autoReady = n !== null && isAutoReady(n, capturedAt(truth, n));
   return { fields, allCorrect, autoReady, silentError: autoReady && !allCorrect };
 }
 

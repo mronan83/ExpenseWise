@@ -1,5 +1,5 @@
 import { isIsoDate, SUPPORTED_CURRENCIES } from '@expensewise/domain';
-import { CORRECTABLE_FIELDS } from '@expensewise/extraction';
+import { CORRECTABLE_FIELDS, READING_CHECKS } from '@expensewise/extraction';
 import { z } from '@hono/zod-openapi';
 
 /** RFC 9457 problem details. Every error response uses this shape. */
@@ -228,6 +228,12 @@ export const ReceiptReadingSchema = z
       })
       .nullable(),
     problems: z.array(z.string()),
+    checks: z.array(z.enum(READING_CHECKS)).openapi({
+      description:
+        'Checks this reading fails (FR-INT-04). sums: the subtotal, taxes and tip don’t make ' +
+        'the total, allowing a minor unit per tax or tip line. future_date: dated more than a ' +
+        'day after the upload. old_date: dated more than a year before it.',
+    }),
   })
   .openapi('ReceiptReading');
 

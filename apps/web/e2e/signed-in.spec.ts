@@ -39,6 +39,8 @@ const SCREENS: [string, (s: Seeded) => string, Step[]][] = [
   ['a reading confirmed with corrections', (s) => `/receipts/${s.receipts.steak}`, []],
   ['a receipt only the fallback read', (s) => `/receipts/${s.receipts.fallback}`, []],
   ['a receipt nothing could read', (s) => `/receipts/${s.receipts.failed}`, []],
+  ['a receipt whose parts don’t make its total', (s) => `/receipts/${s.receipts.sums}`, []],
+  ['a receipt dated after it was uploaded', (s) => `/receipts/${s.receipts.future}`, []],
   ['a receipt being read', (s) => `/receipts/${s.receipts.processing}`, []],
   ['Expenses', () => '/expenses', []],
   [

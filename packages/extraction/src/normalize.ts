@@ -1,13 +1,13 @@
 import {
   assertCurrency,
   DomainError,
-  equals,
   fromDecimal,
   isIsoDate,
   sum,
   type CurrencyCode,
   type Money,
 } from '@expensewise/domain';
+import { addsUp } from './checks.ts';
 import type { ConfidenceLevel, DocumentType, ReceiptExtraction } from './schema.ts';
 
 export interface Field<T> {
@@ -24,6 +24,8 @@ export interface NormalizedExtraction {
   readonly total: Field<Money> | null;
   readonly subtotal: Field<Money> | null;
   readonly taxTotal: Field<Money> | null;
+  /** How many tax lines were read, each rounded on its own (checks.ts allows for that). */
+  readonly taxLines: number;
   readonly tip: Field<Money> | null;
   readonly cardLastFour: Field<string> | null;
   /** Fields that could not be read as valid values; each becomes a Needs review reason. */
@@ -123,6 +125,7 @@ export function normalizeExtraction(
     total,
     subtotal,
     taxTotal,
+    taxLines: taxes.length,
     tip,
     cardLastFour,
     problems,
@@ -147,9 +150,5 @@ export function assumedZeros(n: NormalizedExtraction): OptionalAmount[] {
   if (n.taxTotal === null && !unread('taxes')) absent.push('taxTotal');
   if (n.tip === null && !unread('tip')) absent.push('tip');
   if (absent.length === 0 || !n.subtotal) return absent;
-  const parts = [n.subtotal.value, n.taxTotal?.value, n.tip?.value].filter(
-    (m): m is Money => m !== undefined,
-  );
-  if (parts.some((m) => m.currency !== total.currency)) return [];
-  return equals(sum(total.currency, parts), total) ? absent : [];
+  return addsUp(n) ? absent : [];
 }
