@@ -146,6 +146,7 @@ const reading = (
   currency: { code: currency, confidence: 'high' },
   total: { value: total, confidence: 'high' },
   subtotal: null,
+  fees: [],
   taxes: [],
   tip: null,
   cardLastFour: null,
@@ -299,11 +300,20 @@ await capture('folio', 'upload', {
     },
   ),
 });
+// A ride: its booking fee and airport surcharge are neither tax nor tip, and still add up.
 await capture(
   'uber',
   'camera',
   both(
-    reading('Uber', '2026-09-30', 'USD', '31.45', { tip: { value: '2.00', confidence: 'high' } }),
+    reading('Uber', '2026-09-30', 'USD', '31.45', {
+      documentType: 'ride_receipt',
+      subtotal: { value: '25.20', confidence: 'high' },
+      fees: [
+        { label: 'Booking Fee', value: '2.75', confidence: 'high' },
+        { label: 'Airport Surcharge', value: '1.50', confidence: 'high' },
+      ],
+      tip: { value: '2.00', confidence: 'high' },
+    }),
   ),
 );
 await capture('steak', 'camera', {
@@ -336,6 +346,12 @@ await capture(
 );
 const nextWeek = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
 await capture('future', 'upload', both(reading('Hyatt Regency Omaha', nextWeek, 'USD', '212.40')));
+// An order confirmation: read with confidence, and still a summary, so it waits (Q10).
+await capture(
+  'summary',
+  'upload',
+  both(reading('Amazon.com', '2026-09-29', 'USD', '86.97', { documentType: 'purchase_summary' })),
+);
 await capture('processing', 'upload');
 
 // A confirmed correction, an expense edited away from its receipt, one put on a trip by hand.

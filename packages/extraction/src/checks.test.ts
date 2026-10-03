@@ -15,6 +15,7 @@ const base: ReceiptExtraction = {
   currency: { code: 'USD', confidence: 'high' },
   total: amount('58.43'),
   subtotal: amount('45.50'),
+  fees: [],
   taxes: [tax('3.93'), tax('0.50', 'City tax')],
   tip: amount('8.50'),
   cardLastFour: null,
@@ -61,6 +62,20 @@ describe('addsUp', () => {
     expect(addsUp(read({ tip: null }))).toBe(false);
   });
 
+  it('counts fees that are neither tax nor tip, as a ride receipt prints them', () => {
+    // An Uber ride: $24.17 fare, $2.75 booking fee, $1.50 airport surcharge, $3.00 tip.
+    const ride = {
+      documentType: 'ride_receipt' as const,
+      total: amount('31.42'),
+      subtotal: amount('24.17'),
+      taxes: [],
+      tip: amount('3.00'),
+    };
+    const fees = [tax('2.75', 'Booking Fee'), tax('1.50', 'Airport Surcharge')];
+    expect(addsUp(read({ ...ride, fees }))).toBe(true);
+    expect(addsUp(read({ ...ride, fees: [] }))).toBe(false);
+  });
+
   it('has nothing to add up without a subtotal or a total', () => {
     expect(addsUp(read({ subtotal: null }))).toBeNull();
     expect(addsUp(read({ total: null }))).toBeNull();
@@ -102,6 +117,12 @@ describe('readingChecks', () => {
   it('has nothing to check without a date', () => {
     expect(readingChecks(read({ date: null }), UPLOADED)).toEqual([]);
   });
+
+  it('always flags a purchase summary, however well it reads', () => {
+    expect(readingChecks(read({ documentType: 'purchase_summary' }), UPLOADED)).toEqual([
+      'summary',
+    ]);
+  });
 });
 
 describe('the Ready rule with the checks', () => {
@@ -114,5 +135,9 @@ describe('the Ready rule with the checks', () => {
     expect(isAutoReady(read({ date: { value: '2024-10-03', confidence: 'high' } }), UPLOADED)).toBe(
       false,
     );
+  });
+
+  it('never makes a purchase summary Ready on its own (Q10)', () => {
+    expect(isAutoReady(read({ documentType: 'purchase_summary' }), UPLOADED)).toBe(false);
   });
 });

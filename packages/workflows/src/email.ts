@@ -14,6 +14,7 @@ import { NonRetriableError, type Inngest } from 'inngest';
 import type { DNSResolver } from 'mailauth';
 import { dkimVerify } from 'mailauth/lib/dkim/verify';
 import PostalMime, { type Attachment } from 'postal-mime';
+import { emailAsPdf, htmlAsText } from './email-pdf.ts';
 import { sniffMediaType } from './receipts.ts';
 import { committedWorkflowEvent } from './relay.ts';
 
@@ -107,7 +108,7 @@ export interface EmailFile {
 export interface ParsedEmail {
   readonly subject: string | null;
   readonly sentAt: Date | null;
-  /** The plain text, or the HTML as text when there is no plain part, at most 64 KiB. */
+  /** The HTML as text, or the plain part when there is no HTML, at most 64 KiB. */
   readonly bodyText: string | null;
   readonly files: EmailFile[];
   /** Attachments not taken: unsupported, too small or too big, repeated, or over the limit. */
@@ -154,45 +155,15 @@ export function receiptFiles(attachments: readonly Attachment[]): {
   return { files, skipped: attachments.length - files.length };
 }
 
-const ENTITIES: Record<string, string> = {
-  amp: '&',
-  lt: '<',
-  gt: '>',
-  quot: '"',
-  apos: "'",
-  nbsp: ' ',
-};
-
 /**
- * HTML as plain text, for an email with no plain part: no tags, scripts or styles, a line
- * per block and a space per cell, so a model can read the amounts in order.
+ * Reads the message's parts. A forwarded message's attachments count as its own. The HTML is
+ * preferred to the plain part: a receipt's HTML keeps each amount beside its label, while the
+ * plain part a sender writes is often just a link to the HTML.
  */
-export function htmlAsText(html: string): string {
-  return html
-    .replace(/<(script|style|head|title)\b[\s\S]*?<\/\1\s*>/gi, ' ')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div|tr|li|h[1-6]|table|section)\s*>/gi, '\n')
-    .replace(/<[^>]*>/g, ' ')
-    .replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (entity: string, name: string) => {
-      const code = /^#x/i.test(name)
-        ? parseInt(name.slice(2), 16)
-        : name.startsWith('#')
-          ? parseInt(name.slice(1), 10)
-          : undefined;
-      if (code === undefined) return ENTITIES[name.toLowerCase()] ?? entity;
-      return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : '';
-    })
-    .replace(/[^\S\n]+/g, ' ')
-    .replace(/ ?\n ?/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
-/** Reads the message's parts. A forwarded message's attachments count as its own. */
 export async function parseEmail(raw: Uint8Array): Promise<ParsedEmail> {
   const email = await PostalMime.parse(raw, { attachmentEncoding: 'arraybuffer' });
   const sentAt = email.date ? new Date(email.date) : null;
-  const text = (email.text ?? (email.html ? htmlAsText(email.html) : undefined))?.trim();
+  const text = (email.html ? htmlAsText(email.html) : email.text)?.trim();
   const { files, skipped } = receiptFiles(email.attachments);
   return {
     subject: email.subject?.trim().slice(0, 998) || null,
@@ -233,6 +204,8 @@ export type KeepEmailResult =
       readonly receiptIds: string[];
       /** Upload events to hand to the receipt workflow. */
       readonly events: CommittedEvent[];
+      /** The receipt filed is the email's own text, as a PDF. */
+      readonly fromBody?: true;
       readonly problem?: SenderProblem;
     }
   /** Kept on an earlier try; its receipts still waiting are handed on again. */
@@ -241,8 +214,9 @@ export type KeepEmailResult =
 /**
  * Keeps an arriving email for the member who sent it (ADR-0026). The From address must be a
  * member's sign-in address, or nothing is kept. When its signature proves it, each attachment
- * that can be a receipt is stored and filed, and the body text is kept. When it doesn't, the
- * email is kept as unverified, with nothing filed and no body, so the member can see it came.
+ * that can be a receipt is stored and filed, and the body text is kept; with nothing attached,
+ * the email's text is filed as a PDF instead (ADR-0027). When it doesn't, the email is kept as
+ * unverified, with nothing filed and no body, so the member can see it came.
  * Every id is derived from the message, so a retry makes the same records again.
  */
 export async function keepEmail(
@@ -261,7 +235,13 @@ export async function keepEmail(
     throw new NonRetriableError('The email is not a message we can read', { cause: error });
   });
   const key = `email:${received.provider}:${received.messageId}`;
-  const files = sender.verified ? parsed.files : [];
+  // With nothing attached that can be a receipt, the email itself is the receipt: its text,
+  // as a PDF, read like an upload (ADR-0027).
+  const body =
+    sender.verified && parsed.files.length === 0 && parsed.bodyText
+      ? await bodyAsFile(parsed.subject, parsed.bodyText)
+      : null;
+  const files = !sender.verified ? [] : body ? [body] : parsed.files;
   const attachments: InboundAttachment[] = [];
   for (const file of files) {
     const receiptId = derivedId(`${key}:${file.sha256}`);
@@ -305,8 +285,16 @@ export async function keepEmail(
     status,
     receiptIds: result.receiptIds,
     events: result.events,
+    ...(body ? { fromBody: true as const } : {}),
     ...(sender.verified ? {} : { problem: sender.problem }),
   };
+}
+
+/** The email's text as a PDF file, the receipt an email with nothing attached is filed as. */
+export async function bodyAsFile(subject: string | null, text: string): Promise<EmailFile> {
+  const bytes = await emailAsPdf(subject, text);
+  const sha256 = createHash('sha256').update(bytes).digest('hex');
+  return { bytes, contentType: 'application/pdf', sha256 };
 }
 
 const PROVIDER_ID = /^[A-Za-z0-9_-]{1,100}$/;
@@ -340,7 +328,7 @@ export function emailReadingFunction(client: Inngest, ports: () => EmailReadingP
       triggers: [{ event: EMAIL_RECEIVED }],
       retries: 3,
     },
-    async ({ event, step }) => {
+    async ({ event, step, logger }) => {
       const received = receivedEmail(event.data);
       const kept = await step.run('keep the email', () => keepEmail(ports(), received));
       const events = 'events' in kept ? kept.events : [];
@@ -348,9 +336,19 @@ export function emailReadingFunction(client: Inngest, ports: () => EmailReadingP
         await step.sendEvent('read its receipts', events.map(committedWorkflowEvent));
       }
       const { outcome } = kept;
-      return outcome === 'kept'
-        ? { outcome, status: kept.status, receipts: kept.receiptIds.length }
-        : { outcome, receipts: 0 };
+      const summary =
+        outcome === 'kept'
+          ? {
+              outcome,
+              status: kept.status,
+              receipts: kept.receiptIds.length,
+              ...(kept.fromBody ? { fromBody: true } : {}),
+              ...(kept.problem ? { problem: kept.problem } : {}),
+            }
+          : { outcome, receipts: events.length };
+      // One line per email, with no address in it, so a missing receipt can be traced.
+      logger.info('email-in', { messageId: received.messageId, ...summary });
+      return summary;
     },
   );
 }

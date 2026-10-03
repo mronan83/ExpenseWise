@@ -27,6 +27,7 @@ const good: ReceiptExtraction = {
   currency: { code: 'USD', confidence: 'high' },
   total: { value: '58.35', confidence: 'high' },
   subtotal: { value: '45.50', confidence: 'high' },
+  fees: [],
   taxes: [{ label: 'Sales tax', value: '3.75', confidence: 'high' }],
   tip: { value: '9.10', confidence: 'medium' },
   cardLastFour: { value: '4417', confidence: 'high' },

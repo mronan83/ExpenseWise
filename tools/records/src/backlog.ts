@@ -329,13 +329,27 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Email-in: read the body, and purchase summaries',
     type: 'Feature',
     detail:
-      'The second half of #19. An email with no receipt attached, such as an Uber or airline email, is read from its body, which is already kept for every proved sender (at most 64 KiB). Your answer to Q10: a purchase summary always waits for review, marked as one; a receipt in the body follows the photo rule. Emails kept before this lands are read once it does. Also shows, on Home, an email that came from your address but couldn’t be proved, so a forward that fails the check doesn’t vanish.',
+      'The second half of #19, first at your direction of Oct 3. An email with nothing attached that can be a receipt, such as an Uber, airline or hotel email, is filed as its text laid out as a PDF and read like an upload (ADR-0027). Readings now count fees that are neither tax nor tip, such as a booking fee, so a ride receipt can add up. Your answer to Q10: a purchase summary is marked as one and always waits for review; a receipt in the body follows the photo rule. No email had reached the app before this, so there were none to read again.',
     priority: 'P1',
     effort: 'L',
     severity: 'Medium',
     blocker: { kind: 'none' },
     source: 'Product owner Oct 3 (FR-CAP-02), split from #19',
-    affects: ['FR-CAP-02', 'F-16'],
+    affects: ['FR-CAP-02', 'F-16', 'FR-INT-04'],
+    done: { date: '2026-10-03', in: 'PR #45' },
+  },
+  {
+    num: 59,
+    title: 'Show an email that came but filed nothing',
+    type: 'Feature',
+    detail:
+      'An email from your address that couldn’t be proved, for example one a mail system changed after signing it, or one with nothing in it to read, is kept but shown nowhere. Show it in Needs you with why and what to do: send it from your own mailbox, or attach the receipt. Mail from anyone who isn’t a member stays unrecorded.',
+    priority: 'P2',
+    effort: 'M',
+    severity: 'Low',
+    blocker: { kind: 'none' },
+    source: 'Split from #58',
+    affects: ['FR-CAP-02', 'F-16', 'FR-EXP-02'],
   },
   {
     num: 20,
@@ -817,7 +831,7 @@ export const BACKLOG: readonly BacklogItem[] = [
 
 /** How to order the open work, beyond priority. */
 export const SEQUENCING: readonly string[] = [
-  'Your order, Oct 3: the Home dashboard (#28, done), then email-in (#19, attachments done; its second half, the body and purchase summaries, is #58), then reports drafted after a trip (#23), which bring reports to finish to Home (Q15).',
+  'Your order, Oct 3: the Home dashboard (#28, done), then email-in (#19 and #58, done: attachments, then the email’s own text, first at your direction), then reports drafted after a trip (#23), which bring reports to finish to Home (Q15). Q17 decides which addresses may send receipts in.',
   '#48 needs you, not code: it keeps a leaked key from erasing the backups; any time this month. #4 can wait: the OpenAI fallback reads receipts meanwhile, and #21 waits on it. #52 and #55 are unblocked by your answers.',
   'Mileage (#17) adds business miles to Home.',
   '#8 is security, not polish: it should land before #24, which needs it, and before anyone else is invited (#29). So should #50, which keeps each member’s records their own.',

@@ -432,11 +432,12 @@ export const inboundEmails = pgTable(
     subject: text('subject'),
     sentAt: timestamp('sent_at', { withTimezone: true }),
     /**
-     * filed: its attachments became receipts. no_attachments: its body waits to be read (#58).
-     * unverified: no DKIM signature proved the sender, so nothing was filed and no body kept.
+     * filed: its attachments, or with none its own text as a PDF, became receipts (ADR-0027).
+     * no_attachments: nothing attached and no text, so nothing to file. unverified: no DKIM
+     * signature proved the sender, so nothing was filed and no body kept.
      */
     status: inboundEmailStatus('status').notNull(),
-    /** The email's own text, at most 64 KiB, for reading a receipt in the body (#58). */
+    /** The email's own text as read, at most 64 KiB, kept only for a proved sender. */
     bodyText: text('body_text'),
     /** How many receipts it filed; a file already filed before is not counted again. */
     receiptCount: integer('receipt_count').notNull().default(0),

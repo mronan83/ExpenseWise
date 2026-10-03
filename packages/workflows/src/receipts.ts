@@ -21,7 +21,7 @@ import {
   PROMPT_VERSION,
   ProviderHttpError,
   readingDifferences,
-  ReceiptExtractionSchema,
+  StoredReadingSchema,
   SCHEMA_VERSION,
   valuesOfReading,
 } from '@expensewise/extraction';
@@ -244,7 +244,7 @@ export async function noteUnavailable(
 
 function readingOf(run: ExtractionRunRecord | undefined): NormalizedExtraction | null {
   if (!run || run.outcome === 'failed') return null;
-  const parsed = ReceiptExtractionSchema.safeParse(run.output);
+  const parsed = StoredReadingSchema.safeParse(run.output);
   return parsed.success ? normalizeExtraction(parsed.data) : null;
 }
 

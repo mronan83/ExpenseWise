@@ -131,14 +131,14 @@ export const COMPONENTS: readonly Component[] = [
     name: 'Receipt reading',
     technology: 'Anthropic SDK; OpenAI over HTTPS',
     responsibility:
-      'Turns an image or PDF into fields with a confidence each, through one prompt and one schema. Compares two Claude models and falls back to OpenAI; checks that a reading’s sums make its total and its date is plausible before it can be Ready; checks a reading against the expense.',
+      'Turns an image or PDF into fields with a confidence each, through one prompt and one schema. Compares two Claude models and falls back to OpenAI; checks that a reading’s sums make its total, counting fees as well as tax and tip, that its date is plausible and that it isn’t a purchase summary before it can be Ready; checks a reading against the expense.',
     where: ['packages/extraction'],
   },
   {
     name: 'Workflows',
     technology: 'Inngest',
     responsibility:
-      'Reads receipts, reads emailed receipts and relays the outbox. An email is fetched as it arrived, its sender proved by a DKIM signature aligned with the From domain (mailauth), its parts read (postal-mime) and its attachments filed like uploads. Each step retries on its own; a failed run still settles its receipt.',
+      'Reads receipts, reads emailed receipts and relays the outbox. An email is fetched as it arrived, its sender proved by a DKIM signature aligned with the From domain (mailauth), its parts read (postal-mime) and its attachments filed like uploads; with nothing attached, its HTML becomes text (html-to-text) laid out as a PDF (pdf-lib) and filed instead. Each step retries on its own; a failed run still settles its receipt.',
     where: ['packages/workflows'],
   },
   {
@@ -276,7 +276,7 @@ export const FLOWS: readonly Flow[] = [
     id: 'email-in',
     title: 'An emailed receipt',
     about:
-      'The webhook only checks Bird’s signature and hands the email on; who sent it is proved in the workflow, from the message as it arrived. Nothing is kept unless the From address is a member’s sign-in, and nothing is filed unless a DKIM signature aligned with that address’s domain covers the whole message. Every id comes from the message, so a repeat delivery or a retried step files nothing twice.',
+      'The webhook only checks Bird’s signature and hands the email on; who sent it is proved in the workflow, from the message as it arrived. Nothing is kept unless the From address is a member’s sign-in, and nothing is filed unless a DKIM signature aligned with that address’s domain covers the whole message. An email with nothing attached, such as a ride receipt, is filed as its own text laid out as a PDF (ADR-0027). Every id comes from the message, so a repeat delivery or a retried step files nothing twice.',
     diagram: `sequenceDiagram
   actor P as Member
   participant B as Bird mailbox
@@ -297,13 +297,14 @@ export const FLOWS: readonly Flow[] = [
   alt Not a member
     Note over A: Dropped, nothing kept
   else A member, proved
+    Note over A: Nothing attached: its text, laid out as a PDF
     A->>S: Save each PDF or photo under its derived id
     A->>DB: One transaction: email, receipts, expenses, outbox events, audit
     A->>I: receipt.uploaded for each, as an upload sends
   else A member, not proved
     A->>DB: Email kept as unverified, nothing filed
   end`,
-    refs: ['ADR-0024', 'ADR-0026', 'FR-CAP-02'],
+    refs: ['ADR-0024', 'ADR-0026', 'ADR-0027', 'FR-CAP-02'],
   },
   {
     id: 'request',
@@ -556,7 +557,7 @@ export const BACKGROUND: Readonly<Record<string, string>> = {
   'receipt-reading':
     'Reads a receipt when it is uploaded or read again: checks the file, reads it with each compared model in parallel steps, falls back to OpenAI when none could, then settles the receipt, its expense and its trip.',
   'email-reading':
-    'Reads an email that arrived at the receipts address: fetches it from Bird as it was received, proves its sender by DKIM, finds the member who signs in with that address, then stores and files each PDF or photo as a receipt and hands their reading on. Mail from anyone else is dropped with nothing kept (ADR-0026).',
+    'Reads an email that arrived at the receipts address: fetches it from Bird as it was received, proves its sender by DKIM, finds the member who signs in with that address, then stores and files each PDF or photo as a receipt, or with none the email’s text as a PDF, and hands their reading on. Mail from anyone else is dropped with nothing kept. Logs one line per email with what came of it (ADR-0026, ADR-0027).',
   'outbox-relay':
     'Every five minutes and on demand, sends committed outbox events that the request didn’t manage to send. The event id is the outbox id, so a duplicate is dropped.',
 };

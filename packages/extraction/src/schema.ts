@@ -18,17 +18,20 @@ const amount = z
 
 const Amount = z.object({ value: amount, confidence: Confidence });
 
+const Fees = z.array(z.object({ label: z.string(), value: amount, confidence: Confidence }));
+
 export const DOCUMENT_TYPES = [
   'receipt',
   'hotel_folio',
   'airline_ticket',
   'ride_receipt',
   'invoice',
+  'purchase_summary',
   'other',
 ] as const;
 
 /** Changes whenever ReceiptExtractionSchema changes, and is stored with every reading. */
-export const SCHEMA_VERSION = 'receipt-v1';
+export const SCHEMA_VERSION = 'receipt-v2';
 
 export const ReceiptExtractionSchema = z.object({
   documentType: z.enum(DOCUMENT_TYPES),
@@ -59,11 +62,15 @@ export const ReceiptExtractionSchema = z.object({
       confidence: Confidence,
     })
     .nullable(),
-  total: Amount.nullable().describe('The amount actually charged, including taxes and tip.'),
-  subtotal: Amount.nullable().describe('The amount before taxes and tip, when printed.'),
+  total: Amount.nullable().describe('The amount actually charged, including taxes, fees and tip.'),
+  subtotal: Amount.nullable().describe('The amount before taxes, fees and tip, when printed.'),
   taxes: z
     .array(z.object({ label: z.string(), value: amount, confidence: Confidence }))
-    .describe('Each tax or government fee line. Exclude tips and service charges.'),
+    .describe('Each tax line, such as sales tax, VAT or a city tax. Exclude tips and fees.'),
+  fees: Fees.describe(
+    'Each fee or surcharge the total includes that is neither a tax nor a tip, such as a ' +
+      'booking, service, delivery or airport fee.',
+  ),
   tip: Amount.nullable(),
   cardLastFour: z
     .object({
@@ -81,5 +88,11 @@ export const ReceiptExtractionSchema = z.object({
 });
 
 export type ReceiptExtraction = z.infer<typeof ReceiptExtractionSchema>;
+
+/**
+ * A stored reading, as the models' output is parsed back. Readings made before fees were read
+ * (receipt-v1) have none, which they parse as.
+ */
+export const StoredReadingSchema = ReceiptExtractionSchema.extend({ fees: Fees.default([]) });
 export type ConfidenceLevel = z.infer<typeof Confidence>;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];

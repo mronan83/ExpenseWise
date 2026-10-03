@@ -11,8 +11,8 @@ import {
   capText,
   checkSender,
   EMAIL_RECEIVED,
+  bodyAsFile,
   emailReadingFunction,
-  htmlAsText,
   keepEmail,
   MAX_RECEIPTS_PER_EMAIL,
   parseEmail,
@@ -255,12 +255,26 @@ describe('reading an email', () => {
     expect(parsed.bodyText).toBe('Total $12.00');
   });
 
-  it('reads HTML as lines of text, without its styles or markup', () => {
-    const html =
-      '<html><head><style>p{color:red}</style></head><body>' +
-      '<table><tr><td>Fare</td><td>&#36;10.50</td></tr><tr><td>Tip&nbsp;</td><td>$1.50</td></tr>' +
-      '</table><p>Thanks &amp; see you</p><script>alert(1)</script></body></html>';
-    expect(htmlAsText(html)).toBe('Fare $10.50\nTip $1.50\n\nThanks & see you');
+  it('prefers the HTML to a plain part that only links to it', async () => {
+    const alternative = [
+      'From: riley@example.com',
+      'Subject: Your receipt',
+      'MIME-Version: 1.0',
+      'Content-Type: multipart/alternative; boundary="alt"',
+      '',
+      '--alt',
+      'Content-Type: text/plain; charset=utf-8',
+      '',
+      'View your receipt online.',
+      '--alt',
+      'Content-Type: text/html; charset=utf-8',
+      '',
+      '<table><tr><td>Total</td><td>$12.00</td></tr></table>',
+      '--alt--',
+      '',
+    ].join('\r\n');
+    const parsed = await parseEmail(bytes(alternative));
+    expect(parsed.bodyText).toMatch(/^Total\s+\$12\.00$/);
   });
 
   it('keeps at most 64 KiB of text, without breaking a character', () => {
@@ -271,10 +285,13 @@ describe('reading an email', () => {
 
 const BIRD: ReceivedEmail = { provider: 'bird', messageId: 'rem_01abc', threadId: 'thr_01abc' };
 
-/** Fake provider, database and storage, recording what keeping an email did. */
-/** `raw` is null once the provider no longer has the message. */
+/**
+ * Fake provider, database and storage, recording what keeping an email did. `raw` is null once
+ * the provider no longer has the message.
+ */
 function world(raw: string | null, options: { filed?: Record<string, string> } = {}) {
   const saved: string[] = [];
+  const files = new Map<string, Uint8Array>();
   const recorded: { email: NewInboundEmail; attachments: readonly InboundAttachment[] }[] = [];
   const kept = new Set<string>();
   const ports: EmailReadingPorts = {
@@ -288,8 +305,9 @@ function world(raw: string | null, options: { filed?: Record<string, string> } =
           : undefined,
       ),
     filedAs: (_org, sha256) => Promise.resolve(options.filed?.[sha256]),
-    saveFile: (key) => {
+    saveFile: (key, data) => {
       saved.push(key);
+      files.set(key, data);
       return Promise.resolve();
     },
     record: (orgId, email, attachments): Promise<RecordInboundEmailResult> => {
@@ -306,7 +324,7 @@ function world(raw: string | null, options: { filed?: Record<string, string> } =
       return Promise.resolve({ status: 'recorded', receiptIds, events });
     },
   };
-  return { ports, saved, recorded };
+  return { ports, saved, files, recorded };
 }
 
 describe('keeping an email', () => {
@@ -350,14 +368,44 @@ describe('keeping an email', () => {
     expect(w.saved).toEqual([receiptPath(ORG, receiptId), receiptPath(ORG, receiptId)]);
   });
 
-  it('keeps a verified email with nothing to file, with its text', async () => {
-    const w = world(await signed(message({ text: 'Your Uber receipt: Total $12.00' })));
+  it('files the email itself as a PDF receipt when nothing is attached', async () => {
+    const html = '<table><tr><td>Trip fare</td><td>$18.00</td></tr></table>';
+    const w = world(await signed(message({ subject: 'Your Uber receipt', html })));
+    const result = await keepEmail(w.ports, BIRD);
+
+    const body = await bodyAsFile('Your Uber receipt', 'Trip fare   $18.00');
+    const receiptId = derivedId(`email:bird:rem_01abc:${body.sha256}`);
+    expect(result).toMatchObject({
+      outcome: 'kept',
+      status: 'filed',
+      receiptIds: [receiptId],
+      fromBody: true,
+    });
+    expect(w.recorded[0]?.attachments).toEqual([
+      expect.objectContaining({ receiptId, contentType: 'application/pdf', sha256: body.sha256 }),
+    ]);
+    const stored = w.files.get(receiptPath(ORG, receiptId));
+    expect(new TextDecoder().decode(stored?.subarray(0, 5))).toBe('%PDF-');
+    expect(w.recorded[0]?.email.bodyText).toBe('Trip fare   $18.00');
+  });
+
+  it('files the attachments, not the text, when something is attached', async () => {
+    const raw = await signed(
+      message({ text: 'See attached', parts: [{ type: 'application/pdf', bytes: pdf() }] }),
+    );
+    const result = await keepEmail(world(raw).ports, BIRD);
+    expect(result).toMatchObject({ status: 'filed', receiptIds: [expect.any(String)] });
+    expect(result).not.toHaveProperty('fromBody');
+  });
+
+  it('keeps a verified email with no text and nothing attached, filing nothing', async () => {
+    const w = world(await signed(message({ text: '   ' })));
     expect(await keepEmail(w.ports, BIRD)).toMatchObject({
       outcome: 'kept',
       status: 'no_attachments',
       receiptIds: [],
     });
-    expect(w.recorded[0]?.email.bodyText).toBe('Your Uber receipt: Total $12.00');
+    expect(w.saved).toEqual([]);
   });
 
   it('files nothing from an email it can’t verify, and keeps no body, only that it came', async () => {

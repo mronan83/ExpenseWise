@@ -25,6 +25,7 @@ export class OracleExtractor implements Extractor {
         total: amount(t.total),
         subtotal: amount(t.subtotal),
         taxes: t.taxTotal ? [{ label: 'Tax', value: t.taxTotal, confidence: high }] : [],
+        fees: [],
         tip: amount(t.tip),
         cardLastFour: t.cardLastFour ? { value: t.cardLastFour, confidence: high } : null,
         lineItems: [],

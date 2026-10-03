@@ -10,6 +10,7 @@ const base: ReceiptExtraction = {
   currency: { code: 'usd', confidence: 'high' },
   total: { value: '58.43', confidence: 'high' },
   subtotal: { value: '45.50', confidence: 'high' },
+  fees: [],
   taxes: [
     { label: 'Sales tax', value: '3.93', confidence: 'high' },
     { label: 'City tax', value: '0.50', confidence: 'medium' },

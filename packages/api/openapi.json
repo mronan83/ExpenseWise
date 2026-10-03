@@ -751,7 +751,7 @@
               "checks",
               "unsure"
             ],
-            "description": "failed: no model could read it. fallback: only the fallback model read it. differ: the compared models read the filing fields differently. checks: its sums or date fail a check (FR-INT-04). unsure: a model was not confident, or one could not read it."
+            "description": "failed: no model could read it. fallback: only the fallback model read it. differ: the compared models read the filing fields differently. checks: its sums or date fail a check, or it is a purchase summary (FR-INT-04). unsure: a model was not confident, or one could not read it."
           },
           "fields": {
             "type": "array",
@@ -767,7 +767,8 @@
               "enum": [
                 "sums",
                 "future_date",
-                "old_date"
+                "old_date",
+                "summary"
               ]
             },
             "description": "checks: the checks the readings fail."
@@ -1134,6 +1135,47 @@
                   "assumed"
                 ]
               },
+              "fees": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "amountMinor": {
+                    "type": "integer",
+                    "description": "Integer minor units, e.g. cents."
+                  },
+                  "currency": {
+                    "type": "string",
+                    "example": "USD"
+                  },
+                  "decimal": {
+                    "type": "string",
+                    "example": "6.50",
+                    "description": "The same amount, for display."
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  },
+                  "assumed": {
+                    "type": "boolean",
+                    "description": "True for a tax or tip the receipt does not print, taken as zero rather than read. Never set when the line is printed but unreadable, or when the printed figures leave an amount unaccounted for."
+                  }
+                },
+                "required": [
+                  "amountMinor",
+                  "currency",
+                  "decimal",
+                  "confidence",
+                  "assumed"
+                ],
+                "description": "Fees and surcharges that are neither tax nor tip, such as a booking fee."
+              },
               "cardLastFour": {
                 "type": [
                   "object",
@@ -1167,6 +1209,7 @@
               "subtotal",
               "taxTotal",
               "tip",
+              "fees",
               "cardLastFour"
             ]
           },
@@ -1183,10 +1226,11 @@
               "enum": [
                 "sums",
                 "future_date",
-                "old_date"
+                "old_date",
+                "summary"
               ]
             },
-            "description": "Checks this reading fails (FR-INT-04). sums: the subtotal, taxes and tip don’t make the total, allowing a minor unit per tax or tip line. future_date: dated more than a day after the upload. old_date: dated more than a year before it."
+            "description": "Checks this reading fails (FR-INT-04). sums: the subtotal, taxes and tip don’t make the total, allowing a minor unit per tax or tip line. future_date: dated more than a day after the upload. old_date: dated more than a year before it. summary: a purchase summary, which shows what was ordered, not what was charged (Q10)."
           }
         },
         "required": [
