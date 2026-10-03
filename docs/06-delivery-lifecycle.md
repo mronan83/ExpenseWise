@@ -63,7 +63,7 @@ Everything between them is automated or adversarially reviewed. Work runs as con
 | G1 Static | Format, lint, strict types | Prettier, ESLint, tsc | Every push | Merge |
 | G2 Unit | Domain rules, money math, state machines, property tests; ≥ 90% coverage on the domain package | Vitest, fast-check | Every push | Merge |
 | G3 Integration | API against real Postgres, cross-tenant RLS tests, migrations on a copy, OpenAPI breaking-change diff | Vitest, Testcontainers, oasdiff | Every push | Merge |
-| G4 Security | Dependency audit, secret scan, static analysis, license check | OSV-Scanner, gitleaks, CodeQL | Every push, plus nightly | Merge on high or critical |
+| G4 Security | Dependency audit, secret scan, static analysis, license check | OSV-Scanner, gitleaks, CodeQL | Every push, plus nightly | Merge on high or critical. An advisory with no fixed version may be let through by the product owner: listed in `pnpm-workspace.yaml`, recorded as a gap, and checked weekly by Advisory watch |
 | G5 Preview | Critical journeys end to end, accessibility | Playwright, axe-core | Every pull request preview | Merge |
 | G6 Release | Full E2E, extraction evals when prompts or models change, performance budgets, DAST baseline | Playwright, eval harness, Lighthouse CI, k6, OWASP ZAP | Staging | Promotion |
 

@@ -10,3 +10,10 @@ onlyBuiltDependencies:
   - esbuild
   - sharp
   - unrs-resolver
+
+# Advisories the dependency audit (G4) lets through. Each has no fixed version yet, is
+# recorded as a gap, and is checked weekly by .github/workflows/advisory-watch.yml.
+auditConfig:
+  ignoreGhsas:
+    # braces, reached only through lint tooling (eslint-config-next); GAP-19, #49.
+    - GHSA-vfj7-8cjw-p6xm
