@@ -261,10 +261,25 @@ export const QUESTIONS: readonly Question[] = [
     recommendation: 'Yes, and flag everything again from the first invite (#29).',
     affects: ['NFR-DEL-05'],
   },
+  {
+    id: 'Q6',
+    title: 'What counts as matching the receipt',
+    ask: 'Checking an expense against its receipt (FR-GOV-10): must the amount equal the receipt’s total, or may a person claim less with a reason, such as a hotel bill with a personal minibar charge, or one receipt split across several expenses? And should a mismatch be caught while editing and before submission, or only at review?',
+    why: 'An exact rule rejects honest partial claims; a loose one lets over-claims through. A rejection at review costs a full round trip, which catching it before submission avoids; the approval flow already checks receipts on submit (journeys §4.4).',
+    recommendation:
+      'Merchant (loosely), date and currency must match. The amount may be lower than the receipt’s only with a reason, never higher, and expenses split from one receipt may not add up to more than it. Show a mismatch as soon as the expense is edited, refuse to submit one without a reason, and let review return the whole report for any mismatch it finds.',
+    affects: ['FR-GOV-10', 'FR-EXP-09'],
+  },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-03',
+    change:
+      'From your message: the receipt stays linked to its expense as proof (FR-EXP-08), and an expense can be edited once it exists (FR-EXP-09), both with #6. At review, an expense that doesn’t match its receipt is rejected (FR-GOV-10), one rejected expense returns the whole report (FR-GOV-11), and rejected expenses are surfaced for remediation (FR-GOV-12), with #24 and #9. New Q6: what counts as matching.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-03',
     change:
