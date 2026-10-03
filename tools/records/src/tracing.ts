@@ -294,10 +294,25 @@ export const QUESTIONS: readonly Question[] = [
       'A. The type says what was bought and carries its rules; the category carries the GL and tax codes and is what summaries total. A person picks one thing, never two, and the reader suggests one thing. Each organization starts from a ready-made set that owners and finance admins can rename, add to or retire.',
     affects: ['FR-EXP-11', 'FR-INT-10', 'FR-INS-03'],
   },
+  {
+    id: 'Q8',
+    title: 'What turning an AI model off covers',
+    ask: 'Turning AI models on and off (FR-INT-16). 1, who switches: A, each organization in Settings, by owners and finance admins; B, only you, for every organization at once; C, both. 2, with every model off: A, receipts are still filed but not read, and wait in Needs a look to be filled in by hand; B, the last model can’t be turned off. 3, the OpenAI fallback: A, a switch like the others; B, always on while its key is there.',
+    why: 'Two Claude models read every receipt today, so each costs twice (ADR-0017). The switch is how the tier decision (#21) takes effect, and how spend stops during an outage or a bad model release without a deploy.',
+    recommendation:
+      '1C: each organization chooses in Settings, and you keep an operator switch per model, as a flag, for outages. 2A: every model may be off, since a receipt can always be filled in by hand (ADR-0022). 3A: the fallback is a switch like the others, on by default.',
+    affects: ['FR-INT-16', 'FR-INT-08', 'FR-INT-09'],
+  },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-03',
+    change:
+      'From your message: owners and finance admins turn each AI model on or off for their organization (FR-INT-16, F-45, #52). New Q8: who switches, what happens with every model off, and whether the OpenAI fallback has a switch. The tier decision (#21) takes effect through it.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-03',
     change:
