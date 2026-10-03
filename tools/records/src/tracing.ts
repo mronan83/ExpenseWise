@@ -465,6 +465,12 @@ export const CHANGE_LOG: readonly ChangeLogEntry[] = [
   {
     date: '2026-10-03',
     change:
+      'Your requirement: possible duplicates are caught in review, then merged, deleted or kept (FR-INT-18, F-48, #60, all Planned). The same Uber receipt, forwarded eight times, was filed eight times: each forward differed slightly, so the file fingerprint didn’t match. Duplicates will be judged on what was read: same person, currency and total, within a day, a similar merchant.',
+    by: 'Claude, at your direction',
+  },
+  {
+    date: '2026-10-03',
+    change:
       'Your answer to Q17: A, sign-in addresses stay the only senders; your work address already is one. A correction to the entry below: your work address was also already on the Bird allowlist, so neither explains why Bird made no call for your first test. The next test is watched in the logs as it arrives.',
     by: 'Claude, at your direction',
   },
