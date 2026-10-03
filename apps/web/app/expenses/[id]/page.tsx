@@ -52,9 +52,9 @@ export default function ExpensePage() {
   const expense = load.state === 'ready' ? load.expense : null;
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-md flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]">
+    <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]">
       <header className="flex items-baseline justify-between py-3">
-        <Link href="/expenses" className="text-sm font-semibold text-carbon">
+        <Link href="/expenses" className="tap text-sm font-semibold text-carbon">
           ← Expenses
         </Link>
       </header>
@@ -115,7 +115,11 @@ function Verdict({ expense }: { expense: ExpenseDetail }) {
   }
   return (
     <p role="status" className="rounded-xl border border-rule bg-sheet px-4 py-3 text-sm">
-      <span className={`font-semibold ${status.tone}`}>{status.label}.</span> {text}
+      {/* "Reading…" already ends the sentence. */}
+      <span className={`font-semibold ${status.tone}`}>
+        {status.label.endsWith('…') ? status.label : `${status.label}.`}
+      </span>{' '}
+      {text}
     </p>
   );
 }
@@ -309,7 +313,10 @@ function Proof({ expense }: { expense: ExpenseDetail }) {
           that doesn&apos;t match its receipt is rejected.
         </p>
       ) : null}
-      <Link href={`/receipts/${proof.receiptId}`} className="font-semibold text-carbon underline">
+      <Link
+        href={`/receipts/${proof.receiptId}`}
+        className="tap font-semibold text-carbon underline"
+      >
         Open the receipt
       </Link>
     </section>

@@ -112,9 +112,9 @@ export default function ReceiptPage() {
   const receipt = load.state === 'ready' ? load.receipt : null;
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-md flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]">
+    <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]">
       <header className="flex items-baseline justify-between py-3">
-        <Link href="/receipts" className="text-sm font-semibold text-carbon">
+        <Link href="/receipts" className="tap text-sm font-semibold text-carbon">
           ← Receipts
         </Link>
       </header>
@@ -159,7 +159,7 @@ export default function ReceiptPage() {
               {receipt.expenseId ? (
                 <Link
                   href={`/expenses/${receipt.expenseId}`}
-                  className="text-sm font-semibold text-carbon underline"
+                  className="tap text-sm font-semibold text-carbon underline"
                 >
                   Its expense
                 </Link>
@@ -210,7 +210,11 @@ function Verdict({ receipt, stale }: { receipt: ReceiptDetail; stale: boolean })
   }
   return (
     <p role="status" className="rounded-xl border border-rule bg-sheet px-4 py-3 text-sm">
-      <span className={`font-semibold ${status.tone}`}>{status.label}.</span> {text}
+      {/* "Reading…" already ends the sentence. */}
+      <span className={`font-semibold ${status.tone}`}>
+        {status.label.endsWith('…') ? status.label : `${status.label}.`}
+      </span>{' '}
+      {text}
     </p>
   );
 }
@@ -363,7 +367,7 @@ function Review({
         <fieldset className="flex flex-wrap gap-x-4 gap-y-2 text-sm">
           <legend className="mb-1 text-xs font-medium text-ink-2">Use the reading from</legend>
           {choices.map((r) => (
-            <label key={r.model} className="flex items-center gap-2">
+            <label key={r.model} className="flex min-h-11 items-center gap-2">
               <input
                 type="radio"
                 name="reading"
@@ -457,13 +461,20 @@ function Review({
 const isMoney = (v: unknown): v is MoneyField =>
   typeof v === 'object' && v !== null && 'decimal' in v;
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
 function Value({ value }: { value: TextField | MoneyField | string | null | undefined }) {
   if (value === null || value === undefined) return <span className="text-ink-3">–</span>;
   if (typeof value === 'string') return <span>{value.replaceAll('_', ' ')}</span>;
   const text = isMoney(value) ? formatMoney(value) : value.value;
   return (
     <span className="flex flex-col">
-      <span className="tabular-nums">{text}</span>
+      {/* Dates and amounts stay on one line; a date split at a hyphen reads as two values. */}
+      <span
+        className={`tabular-nums ${isMoney(value) || ISO_DATE.test(text) ? 'whitespace-nowrap' : ''}`}
+      >
+        {text}
+      </span>
       {isMoney(value) && value.assumed ? (
         <span className="text-xs text-ink-2">not on receipt</span>
       ) : value.confidence === 'high' ? null : (
@@ -489,7 +500,11 @@ function Comparison({ receipt }: { receipt: ReceiptDetail }) {
         <caption className="sr-only">Each model&apos;s reading, side by side</caption>
         <thead>
           <tr className="text-left">
-            <th scope="col" className="w-1/4 pb-2 text-xs font-medium text-ink-2">
+            {/* With a third reading, the labels give up room so a date fits on one line. */}
+            <th
+              scope="col"
+              className={`${readings.length > 2 ? 'w-1/5' : 'w-1/4'} pb-2 text-xs font-medium text-ink-2`}
+            >
               <span className="sr-only">Field</span>
             </th>
             {readings.map((r) => (

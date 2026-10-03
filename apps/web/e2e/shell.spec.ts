@@ -12,6 +12,52 @@ test.describe('app shell', () => {
     await expect(nav.getByText('Home', { exact: true })).toHaveAttribute('aria-current', 'page');
   });
 
+  test('shows the tab bar on every screen but sign-in, marking where you are', async ({ page }) => {
+    for (const [path, current] of [
+      ['/expenses', 'Expenses'],
+      ['/trips', 'Trips'],
+      ['/receipts', 'Capture'],
+      ['/settings/ai', null],
+    ] as const) {
+      await page.goto(path);
+      const nav = page.getByRole('navigation', { name: 'Main' });
+      await expect(nav).toBeVisible();
+      await expect(nav.locator('[aria-current="page"]')).toHaveCount(current ? 1 : 0);
+      if (current) {
+        await expect(nav.locator('[aria-current="page"]')).toContainText(current);
+      }
+    }
+    await page.goto('/sign-in');
+    await expect(page.getByRole('heading', { level: 1, name: 'Sign in' })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Main' })).toHaveCount(0);
+  });
+
+  test('keeps two date fields side by side inside a narrow card', async ({ page }) => {
+    // iOS Safari gives a native date field a minimum width of its own; the app turns the
+    // native look off so the field fits its column (globals.css).
+    await page.goto('/');
+    const boxes = await page.evaluate(() => {
+      const row = document.createElement('div');
+      row.className = 'grid grid-cols-2 gap-3';
+      row.style.width = '260px';
+      row.innerHTML = ['From', 'To']
+        .map(
+          (label) =>
+            `<label class="flex min-w-0 flex-col">${label}<input type="date" value="2026-09-30" class="w-full min-w-0 rounded-lg border px-3 py-2 text-base"></label>`,
+        )
+        .join('');
+      document.querySelector('main')!.append(row);
+      const [from, to] = [...row.querySelectorAll('input')].map((input) => ({
+        box: input.getBoundingClientRect().toJSON() as DOMRect,
+        appearance: getComputedStyle(input).appearance,
+      }));
+      return { row: row.getBoundingClientRect().toJSON() as DOMRect, from: from!, to: to! };
+    });
+    expect(boxes.from.appearance).toBe('none');
+    expect(boxes.from.box.right).toBeLessThanOrEqual(boxes.to.box.left);
+    expect(boxes.to.box.right).toBeLessThanOrEqual(boxes.row.right + 0.5);
+  });
+
   test('ships the build-version change dark: its flag is off by default', async ({ page }) => {
     await page.goto('/');
     await expect(page.getByText('Phase 0 preview', { exact: true })).toBeVisible();

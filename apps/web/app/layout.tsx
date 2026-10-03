@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';
+import { TabBar } from './tab-bar';
 
 export const metadata: Metadata = {
   title: 'ExpenseWise',
@@ -22,7 +23,10 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-dvh font-sans antialiased">{children}</body>
+      <body className="flex min-h-dvh flex-col font-sans antialiased">
+        {children}
+        <TabBar />
+      </body>
     </html>
   );
 }

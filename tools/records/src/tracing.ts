@@ -31,6 +31,17 @@ export const GAPS: readonly Gap[] = [
     backlog: 48,
   },
   {
+    id: 'GAP-21',
+    title:
+      'The automated screen checks see only signed-out screens, and their iPhone engine is not iOS Safari.',
+    affects: ['NFR-UX-01', 'NFR-UX-02'],
+    severity: 'Medium',
+    evidence:
+      'CI has no signed-in user, so its accessibility and layout checks load each screen’s sign-in prompt, never the forms and lists people use. Its iPhone run is WebKit on Linux, which has no native date picker. On Oct 3 you found From and To overlapping on Trips on your iPhone; a sweep of every signed-in screen then found the same in four more forms, and a colour-contrast failure on receipts whose readings differ.',
+    fix: 'A signed-in run in CI: the real API on a test database with a test sign-in, every screen in each state, at phone and desktop widths, in light and dark, with the layout and accessibility checks (#54).',
+    backlog: 54,
+  },
+  {
     id: 'GAP-20',
     title:
       'Within an organization, any member can see and change every member’s receipts, expenses and trips.',
@@ -346,10 +357,25 @@ export const QUESTIONS: readonly Question[] = [
       'B, with A as a setting you turn on while choosing a primary (#21), so the comparison stays available without paying for it every day.',
     affects: ['FR-INT-16', 'FR-INT-02', 'FR-INT-08'],
   },
+  {
+    id: 'Q12',
+    title: 'How dates are shown',
+    ask: 'Screens show dates three ways today: 2026-09-30 on receipts and expenses, 10/3/2026, 1:12 PM for when something was added or checked, and Sep 29 – Oct 1, 2026 on trips. Pick one for showing a date: A, Sep 30, 2026; B, 2026-09-30; C, the phone’s own format (09/30/2026 in the US).',
+    why: 'One format reads faster and avoids 10/3 meaning October 3 to you and 10 March to a European colleague. Forms keep the phone’s date picker whatever is chosen, and a model’s reading table keeps the date exactly as read.',
+    recommendation:
+      'A everywhere a date is shown, with the time as 1:12 PM where one matters: unambiguous in any country, and already how trips read.',
+    affects: ['NFR-UX-02'],
+  },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-03',
+    change:
+      'PR #36, from your iPhone screenshot: date fields no longer run over each other on iOS, in the five forms that put two side by side (Trips search, new and edited trips, Expenses search, and a receipt’s Edit a field). A sweep of every signed-in screen then fixed more: the tab bar is on every screen, as the design has it, not only Home; small links have 44-point touch areas; the “differs” note on a receipt meets AA contrast; and two text slips. Found on the way: CI checks only signed-out screens, which is how this reached you (GAP-21, #54), so NFR-UX-01 and NFR-UX-02 are Partial until it checks signed-in ones.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-03',
     change:
