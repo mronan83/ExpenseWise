@@ -465,6 +465,12 @@ export const CHANGE_LOG: readonly ChangeLogEntry[] = [
   {
     date: '2026-10-03',
     change:
+      'Fix: Bird’s webhook refused an event it should have ignored. Your webhook also sends events email-in doesn’t use, such as email.received, whose message id may be empty or an email’s Message-ID; the webhook checked those ids as if they were mailbox ids and answered 400. It now acknowledges every other event whatever its data, reads the signed body whatever content type it carries, and logs one line per delivery. Your forwarded email itself never raised the mailbox event the app reads, which points to Bird holding it back before the webhook.',
+    by: 'Claude',
+  },
+  {
+    date: '2026-10-03',
+    change:
       'Your answer to Q17: A, sign-in addresses stay the only senders; your work address already is one. A correction to the entry below: your work address was also already on the Bird allowlist, so neither explains why Bird made no call for your first test. The next test is watched in the logs as it arrives.',
     by: 'Claude, at your direction',
   },

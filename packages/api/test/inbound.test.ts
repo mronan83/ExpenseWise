@@ -97,13 +97,29 @@ describe('POST /v1/inbound/bird', () => {
     expect(received).toEqual([{ provider: 'bird', messageId: 'rem_01abc', threadId: 'thr_01xyz' }]);
   });
 
-  it('acknowledges other events and does nothing with them', async () => {
+  it('acknowledges other events and does nothing with them, whatever their data', async () => {
     const { post, received } = api();
-    const body = JSON.stringify({ type: 'email.received', data: { message_id: 'rem_01abc' } });
-    const res = await post(body);
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ status: 'ignored' });
+    // email.received names the message by its Message-ID header, or not at all.
+    for (const messageId of ['rem_01abc', null, '<CAF+abc@mail.gmail.com>']) {
+      const body = JSON.stringify({
+        type: 'email.received',
+        timestamp: '2026-10-03T21:44:49Z',
+        data: { message_id: messageId, inbound_message_id: 'rem_01abc' },
+      });
+      const res = await post(body);
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ status: 'ignored' });
+    }
+    const threadCreated = JSON.stringify({ type: 'email_mailbox.thread_created', data: {} });
+    expect((await post(threadCreated)).status).toBe(200);
     expect(received).toEqual([]);
+  });
+
+  it('reads the signed body whatever content type it is labelled with', async () => {
+    const { post, received } = api();
+    const res = await post(arrived(), { 'content-type': 'text/plain' });
+    expect(res.status).toBe(202);
+    expect(received).toHaveLength(1);
   });
 
   it('refuses a delivery whose signature does not match its body', async () => {
@@ -120,6 +136,11 @@ describe('POST /v1/inbound/bird', () => {
     const { post, received } = api();
     const res = await post(arrived({ message_id: '../../v1/keys' }));
     expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({
+      detail: 'Unusable message_id on email_mailbox.message_received',
+    });
+    expect((await post(arrived({ thread_id: null }))).status).toBe(400);
+    expect((await post('not json')).status).toBe(400);
     expect(received).toEqual([]);
   });
 
