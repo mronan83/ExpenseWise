@@ -2,7 +2,7 @@
 
 The index of ExpenseWise architecture decision records (ADRs) and how to add one.
 
-Each ADR records one decision with its context, the alternatives considered and an exit path. ADR-0001 to ADR-0012 record decisions D-01 to D-12 from the blueprint's decision register (v0.3, 30 September 2026). "Decided by product owner" records the product owner's call from 30 September 2026. "Recommended; no objection" means Claude is proceeding on it unless the product owner objects. ADR-0013 records D-13, decided after v0.3, ADR-0014 records D-16, ADR-0015 records D-17, ADR-0016 records D-18, ADR-0017 records D-19, ADR-0018 records D-20, ADR-0019 records D-21, ADR-0020 records D-22, ADR-0021 records D-23, ADR-0022 records D-24, and ADR-0023 records D-25.
+Each ADR records one decision with its context, the alternatives considered and an exit path. ADR-0001 to ADR-0012 record decisions D-01 to D-12 from the blueprint's decision register (v0.3, 30 September 2026). "Decided by product owner" records the product owner's call from 30 September 2026. "Recommended; no objection" means Claude is proceeding on it unless the product owner objects. ADR-0013 records D-13, decided after v0.3, ADR-0014 records D-16, ADR-0015 records D-17, ADR-0016 records D-18, ADR-0017 records D-19, ADR-0018 records D-20, ADR-0019 records D-21, ADR-0020 records D-22, ADR-0021 records D-23, ADR-0022 records D-24, ADR-0023 records D-25, and ADR-0024 records D-26.
 
 ## Index
 
@@ -31,6 +31,7 @@ Each ADR records one decision with its context, the alternatives considered and 
 | [0021](0021-confirming-a-reading.md) | A person confirms or corrects a reading that needs a look | D-23 | Accepted (actions requested by product owner; storage and rules recommended, no objection); amended by [ADR-0022](0022-expense-follows-its-receipt.md) | 2026-10-03 |
 | [0022](0022-expense-follows-its-receipt.md) | An expense follows its receipt until a person edits it | D-24 | Accepted (proof and editing decided by product owner; filing rules recommended, no objection) | 2026-10-03 |
 | [0023](0023-expenses-file-to-trips-by-date.md) | Expenses file to trips by date, until a person chooses | D-25 | Accepted (filing by date required by FR-EXP-04; choice, shared-day and submitted rules recommended, no objection) | 2026-10-03 |
+| [0024](0024-inbound-email-through-bird.md) | Inbound email through Bird | D-26 | Accepted (vendor decided by product owner; sender and webhook checks recommended, no objection) | 2026-10-03 |
 
 ## How to add an ADR
 

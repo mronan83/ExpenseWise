@@ -61,7 +61,11 @@ describe('the backlog page', () => {
   });
 
   it('leaves requirement ids as plain text until the traceability page is published', () => {
-    expect(html).toContain('<span class="ref">GAP-02</span>');
+    const gap = BACKLOG.filter((b) => !b.done)
+      .flatMap((b) => b.affects ?? [])
+      .find((a) => a.startsWith('GAP-'));
+    expect(gap).toBeDefined();
+    expect(html).toContain(`<span class="ref">${gap}</span>`);
   });
 });
 

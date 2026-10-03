@@ -25,14 +25,14 @@ export const FUNCTIONAL: readonly Requirement[] = [
   {
     id: 'FR-CAP-02',
     text: 'Email a receipt or a purchase summary, or forward an airline, hotel or ride email, to a personal receipts address: the body and any PDF or image attached are read like a receipt. A purchase summary always waits for review, marked as a summary; a receipt follows the same rule as a photo. Only mail from an address the person signs in with is read.',
-    sources: ['ADR-0011', 'D-11', 'arch §6.11', 'roadmap inc 2', 'owner 2026-10-03'],
+    sources: ['ADR-0011', 'ADR-0024', 'D-11', 'arch §6.11', 'roadmap inc 2', 'owner 2026-10-03'],
     priority: 'Must',
     phase: 'P1',
     status: 'Planned',
     capabilities: ['Capture · Email-in forwarding'],
     features: ['F-16'],
     backlog: [19],
-    note: 'Your requirement of Oct 3 widened it from travel emails to any receipt or purchase summary; your answer to Q10 (C) says which wait for review.',
+    note: 'Your requirement of Oct 3 widened it from travel emails to any receipt or purchase summary; your answer to Q10 (C) says which wait for review. It comes in through Bird (ADR-0024).',
   },
   {
     id: 'FR-CAP-03',
@@ -1010,8 +1010,8 @@ export const NON_FUNCTIONAL: readonly Requirement[] = [
     sources: ['delivery §7.3', 'arch §6.9'],
     priority: 'Must',
     phase: 'P1',
-    status: 'Partial',
-    shortfalls: ['GAP-02'],
+    status: 'Implemented',
+    note: 'Since Oct 3 (GAP-02 closed). Vercel’s scoping enforces it, and nothing automated checks the scoping.',
   },
   {
     id: 'NFR-SEC-14',

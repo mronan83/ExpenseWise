@@ -83,7 +83,7 @@ flowchart TB
     ADP["Adapters<br/>retries, idempotency keys"]
     CL["Claude API<br/>extraction"]
     MAPS["Maps routing<br/>mileage"]
-    MAIL["Email<br/>Postmark, Resend"]
+    MAIL["Email<br/>Bird in, Resend out"]
     PLAID["Plaid (P2)<br/>bank feeds"]
     LEDGER["QBO, Xero (P2)<br/>ledger sync"]
     subgraph XC["Cross-cutting"]
@@ -346,7 +346,7 @@ See [ADR-0008](adr/0008-money-and-data-conventions.md).
 | Identity | Supabase Auth | Users live in the project's own Postgres; TOTP MFA; SAML SSO on Pro; supabase-swift SDK for iOS | Clerk (rejected by the product owner), Auth.js / Better Auth, WorkOS |
 | Extraction | Claude API, vision + structured outputs | Reads messy receipts; returns schema-valid JSON | Textract AnalyzeExpense, Veryfi, Mindee |
 | Maps | Google Routes API | Route distance for mileage | Mapbox Directions |
-| Email | Postmark inbound, Resend outbound | Parsed inbound webhooks; simple transactional sending | Amazon SES |
+| Email | Bird inbound ([ADR-0024](adr/0024-inbound-email-through-bird.md)), Resend outbound | An inbound address without a domain of ours; simple transactional sending | Postmark inbound, Amazon SES |
 | Flags and analytics | PostHog | Feature flags and product analytics in one place | LaunchDarkly + Amplitude |
 | Observability | Sentry + OpenTelemetry | Errors, traces and workflow timings | Datadog |
 | Hosting and CI | Vercel + GitHub Actions | Preview per pull request, instant rollback, rolling releases | AWS ECS / Fargate + CodePipeline |

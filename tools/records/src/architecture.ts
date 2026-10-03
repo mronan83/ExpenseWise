@@ -288,7 +288,7 @@ export const FLOWS: readonly Flow[] = [
       'A pull request passes the gates; merging it starts the release, which changes the database before the code that needs it goes live.',
     diagram: `flowchart LR
   PR["Pull request"] --> G["CI gates G1–G5<br/>CodeQL"]
-  PR --> PV["Vercel preview"]
+  PR --> PV["Vercel preview<br/>no production data"]
   G --> R{"Product owner:<br/>merge?"}
   R -->|merge| M["main"]
   M --> MG["Release: migrate<br/>as schema owner"]
@@ -342,7 +342,7 @@ export const SETTINGS: readonly Setting[] = [
   {
     names: ['DATABASE_URL'],
     kind: 'Secret',
-    where: 'Vercel; locally from `pnpm db:up`',
+    where: 'Vercel, Production only; locally from `pnpm db:up`',
     use: 'The app’s connection, as `expensewise_app`. Tests use it as a superuser to build throwaway databases, and the end-to-end bench to build its own.',
   },
   {
@@ -372,7 +372,7 @@ export const SETTINGS: readonly Setting[] = [
   {
     names: ['SUPABASE_SECRET_KEY'],
     kind: 'Secret',
-    where: 'Vercel',
+    where: 'Vercel, Production only',
     use: 'Server-side access to the receipts bucket; also derives the key-encryption key when `APP_ENCRYPTION_KEY` is unset.',
   },
   {
@@ -512,10 +512,9 @@ export interface Quality {
 export const QUALITY: readonly Quality[] = [
   {
     attribute: 'Security',
-    how: 'Forced row-level security, a runtime role that can’t bypass it, Supabase’s Data API roles stripped on every release, verified tokens, encrypted provider keys, a private bucket, invite-only sign-in, security headers.',
-    short:
-      'Members aren’t yet kept to their own records (GAP-20); preview builds hold production credentials (GAP-02); no second factor (#8).',
-    refs: ['NFR-SEC-01', 'GAP-20', 'GAP-02', '#8'],
+    how: 'Forced row-level security, a runtime role that can’t bypass it, Supabase’s Data API roles stripped on every release, verified tokens, encrypted provider keys, a private bucket, invite-only sign-in, security headers, and production credentials in production builds only.',
+    short: 'Members aren’t yet kept to their own records (GAP-20); no second factor (#8).',
+    refs: ['NFR-SEC-01', 'NFR-SEC-13', 'GAP-20', '#8'],
   },
   {
     attribute: 'Integrity',

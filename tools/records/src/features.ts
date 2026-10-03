@@ -236,7 +236,7 @@ export const FEATURES: readonly Feature[] = [
     kind: 'product',
     phase: 'P1',
     status: 'Planned',
-    decisions: ['ADR-0011'],
+    decisions: ['ADR-0011', 'ADR-0024'],
     backlog: 19,
   },
 
