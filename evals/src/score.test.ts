@@ -66,10 +66,11 @@ describe('scoreDocument', () => {
     expect(s.silentError).toBe(false);
   });
 
-  it('flags a confidently wrong total as a silent error', () => {
+  it('flags a confidently wrong total as a silent error when nothing checks it', () => {
+    // Without a subtotal there is nothing for the total to add up against (FR-INT-04).
     const s = scoreDocument(truth, {
       outcome: 'extracted',
-      extraction: { ...good, total: { value: '49.25', confidence: 'high' } },
+      extraction: { ...good, subtotal: null, total: { value: '49.25', confidence: 'high' } },
     });
     expect(s.fields.find((f) => f.field === 'total')).toEqual({
       field: 'total',
@@ -77,6 +78,26 @@ describe('scoreDocument', () => {
       confidence: 'high',
     });
     expect(s.silentError).toBe(true);
+  });
+
+  it('sends a total its parts do not make to review, so it is no silent error', () => {
+    const s = scoreDocument(truth, {
+      outcome: 'extracted',
+      extraction: { ...good, total: { value: '49.25', confidence: 'high' } },
+    });
+    expect(s.autoReady).toBe(false);
+    expect(s.silentError).toBe(false);
+  });
+
+  it('judges the date as if the receipt was captured on the day it is dated', () => {
+    const old = { ...truth, date: '2019-03-02' };
+    const read = { ...good, date: { value: '2019-03-02', confidence: 'high' as const } };
+    expect(scoreDocument(old, { outcome: 'extracted', extraction: read }).autoReady).toBe(true);
+    // A year misread is caught by the date check, not filed.
+    const misread = { ...good, date: { value: '2016-03-02', confidence: 'high' as const } };
+    expect(scoreDocument(old, { outcome: 'extracted', extraction: misread }).silentError).toBe(
+      false,
+    );
   });
 
   it('sends a doubtful read to review rather than counting a silent error', () => {
@@ -137,9 +158,10 @@ describe('report arithmetic', () => {
       score,
     });
     const right = scoreDocument(truth, { outcome: 'extracted', extraction: good });
+    // A wrong merchant: confident, and nothing a check can catch.
     const wrong = scoreDocument(truth, {
       outcome: 'extracted',
-      extraction: { ...good, total: { value: '1.00', confidence: 'high' } },
+      extraction: { ...good, merchant: { name: 'Copper Kettle Diner', confidence: 'high' } },
     });
     const s = summarize(
       [row(right, 4_000_000n), row(wrong, 6_000_000n)],
@@ -155,6 +177,6 @@ describe('report arithmetic', () => {
       wrongFields: 1,
       costNanoUsd: 10_000_000n,
     });
-    expect(s.fieldAccuracy.total).toEqual({ correct: 1, scored: 2 });
+    expect(s.fieldAccuracy.merchant).toEqual({ correct: 1, scored: 2 });
   });
 });
