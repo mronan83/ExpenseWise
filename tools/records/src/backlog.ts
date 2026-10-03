@@ -116,13 +116,14 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'No backup has ever been restored',
     type: 'Ops',
     detail:
-      'A backup nobody has restored is only a hope. The monthly drill is built (PR #35, F-41) and passed against a stand-in; this closes when it first passes on production’s backup. That run needs nothing set up: Actions → Restore drill → Run workflow, on main.',
+      'A backup nobody has restored is only a hope. The monthly drill (PR #35, F-41) restored production’s backup on Oct 3 at your request and every check passed: 50 tables and 137 rows, migrations, schema, isolation and all 6 receipt images, in 1 min 11 s. It runs again on the 2nd of each month.',
     priority: 'P1',
     effort: 'M',
     severity: 'High',
     blocker: { kind: 'none' },
     source: 'ADR-0014',
     affects: ['NFR-REL-02', 'NFR-REL-03', 'F-41'],
+    done: { date: '2026-10-03', in: 'PR #35' },
   },
   {
     num: 3,
@@ -641,14 +642,11 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Turn AI models on and off',
     type: 'Feature',
     detail:
-      'A switch for each AI model in Settings and a choice of primary, for owners and finance admins, recorded in the audit trail, plus an operator switch per model as a flag. Any model can be primary, OpenAI’s included, and the fallback rule goes (your answer to Q8). With every model off, receipts are filed for a person to fill in; a model with no key stays off; read again uses the settings as they are then. What a model that is on but not primary does waits on Q11.',
+      'A switch for each AI model in Settings and a choice of exactly one primary, for owners and finance admins, recorded in the audit trail, plus an operator switch per model as a flag. The primary reads every receipt; models that are on but not primary are back-ups, read in the order set only when the primary can’t (your answer to Q11). Any model can be primary, OpenAI’s included, and the fallback rule goes (Q8). With every model off, receipts are filed for a person to fill in; a model with no key stays off; read again uses the settings as they are then. Ready then rests on one confident reading, not two that agree, which needs a decision record replacing ADR-0017. Proposed, for you to confirm: a model can be made primary only once it meets the eval bar on the receipt set.',
     priority: 'P2',
     effort: 'M',
     severity: 'Medium',
-    blocker: {
-      kind: 'owner',
-      ask: 'Your answer to Q11: what a model that is on but not primary does',
-    },
+    blocker: { kind: 'none' },
     source: 'Product owner, Oct 3',
     affects: ['FR-INT-16', 'F-45', 'FR-INT-08', 'FR-INT-09'],
   },
@@ -664,6 +662,32 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none' },
     source: 'Product owner, Oct 3',
     affects: ['FR-INT-17', 'F-46', 'FR-INT-01'],
+  },
+  {
+    num: 56,
+    title: 'Rehearse a whole recovery once a year',
+    type: 'Ops',
+    detail:
+      'The monthly drill proves the backup restores and checks it, on a runner. A real recovery also needs a new Supabase project, the Release run to set role passwords and take back Data API grants, the receipt images copied back, and Vercel pointed at it, which the runbook does by hand and nobody has timed against the 4-hour recovery time. Do it once a year into the staging project, timing each step.',
+    priority: 'P3',
+    effort: 'M',
+    severity: 'Medium',
+    blocker: { kind: 'items', items: [30] },
+    source: 'NFR-REL-03',
+    affects: ['NFR-REL-03'],
+  },
+  {
+    num: 55,
+    title: 'Show dates one way everywhere',
+    type: 'Feature',
+    detail:
+      'Screens show 2026-09-30, 10/3/2026, 1:12:47 PM and Sep 29 – Oct 1, 2026 today. One formatter for the web app: Sep 30, 2026, and 1:12 PM where a time matters (your answer to Q12). A model’s reading table keeps each date as read, so a difference between readings stays visible.',
+    priority: 'P2',
+    effort: 'S',
+    severity: 'Low',
+    blocker: { kind: 'none' },
+    source: 'Q12',
+    affects: ['NFR-UX-06'],
   },
   // Done
   {
@@ -748,7 +772,7 @@ export const BACKLOG: readonly BacklogItem[] = [
 
 /** How to order the open work, beyond priority. */
 export const SEQUENCING: readonly string[] = [
-  'Your order, Oct 3: #47, then #16, then #10, with #6 before #16 because trips need expenses. #47, #6 and #16 are done, so #10 is next. Claude’s recommendation was #10 first, since until a backup has been restored it is only a hope; keep the paper or email originals until it passes.',
+  'Your order, Oct 3: #47, then #16, then #10, all done, and then #54, so every signed-in screen is checked in CI before more screens are built. #52 and #55 are unblocked by your answers to Q11 and Q12.',
   '#3 needs you, not code. So does #48, which keeps a leaked key from erasing the backups; any time this month. #4 can wait: the OpenAI fallback reads receipts meanwhile, and #21 waits on it.',
   'With #6 and #16 done, the rest of increment 2 (#17–#19), reports drafted after a trip (#23) and the dashboard (#28) are open. #9 should come soon: receipts and expenses that need a look have nowhere to gather yet. #7 is small and touches the same code.',
   '#8 is security, not polish: it should land before #24, which needs it, and before anyone else is invited (#29). So should #50, which keeps each member’s records their own.',

@@ -533,8 +533,8 @@ export const QUALITY: readonly Quality[] = [
     attribute: 'Recoverability',
     how: 'Nightly encrypted backups to a second vendor, locked for 30 days, and a monthly drill that restores the newest one and checks it. Recovery point 24 hours, recovery time 4 hours.',
     short:
-      'The drill has run on a stand-in, not yet on production’s backup (#10). Its recovery time covers the restore and checks, not pointing Vercel at a new project.',
-    refs: ['NFR-REL-01', 'NFR-REL-02', 'NFR-REL-03', '#10'],
+      'The drill restored production’s backup in 1 min 11 s on Oct 3, but a whole recovery, into a new project with Vercel pointed at it, has not been rehearsed (#56).',
+    refs: ['NFR-REL-01', 'NFR-REL-02', 'NFR-REL-03', '#56'],
   },
   {
     attribute: 'Operability',
