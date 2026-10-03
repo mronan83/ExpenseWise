@@ -2278,23 +2278,9 @@
           },
           "data": {
             "type": "object",
-            "properties": {
-              "message_id": {
-                "type": "string",
-                "pattern": "^[A-Za-z0-9_-]{1,100}$",
-                "example": "rem_01k6x3n2ab"
-              },
-              "thread_id": {
-                "type": "string",
-                "pattern": "^[A-Za-z0-9_-]{1,100}$",
-                "example": "thr_01k6x3n2cd"
-              },
-              "mailbox_id": {
-                "type": "string",
-                "example": "mbx_01m414nd2jf769jm8rs7rb3cjv"
-              }
-            },
-            "description": "Other fields are ignored; the email itself is fetched later."
+            "properties": {},
+            "additionalProperties": {},
+            "description": "For email_mailbox.message_received, message_id (rem_…) and thread_id (thr_…) are read; the email itself is fetched later. Nothing else is read."
           }
         },
         "required": [

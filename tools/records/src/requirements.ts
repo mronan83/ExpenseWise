@@ -345,7 +345,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
   },
   {
     id: 'FR-INT-18',
-    text: 'A receipt that reads like another of the same person’s, with the same currency and total, dated within a day of it and from a similar merchant, is a possible duplicate: it waits in Needs you, never Ready on its own, until the person decides. Merge keeps one expense with both files as its proof; Delete removes the copy, its expense and its file, leaving a record in the audit trail; Not a duplicate keeps both and never flags the pair again. A submitted or approved expense is never deleted.',
+    text: 'A receipt that reads like another of the same person’s, with the same currency and total, dated within a day of it and from a similar merchant, is a possible duplicate: it waits in Needs you, never Ready on its own, until the person decides. Delete removes the copy, its expense and its file. Merge: the person chooses which is primary; the other fills the primary’s missing fields, or the person picks which of its fields to take, and is then deleted the same way. Not a duplicate keeps both and never flags the pair again. Each deletion leaves a record in the audit trail; a submitted or approved expense is never deleted.',
     sources: ['owner 2026-10-03'],
     priority: 'Must',
     phase: 'P1',
@@ -353,7 +353,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
     capabilities: ['Intelligence · Near-duplicate detection'],
     features: ['F-48'],
     backlog: [60],
-    note: 'Your requirement of Oct 3, after the same Uber receipt forwarded several times was filed as several receipts: each forward differed slightly, so the file’s fingerprint (FR-INT-03) didn’t match. Duplicates are judged on what was read instead. Claude’s reading, yours to overturn: Merge keeps both files as proof of one expense (an emailed copy and a photo, say); Delete removes the copy entirely. The cost to avoid is double counting more than space: an emailed receipt is a few kilobytes.',
+    note: 'Your requirement of Oct 3, after the same Uber receipt forwarded several times was filed as several receipts: each forward differed slightly, so the file’s fingerprint (FR-INT-03) didn’t match. Duplicates are judged on what was read instead. Your answers the same day: no reference copy is kept; a merge keeps the primary you choose, takes its missing or chosen fields from the other, and deletes the other. Built next, before #23.',
   },
   {
     id: 'FR-INT-13',

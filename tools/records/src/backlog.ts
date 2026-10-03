@@ -356,7 +356,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Possible duplicates: flag in review, then merge, delete or keep both',
     type: 'Feature',
     detail:
-      'Your requirement of Oct 3. Once a receipt is read, compare it with the person’s other receipts: same currency and total, dated within a day, a similar merchant. A match waits in Needs you as a possible duplicate of the other, so it isn’t Ready and isn’t counted twice. Merge: one expense keeps both files as proof. Delete: the copy, its readings, its expense and its file go, and the audit trail records what it duplicated. Not a duplicate: both stay and the pair is never flagged again. Submitted or approved expenses are never deleted. Repeat forwards of one email could later be caught before reading, to save the two model reads each costs.',
+      'Your requirement of Oct 3. Once a receipt is read, compare it with the person’s other receipts: same currency and total, dated within a day, a similar merchant. A match waits in Needs you as a possible duplicate of the other, so it isn’t Ready and isn’t counted twice. Delete: the copy, its readings, its expense and its file go, and the audit trail records what it duplicated. Merge (your answer): choose the primary; the other fills its missing fields, or you pick which fields to take, and the other is then deleted. Not a duplicate: both stay and the pair is never flagged again. Submitted or approved expenses are never deleted. Receipts already filed are checked once when it ships. Repeat forwards of one email could later be caught before reading, to save the two model reads each costs.',
     priority: 'P1',
     effort: 'L',
     severity: 'Medium',
@@ -844,7 +844,7 @@ export const BACKLOG: readonly BacklogItem[] = [
 
 /** How to order the open work, beyond priority. */
 export const SEQUENCING: readonly string[] = [
-  'Your order, Oct 3: the Home dashboard (#28, done), then email-in (#19 and #58, done: attachments, then the email’s own text, first at your direction), then reports drafted after a trip (#23), which bring reports to finish to Home (Q15). Recommended before #23: possible duplicates (#60), since until it lands a receipt sent twice counts twice on Home.',
+  'Your order, Oct 3: the Home dashboard (#28, done), then email-in (#19 and #58, done: attachments, then the email’s own text, first at your direction), then reports drafted after a trip (#23), which bring reports to finish to Home (Q15). Your order, Oct 3: possible duplicates (#60) first, then #23.',
   '#48 needs you, not code: it keeps a leaked key from erasing the backups; any time this month. #4 can wait: the OpenAI fallback reads receipts meanwhile, and #21 waits on it. #52 and #55 are unblocked by your answers.',
   'Mileage (#17) adds business miles to Home.',
   '#8 is security, not polish: it should land before #24, which needs it, and before anyone else is invited (#29). So should #50, which keeps each member’s records their own.',
