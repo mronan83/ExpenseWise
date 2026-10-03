@@ -689,29 +689,28 @@ export const HomeSchema = z
   })
   .openapi('Home');
 
-const PROVIDER_ID = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
-
-/** A Bird webhook: the Standard Webhooks envelope, with only what email-in reads from it. */
+/**
+ * A Bird webhook: the Standard Webhooks envelope. Only an arriving mailbox message is read;
+ * any other event is acknowledged whatever its data holds, since Bird's other events use
+ * fields of the same names differently (email.received's message_id may be null).
+ */
 export const BirdWebhookSchema = z
   .object({
     type: z.string().openapi({ example: 'email_mailbox.message_received' }),
     timestamp: z.string().optional(),
-    data: z
-      .object({
-        message_id: PROVIDER_ID.optional().openapi({ example: 'rem_01k6x3n2ab' }),
-        thread_id: PROVIDER_ID.optional().openapi({ example: 'thr_01k6x3n2cd' }),
-        mailbox_id: z.string().optional().openapi({ example: 'mbx_01m414nd2jf769jm8rs7rb3cjv' }),
-      })
-      .openapi({ description: 'Other fields are ignored; the email itself is fetched later.' }),
-  })
-  .superRefine((body, ctx) => {
-    if (body.type !== 'email_mailbox.message_received') return;
-    for (const key of ['message_id', 'thread_id'] as const) {
-      if (!body.data[key])
-        ctx.addIssue({ code: 'custom', path: ['data', key], message: 'Required' });
-    }
+    data: z.looseObject({}).openapi({
+      description:
+        'For email_mailbox.message_received, message_id (rem_…) and thread_id (thr_…) are ' +
+        'read; the email itself is fetched later. Nothing else is read.',
+    }),
   })
   .openapi('BirdWebhook');
+
+/** The ids email-in reads from an arriving mailbox message, which go into Bird's URL. */
+export const BirdMessageReceivedSchema = z.object({
+  message_id: z.string().regex(/^rem_[0-9a-z]{1,64}$/),
+  thread_id: z.string().regex(/^thr_[0-9a-z]{1,64}$/),
+});
 
 export const WebhookReceiptSchema = z
   .object({
