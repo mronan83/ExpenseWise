@@ -253,6 +253,12 @@ export const CHANGE_LOG: readonly ChangeLogEntry[] = [
   {
     date: '2026-10-03',
     change:
+      'From your message: your copy of the backup passphrase decrypts the first backup, production has one receipt image as the backup counted, and GitHub’s failure email reached you (F-37, F-42). Your focus is #47, #16, then #10; #16 rises to P1 and needs #6 first. #4 drops to P3 and Medium severity, and #21, which waits on it, to P3.',
+    by: 'Claude, at your direction',
+  },
+  {
+    date: '2026-10-03',
+    change:
       'From your setup: the nightly backup ran for real (51 tables, 1 receipt image), so #2 is done and GAP-01 closed. The heartbeat and quota alerts are now their own feature, F-42, so NFR-REL-05 is Verified; the heartbeat is written first, so a Backblaze outage can’t stop it. F-37 and NFR-REL-01 stay Partial: no restore yet (#10), and the job’s key can delete after the 30-day lock (new GAP-18, #48).',
     by: 'Claude, at your direction',
   },
