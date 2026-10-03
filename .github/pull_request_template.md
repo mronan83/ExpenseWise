@@ -20,4 +20,4 @@
 - [ ] Docs, ADRs and requirement records (`tools/records`) updated in this pull request (or not needed)
 - [ ] Architecture and data model assessed: revised in this pull request, or no change needed and why
 - [ ] Behind a feature flag, default off, if customer-visible
-- [ ] Demonstrated on the preview environment, on an iPhone where a screen changed, and accepted by the product owner
+- [ ] Accepted by the product owner; a changed screen checked on an iPhone in production right after its release (ADR-0025)

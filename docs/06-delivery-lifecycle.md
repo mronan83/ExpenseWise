@@ -48,12 +48,13 @@ Everything between them is automated or adversarially reviewed. Work runs as con
 | Environment | Purpose | Data | Deployed | Keys |
 | --- | --- | --- | --- | --- |
 | Local | Build and debug | Seeded fixtures, Postgres in Docker, workflow dev server | On demand | Test keys |
-| Preview | One per pull request | The shared staging Supabase project, with synthetic data; no per-PR database | Every push | Staging Supabase keys: publishable key (client), secret key (server only). Other sandbox keys (Plaid sandbox, capped Claude workspace). |
-| Staging | Integration and release candidate | Staging Supabase project: synthetic data plus the anonymized eval receipts | Every merge to main | Supabase publishable key (client), secret key (server only). Other sandbox keys. |
+| Preview | One per pull request | None: production credentials are Production-only (#3), and there is no staging project in Phase 1 ([ADR-0025](adr/0025-no-staging-in-phase-1.md)) | Every push | The publishable Supabase key only; no secret key and no database URL |
+| Staging | Not in Phase 1 ([ADR-0025](adr/0025-no-staging-in-phase-1.md)) | Planned: a second Supabase project with synthetic data plus the anonymized eval receipts (#30) | — | — |
 | Production | Customers | Production Supabase project: real data, isolated by tenant | Promotion with product owner approval; flags control exposure | Supabase publishable key (client), secret key (server only). Other live keys, least privilege. |
 
 - CI gates run against a Postgres service container, so no per-PR database is needed.
-- End-to-end tests against a preview create their own organization for each run, so parallel runs on the shared staging project stay isolated by the same row-level security that separates customers.
+- Signed-in end-to-end tests run in CI against a bench API on a throwaway database (G5), so they need no shared project.
+- A changed screen is checked on an iPhone in production right after its release, since previews have no data (ADR-0025).
 - Custom database role passwords, such as `expensewise_app`'s, are never in migrations and don't survive a restore or a new project. After a restore, the runbook re-sets them from secrets ([ADR-0013](adr/0013-supabase-platform.md)).
 
 ## 7.4 Quality gates
@@ -65,7 +66,7 @@ Everything between them is automated or adversarially reviewed. Work runs as con
 | G3 Integration | API against real Postgres, cross-tenant RLS tests, migrations on a copy, OpenAPI breaking-change diff | Vitest, Testcontainers, oasdiff | Every push | Merge |
 | G4 Security | Dependency audit, secret scan, static analysis, license check | OSV-Scanner, gitleaks, CodeQL | Every push, plus nightly | Merge on high or critical. An advisory with no fixed version may be let through by the product owner: listed in `pnpm-workspace.yaml`, recorded as a gap, and checked weekly by Advisory watch |
 | G5 Preview | Critical journeys end to end; every signed-in screen in each state, at phone and desktop widths in light and dark, for layout and accessibility | Playwright, axe-core, the real API on its own database (`apps/web/e2e/bench`) | Every pull request | Merge |
-| G6 Release | Full E2E, extraction evals when prompts or models change, performance budgets, DAST baseline | Playwright, eval harness, Lighthouse CI, k6, OWASP ZAP | Staging | Promotion |
+| G6 Release | Full E2E, extraction evals when prompts or models change, performance budgets, DAST baseline | Playwright, eval harness, Lighthouse CI, k6, OWASP ZAP | Staging (none in Phase 1, ADR-0025) | Promotion |
 
 ## 7.5 Test strategy
 
@@ -112,7 +113,7 @@ A story is finished when:
 - [ ] State changes emit audit events, and telemetry events are added.
 - [ ] Accessibility is checked, and docs, ADRs and the requirement records (`tools/records`) are updated in the same pull request.
 - [ ] The technical architecture and data model are assessed: revised in the same pull request (`tools/records/src/architecture.ts`, `data-model.ts`, and `packages/db/schema.json` after a migration), or the pull request says why nothing needed revising (NFR-DEL-08).
-- [ ] It has been demonstrated on its preview environment and accepted by the product owner.
+- [ ] It has been accepted by the product owner, and a changed screen checked on an iPhone in production right after its release (ADR-0025).
 - [ ] It is in production behind a flag, default off until release.
 
 ## 7.7 Release management and operations

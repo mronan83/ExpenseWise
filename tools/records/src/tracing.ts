@@ -52,7 +52,7 @@ export const GAPS: readonly Gap[] = [
     severity: 'Low',
     evidence:
       'Gate G5’s iPhone run is WebKit on Linux, which draws form controls its own way. Since PR #38 it fails any date field still drawn natively, the cause of the Oct 3 overlap, but another iOS-only quirk would still reach a phone first.',
-    fix: 'Open a changed screen on an iPhone through the preview before merging (the pull request template asks for it), and decide whether a device cloud run is worth its cost (#57).',
+    fix: 'Check a changed screen on an iPhone in production right after its release, as the pull request template asks (ADR-0025, Q13), and decide whether a device cloud run is worth its cost (#57).',
     backlog: 57,
   },
   {
@@ -403,11 +403,38 @@ export const QUESTIONS: readonly Question[] = [
     why: 'CI’s iPhone run is WebKit on Linux, not iOS Safari (GAP-22), so the iPhone check is what catches an iOS-only fault, as your Oct 3 screenshot did. A finds it after it reaches production; B finds it before. Staging also gives the delivery lifecycle the release candidate environment it describes (delivery §7.3). The Free plan allows two projects, so B costs nothing; it needs about 20 minutes of your setup, and the rest is mine.',
     recommendation: 'B, with A until staging is ready. C would leave GAP-22 with no defence.',
     affects: ['NFR-SEC-13', 'NFR-UX-02', 'GAP-22'],
+    answer: {
+      date: '2026-10-03',
+      text: 'A: a changed screen is checked on an iPhone in production right after its release. No staging environment (ADR-0025).',
+    },
+  },
+  {
+    id: 'Q14',
+    title: 'Whether an expense on no trip needs you',
+    ask: 'The Home dashboard (#28) shows expenses that aren’t on a trip. A: as a figure (“Not on a trip: 3 · $41.75”) that opens them. B: each one goes in Needs you until you put it on a trip or mark it as everyday spend.',
+    why: 'Expenses already file to the trip their date falls in (ADR-0023), so one left over is usually everyday spend, like a local lunch or software, that needs no trip. Asking about each would put routine items in the inbox, which DP2 keeps for what really needs you.',
+    recommendation:
+      'A. If a policy later needs every expense on a trip, that rule can make it B for those organizations.',
+    affects: ['FR-INS-01', 'FR-EXP-02'],
+  },
+  {
+    id: 'Q15',
+    title: 'When incomplete reports join Home',
+    ask: 'You asked for incomplete expense reports on Home, and reports don’t exist yet. A: they join when reports are built (#23, P3), and until then Recent trips shows whether each trip’s expenses are all Ready. B: move #23 up, so a trip becomes a draft report 48 hours after it ends and Home shows the ones to finish.',
+    why: 'For one person the trip is the report, and a trip whose expenses are all Ready is ready to claim. Reports start to matter when someone else approves them (#24) or an accountant wants them as documents (#25).',
+    recommendation: 'A, unless you are reimbursed from reports this quarter.',
+    affects: ['FR-INS-01', 'FR-EXP-05'],
   },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-03',
+    change:
+      'Your answers: Q13 A, so there is no staging environment (ADR-0025, #30) and a changed screen is checked on an iPhone in production after its release; #7’s limits stand; any model that is on can be made primary at any time (#52). Bird signs its webhooks to the Standard Webhooks scheme, which settles how email-in verifies them (#19). Your new requirement: Home becomes a dashboard beneath Needs you, with the current trip, recent trips, this month’s figures, expenses on no trip and, once reports exist, reports to finish (FR-INS-01, #28 now P1). Q14 and Q15 ask how two of its items behave.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-03',
     change:
