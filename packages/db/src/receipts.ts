@@ -1,7 +1,8 @@
-import type { ExpenseSource } from '@expensewise/domain';
+import type { ExpenseSource, ExpenseValues } from '@expensewise/domain';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { appendAuditEvent } from './audit.ts';
 import type { Transaction } from './client.ts';
+import { fileReceiptExpense } from './expenses.ts';
 import { enqueueOutbox } from './outbox.ts';
 import type { receiptStatus } from './schema.ts';
 import { auditEvents, extractionRuns, members, receiptReviews, receipts } from './schema.ts';
@@ -22,6 +23,8 @@ export interface ReceiptRecord {
   readonly byteSize: number;
   readonly sha256: string;
   readonly status: ReceiptStatus;
+  /** The expense this receipt proves (FR-EXP-08); null only before it is filed. */
+  readonly expenseId: string | null;
   readonly createdAt: Date;
 }
 
@@ -52,6 +55,7 @@ const receiptColumns = {
   byteSize: receipts.byteSize,
   sha256: receipts.sha256,
   status: receipts.status,
+  expenseId: receipts.expenseId,
   createdAt: receipts.createdAt,
 };
 
@@ -101,6 +105,15 @@ export async function findReceiptBySha256(
 /** The newest receipts first. Call inside withOrg(). */
 export function listReceipts(tx: Transaction, limit: number): Promise<ReceiptRecord[]> {
   return withUploader(tx).orderBy(desc(receipts.createdAt), desc(receipts.id)).limit(limit);
+}
+
+/** These receipts, in no particular order. Call inside withOrg(). */
+export function receiptsById(
+  tx: Transaction,
+  receiptIds: readonly string[],
+): Promise<ReceiptRecord[]> {
+  if (receiptIds.length === 0) return Promise.resolve([]);
+  return withUploader(tx).where(inArray(receipts.id, [...receiptIds]));
 }
 
 /** Every reading of these receipts, newest first. Call inside withOrg(). */
@@ -171,6 +184,8 @@ export async function fileReceipt(
     action: 'receipt.captured',
     payload: { source: input.source, byteSize: input.byteSize, sha256: input.sha256 },
   });
+  // Its expense exists from the start, processing while the receipt is read (ADR-0022).
+  await fileReceiptExpense(tx, orgId, input.id, null, { type: 'user', id: actorUserId });
   const receipt = await getReceipt(tx, input.id);
   if (!receipt) throw new Error('The new receipt is not visible');
   return { status: 'filed', receipt, event: { outboxId, topic: RECEIPT_UPLOADED, orgId, payload } };
@@ -200,6 +215,7 @@ export async function requestReceiptReading(
     entityId: receiptId,
     action: 'receipt.read_requested',
   });
+  await fileReceiptExpense(tx, orgId, receiptId, null, { type: 'user', id: actorUserId });
   return { outboxId, topic: RECEIPT_READ_REQUESTED, orgId, payload };
 }
 
@@ -262,7 +278,13 @@ export async function settleReceipt(
   tx: Transaction,
   orgId: string,
   receiptId: string,
-  outcome: { status: ReceiptStatus; requestId: string; detail: Record<string, unknown> },
+  outcome: {
+    status: ReceiptStatus;
+    requestId: string;
+    detail: Record<string, unknown>;
+    /** What the reading would file its expense with; null when nothing was read. */
+    values?: ExpenseValues | null;
+  },
 ): Promise<void> {
   const [settled] = await tx
     .select({ id: auditEvents.id })
@@ -284,6 +306,10 @@ export async function settleReceipt(
     entityId: receiptId,
     action: 'receipt.read',
     payload: { status: outcome.status, requestId: outcome.requestId, ...outcome.detail },
+  });
+  await fileReceiptExpense(tx, orgId, receiptId, outcome.values ?? null, {
+    type: 'system',
+    id: 'receipt-workflow',
   });
 }
 
@@ -353,7 +379,7 @@ export type ConfirmReceiptResult =
   | 'confirmed'
   /** No such receipt in this organization. */
   | 'missing'
-  /** It is not waiting for a look: being read, already Ready, or not read at all. */
+  /** It is not waiting for a look: being read, or already Ready. */
   | 'not_waiting'
   /** It was read again after the readings the person confirmed were shown. */
   | 'stale';
@@ -376,7 +402,8 @@ export async function confirmReceipt(
     .where(eq(receipts.id, receiptId))
     .for('update');
   if (!current) return 'missing';
-  if (current.status !== 'needs_review') return 'not_waiting';
+  // Not read counts too: a person enters every field, so its expense isn't a dead end.
+  if (current.status !== 'needs_review' && current.status !== 'failed') return 'not_waiting';
   const [latest] = await tx
     .select({ requestId: extractionRuns.requestId })
     .from(extractionRuns)
@@ -398,5 +425,58 @@ export async function confirmReceipt(
       corrections: review.corrections,
     },
   });
+  await fileReceiptExpense(
+    tx,
+    orgId,
+    receiptId,
+    {
+      merchant: review.merchant,
+      transactionDate: review.transactionDate,
+      currency: review.currency,
+      amountMinor: review.totalMinor,
+    },
+    { type: 'user', id: actorUserId },
+  );
   return 'confirmed';
+}
+
+/**
+ * Files an expense for every receipt that has none: those captured before expenses were made
+ * from receipts (#6). A confirmed receipt files what was confirmed; any other receipt gets an
+ * expense that needs review, filled in when it is next read or confirmed. Safe to run again.
+ * Runs as the schema owner, across organizations, after migrations.
+ */
+export async function fileMissingReceiptExpenses(db: {
+  transaction: <T>(work: (tx: Transaction) => Promise<T>) => Promise<T>;
+}): Promise<number> {
+  return db.transaction(async (tx) => {
+    const missing = await tx
+      .select({ id: receipts.id, orgId: receipts.orgId })
+      .from(receipts)
+      .where(sql`${receipts.expenseId} is null`)
+      .orderBy(receipts.createdAt);
+    for (const receipt of missing) {
+      const [review] = await tx
+        .select()
+        .from(receiptReviews)
+        .where(eq(receiptReviews.receiptId, receipt.id))
+        .orderBy(desc(receiptReviews.createdAt), desc(receiptReviews.id))
+        .limit(1);
+      await fileReceiptExpense(
+        tx,
+        receipt.orgId,
+        receipt.id,
+        review
+          ? {
+              merchant: review.merchant,
+              transactionDate: review.transactionDate,
+              currency: review.currency,
+              amountMinor: review.totalMinor,
+            }
+          : null,
+        { type: 'system', id: 'expense-backfill' },
+      );
+    }
+    return missing.length;
+  });
 }

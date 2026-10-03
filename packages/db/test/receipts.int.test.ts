@@ -133,7 +133,12 @@ describe('reading a receipt', () => {
     const actions = await withOrg(app.db, acme.orgId, async (tx) =>
       (await tx.select().from(auditEvents).orderBy(asc(auditEvents.sequence))).map((e) => e.action),
     );
-    expect(actions).toEqual(['receipt.captured', 'receipt.read']);
+    expect(actions).toEqual([
+      'receipt.captured',
+      'expense.created',
+      'receipt.read',
+      'expense.filed',
+    ]);
   });
 
   it('reads again on request, with a new request id', async () => {
@@ -222,10 +227,13 @@ describe('confirming a reading that needs a look', () => {
     ]);
     expect(after.audit.map((e) => e.action)).toEqual([
       'receipt.captured',
+      'expense.created',
       'receipt.read',
+      'expense.filed',
       'receipt.confirmed',
+      'expense.filed',
     ]);
-    expect(after.audit.at(-1)).toMatchObject({
+    expect(after.audit.find((e) => e.action === 'receipt.confirmed')).toMatchObject({
       actorType: 'user',
       actorId: org.userId,
       payload: { requestId, model: 'gpt-5.6-luna' },

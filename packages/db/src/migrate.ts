@@ -2,14 +2,21 @@ import { fileURLToPath } from 'node:url';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { createDatabase } from './client.ts';
 import { describeConnection, retryWhilePoolerRejectsPassword } from './connection.ts';
+import { fileMissingReceiptExpenses } from './receipts.ts';
 
 export const migrationsFolder = fileURLToPath(new URL('../migrations', import.meta.url));
 
-/** Applies pending migrations. Run as the schema owner, never as expensewise_app. */
-export async function runMigrations(connectionString: string): Promise<void> {
+/**
+ * Applies pending migrations, then the data steps that need application code, such as the
+ * hash-chained audit events. Each data step is safe to run on every release. Run as the
+ * schema owner, never as expensewise_app. Returns what the data steps did.
+ */
+export async function runMigrations(connectionString: string): Promise<{ filedExpenses: number }> {
   const { db, pool } = createDatabase(connectionString);
   try {
     await migrate(db, { migrationsFolder });
+    // Receipts captured before #6 get the expense they prove (ADR-0022).
+    return { filedExpenses: await fileMissingReceiptExpenses(db) };
   } finally {
     await pool.end();
   }
@@ -33,6 +40,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     process.exit(1);
   }
   logConnection(url);
-  await retryWhilePoolerRejectsPassword(url, () => runMigrations(url), { log: console.log });
+  const done = await retryWhilePoolerRejectsPassword(url, () => runMigrations(url), {
+    log: console.log,
+  });
   console.log('Migrations applied.');
+  if (done.filedExpenses > 0) {
+    console.log(`Filed an expense for ${done.filedExpenses} receipt(s) captured before expenses.`);
+  }
 }

@@ -39,12 +39,20 @@ const reading = (over: Partial<ReceiptExtraction> = {}): ReceiptExtraction => ({
   ...over,
 });
 
+/** What the default reading files an expense with. */
+const COFFEE = {
+  merchant: 'Blue Bottle Coffee',
+  transactionDate: '2026-09-24',
+  currency: 'USD',
+  amountMinor: 650,
+};
+
 type Behaviour = ReceiptExtraction | Error | KeyProblem;
 
 /** An organization with one uploaded receipt, and a scripted answer per model. */
 function world(answers: Partial<Record<ModelId, Behaviour>>, file: Uint8Array | null = JPEG) {
   const runs: (NewExtractionRun & { orgId: string })[] = [];
-  const settled: { status: string; detail: Record<string, unknown> }[] = [];
+  const settled: { status: string; detail: Record<string, unknown>; values: unknown }[] = [];
   const calls: string[] = [];
   const ports: ReceiptReadingPorts = {
     loadReceipt: () =>
@@ -156,6 +164,8 @@ describe('reading a receipt with both models', () => {
     expect(w.settled[0]).toMatchObject({
       status: 'extracted',
       detail: { readings: { 'claude-haiku-4-5': 'confident', 'claude-sonnet-5-5': 'confident' } },
+      // The expense is filed with what was read.
+      values: COFFEE,
     });
   });
 
@@ -165,6 +175,8 @@ describe('reading a receipt with both models', () => {
     });
     const { result } = await run(w);
     expect(result).toEqual({ status: 'needs_review', differences: ['total'] });
+    // Its expense starts from the more capable model's reading.
+    expect(w.settled[0]?.values).toEqual(COFFEE);
   });
 
   it('records a missing key as a failed reading, and calls no model', async () => {
@@ -215,6 +227,7 @@ describe('the fallback reader', () => {
       outcome: 'confident',
       requestId: REQUEST,
     });
+    expect(w.settled[0]?.values).toEqual(COFFEE);
     expect(w.settled[0]?.detail).toMatchObject({
       fallback: 'gpt-5.6-luna',
       readings: {
@@ -266,6 +279,7 @@ describe('the fallback reader', () => {
     });
     const { result } = await run(w);
     expect(result).toEqual({ status: 'failed', differences: [] });
+    expect(w.settled[0]?.values).toBeNull();
     expect(w.runs.find((r) => r.model === 'gpt-5.6-luna')?.error).toBe(
       'request_rejected: You exceeded your current quota.',
     );

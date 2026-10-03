@@ -277,6 +277,12 @@ export const CHANGE_LOG: readonly ChangeLogEntry[] = [
   {
     date: '2026-10-03',
     change:
+      'PR #28: every receipt has an expense from capture, linked as its proof, and the expense can be edited (F-09, ADR-0022, D-24). #6 is done; FR-EXP-08 and FR-EXP-09 are Verified; FR-EXP-01 is Partial until expenses file to trips (#16). An edited expense that differs from its receipt says so; enforcing that at review is #24 (Q6).',
+    by: 'Claude, at your direction',
+  },
+  {
+    date: '2026-10-03',
+    change:
       'From your message: the receipt stays linked to its expense as proof (FR-EXP-08), and an expense can be edited once it exists (FR-EXP-09), both with #6. At review, an expense that doesn’t match its receipt is rejected (FR-GOV-10), one rejected expense returns the whole report (FR-GOV-11), and rejected expenses are surfaced for remediation (FR-GOV-12), with #24 and #9. New Q6: what counts as matching.',
     by: 'Claude, at your direction',
   },

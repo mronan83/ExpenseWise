@@ -4,6 +4,7 @@ export * from './currency.ts';
 export * from './dates.ts';
 export * from './decimal.ts';
 export * from './errors.ts';
+export * from './expense-values.ts';
 export * from './fx.ts';
 export * from './ids.ts';
 export * from './lifecycle/expense.ts';
