@@ -6,6 +6,10 @@
 
 <!-- Commands run, tests added, screenshots of UI changes. -->
 
+## Architecture and data model
+
+<!-- Say what this change revised in tools/records/src/architecture.ts and data-model.ts (and packages/db/schema.json, via `pnpm db:snapshot`), or why neither needed revising. -->
+
 ## Definition of Done
 
 - [ ] Gates G1–G5 are green
@@ -14,5 +18,6 @@
 - [ ] Money stays integer minor units; every new tenant table has `org_id` and a row-level security policy
 - [ ] Accessibility checked (axe in G5 for new screens)
 - [ ] Docs, ADRs and requirement records (`tools/records`) updated in this pull request (or not needed)
+- [ ] Architecture and data model assessed: revised in this pull request, or no change needed and why
 - [ ] Behind a feature flag, default off, if customer-visible
 - [ ] Demonstrated on the preview environment and accepted by the product owner

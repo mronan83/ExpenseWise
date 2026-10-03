@@ -1511,6 +1511,23 @@ export const NON_FUNCTIONAL: readonly Requirement[] = [
     features: ['F-39'],
     checks: ['records/integrity', 'records/render'],
   },
+  {
+    id: 'NFR-DEL-08',
+    text: 'The technical architecture and the data model are living pages: read from the repository and the migrated database, revised in the same pull request as any change that affects them, republished after each successful release with what changed, and every report of a change, enhancement or fix confirms they were assessed and revised.',
+    enforcedBy:
+      'Integrity checks in gate G2 refuse an undescribed package, setting, workflow, background function, table or function; the schema snapshot test in G3; the pull request template; the rule in CLAUDE.md',
+    sources: ['owner 2026-10-03'],
+    priority: 'Must',
+    phase: 'P1',
+    status: 'Verified',
+    features: ['F-44'],
+    checks: [
+      'db/schema-snapshot.int',
+      'records/integrity',
+      'records/render › the architecture page › says what changed since the last release',
+    ],
+    note: 'Your requirement of Oct 3, with the WayPoint pages as the pattern, branded ExpenseWise.',
+  },
 
   // Observability
   {

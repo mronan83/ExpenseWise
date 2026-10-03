@@ -301,6 +301,12 @@ export const CHANGE_LOG: readonly ChangeLogEntry[] = [
   {
     date: '2026-10-03',
     change:
+      'From your message: the technical architecture and the data model are living pages, revised with every change and confirmed in every report (NFR-DEL-08). PR #32 builds both (F-44): read from the repository and from a snapshot of the migrated database that the integration tests keep current, with a written half the tests hold to completeness, and a "changed in this release" box on each.',
+    by: 'Claude, at your direction',
+  },
+  {
+    date: '2026-10-03',
+    change:
       'From your message: an organization defines its own expense categories and types, and every expense has a type (FR-EXP-11, F-43, #51). New Q7: what a type is beside a category. Category suggestions (#18) now wait on #51, since they suggest from what an organization defines.',
     by: 'Claude, at your direction',
   },

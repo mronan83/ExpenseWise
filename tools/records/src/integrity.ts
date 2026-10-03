@@ -2,6 +2,7 @@ import { FLAG_KEYS } from '@expensewise/flags';
 import { BACKLOG, SEQUENCING } from './backlog.ts';
 import { FEATURES } from './features.ts';
 import type { Feature, FeatureStatus, Requirement, Status } from './model.ts';
+import { pageProblems } from './integrity-pages.ts';
 import { AREAS, OBJECTIVES } from './objectives.ts';
 import {
   adrs,
@@ -297,6 +298,9 @@ export function problems(): string[] {
     if (next && next.date > entry.date) fail('change log', 'is not newest first');
     checkText('change log', entry.change);
   });
+
+  // The architecture and data model pages describe everything there is.
+  pageProblems(fail, checkText, known);
 
   return out;
 }

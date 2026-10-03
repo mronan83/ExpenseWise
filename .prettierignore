@@ -4,3 +4,5 @@ pnpm-lock.yaml
 **/coverage/
 **/openapi.json
 docs/
+# Generated from a migrated database by pnpm db:snapshot
+packages/db/schema.json

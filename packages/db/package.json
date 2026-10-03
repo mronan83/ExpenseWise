@@ -15,7 +15,8 @@
     "test:integration": "vitest run",
     "contract:check": "bash scripts/check-schema-drift.sh",
     "test": "vitest run --config vitest.unit.config.ts",
-    "roles:set-passwords": "tsx src/set-role-passwords.ts"
+    "roles:set-passwords": "tsx src/set-role-passwords.ts",
+    "snapshot": "tsx scripts/snapshot-schema.ts"
   },
   "dependencies": {
     "@expensewise/domain": "workspace:*",

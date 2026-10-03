@@ -111,6 +111,7 @@ A story is finished when:
 - [ ] Gates G1–G5 are green, and acceptance criteria run as automated tests.
 - [ ] State changes emit audit events, and telemetry events are added.
 - [ ] Accessibility is checked, and docs, ADRs and the requirement records (`tools/records`) are updated in the same pull request.
+- [ ] The technical architecture and data model are assessed: revised in the same pull request (`tools/records/src/architecture.ts`, `data-model.ts`, and `packages/db/schema.json` after a migration), or the pull request says why nothing needed revising (NFR-DEL-08).
 - [ ] It has been demonstrated on its preview environment and accepted by the product owner.
 - [ ] It is in production behind a flag, default off until release.
 

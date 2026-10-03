@@ -10,8 +10,13 @@ export interface PageContext {
   readonly productionSha: string;
   /** The day of the release, YYYY-MM-DD. */
   readonly date: string;
-  /** Published page URLs, for links between the two pages. */
-  readonly urls: { readonly traceability?: string; readonly backlog?: string };
+  /** Published page URLs, for links between the pages. */
+  readonly urls: {
+    readonly traceability?: string;
+    readonly backlog?: string;
+    readonly architecture?: string;
+    readonly dataModel?: string;
+  };
   /** Set while the records are still in review: says so on the page. */
   readonly draft?: string;
   /** Commits in this release, newest first, for the backlog page. */
@@ -21,7 +26,7 @@ export interface PageContext {
   };
 }
 
-export type PageKind = 'traceability' | 'backlog';
+export type PageKind = 'traceability' | 'backlog' | 'architecture' | 'data-model';
 
 const ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 export const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ESCAPES[c]!);
@@ -45,7 +50,7 @@ export function refLink(ctx: PageContext, page: PageKind, id: string): string {
   }
   const backlog = /^#(\d+)$/.exec(id);
   const anchor = backlog ? `item-${backlog[1]}` : id;
-  const home: PageKind = backlog ? 'backlog' : 'traceability';
+  const home = backlog ? ('backlog' as const) : ('traceability' as const);
   if (home === page) return `<a class="ref" href="#${anchor}">${esc(id)}</a>`;
   const url = ctx.urls[home];
   return url ? ext(`${url}#${anchor}`, esc(id), 'ref') : `<span class="ref">${esc(id)}</span>`;
@@ -181,6 +186,9 @@ span.ref { color: var(--ink-2); }
 .defs dt { font-weight: 600; }
 .defs dd { margin: 0; color: var(--ink-2); }
 .foot { border-top: 1px solid var(--rule); padding-top: 16px; color: var(--ink-2); font-size: 0.88rem; max-width: none; }
+.diagram { margin: 0; overflow-x: auto; background: var(--sheet); border: 1px solid var(--rule); border-radius: 6px; padding: 16px; }
+.diagram pre.mermaid { margin: 0; font: 400 0.8rem/1.45 var(--mono); color: var(--ink-2); white-space: pre; background: transparent; }
+.diagram svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
 @media (max-width: 900px) {
   .layout { grid-template-columns: minmax(0, 1fr); }
   .toc { position: static; }
@@ -279,6 +287,14 @@ export function slip(
     .join('');
   return `<div class="slip" role="group" aria-label="${esc(head)}"><div class="slip-head">${esc(head)}</div><dl>${lines}</dl><div class="slip-foot">${foot}</div></div>`;
 }
+
+/** A diagram the artifact viewer draws: mermaid source, escaped, in a scrolling frame. */
+export const mermaid = (source: string, label: string) =>
+  `<figure class="diagram" role="img" aria-label="${esc(label)}" tabindex="0"><pre class="mermaid">${esc(source)}</pre></figure>`;
+
+/** A table in its scrolling frame. */
+export const table = (head: readonly string[], rows: readonly string[], cls = '') =>
+  `<div class="table-wrap" tabindex="0" role="region" aria-label="${esc(head.filter(Boolean).join(', '))}"><table${cls ? ` class="${cls}"` : ''}><thead><tr>${head.map((h) => `<th scope="col">${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
 
 /** A banner on a page built from records that are not on main yet. */
 export const draftBanner = (ctx: PageContext) =>
