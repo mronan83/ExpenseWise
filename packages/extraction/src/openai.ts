@@ -1,7 +1,8 @@
 import { z } from 'zod';
 import type { ExtractionInput, ExtractionRun, Extractor } from './extractor.ts';
 import { costNanoUsd, MODELS, type OpenAIModelId, type TokenUsage } from './models.ts';
-import { EXTRACTION_VARIANTS, variantOf, type ExtractorOptions } from './variant.ts';
+import type { ReceiptExtraction } from './schema.ts';
+import { variantOf, type ExtractionVariant, type ExtractorOptions } from './variant.ts';
 
 const RESPONSES_URL = 'https://api.openai.com/v1/responses';
 
@@ -48,10 +49,15 @@ export function strictJsonSchema(schema: JsonSchema): JsonSchema {
 const mapValues = (o: JsonSchema, f: (v: unknown) => unknown) =>
   Object.fromEntries(Object.entries(o).map(([k, v]) => [k, f(v)]));
 
-/** Each request's structure, made once: the source-line variant only where it is switched on. */
-const JSON_SCHEMAS = {
-  plain: strictJsonSchema(z.toJSONSchema(EXTRACTION_VARIANTS.plain.schema)),
-  sources: strictJsonSchema(z.toJSONSchema(EXTRACTION_VARIANTS.sources.schema)),
+/** Each request's structure, made once, for the additions an organization has switched on. */
+const JSON_SCHEMAS = new WeakMap<ExtractionVariant, JsonSchema>();
+const jsonSchemaOf = (variant: ExtractionVariant) => {
+  let schema = JSON_SCHEMAS.get(variant);
+  if (!schema) {
+    schema = strictJsonSchema(z.toJSONSchema(variant.schema));
+    JSON_SCHEMAS.set(variant, schema);
+  }
+  return schema;
 };
 
 interface ResponsesAnswer {
@@ -74,7 +80,7 @@ export class OpenAIExtractor implements Extractor {
   private readonly doFetch: typeof fetch;
   private readonly timeoutMs: number;
 
-  private readonly fieldSources: boolean;
+  private readonly asked: ExtractorOptions;
 
   constructor(
     private readonly apiKey: string,
@@ -83,12 +89,15 @@ export class OpenAIExtractor implements Extractor {
   ) {
     this.doFetch = options.fetch ?? fetch;
     this.timeoutMs = options.timeoutMs ?? 90_000;
-    this.fieldSources = options.fieldSources ?? false;
+    this.asked = {
+      fieldSources: options.fieldSources ?? false,
+      journeys: options.journeys ?? false,
+    };
   }
 
   async extract(input: ExtractionInput): Promise<ExtractionRun> {
     const { effort } = MODELS[this.model];
-    const variant = variantOf({ fieldSources: this.fieldSources });
+    const variant = variantOf(this.asked);
     const started = performance.now();
     const res = await this.doFetch(RESPONSES_URL, {
       method: 'POST',
@@ -106,7 +115,7 @@ export class OpenAIExtractor implements Extractor {
           format: {
             type: 'json_schema',
             name: 'receipt_extraction',
-            schema: this.fieldSources ? JSON_SCHEMAS.sources : JSON_SCHEMAS.plain,
+            schema: jsonSchemaOf(variant),
             strict: true,
           },
         },
@@ -155,7 +164,8 @@ export class OpenAIExtractor implements Extractor {
           : 'invalid';
     return {
       outcome,
-      extraction: outcome === 'extracted' && parsed?.success ? parsed.data : null,
+      extraction:
+        outcome === 'extracted' && parsed?.success ? (parsed.data as ReceiptExtraction) : null,
       model: this.model,
       promptVersion: variant.promptVersion,
       schemaVersion: variant.schemaVersion,

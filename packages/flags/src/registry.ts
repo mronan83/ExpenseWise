@@ -65,6 +65,13 @@ export const FLAGS = {
     description:
       'How the models compare shows the 95th-percentile time from capture to Ready (GAP-16, #32).',
   },
+  'receipts.journeys': {
+    name: 'Journeys and stays',
+    description:
+      'A ride, flight or train receipt reads where it went from and to, and a hotel folio its ' +
+      'check-in and check-out, with the nights worked out; each shows on the expense, which can ' +
+      'correct it (FR-INT-20, FR-INT-21, #79). A receipt read before gains them when read again.',
+  },
   'expenses.mileage': {
     name: 'Mileage',
     description:

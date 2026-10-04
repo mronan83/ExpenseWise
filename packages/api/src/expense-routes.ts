@@ -1,5 +1,5 @@
 import type { Membership } from '@expensewise/db';
-import { amountMatches, type DetailField } from '@expensewise/domain';
+import { amountMatches, type DetailField, type TravelEdit } from '@expensewise/domain';
 import { timeZoneFor } from '@expensewise/extraction/place';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
@@ -9,6 +9,7 @@ import { expenseSummaries } from './expense-views.ts';
 import type { ExpenseStore } from './expenses.ts';
 import { featureGate, type FeatureGate } from './features.ts';
 import { ProblemError } from './problem.ts';
+import { withTravel } from './travel-views.ts';
 import {
   editExpenseRoute,
   getExpenseRoute,
@@ -104,11 +105,17 @@ export function registerExpenseRoutes(
     return c.json({ expenses: summaries.map((s) => ({ ...s, category: shown.get(s.id) })) }, 200);
   });
 
-  /** One expense as its page shows it, its category and type included while they are on. */
+  /**
+   * One expense as its page shows it: its category and type included while they are on, and
+   * its journey and stay while Journeys and stays is (FR-INT-20, FR-INT-21).
+   */
   const detail = async (
     orgId: string,
     found: NonNullable<Awaited<ReturnType<ExpenseStore['get']>>>,
-  ) => detailWithCategory(await categoriesOn(orgId), orgId, found);
+  ) => {
+    const shown = await detailWithCategory(await categoriesOn(orgId), orgId, found);
+    return (await features.isOn(orgId, 'receipts.journeys')) ? withTravel(shown, found) : shown;
+  };
 
   app.openapi(getExpenseRoute, async (c) => {
     const who = await member(c.var.identity.userId);
@@ -123,11 +130,28 @@ export function registerExpenseRoutes(
     const who = await member(caller.userId);
     const { expenseId } = c.req.valid('param');
     const { expenses } = stores();
-    const { time, timeZone, address, city, region, country, ...values } = c.req.valid('json');
+    const {
+      time,
+      timeZone,
+      address,
+      city,
+      region,
+      country,
+      journeyFrom,
+      journeyTo,
+      checkIn,
+      checkOut,
+      ...values
+    } = c.req.valid('json');
+    const sent = (given: Record<string, string | undefined>) =>
+      Object.fromEntries(
+        Object.entries(given).filter((entry): entry is [string, string] => entry[1] !== undefined),
+      );
     const given = { time, timeZone, address, city, region, country };
-    const details: Partial<Record<DetailField, string>> = Object.fromEntries(
-      Object.entries(given).filter((entry): entry is [string, string] => entry[1] !== undefined),
-    );
+    const details: Partial<Record<DetailField, string>> = sent(given);
+    // A journey or a stay is corrected only while Journeys and stays is on.
+    const travel: TravelEdit = sent({ journeyFrom, journeyTo, checkIn, checkOut });
+    if (Object.keys(travel).length > 0) await features.require(who.orgId, 'receipts.journeys');
     // A new place means a new time zone, worked out again unless the person set one; a blank
     // time zone asks for it to be worked out from the place.
     const fromPlace =
@@ -150,6 +174,7 @@ export function registerExpenseRoutes(
       {
         ...values,
         ...(Object.keys(details).length > 0 ? { details } : {}),
+        ...(Object.keys(travel).length > 0 ? { travel } : {}),
       },
       caller.userId,
     );

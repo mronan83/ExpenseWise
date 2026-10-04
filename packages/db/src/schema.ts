@@ -464,6 +464,15 @@ export const expenses = pgTable(
     merchantRegion: text('merchant_region'),
     /** ISO 3166-1 alpha-2. */
     merchantCountry: char('merchant_country', { length: 2 }),
+    /**
+     * Where a ride, flight or train went, each end as its receipt prints it (FR-INT-20), and a
+     * hotel stay's check-in and check-out days (FR-INT-21). Read only where Journeys and stays
+     * is on. The nights are worked out from the two days when shown, never kept.
+     */
+    journeyFrom: text('journey_from'),
+    journeyTo: text('journey_to'),
+    checkIn: date('check_in', { mode: 'string' }),
+    checkOut: date('check_out', { mode: 'string' }),
     notes: text('notes'),
     /**
      * Why a local expense, one on no trip, was for business. Its report can't close without

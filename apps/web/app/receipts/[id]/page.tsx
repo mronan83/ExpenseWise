@@ -59,6 +59,17 @@ const ROWS: { key: keyof Fields; label: string; filing?: string }[] = [
   { key: 'documentType', label: 'Type' },
 ];
 
+/**
+ * Where a ride, flight or train went and a folio's stay, as each model read them, while
+ * Journeys and stays is on (FR-INT-20, FR-INT-21). A row shows once any model read it.
+ */
+const JOURNEY_ROWS: typeof ROWS = [
+  { key: 'from', label: 'From' },
+  { key: 'to', label: 'To' },
+  { key: 'checkIn', label: 'Check-in' },
+  { key: 'checkOut', label: 'Check-out' },
+];
+
 /** Gives up refreshing after this long; the page offers to read it again instead. */
 const POLL_LIMIT_MS = 3 * 60 * 1000;
 
@@ -69,6 +80,7 @@ export default function ReceiptPage() {
   const isOn = useFeatures();
   // Where each field was read, and one tap to correct a Ready receipt (GAP-14).
   const sources = isOn('receipts.field-sources');
+  const journeys = isOn('receipts.journeys');
   const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -190,7 +202,7 @@ export default function ReceiptPage() {
               <Filed confirmation={receipt.confirmation} />
             ) : null}
             {receipt.readings.length > 0 ? (
-              <Comparison receipt={receipt} sources={sources} />
+              <Comparison receipt={receipt} sources={sources} journeys={journeys} />
             ) : null}
             <div className="flex flex-wrap items-center gap-3">
               <button
@@ -1169,9 +1181,9 @@ function Review({
   );
 }
 
-/** The line a field was read from; the document type has none. */
+/** The line a field was read from; the document type, journey and stay have none. */
 const sourceOf = (sources: FieldSources | null | undefined, key: keyof Fields) =>
-  sources && key !== 'documentType' ? sources[key] : null;
+  sources && key in sources ? sources[key as keyof FieldSources] : null;
 
 const isMoney = (v: unknown): v is MoneyField =>
   typeof v === 'object' && v !== null && 'decimal' in v;
@@ -1219,8 +1231,19 @@ function SourceLine({ line }: { line: string }) {
   );
 }
 
-function Comparison({ receipt, sources }: { receipt: ReceiptDetail; sources: boolean }) {
+function Comparison({
+  receipt,
+  sources,
+  journeys,
+}: {
+  receipt: ReceiptDetail;
+  sources: boolean;
+  journeys: boolean;
+}) {
   const { readings } = receipt;
+  const rows = journeys
+    ? [...ROWS, ...JOURNEY_ROWS.filter((row) => readings.some((r) => r.fields?.[row.key]))]
+    : ROWS;
   const cell = (r: Reading, content: ReactNode) =>
     r.state === 'pending' ? <span className="text-ink-3">…</span> : content;
   return (
@@ -1270,7 +1293,7 @@ function Comparison({ receipt, sources }: { receipt: ReceiptDetail; sources: boo
               ))}
             </tr>
           ) : null}
-          {ROWS.map((row) => {
+          {rows.map((row) => {
             const differs = row.filing !== undefined && receipt.differences.includes(row.filing);
             return (
               <tr

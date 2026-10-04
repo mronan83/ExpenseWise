@@ -281,6 +281,13 @@
       "when": 1791148859464,
       "tag": "0039_route_mileage_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1791149330240,
+      "tag": "0040_expense_journeys_and_stays",
+      "breakpoints": true
     }
   ]
 }

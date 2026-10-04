@@ -1,4 +1,4 @@
-import type { ExpenseDetails, ExpenseSource } from '@expensewise/domain';
+import type { ExpenseDetails, ExpenseSource, ExpenseTravel } from '@expensewise/domain';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { appendAuditEvent } from './audit.ts';
 import type { Transaction } from './client.ts';
@@ -460,6 +460,8 @@ export async function confirmReceipt(
   actorUserId: string,
   /** The time and place of the reading confirmed (FR-INT-17). */
   details?: ExpenseDetails,
+  /** Its journey and stay, when it was asked for them (FR-INT-20, FR-INT-21). */
+  travel?: ExpenseTravel,
 ): Promise<ConfirmReceiptResult> {
   // The lock orders this against a concurrent read-again or a second confirmation.
   const [current] = await tx
@@ -507,6 +509,7 @@ export async function confirmReceipt(
       currency: review.currency,
       amountMinor: review.totalMinor,
       ...(details ? { details } : {}),
+      ...(travel ? { travel } : {}),
     },
     { type: 'user', id: actorUserId },
   );

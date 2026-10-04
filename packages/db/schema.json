@@ -1269,6 +1269,30 @@
           "type": "timestamp with time zone",
           "nullable": true,
           "default": null
+        },
+        {
+          "name": "journey_from",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "journey_to",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "check_in",
+          "type": "date",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "check_out",
+          "type": "date",
+          "nullable": true,
+          "default": null
         }
       ],
       "primaryKey": [

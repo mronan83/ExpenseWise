@@ -18,7 +18,7 @@ import {
   type Transaction,
   type TripChoice,
 } from '@expensewise/db';
-import type { DetailsEdit, ExpenseEdit } from '@expensewise/domain';
+import type { DetailsEdit, ExpenseEdit, TravelEdit } from '@expensewise/domain';
 import { asCaller } from './caller.ts';
 import type { ReceiptWithReadings } from './receipts.ts';
 
@@ -55,7 +55,7 @@ export interface ExpenseStore {
   edit(
     orgId: string,
     expenseId: string,
-    edit: ExpenseEdit & { readonly details?: DetailsEdit },
+    edit: ExpenseEdit & { readonly details?: DetailsEdit; readonly travel?: TravelEdit },
     actorUserId: string,
   ): Promise<EditExpenseResult>;
   /** Puts it on a trip, on none, or back to filing by date (ADR-0023). */

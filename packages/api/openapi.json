@@ -467,6 +467,7 @@
           "receipts.model-settings",
           "receipts.field-sources",
           "receipts.capture-time",
+          "receipts.journeys",
           "expenses.mileage",
           "expenses.route-mileage",
           "reports.export",
@@ -1173,7 +1174,8 @@
                 "sums",
                 "future_date",
                 "old_date",
-                "summary"
+                "summary",
+                "stay"
               ]
             },
             "description": "checks: the checks the readings fail."
@@ -2120,6 +2122,102 @@
                   "confidence"
                 ],
                 "description": "The merchant’s address as printed. Neither decides Ready."
+              },
+              "from": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "value": {
+                    "type": "string"
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  }
+                },
+                "required": [
+                  "value",
+                  "confidence"
+                ],
+                "description": "Where a ride, flight or train went from, as printed: a pickup, an origin airport or city, a station. Only while receipts.journeys is on."
+              },
+              "to": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "value": {
+                    "type": "string"
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  }
+                },
+                "required": [
+                  "value",
+                  "confidence"
+                ],
+                "description": "Where it went to, as printed. Only while receipts.journeys is on."
+              },
+              "checkIn": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "value": {
+                    "type": "string"
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  }
+                },
+                "required": [
+                  "value",
+                  "confidence"
+                ],
+                "description": "A hotel folio’s check-in date as read, YYYY-MM-DD. Only while receipts.journeys is on."
+              },
+              "checkOut": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "value": {
+                    "type": "string"
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  }
+                },
+                "required": [
+                  "value",
+                  "confidence"
+                ],
+                "description": "A hotel folio’s check-out date as read, YYYY-MM-DD. Only while receipts.journeys is on."
               }
             },
             "required": [
@@ -2154,10 +2252,11 @@
                 "sums",
                 "future_date",
                 "old_date",
-                "summary"
+                "summary",
+                "stay"
               ]
             },
-            "description": "Checks this reading fails (FR-INT-04). sums: the subtotal, taxes and tip don’t make the total, allowing a minor unit per tax or tip line. future_date: dated more than a day after the upload. old_date: dated more than a year before it. summary: a purchase summary, which shows what was ordered, not what was charged (Q10)."
+            "description": "Checks this reading fails (FR-INT-04). sums: the subtotal, taxes and tip don’t make the total, allowing a minor unit per tax or tip line. future_date: dated more than a day after the upload. old_date: dated more than a year before it. summary: a purchase summary, which shows what was ordered, not what was charged (Q10). stay: a folio’s check-out is before its check-in, or its stay is longer than 31 nights, so its nights aren’t sure (FR-INT-21); only where receipts.journeys is on."
           }
         },
         "required": [
@@ -3197,6 +3296,99 @@
                       ]
                     },
                     "description": "Where its time or place differs from the receipt’s. Shown, never a reason to reject."
+                  },
+                  "journey": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "from": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "description": "Where it went from, as printed: a pickup, an airport or city, a station.",
+                        "example": "SFO"
+                      },
+                      "to": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "description": "Where it went to.",
+                        "example": "ORD"
+                      }
+                    },
+                    "required": [
+                      "from",
+                      "to"
+                    ],
+                    "description": "Where the journey went, as its receipt reads; null for a reading not asked for it."
+                  },
+                  "stay": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "properties": {
+                      "checkIn": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "format": "date",
+                        "example": "2026-09-29"
+                      },
+                      "checkOut": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "format": "date",
+                        "example": "2026-10-01"
+                      },
+                      "nights": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ],
+                        "description": "The days from check-in to check-out, worked out, never stored: Sep 29 to Oct 1 is 2. Null until both dates are known, or when they aren’t sure.",
+                        "example": 2
+                      },
+                      "doubt": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "enum": [
+                          "check_out_before_check_in",
+                          "too_long",
+                          null
+                        ],
+                        "description": "Why the nights aren’t sure: the check-out is before the check-in, or the stay is longer than 31 nights. Null when they are, or a date is missing."
+                      }
+                    },
+                    "required": [
+                      "checkIn",
+                      "checkOut",
+                      "nights",
+                      "doubt"
+                    ],
+                    "description": "The stay, as its receipt reads; null for a reading not asked for it."
+                  },
+                  "travelDifferences": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "journeyFrom",
+                        "journeyTo",
+                        "checkIn",
+                        "checkOut"
+                      ]
+                    },
+                    "description": "Where its journey or stay differs from the receipt’s. Shown, never a reason to reject."
                   }
                 },
                 "required": [
@@ -3257,6 +3449,12 @@
                 ],
                 "description": "ISO 3166-1 alpha-2.",
                 "example": "US"
+              },
+              "journey": {
+                "$ref": "#/components/schemas/Journey"
+              },
+              "stay": {
+                "$ref": "#/components/schemas/Stay"
               }
             },
             "required": [
@@ -3272,6 +3470,80 @@
             ]
           }
         ]
+      },
+      "Journey": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Where it went from, as printed: a pickup, an airport or city, a station.",
+            "example": "SFO"
+          },
+          "to": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Where it went to.",
+            "example": "ORD"
+          }
+        },
+        "required": [
+          "from",
+          "to"
+        ],
+        "description": "Where a ride, flight or train went. Only while receipts.journeys is on."
+      },
+      "Stay": {
+        "type": "object",
+        "properties": {
+          "checkIn": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "example": "2026-09-29"
+          },
+          "checkOut": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "example": "2026-10-01"
+          },
+          "nights": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "The days from check-in to check-out, worked out, never stored: Sep 29 to Oct 1 is 2. Null until both dates are known, or when they aren’t sure.",
+            "example": 2
+          },
+          "doubt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "check_out_before_check_in",
+              "too_long",
+              null
+            ],
+            "description": "Why the nights aren’t sure: the check-out is before the check-in, or the stay is longer than 31 nights. Null when they are, or a date is missing."
+          }
+        },
+        "required": [
+          "checkIn",
+          "checkOut",
+          "nights",
+          "doubt"
+        ],
+        "description": "A hotel stay and its nights. Only while receipts.journeys is on."
       },
       "EditExpense": {
         "type": "object",
@@ -3334,6 +3606,30 @@
             "maxLength": 200,
             "description": "ISO 3166-1 alpha-2.",
             "example": "US"
+          },
+          "journeyFrom": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Where a ride, flight or train went from; blank clears it. Only while receipts.journeys is on.",
+            "example": "SFO"
+          },
+          "journeyTo": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Where it went to; blank clears it.",
+            "example": "ORD"
+          },
+          "checkIn": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "A stay’s check-in, YYYY-MM-DD; blank clears it. Only while receipts.journeys is on.",
+            "example": "2026-09-29"
+          },
+          "checkOut": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "A stay’s check-out, YYYY-MM-DD, on or after check-in and at most 31 nights later.",
+            "example": "2026-10-01"
           }
         },
         "additionalProperties": false
