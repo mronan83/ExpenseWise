@@ -5,6 +5,7 @@ import {
   correctionsOf,
   correctReading,
   expenseEditOf,
+  travelOf,
 } from '@expensewise/extraction';
 import { detailsOf } from '@expensewise/extraction/place';
 import { receiptPath, RECEIPT_BUCKET, type ObjectStore } from '@expensewise/storage';
@@ -23,6 +24,7 @@ import { ProblemError } from './problem.ts';
 import { showConverted } from './reimbursement.ts';
 import { inboxRoute } from './routes/inbox.ts';
 import { captureTimeOf, withSources } from './receipt-evidence.ts';
+import { withJourneys } from './travel-views.ts';
 import {
   comparisonSummary,
   currentReview,
@@ -169,9 +171,13 @@ export function registerReceiptRoutes(
       found.pairs,
       await readingNext(orgId),
     );
-    return (await features.isOn(orgId, 'receipts.field-sources'))
+    const sourced = (await features.isOn(orgId, 'receipts.field-sources'))
       ? { ...detail, readings: withSources(found.receipt, found.runs, detail.readings) }
       : detail;
+    // The journey and stay each model read, as read (FR-INT-20, FR-INT-21).
+    return (await features.isOn(orgId, 'receipts.journeys'))
+      ? { ...sourced, readings: withJourneys(found.receipt, found.runs, sourced.readings) }
+      : sourced;
   };
 
   const imageOf = async (storageKey: string) => {
@@ -382,6 +388,7 @@ export function registerReceiptRoutes(
       },
       caller.userId,
       detailsOf(reading),
+      travelOf(reading),
     );
     if (outcome === 'missing') throw notFound();
     if (outcome === 'duplicate') throw heldAsDuplicate();

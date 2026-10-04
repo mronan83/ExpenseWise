@@ -11,6 +11,7 @@ export * from './errors.ts';
 export * from './expense-details.ts';
 export * from './expense-values.ts';
 export * from './fx.ts';
+export * from './journeys.ts';
 export * from './ids.ts';
 export * from './lifecycle/expense.ts';
 export * from './lifecycle/report.ts';

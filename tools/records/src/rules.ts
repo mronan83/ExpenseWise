@@ -151,6 +151,15 @@ export const RULES: readonly Rule[] = [
     code: { file: 'packages/api/src/report-pdf.ts', constant: 'MAX_CELL_LINES', literal: '12' },
   },
   {
+    id: 'R-STAY-NIGHTS',
+    name: 'Most nights a hotel stay is worked out for',
+    value:
+      '31; a stay read as longer, or with its check-out before its check-in, is not sure and needs a look',
+    decided: { by: 'claude', source: 'ADR-0040' },
+    code: { file: 'packages/domain/src/journeys.ts', constant: 'STAY_MAX_NIGHTS', literal: '31' },
+    note: 'A guard against a year or a month misread, as a stay of 366 nights. A longer stay is entered as two. Never put to you.',
+  },
+  {
     id: 'R-TRIP-LENGTH',
     name: 'Longest trip',
     value: '366 days',

@@ -186,6 +186,7 @@ function setup() {
     verifyToken: (token) => Promise.resolve(identity(token)),
     workspace: {
       findMembership: (userId: string) => Promise.resolve(memberships[userId]),
+      featureOn: () => Promise.resolve(false),
     } as unknown as WorkspaceStore,
     expenses: store,
   });

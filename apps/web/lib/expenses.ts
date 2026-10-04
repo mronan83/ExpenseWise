@@ -57,6 +57,10 @@ export interface ExpenseDetail extends ExpenseSummary {
     country: string | null;
     /** Shown, never a reason to reject. */
     detailDifferences: ('time' | 'address' | 'city' | 'country')[];
+    /** As its receipt reads them; only while Journeys and stays is on. */
+    journey?: Journey | null;
+    stay?: Stay | null;
+    travelDifferences?: TravelField[];
   } | null;
   /** When it was bought, HH:MM local time (FR-INT-17). */
   time: string | null;
@@ -67,7 +71,42 @@ export interface ExpenseDetail extends ExpenseSummary {
   region: string | null;
   /** ISO 3166-1 alpha-2. */
   country: string | null;
+  /** Where a ride, flight or train went; only while Journeys and stays is on (FR-INT-20). */
+  journey?: Journey;
+  /** A hotel stay and its nights, worked out; only while the feature is on (FR-INT-21). */
+  stay?: Stay;
 }
+
+export interface Journey {
+  from: string | null;
+  to: string | null;
+}
+
+export interface Stay {
+  checkIn: string | null;
+  checkOut: string | null;
+  /** Worked out from the dates; null until both are known, or when they aren't sure. */
+  nights: number | null;
+  doubt: 'check_out_before_check_in' | 'too_long' | null;
+}
+
+/** The journey and stay a person can correct (FR-INT-20, FR-INT-21). */
+export type TravelField = 'journeyFrom' | 'journeyTo' | 'checkIn' | 'checkOut';
+
+export const TRAVEL_LABELS: Record<TravelField, string> = {
+  journeyFrom: 'From',
+  journeyTo: 'To',
+  checkIn: 'Check-in',
+  checkOut: 'Check-out',
+};
+
+/** A journey and a stay as the domain's lines read them. */
+export const travelOf = (journey?: Journey | null, stay?: Stay | null) => ({
+  journeyFrom: journey?.from ?? null,
+  journeyTo: journey?.to ?? null,
+  checkIn: stay?.checkIn ?? null,
+  checkOut: stay?.checkOut ?? null,
+});
 
 /** The parts of when and where a person can edit. A blank time zone follows the place. */
 export type DetailField = 'time' | 'timeZone' | 'address' | 'city' | 'region' | 'country';

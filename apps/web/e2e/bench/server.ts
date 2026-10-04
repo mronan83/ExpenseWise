@@ -574,6 +574,54 @@ await capture(
   ),
 );
 await capture('lunch', 'camera', both(reading('Zuni Café', '2026-09-27', 'USD', '48.20')));
+// Journeys and stays (FR-INT-20, FR-INT-21), read as a model asked for them answers: a ride
+// with its pickup and drop-off, a flight with its airports, a folio with its stay, and a
+// folio whose dates can't be right, which needs a look rather than a wrong count of nights.
+const end = (value: string) => ({ value, confidence: 'high' });
+await capture(
+  'ride',
+  'camera',
+  both(
+    reading('Lyft', '2026-09-30', 'USD', '18.40', {
+      documentType: 'ride_receipt',
+      journey: { from: end('Hilton Omaha, 1001 Cass St'), to: end('1520 Harney St') },
+      stay: null,
+    }),
+  ),
+);
+await capture(
+  'flight',
+  'upload',
+  both(
+    reading('United Airlines', '2026-09-29', 'USD', '389.20', {
+      documentType: 'airline_ticket',
+      journey: { from: end('SFO'), to: end('OMA') },
+      stay: null,
+    }),
+  ),
+);
+await capture(
+  'stay',
+  'upload',
+  both(
+    reading('Hilton Omaha', '2026-10-01', 'USD', '412.60', {
+      documentType: 'hotel_folio',
+      journey: null,
+      stay: { checkIn: end('2026-09-29'), checkOut: end('2026-10-01') },
+    }),
+  ),
+);
+await capture(
+  'stayUnsure',
+  'upload',
+  both(
+    reading('Embassy Suites Omaha Downtown', '2026-09-30', 'USD', '236.80', {
+      documentType: 'hotel_folio',
+      journey: null,
+      stay: { checkIn: end('2026-10-01'), checkOut: end('2026-09-30') },
+    }),
+  ),
+);
 
 // A confirmed correction, an expense edited away from its receipt, one put on a trip by hand.
 await call('POST', `/v1/receipts/${receipts.steak}/confirm`, {

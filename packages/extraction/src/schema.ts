@@ -30,6 +30,31 @@ export const DOCUMENT_TYPES = [
   'other',
 ] as const;
 
+/**
+ * Every kind of document a reading can say it is. A rail ticket is offered only where journeys
+ * are asked for (`receipts.journeys`), so every other organization's request stays as it was.
+ */
+export const JOURNEY_DOCUMENT_TYPES = [
+  'receipt',
+  'hotel_folio',
+  'airline_ticket',
+  'ride_receipt',
+  'rail_ticket',
+  'invoice',
+  'purchase_summary',
+  'other',
+] as const;
+
+/** The documents whose journey is read: where it went from and to (FR-INT-20, Q41). */
+export const JOURNEY_DOCUMENTS: readonly DocumentType[] = [
+  'ride_receipt',
+  'airline_ticket',
+  'rail_ticket',
+];
+
+/** The document whose stay is read: its check-in and check-out (FR-INT-21). */
+export const STAY_DOCUMENTS: readonly DocumentType[] = ['hotel_folio'];
+
 /** Changes whenever ReceiptExtractionSchema changes, and is stored with every reading. */
 export const SCHEMA_VERSION = 'receipt-v3';
 
@@ -124,7 +149,69 @@ export const ReceiptExtractionSchema = z.object({
   ),
 });
 
-export type ReceiptExtraction = z.infer<typeof ReceiptExtractionSchema>;
+const JourneyEnd = (where: string) =>
+  z
+    .object({
+      value: z.string().describe(`${where}, exactly as printed.`),
+      confidence: Confidence,
+    })
+    .nullable()
+    .describe('Null if the document does not print it.');
+
+const Journey = z
+  .object({
+    from: JourneyEnd(
+      "Where it started: a ride's pickup address, a flight's origin airport code or city, a " +
+        "train's departure station",
+    ),
+    to: JourneyEnd(
+      "Where it ended: a ride's drop-off address, a flight's destination airport code or city, " +
+        "a train's arrival station",
+    ),
+  })
+  .nullable()
+  .describe(
+    'For a ride receipt, an airline ticket or a rail ticket: where the journey went. Null for ' +
+      'any other document, or when it prints neither end.',
+  );
+
+const StayDate = (which: string) =>
+  z
+    .object({
+      value: z.string().describe(`The ${which} date as YYYY-MM-DD.`),
+      confidence: Confidence,
+    })
+    .nullable()
+    .describe('Null if the folio does not print it.');
+
+const Stay = z
+  .object({ checkIn: StayDate('check-in (arrival)'), checkOut: StayDate('check-out (departure)') })
+  .nullable()
+  .describe('For a hotel folio: the stay it bills. Null for any other document.');
+
+/**
+ * What an organization that has switched on Journeys and stays is also asked (FR-INT-20,
+ * FR-INT-21, Q41): a rail ticket as a kind of document, where a journey went, and a stay's
+ * dates. Added to whichever schema it is asked with; every other organization's is unchanged.
+ */
+export const JOURNEYS_SHAPE = {
+  documentType: z.enum(JOURNEY_DOCUMENT_TYPES),
+  journey: Journey,
+  stay: Stay,
+};
+export const JOURNEYS_VERSION = 'journeys-v1';
+
+/**
+ * Any reading, as asked with any of the additions: a rail ticket among the documents, and a
+ * journey and a stay present only where they were asked for.
+ */
+const ReadingSchema = ReceiptExtractionSchema.extend({
+  documentType: z.enum(JOURNEY_DOCUMENT_TYPES),
+  journey: Journey.optional(),
+  stay: Stay.optional(),
+});
+
+export type ReceiptExtraction = z.infer<typeof ReadingSchema>;
 
 const SourceLine = z
   .string()
@@ -173,12 +260,13 @@ export function sourcesOf(output: unknown): FieldSources | null {
 /**
  * A stored reading, as the models' output is parsed back. Readings made before fees were read
  * (receipt-v1) have none, and those made before time and place were read (receipt-v2) have
- * neither, which they parse as.
+ * neither, which they parse as. A reading not asked for journeys and stays has neither key,
+ * and keeps none: absent is not asked, null is asked and not read.
  */
-export const StoredReadingSchema = ReceiptExtractionSchema.extend({
+export const StoredReadingSchema = ReadingSchema.extend({
   fees: Fees.default([]),
   time: Time.default(null),
   address: Address.default(null),
 });
 export type ConfidenceLevel = z.infer<typeof Confidence>;
-export type DocumentType = (typeof DOCUMENT_TYPES)[number];
+export type DocumentType = (typeof JOURNEY_DOCUMENT_TYPES)[number];

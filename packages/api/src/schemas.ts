@@ -1,4 +1,9 @@
-import { isIsoDate, MERGE_FIELDS, SUPPORTED_CURRENCIES } from '@expensewise/domain';
+import {
+  isIsoDate,
+  MERGE_FIELDS,
+  STAY_MAX_NIGHTS,
+  SUPPORTED_CURRENCIES,
+} from '@expensewise/domain';
 import { CORRECTABLE_FIELDS, READING_CHECKS } from '@expensewise/extraction';
 import { z } from '@hono/zod-openapi';
 import { ExpenseCategorySchema } from './category-schemas.ts';
@@ -235,6 +240,9 @@ export const ReceiptSummarySchema = z
 
 const SourceLineSchema = z.string().nullable();
 
+/** A journey's end or a stay's date, as one model read it; only where receipts.journeys is on. */
+const JourneyEndReadSchema = TextFieldSchema.optional();
+
 export const FieldSourcesSchema = z
   .object({
     merchant: SourceLineSchema,
@@ -297,6 +305,23 @@ export const ReceiptReadingSchema = z
         address: TextFieldSchema.openapi({
           description: 'The merchant’s address as printed. Neither decides Ready.',
         }),
+        // Only while Journeys and stays is on (receipts.journeys, FR-INT-20, FR-INT-21).
+        from: JourneyEndReadSchema.openapi({
+          description:
+            'Where a ride, flight or train went from, as printed: a pickup, an origin airport or ' +
+            'city, a station. Only while receipts.journeys is on.',
+        }),
+        to: JourneyEndReadSchema.openapi({
+          description: 'Where it went to, as printed. Only while receipts.journeys is on.',
+        }),
+        checkIn: JourneyEndReadSchema.openapi({
+          description:
+            'A hotel folio’s check-in date as read, YYYY-MM-DD. Only while receipts.journeys is on.',
+        }),
+        checkOut: JourneyEndReadSchema.openapi({
+          description:
+            'A hotel folio’s check-out date as read, YYYY-MM-DD. Only while receipts.journeys is on.',
+        }),
       })
       .nullable(),
     problems: z.array(z.string()),
@@ -306,7 +331,9 @@ export const ReceiptReadingSchema = z
         'Checks this reading fails (FR-INT-04). sums: the subtotal, taxes and tip don’t make ' +
         'the total, allowing a minor unit per tax or tip line. future_date: dated more than a ' +
         'day after the upload. old_date: dated more than a year before it. summary: a purchase ' +
-        'summary, which shows what was ordered, not what was charged (Q10).',
+        'summary, which shows what was ordered, not what was charged (Q10). stay: a folio’s ' +
+        `check-out is before its check-in, or its stay is longer than ${STAY_MAX_NIGHTS} nights, ` +
+        'so its nights aren’t sure (FR-INT-21); only where receipts.journeys is on.',
     }),
   })
   .openapi('ReceiptReading');
@@ -717,6 +744,51 @@ export const ExpenseSummarySchema = z
   })
   .openapi('ExpenseSummary');
 
+const JourneySchema = z
+  .object({
+    from: z.string().nullable().openapi({
+      description: 'Where it went from, as printed: a pickup, an airport or city, a station.',
+      example: 'SFO',
+    }),
+    to: z.string().nullable().openapi({ description: 'Where it went to.', example: 'ORD' }),
+  })
+  .openapi('Journey', {
+    description:
+      'Where a ride, flight or train went (FR-INT-20): read from its receipt, or corrected by a ' +
+      'person. Either end may be blank.',
+  });
+
+const StayDoubtSchema = z
+  .enum(['check_out_before_check_in', 'too_long'])
+  .nullable()
+  .openapi({
+    description:
+      'Why the nights aren’t sure: the check-out is before the check-in, or the stay is longer ' +
+      `than ${STAY_MAX_NIGHTS} nights. Null when they are, or a date is missing.`,
+  });
+
+const StaySchema = z
+  .object({
+    checkIn: z.string().nullable().openapi({ format: 'date', example: '2026-09-29' }),
+    checkOut: z.string().nullable().openapi({ format: 'date', example: '2026-10-01' }),
+    nights: z
+      .number()
+      .int()
+      .nullable()
+      .openapi({
+        description:
+          'The days from check-in to check-out, worked out, never stored: Sep 29 to Oct 1 is 2. ' +
+          'Null until both dates are known, or when they aren’t sure.',
+        example: 2,
+      }),
+    doubt: StayDoubtSchema,
+  })
+  .openapi('Stay', {
+    description: 'A hotel stay (FR-INT-21): its check-in and check-out, and the nights between.',
+  });
+
+const TravelFieldSchema = z.enum(['journeyFrom', 'journeyTo', 'checkIn', 'checkOut']);
+
 export const ExpenseDetailSchema = ExpenseSummarySchema.extend({
   editable: z
     .boolean()
@@ -748,6 +820,18 @@ export const ExpenseDetailSchema = ExpenseSummarySchema.extend({
         description:
           'Where its time or place differs from the receipt’s. Shown, never a reason to reject.',
       }),
+      // Only while Journeys and stays is on (receipts.journeys).
+      journey: JourneySchema.nullable().optional().openapi({
+        description:
+          'Where the journey went, as its receipt reads; null for a reading not asked for it.',
+      }),
+      stay: StaySchema.nullable().optional().openapi({
+        description: 'The stay, as its receipt reads; null for a reading not asked for it.',
+      }),
+      travelDifferences: z.array(TravelFieldSchema).optional().openapi({
+        description:
+          'Where its journey or stay differs from the receipt’s. Shown, never a reason to reject.',
+      }),
     })
     .nullable()
     .openapi({ description: 'What its receipt shows (FR-EXP-08).' }),
@@ -763,6 +847,12 @@ export const ExpenseDetailSchema = ExpenseSummarySchema.extend({
   city: z.string().nullable(),
   region: z.string().nullable().openapi({ description: 'State, province or region.' }),
   country: z.string().nullable().openapi({ description: 'ISO 3166-1 alpha-2.', example: 'US' }),
+  journey: JourneySchema.optional().openapi({
+    description: 'Where a ride, flight or train went. Only while receipts.journeys is on.',
+  }),
+  stay: StaySchema.optional().openapi({
+    description: 'A hotel stay and its nights. Only while receipts.journeys is on.',
+  }),
 }).openapi('ExpenseDetail');
 
 export const ExpenseListSchema = z
@@ -787,6 +877,19 @@ export const EditExpenseSchema = z
     city: edited('The city or town.', 'Omaha'),
     region: edited('State, province or region.', 'NE'),
     country: edited('ISO 3166-1 alpha-2.', 'US'),
+    journeyFrom: edited(
+      'Where a ride, flight or train went from; blank clears it. Only while receipts.journeys is on.',
+      'SFO',
+    ),
+    journeyTo: edited('Where it went to; blank clears it.', 'ORD'),
+    checkIn: edited(
+      'A stay’s check-in, YYYY-MM-DD; blank clears it. Only while receipts.journeys is on.',
+      '2026-09-29',
+    ),
+    checkOut: edited(
+      `A stay’s check-out, YYYY-MM-DD, on or after check-in and at most ${STAY_MAX_NIGHTS} nights later.`,
+      '2026-10-01',
+    ),
   })
   .strict()
   .refine((e) => Object.values(e).some((v) => v !== undefined), {

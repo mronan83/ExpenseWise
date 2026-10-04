@@ -1,4 +1,4 @@
-import type { ExpenseDetails, ExpenseValues } from '@expensewise/domain';
+import type { ExpenseDetails, ExpenseTravel, ExpenseValues } from '@expensewise/domain';
 import { createHash } from 'node:crypto';
 import {
   RECEIPT_READ_REQUESTED,
@@ -24,6 +24,7 @@ import {
   readingDifferences,
   StoredReadingSchema,
   SCHEMA_VERSION,
+  travelOf,
   valuesOfReading,
 } from '@expensewise/extraction';
 import { detailsOf } from '@expensewise/extraction/place';
@@ -59,8 +60,11 @@ export interface ReceiptReadingPorts {
       status: ReceiptStatus;
       requestId: string;
       detail: Record<string, unknown>;
-      /** What the reading would file the receipt's expense with, its time and place too. */
-      values: (ExpenseValues & { details?: ExpenseDetails }) | null;
+      /**
+       * What the reading would file the receipt's expense with, its time and place too, and its
+       * journey and stay where it was asked for them.
+       */
+      values: (ExpenseValues & { details?: ExpenseDetails; travel?: ExpenseTravel }) | null;
     },
   ): Promise<void>;
 }
@@ -275,6 +279,19 @@ export async function readingPlan(ports: ReceiptReadingPorts, orgId: string): Pr
   return ports.readingPlan ? ports.readingPlan(orgId) : SIDE_BY_SIDE;
 }
 
+/**
+ * What a reading files its expense with: its values, time and place, and its journey and stay
+ * only when it was asked for them, so a reading not asked leaves the expense's as they are.
+ */
+function offerOf(reading: NormalizedExtraction) {
+  const travel = travelOf(reading);
+  return {
+    ...valuesOfReading(reading),
+    details: detailsOf(reading),
+    ...(travel ? { travel } : {}),
+  };
+}
+
 function readingOf(run: ExtractionRunRecord | undefined): NormalizedExtraction | null {
   if (!run || run.outcome === 'failed') return null;
   const parsed = StoredReadingSchema.safeParse(run.output);
@@ -323,7 +340,7 @@ export async function settleReading(
   await ports.settle(orgId, receiptId, {
     status,
     requestId,
-    values: best ? { ...valuesOfReading(best), details: detailsOf(best) } : null,
+    values: best ? offerOf(best) : null,
     detail: {
       differences,
       readings: Object.fromEntries([
@@ -372,7 +389,7 @@ async function settleOneReading(
   await ports.settle(orgId, receiptId, {
     status,
     requestId,
-    values: reading ? { ...valuesOfReading(reading), details: detailsOf(reading) } : null,
+    values: reading ? offerOf(reading) : null,
     detail: {
       differences: [],
       readings: Object.fromEntries(tried.map((run) => [run.model, run.outcome])),

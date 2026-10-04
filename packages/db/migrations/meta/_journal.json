@@ -253,6 +253,13 @@
       "when": 1791137893564,
       "tag": "0035_own_records_conversions",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1791147907521,
+      "tag": "0036_expense_journeys_and_stays",
+      "breakpoints": true
     }
   ]
 }

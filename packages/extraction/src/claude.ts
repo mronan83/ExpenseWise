@@ -2,12 +2,18 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import type { ExtractionInput, ExtractionRun, Extractor } from './extractor.ts';
 import { costNanoUsd, MODELS, type ClaudeModelId, type TokenUsage } from './models.ts';
-import { EXTRACTION_VARIANTS, variantOf, type ExtractorOptions } from './variant.ts';
+import type { ReceiptExtraction } from './schema.ts';
+import { variantOf, type ExtractionVariant, type ExtractorOptions } from './variant.ts';
 
-/** Each request's structure, made once: the source-line variant only where it is switched on. */
-const FORMATS = {
-  plain: zodOutputFormat(EXTRACTION_VARIANTS.plain.schema),
-  sources: zodOutputFormat(EXTRACTION_VARIANTS.sources.schema),
+/** Each request's structure, made once, for the additions an organization has switched on. */
+const FORMATS = new WeakMap<ExtractionVariant, ReturnType<typeof zodOutputFormat>>();
+const formatOf = (variant: ExtractionVariant) => {
+  let format = FORMATS.get(variant);
+  if (!format) {
+    format = zodOutputFormat(variant.schema);
+    FORMATS.set(variant, format);
+  }
+  return format;
 };
 
 /**
@@ -24,7 +30,7 @@ export class ClaudeExtractor implements Extractor {
   async extract(input: ExtractionInput): Promise<ExtractionRun> {
     const { effort } = MODELS[this.model];
     const variant = variantOf(this.options);
-    const format = this.options.fieldSources ? FORMATS.sources : FORMATS.plain;
+    const format = formatOf(variant);
     const started = performance.now();
     const response = await this.client.messages.parse({
       model: this.model,
@@ -58,7 +64,7 @@ export class ClaudeExtractor implements Extractor {
             : 'invalid';
     return {
       outcome,
-      extraction: outcome === 'extracted' ? response.parsed_output : null,
+      extraction: outcome === 'extracted' ? (response.parsed_output as ReceiptExtraction) : null,
       model: this.model,
       promptVersion: variant.promptVersion,
       schemaVersion: variant.schemaVersion,
