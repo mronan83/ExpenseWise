@@ -4,7 +4,9 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, ApiProblem } from '../../lib/api';
 import { EXPENSE_STATUS, type ExpenseSummary } from '../../lib/expenses';
+import { useFeatures } from '../../lib/features';
 import { formText } from '../../lib/form';
+import { MILEAGE_FLAG } from '../../lib/mileage';
 import { formatMoney } from '../../lib/receipts';
 import { supabase } from '../../lib/supabase';
 
@@ -43,6 +45,7 @@ const describeError = (error: unknown) =>
 export default function ExpensesPage() {
   const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [search, setSearch] = useState<Search>(NO_SEARCH);
+  const featureOn = useFeatures();
 
   const refresh = useCallback(async (terms: Search) => {
     const session = (await supabase()?.auth.getSession())?.data.session;
@@ -84,9 +87,16 @@ export default function ExpensesPage() {
         <Link href="/" className="tap font-mono text-xs tracking-widest text-ink-2 uppercase">
           ExpenseWise
         </Link>
-        <Link href="/receipts" className="tap text-xs font-semibold text-carbon">
-          Capture
-        </Link>
+        <span className="flex items-baseline gap-4">
+          {featureOn(MILEAGE_FLAG) ? (
+            <Link href="/mileage/new" className="tap text-xs font-semibold text-carbon">
+              Add mileage
+            </Link>
+          ) : null}
+          <Link href="/receipts" className="tap text-xs font-semibold text-carbon">
+            Capture
+          </Link>
+        </span>
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <h1 className="text-2xl font-bold">Expenses</h1>
@@ -136,6 +146,7 @@ export default function ExpensesPage() {
                         {EXPENSE_STATUS[e.status].label}
                       </span>
                       {e.date ? ` · ${e.date}` : ''}
+                      {e.source === 'mileage' ? ' · Mileage' : ''}
                       {e.trip ? ` · ${e.trip.name}` : ''}
                       {e.matchesReceipt === false ? (
                         <span className="text-warn"> · differs from its receipt</span>

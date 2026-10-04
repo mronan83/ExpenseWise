@@ -27,7 +27,7 @@ import { withOrg, type Database, type Transaction } from './client.ts';
 import { listReportExpenses, type ReportExpenseRecord } from './expenses.ts';
 import { organizationTimeZone } from './organizations.ts';
 import { reopenChangedReports, reportsOfExpenses } from './report-touch.ts';
-import { expenses, members, organizations, reports, trips } from './schema.ts';
+import { expenses, members, mileageLogs, organizations, reports, trips } from './schema.ts';
 import { tallyTrips, tripsWithOwner, type TripRecord, type TripTally } from './trips.ts';
 
 const SCHEDULE: AuditEntry['actor'] = { type: 'system', id: 'report-schedule' };
@@ -705,6 +705,7 @@ export async function justifyExpense(
     .select({
       tripId: expenses.tripId,
       status: expenses.status,
+      source: expenses.source,
       justification: expenses.justification,
     })
     .from(expenses)
@@ -716,11 +717,22 @@ export async function justifyExpense(
     return { status: 'not_editable' };
   }
   if (cleaned.value === expense.justification) return { status: 'unchanged' };
+  // A drive's business purpose is its justification: they change together (ADR-0038).
+  const mileage = expense.source === 'mileage';
+  if (mileage && cleaned.value === null) {
+    return { status: 'invalid', message: 'A drive keeps its business purpose: change it instead.' };
+  }
   const actor = { type: 'user', id: actorUserId } as const;
   await tx
     .update(expenses)
     .set({ justification: cleaned.value, updatedAt: new Date() })
     .where(eq(expenses.id, expenseId));
+  if (mileage && cleaned.value !== null) {
+    await tx
+      .update(mileageLogs)
+      .set({ purpose: cleaned.value })
+      .where(eq(mileageLogs.expenseId, expenseId));
+  }
   await appendAuditEvent(tx, orgId, {
     actor,
     entityType: 'expense',

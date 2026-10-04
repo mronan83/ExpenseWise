@@ -86,7 +86,9 @@ export const editExpenseRoute = createRoute({
     },
     ...common,
     404: problem('No such expense in this organization.'),
-    409: problem('It can’t be edited now: its receipt is being read, or it is submitted or later.'),
+    409: problem(
+      'It can’t be edited now: its receipt is being read, or it is submitted or later; or it is a drive, edited as mileage.',
+    ),
     422: problem('A value is not valid; field names which.'),
   },
 });

@@ -10,6 +10,7 @@ export * from './home.ts';
 export * from './inbound.ts';
 export * from './members.ts';
 export * from './organizations.ts';
+export * from './mileage.ts';
 export * from './role-passwords.ts';
 export * from './outbox.ts';
 export * from './readiness.ts';

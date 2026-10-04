@@ -1006,6 +1006,6 @@ export const EXPENSE_STORIES: readonly Story[] = [
         checks: [],
       },
     ],
-    note: 'Business miles join with manual mileage (#17); what awaits reimbursement once payouts exist.',
+    note: 'Mileage is built (#17), and business miles join Home with #74; what awaits reimbursement once payouts exist.',
   },
 ];

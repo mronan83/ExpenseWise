@@ -760,6 +760,94 @@ export const SetExpenseTripSchema = z
   ])
   .openapi('SetExpenseTrip');
 
+// Mileage (FR-CAP-03, NFR-DAT-04, ADR-0038)
+
+export const MileageRateSchema = z
+  .object({
+    perUnit: z.string().openapi({
+      example: '0.725',
+      description: 'Currency units a mile, as a plain decimal: 72.5 cents is "0.725".',
+    }),
+    currency: z.string().openapi({ example: 'USD' }),
+    unit: z.enum(['mi', 'km']),
+    effectiveFrom: isoDate().openapi({ description: 'The day the rate took effect.' }),
+    source: z.string().openapi({
+      example: 'irs-business',
+      description: 'Where it came from: irs-business is the IRS standard rate for business use.',
+    }),
+  })
+  .openapi('MileageRate');
+
+export const MileageSchema = z
+  .object({
+    date: isoDate().openapi({ description: 'The day of the drive.' }),
+    destination: z.string().openapi({ example: 'IAH, George Bush Intercontinental' }),
+    purpose: z.string().openapi({
+      example: 'Drive to the airport for the Acme onsite',
+      description: 'Why the drive was for business; also the expense’s justification.',
+    }),
+    miles: z.string().openapi({ example: '38.4', description: 'A plain decimal.' }),
+    unit: z.enum(['mi', 'km']),
+    method: z.enum(['manual', 'route', 'gps']).openapi({ description: 'manual: typed in.' }),
+    rate: MileageRateSchema.openapi({
+      description:
+        'The rate in force on its date, copied on when it was logged and again when its date ' +
+        'or miles changed, so a later rate never alters it (NFR-DAT-04).',
+    }),
+  })
+  .openapi('Mileage');
+
+export const MileageEntrySchema = ExpenseDetailSchema.extend({
+  mileage: MileageSchema,
+}).openapi('MileageEntry');
+
+const mileageText = (description: string, example: string) =>
+  z.string().max(1000).openapi({ description, example });
+
+export const LogMileageSchema = z
+  .object({
+    date: z.string().max(40).openapi({
+      description: 'YYYY-MM-DD: today at the latest, and a day the rate is known for.',
+      example: '2026-09-22',
+    }),
+    destination: mileageText('Where you drove to. Up to 200 characters.', 'IAH'),
+    purpose: mileageText(
+      'Why the drive was for business. Up to 500 characters.',
+      'Drive to the airport for the Acme onsite',
+    ),
+    miles: z.string().max(40).openapi({
+      description: 'More than 0 and at most 1000, two decimal places at most.',
+      example: '38.4',
+    }),
+  })
+  .strict()
+  .openapi('LogMileage');
+
+export const EditMileageSchema = LogMileageSchema.partial()
+  .strict()
+  .refine((m) => Object.values(m).some((v) => v !== undefined), {
+    message: 'Change at least one field.',
+  })
+  .openapi('EditMileage');
+
+export const MileageQuoteQuerySchema = z.object({
+  date: z.string().max(40).openapi({ description: 'YYYY-MM-DD.', example: '2026-09-22' }),
+  miles: z.string().max(40).openapi({ description: 'A plain decimal.', example: '38.4' }),
+});
+
+export const MileageQuoteSchema = z
+  .object({
+    date: isoDate(),
+    miles: z.string().openapi({ example: '38.4' }),
+    rate: MileageRateSchema,
+    amount: z.object({
+      amountMinor: z.number().int().openapi({ example: 2784 }),
+      currency: z.string().openapi({ example: 'USD' }),
+      decimal: z.string().openapi({ example: '27.84' }),
+    }),
+  })
+  .openapi('MileageQuote');
+
 // Trips (FR-EXP-04, FR-INS-02, ADR-0023)
 
 const TripTotalSchema = z.object({

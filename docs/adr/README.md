@@ -41,6 +41,7 @@ Each ADR records one decision with its context, the alternatives considered and 
 | [0031](0031-duplicates-on-time-and-place.md) | Duplicates are matched on time and place, and told apart as exact or possible | D-33 | Accepted (matching and exact versus possible decided by product owner; 30-minute window and display recommended); amended by [ADR-0037](0037-organization-settings.md) | 2026-10-04 |
 | [0032](0032-features-switched-per-organization.md) | Every new feature ships switched off, and each organization's owner switches it on | D-34 | Accepted (flagging every feature decided by product owner, Q5; switch per organization recommended) | 2026-10-04 |
 | [0037](0037-organization-settings.md) | The organization's settings are kept on the organization, and its time zone sets the report schedule's days | D-39 | Accepted (details, who sets the window and its bounds decided by product owner, Q24; time zone, what a change touches and storage recommended, no objection yet) | 2026-10-04 |
+| [0038](0038-manual-mileage.md) | A drive is an expense, paid at the IRS business rate on its date | D-40 | Accepted (what is logged and the rate copied on from the blueprint; the IRS rate, the shape and the rules recommended, Q31) | 2026-10-04 |
 
 ## How to add an ADR
 

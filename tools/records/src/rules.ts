@@ -194,4 +194,36 @@ export const RULES: readonly Rule[] = [
     decided: { by: 'claude' },
     code: { file: 'packages/api/src/audit.ts', constant: 'AUDIT_PAGE_SIZE', literal: '50' },
   },
+  {
+    id: 'R-MILEAGE-RATE',
+    name: 'The rate a drive is paid at',
+    value:
+      'the IRS standard mileage rate for business use on its date: 72.5 cents a mile in 2026, 70 cents in 2025; known from 1 Jan 2022 to 31 Dec 2026',
+    decided: { by: 'claude', source: 'ADR-0038' },
+    code: {
+      file: 'packages/domain/src/mileage.ts',
+      constant: 'IRS_BUSINESS_RATES_THROUGH',
+      literal: "'2026-12-31'",
+    },
+    note: 'Nothing in the app held a rate, so Claude chose the IRS rate; Q31 asks whether you want your own. Each year’s rate is added when the IRS announces it in December; until then a drive dated after the last day known is refused rather than paid at the old rate.',
+  },
+  {
+    id: 'R-MILEAGE-MAX',
+    name: 'Most miles one drive claims',
+    value: '1,000 miles; a longer drive is logged day by day',
+    decided: { by: 'claude', source: 'ADR-0038' },
+    code: {
+      file: 'packages/domain/src/mileage.ts',
+      constant: 'MILEAGE_MAX_MILES',
+      literal: '1000',
+    },
+    note: 'A guard against an odometer reading typed as the distance.',
+  },
+  {
+    id: 'R-MILEAGE-AHEAD',
+    name: 'How far after today a drive can be dated',
+    value: '1 day after today in UTC, for a person ahead of UTC',
+    decided: { by: 'claude', source: 'ADR-0038' },
+    code: { file: 'packages/domain/src/mileage.ts', constant: 'MILEAGE_DAYS_AHEAD', literal: '1' },
+  },
 ];

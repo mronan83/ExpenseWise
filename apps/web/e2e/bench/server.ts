@@ -20,6 +20,7 @@ import {
   dbReceiptStore,
   dbHomeStore,
   dbOrganizationStore,
+  dbMileageStore,
   dbReportStore,
   dbTripStore,
   dbWorkspaceStore,
@@ -228,6 +229,7 @@ const app = createHttpApp({
   receipts: dbReceiptStore(db),
   expenses: dbExpenseStore(db),
   trips: dbTripStore(db),
+  mileage: dbMileageStore(db),
   home: dbHomeStore(db),
   reports: dbReportStore(db),
   audit: dbAuditStore(db),
@@ -458,6 +460,15 @@ await call('PUT', `/v1/expenses/${await expenseOf('lufthansa')}/trip`, { tripId:
 
 const expenses: Record<string, string> = {};
 for (const name of Object.keys(receipts)) expenses[name] = await expenseOf(name);
+// A drive to the airport on the Omaha trip's first day (FR-CAP-03): it files to the trip.
+expenses.mileage = (
+  await call<{ id: string }>('POST', '/v1/mileage', {
+    date: '2026-09-29',
+    destination: 'Eppley Airfield, Omaha',
+    purpose: 'Drive to the airport for the Q4 architect meeting',
+    miles: '38.4',
+  })
+).id;
 
 // Reports (#23): the hourly schedule puts the trips that have ended, and the local expenses,
 // on one open report; Chicago then moves to a report of its own, which closes.

@@ -396,6 +396,20 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none' },
     source: 'Roadmap increment 2',
     affects: ['FR-CAP-03', 'NFR-DAT-04', 'F-13'],
+    done: { date: '2026-10-04', in: 'PR #58' },
+  },
+  {
+    num: 74,
+    title: 'Business miles on Home',
+    type: 'Gap',
+    detail:
+      'Home’s month shows spend, expenses and trips, but not the miles driven for business, which FR-INS-01 asks for once mileage exists. Sum the person’s own drives dated this month and show the figure, opening their drives, behind the expenses.mileage flag. A drive already counts in this month’s spend like any expense.',
+    priority: 'P2',
+    effort: 'S',
+    severity: 'Low',
+    blocker: { kind: 'none' },
+    source: 'GAP-31',
+    affects: ['GAP-31', 'FR-INS-01', 'F-22'],
   },
   {
     num: 18,
@@ -1003,7 +1017,7 @@ export const BACKLOG: readonly BacklogItem[] = [
 export const SEQUENCING: readonly string[] = [
   'Your order, Oct 3: the Home dashboard (#28, done), then email-in (#19 and #58, done: attachments, then the email’s own text, first at your direction), then reports drafted after a trip (#23), which bring reports to finish to Home (Q15). Your order, Oct 3: possible duplicates (#60) first, then #23.',
   '#48 needs you, not code: it keeps a leaked key from erasing the backups; any time this month. #4 can wait: the OpenAI fallback reads receipts meanwhile, and #21 waits on it. #52 and #55 are unblocked by your answers.',
-  'Mileage (#17) adds business miles to Home.',
+  'Mileage is built (#17); #74 adds business miles to Home.',
   '#8 is security, not polish: it should land before #24, which needs it, and before anyone else is invited (#29). So should #50, which keeps each member’s records their own.',
   '#11–#15 are small, independent and each closes a gap; take them between features.',
 ];

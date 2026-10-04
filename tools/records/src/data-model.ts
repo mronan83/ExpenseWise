@@ -100,7 +100,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   expenses: {
     about:
-      'What is claimed: merchant, date, amount and currency, its status, and the trip it is filed to. It also carries when and where it was bought, as its receipt prints them: a local time with its time zone, worked out offline from the city, region and country, and the address (FR-INT-17, ADR-0030). It follows its receipt until a person edits it (ADR-0022) and files to trips by date until a person chooses (ADR-0023). One with a date and no trip is local: it carries a justification and points at its report itself, while one on a trip goes with the trip’s report (FR-EXP-14, ADR-0029). Home sums a member’s month through the member-and-date index, so it needs no index of its own.',
+      'What is claimed: merchant, date, amount and currency, its status, and the trip it is filed to. It also carries when and where it was bought, as its receipt prints them: a local time with its time zone, worked out offline from the city, region and country, and the address (FR-INT-17, ADR-0030). It follows its receipt until a person edits it (ADR-0022) and files to trips by date until a person chooses (ADR-0023). One with a date and no trip is local: it carries a justification and points at its report itself, while one on a trip goes with the trip’s report (FR-EXP-14, ADR-0029). A drive is an expense with source `mileage` and a mileage log (ADR-0038). Home sums a member’s month through the member-and-date index, so it needs no index of its own.',
   },
   trips: {
     about:
@@ -112,7 +112,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   mileage_logs: {
     about:
-      'The journey behind a mileage expense: method, distance, and the rate copied on when the claim was made (NFR-DAT-04). Built with manual mileage (#17).',
+      'The drive behind a mileage expense, one per expense: how it was logged (manual since PR #58; route and GPS later), its date, destination, business purpose and miles, and the rate copied on when it was logged, or when its date or miles last changed: per mile, currency, the day it took effect and its source, the IRS business rate for now (NFR-DAT-04, ADR-0038). Its expense holds miles × that rate, the destination as its merchant and the purpose as its justification, so trips, reports and totals need nothing of their own for it. Read only through its expense, with the expense’s member named.',
   },
   reports: {
     about:
@@ -261,9 +261,14 @@ export const RULES: readonly Rule[] = [
   {
     rule: 'A mileage claim keeps the rate it was made at.',
     mechanism:
-      'The rate, its currency, effective date and source are copied onto the log, so a later rate change never alters it.',
-    objects: ['mileage_logs_rate_currency_iso', 'mileage_logs_distance_nonnegative'],
-    refs: ['NFR-DAT-04'],
+      'The rate, its currency, effective date and source are copied onto the log, so a later rate change never alters it; one log per expense, on the expense’s own organization. That the expense claims miles × that rate, and that it is changed only as mileage, are rules in the domain (`applyMileageInput`) and the db code.',
+    objects: [
+      'mileage_logs_rate_currency_iso',
+      'mileage_logs_distance_nonnegative',
+      'mileage_logs_expense_key',
+      'mileage_logs_expense_fk',
+    ],
+    refs: ['NFR-DAT-04', 'FR-CAP-03', 'ADR-0038'],
   },
   {
     rule: 'An organization has one key per AI provider, and shows only its last four characters.',
