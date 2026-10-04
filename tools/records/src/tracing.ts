@@ -562,6 +562,10 @@ export const QUESTIONS: readonly Question[] = [
     why: 'Catching duplicates is a control: it stops one purchase being reimbursed twice. A person who can narrow the window on their own receipts can switch that control off for themselves, which an approver or auditor would not accept once there is a team. In a one-person organization the owner is you, so A changes nothing for you today.',
     recommendation: 'A.',
     affects: ['FR-INT-19', 'F-52'],
+    answer: {
+      date: '2026-10-04',
+      text: 'A: the organization’s owner sets it, for everyone. Make sure both of your email addresses have the owner role. A role belongs to the person, not the address: your first sign-in made you the owner of your organization, and your work address was linked to you as a second sign-in (Q17), so both carry it. #64 shows your role in Settings so you can confirm it with each address.',
+    },
   },
   {
     id: 'Q25',
@@ -570,6 +574,10 @@ export const QUESTIONS: readonly Question[] = [
     why: 'The reference rate needs no work from you and suits cash and local-currency charges, which have no conversion at all. But your card’s conversion, fees included, is what you actually paid (your answer to Q22), so A lets the statement win where you have it. Each conversion keeps its rate, the rate’s date and its source (NFR-DAT-02).',
     recommendation: 'A.',
     affects: ['FR-EXP-13', 'F-49', 'NFR-DAT-02'],
+    answer: {
+      date: '2026-10-04',
+      text: 'The rate at the time of purchase: the purchase date’s reference rate. Replacing it with the amount on your statement was not asked for, so it isn’t planned.',
+    },
   },
   {
     id: 'Q26',
@@ -578,11 +586,21 @@ export const QUESTIONS: readonly Question[] = [
     why: 'A separate document drifts from the code within weeks; these records already fail the build when they disagree with it, and the criteria would inherit that. Stories carry who and why; the Given/When/Then criteria carry the precision, and are what you would accept or reject.',
     recommendation: 'A.',
     affects: ['NFR-DEL-09', 'F-53', 'GAP-24'],
+    answer: {
+      date: '2026-10-04',
+      text: 'A, the user story format as laid out. Go back through the entire build and capture every user story and its acceptance criteria. Asked where they live: in these records (tools/records/src/stories), beside the requirements, and published as a fifth page, User stories & acceptance criteria, after each release; the traceability page links each requirement to its stories.',
+    },
   },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-04',
+    change:
+      'Your answers to Q24 to Q26. Q24: the organization’s owner sets the duplicate time window, for everyone, and both of your addresses must carry the owner role; #64 shows your role in Settings. Q25: an amount in another currency is converted at the purchase date’s reference rate; no statement override is planned. Q26: user stories with Given/When/Then acceptance criteria, in these records and on a fifth page, written for the entire build (#65). #62, #64 and #65 are no longer waiting on you.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-04',
     change:
