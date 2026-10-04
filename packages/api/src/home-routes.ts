@@ -1,10 +1,12 @@
 import type { Membership } from '@expensewise/db';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
+import type { CategoryStore } from './categories.ts';
 import { featureGate, type FeatureGate } from './features.ts';
 import type { HomeStore } from './home.ts';
 import type { ModelSettingsStore } from './model-settings.ts';
 import { homeView } from './home-views.ts';
+import { askForCoding } from './needs-you-views.ts';
 import { ProblemError } from './problem.ts';
 import { showConverted } from './reimbursement.ts';
 import { homeRoute } from './routes/home.ts';
@@ -18,6 +20,8 @@ export interface HomeRouteOptions {
   readonly features?: FeatureGate;
   /** Present where AI model settings can be on (FR-INT-16). */
   readonly modelSettings?: ModelSettingsStore;
+  /** Present where categories can be on, so Needs you asks for them (FR-EXP-11, Q27). */
+  readonly categories?: CategoryStore;
   readonly now?: () => Date;
 }
 
@@ -63,7 +67,9 @@ export function registerHomeRoutes(
     const who = await member(c.var.identity.userId);
     const day =
       c.req.valid('query').day ?? (options.now?.() ?? new Date()).toISOString().slice(0, 10);
-    const data = await stores().home.snapshot(who.orgId, who.memberId, day, NEEDS_LIMIT);
+    const data = await stores().home.snapshot(who.orgId, who.memberId, day, NEEDS_LIMIT, {
+      uncoded: await askForCoding(options, features, who.orgId),
+    });
     const settingsOn =
       options.modelSettings !== undefined &&
       (await features.isOn(who.orgId, 'receipts.model-settings'));

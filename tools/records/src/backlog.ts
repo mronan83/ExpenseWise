@@ -556,13 +556,14 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Your own mileage rate in Settings',
     type: 'Feature',
     detail:
-      'Your answer to Q28: drives are paid at the IRS business rate by default, and Settings lets you set your own rate a mile instead whenever you want, applying to drives dated from the day it takes effect. Each drive keeps the rate it was paid at (NFR-DAT-04).',
+      'Your answer to Q28: drives are paid at the IRS business rate by default, and Settings lets you set your own rate a mile instead whenever you want, applying to drives dated from the day it takes effect. Each drive keeps the rate it was paid at (NFR-DAT-04). Built in PR #59 behind `expenses.mileage`: Settings › Mileage shows the rate in force today and each change; an owner or finance admin sets your own rate from a day, in your home currency, or goes back to the IRS rate from a day, each change audited (US-MILE-11).',
     priority: 'P2',
     effort: 'S',
     severity: 'Low',
     blocker: { kind: 'none' },
     source: 'Q28',
     affects: ['FR-CAP-03', 'F-13', 'NFR-DAT-04'],
+    done: { date: '2026-10-04', in: 'PR #59' },
   },
 
   // P3: this quarter
@@ -797,10 +798,24 @@ export const BACKLOG: readonly BacklogItem[] = [
   },
   {
     num: 71,
-    title: 'List an expense without a category and type in Needs you, and hang rules on types',
+    title: 'List an expense without a category and type in Needs you',
     type: 'Gap',
     detail:
-      'Your answer to Q27: an expense without a category and type appears in Needs you, as well as saying so on its page and in the list; it holds nothing up. And as each rule is built, such as meal attendees, the mileage rate (#17) or a receipt needed above a limit, attach it to the type, as US-RPT-12 assumes.',
+      'Your answer to Q27: an expense without a category and type appears in Needs you, as well as saying so on its page and in the list; it holds nothing up. Built in PR #59 behind `expenses.categories`: each of your Ready expenses with neither is in Needs you, after local expenses needing a reason and before reports ready to close, with the suggestion when there is one, and Home counts it (US-RPT-18). Hanging rules on types moved to #78.',
+    priority: 'P3',
+    effort: 'M',
+    severity: 'Low',
+    blocker: { kind: 'none' },
+    source: 'GAP-28',
+    affects: ['FR-EXP-11', 'F-43'],
+    done: { date: '2026-10-04', in: 'PR #59' },
+  },
+  {
+    num: 78,
+    title: 'Hang each rule on its type as the rule is built',
+    type: 'Gap',
+    detail:
+      'As each rule is built, such as meal attendees or a receipt needed above a limit, attach it to the type, as US-RPT-12 assumes. The mileage rate is the organization’s, by your answer to Q28 (#77), so it stays off the type.',
     priority: 'P3',
     effort: 'M',
     severity: 'Low',

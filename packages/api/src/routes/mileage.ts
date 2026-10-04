@@ -41,8 +41,8 @@ export const quoteMileageRoute = createRoute({
   tags: ['Mileage'],
   summary: 'What a drive would pay, before it is logged',
   description:
-    'FR-CAP-03, ADR-0038. The rate in force on the date and miles × rate, rounded half-up to ' +
-    'the cent. Nothing is saved.',
+    'FR-CAP-03, ADR-0038. The rate in force on the date, the organization’s own where it set ' +
+    'one (Q28), and miles × rate, rounded half-up to the cent. Nothing is saved.',
   ...secured,
   request: { query: MileageQuoteQuerySchema },
   responses: {

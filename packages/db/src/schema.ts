@@ -1045,3 +1045,44 @@ export const orgAiModels = pgTable(
     check('org_ai_models_position_not_negative', sql`${t.position} >= 0`),
   ],
 );
+
+/**
+ * What an organization pays drives at, as its owner or a finance admin set it (Q28, #77): from
+ * each row's day, its own rate a mile, or, with no rate, the IRS business rate again. With no
+ * row on or before a drive's date, the IRS rate. A drive copies the rate it is paid at onto its
+ * mileage log, so changing these never alters one already logged (NFR-DAT-04).
+ */
+export const orgMileageRates = pgTable(
+  'org_mileage_rates',
+  {
+    id: id(),
+    orgId: orgId(),
+    /** The first travel date it applies to. One change per organization and day. */
+    effectiveFrom: date('effective_from', { mode: 'string' }).notNull(),
+    /** Its own rate a mile, in major units of `currency`; null for the IRS rate again. */
+    perMile: numeric('per_mile', { precision: 12, scale: 4 }),
+    /** The organization's home currency when it was set; null with no rate of its own. */
+    currency: char('currency', { length: 3 }),
+    setByMemberId: uuid('set_by_member_id').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('org_mileage_rates_org_id_id_key').on(t.orgId, t.id),
+    unique('org_mileage_rates_org_day_key').on(t.orgId, t.effectiveFrom),
+    foreignKey({
+      name: 'org_mileage_rates_set_by_fk',
+      columns: [t.orgId, t.setByMemberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    check(
+      'org_mileage_rates_currency_iso',
+      sql`${t.currency} IS NULL OR ${isoCurrency(t.currency)}`,
+    ),
+    check(
+      'org_mileage_rates_rate_and_currency',
+      sql`(${t.perMile} IS NULL) = (${t.currency} IS NULL)`,
+    ),
+    check('org_mileage_rates_rate_positive', sql`${t.perMile} IS NULL OR ${t.perMile} > 0`),
+  ],
+);

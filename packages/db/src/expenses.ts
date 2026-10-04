@@ -205,6 +205,30 @@ export function listUnjustifiedExpenses(
     .limit(limit);
 }
 
+/**
+ * A member's own expenses with no category and type yet, oldest first (FR-EXP-11, Q27). Only
+ * Ready ones: one being read or needing a look is in Needs you for that already, or soon will
+ * be, and a submitted one keeps what it went in with. One held as a possible duplicate waits
+ * for the person's decision on the pair, so it isn't asked for twice. Call inside withOrg().
+ */
+export function listUncodedExpenses(
+  tx: Transaction,
+  memberId: string,
+  limit: number,
+): Promise<ExpenseRecord[]> {
+  return withProof(tx)
+    .where(
+      and(
+        eq(expenses.memberId, memberId),
+        eq(expenses.status, 'ready'),
+        isNull(expenses.typeId),
+        sql`not ${heldAsDuplicate(expenses.id)}`,
+      ),
+    )
+    .orderBy(sql`${expenses.transactionDate} asc nulls last`, expenses.createdAt, expenses.id)
+    .limit(limit);
+}
+
 /** One expense, or undefined. Call inside withOrg(). */
 export async function getExpense(
   tx: Transaction,

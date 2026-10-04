@@ -17,13 +17,13 @@ export const GAPS: readonly Gap[] = [
   },
   {
     id: 'GAP-28',
-    title: 'An expense can go on without a category and type, and no rule hangs off a type.',
+    title: 'No rule hangs off a type yet.',
     affects: ['FR-EXP-11', 'F-43'],
     severity: 'Low',
     evidence:
-      'Built in PR #58 behind `expenses.categories`: an expense without a category and type says so on its page and in the list, but nothing refuses one, since nothing that works today may be blocked by a feature switched on. Types carry no rules yet, because attendees, a mileage rate and a receipt needed above a limit are not built as rules.',
-    fix: 'Refuse to submit a report while an expense on it lacks them, once reports are submitted, and attach each rule to the type as it is built (#71).',
-    backlog: 71,
+      'Built in PR #58 behind `expenses.categories`: an expense without a category and type says so on its page and in the list, and since PR #59 in Needs you too (#71); by your answer to Q27 it holds nothing up, so nothing refuses one. Types carry no rules yet, because attendees and a receipt needed above a limit are not built as rules; the mileage rate is the organization’s, by your answer to Q28.',
+    fix: 'Attach each rule to the type as it is built (#78).',
+    backlog: 78,
   },
   {
     id: 'GAP-29',

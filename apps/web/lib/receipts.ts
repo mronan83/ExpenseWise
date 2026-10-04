@@ -1,5 +1,6 @@
 import { isIsoDate, showDate } from '@expensewise/domain';
 import { api, ApiProblem } from './api';
+import type { ExpenseCategory } from './categories';
 import type { ExpenseAmount } from './expenses';
 import type { ReportSummary } from './reports';
 import { prepareReceiptFile, sha256Hex } from './receipt-file';
@@ -225,7 +226,10 @@ export interface ReportInboxItem {
   reason: { code: 'overdue' | 'closing_soon' | 'ready_to_close' };
 }
 
-/** A local expense that says nothing yet of why it was for business (FR-EXP-14). */
+/**
+ * An expense that needs the person: a local one that says nothing yet of why it was for
+ * business (FR-EXP-14), or, while categories are on, one with no category and type (Q27).
+ */
 export interface ExpenseInboxItem {
   kind: 'expense';
   expense: {
@@ -235,7 +239,9 @@ export interface ExpenseInboxItem {
     amount: ExpenseAmount | null;
     receiptId: string | null;
   };
-  reason: { code: 'justification' };
+  reason: { code: 'justification' | 'uncoded' };
+  /** uncoded: what is suggested for it, or missing when nothing is. */
+  category?: ExpenseCategory;
 }
 
 export type InboxItem = ReceiptInboxItem | ReportInboxItem | ExpenseInboxItem;

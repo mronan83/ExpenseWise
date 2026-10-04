@@ -1,16 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyMileageInput,
+  changeOn,
   IRS_BUSINESS_RATES,
+  IRS_ONLY,
   MILEAGE_MAX_MILES,
   mileageRate,
+  ownMileageRate,
   plainMiles,
   quoteMileage,
   rateDecimal,
   rateOn,
   reimburse,
   selectRate,
+  type MileagePolicy,
   type MileageValues,
+  type OwnMileageRate,
 } from './mileage.ts';
 
 const orgRate = (perUnit: string, effectiveFrom: string, unit: 'mi' | 'km' = 'mi') =>
@@ -189,5 +194,98 @@ describe('editing a drive before it is submitted', () => {
       { field: 'destination', from: 'IAH', to: 'Bush Intercontinental' },
     ]);
     expect(renamed.value.claim).toBeNull();
+  });
+});
+
+describe('the organization’s own rate a mile (Q28, #77)', () => {
+  const own = (effectiveFrom: string, perMile: string | null, currency = 'USD') => {
+    const change = ownMileageRate({ effectiveFrom, perMile }, currency);
+    if (!change.ok) throw new Error(change.error.message);
+    return change.value;
+  };
+  const policy = (...changes: OwnMileageRate[]): MileagePolicy => ({
+    own: changes,
+    irs: IRS_BUSINESS_RATES,
+  });
+  const on = (date: string, rates: MileagePolicy) => {
+    const rate = rateOn(date, rates);
+    if (!rate.ok) throw new Error(rate.error.message);
+    return rate.value;
+  };
+
+  it('pays its own rate from the day it takes effect, and the IRS rate before it', () => {
+    const rates = policy(own('2026-09-01', '0.65'));
+    expect(on('2026-08-31', rates)).toMatchObject({ perUnit: '0.725', source: 'irs-business' });
+    expect(on('2026-09-01', rates)).toEqual({
+      currency: 'USD',
+      perUnit: '0.65',
+      unit: 'mi',
+      effectiveFrom: '2026-09-01',
+      source: 'organization',
+    });
+    expect(on('2026-10-04', rates)).toMatchObject({ perUnit: '0.65', source: 'organization' });
+    // The latest change on or before the day decides, in whatever order they come.
+    const two = policy(own('2026-10-01', '0.60'), own('2026-09-01', '0.65'));
+    expect(on('2026-09-30', two).perUnit).toBe('0.65');
+    expect(on('2026-10-01', two).perUnit).toBe('0.60');
+    expect(changeOn(two, '2026-08-31')).toBeUndefined();
+    expect(on('2026-10-04', IRS_ONLY).source).toBe('irs-business');
+  });
+
+  it('goes back to the IRS rate from the day it switches back', () => {
+    const rates = policy(own('2026-03-01', '0.65'), own('2026-06-01', null));
+    expect(on('2026-05-31', rates)).toMatchObject({ perUnit: '0.65', source: 'organization' });
+    expect(on('2026-06-01', rates)).toMatchObject({
+      perUnit: '0.725',
+      effectiveFrom: '2026-01-01',
+      source: 'irs-business',
+    });
+    expect(changeOn(rates, '2026-06-01')).toEqual({ effectiveFrom: '2026-06-01', rate: null });
+  });
+
+  it('pays its own rate in 2027, which has no last day known, and the IRS rate there only once known', () => {
+    const rates = policy(own('2026-12-01', '0.66'));
+    expect(on('2027-03-15', rates)).toMatchObject({ perUnit: '0.66', source: 'organization' });
+    const back = policy(own('2026-12-01', '0.66'), own('2027-01-01', null));
+    const later = rateOn('2027-03-15', back);
+    expect(later.ok).toBe(false);
+    if (!later.ok)
+      expect(later.error).toMatchObject({ field: 'date', message: /after 2026-12-31/ });
+  });
+
+  it('logs, quotes and prices a drive again at its own rate, in its currency, from the policy', () => {
+    const rates = policy(own('2026-09-01', '0.40', 'EUR'));
+    const logged = applyMileageInput(null, drive, TODAY, rates);
+    if (!logged.ok) throw new Error(logged.error.message);
+    // 38.4 × €0.40 = €15.36
+    expect(logged.value.claim?.amount).toEqual({ amountMinor: 1536, currency: 'EUR' });
+    expect(logged.value.claim?.rate).toMatchObject({ source: 'organization', perUnit: '0.40' });
+    const quoted = quoteMileage({ date: '2027-01-04', miles: '10' }, '2027-01-04', rates);
+    expect(quoted.ok && quoted.value.amount).toEqual({ amountMinor: 400, currency: 'EUR' });
+    const moved = applyMileageInput({ ...drive }, { date: '2026-08-31' }, TODAY, rates);
+    expect(moved.ok && moved.value.claim?.rate.source).toBe('irs-business');
+  });
+
+  it('takes a rate a mile to four places in the home currency, and IRS again as none', () => {
+    expect(own('2026-11-01', ' 0.655 ', 'EUR').rate).toMatchObject({
+      perUnit: '0.655',
+      currency: 'EUR',
+      effectiveFrom: '2026-11-01',
+    });
+    expect(own('2026-11-01', '00.5000').rate?.perUnit).toBe('0.5000');
+    expect(own('2026-11-01', null)).toEqual({ effectiveFrom: '2026-11-01', rate: null });
+  });
+
+  it.each<[string, string | null, string, RegExp]>([
+    ['2026-02-30', '0.65', 'effectiveFrom', /YYYY-MM-DD/],
+    ['2026-11-01', '0', 'perMile', /more than zero/],
+    ['2026-11-01', '-0.65', 'perMile', /as a number/],
+    ['2026-11-01', '0.65555', 'perMile', /4 decimal places/],
+    ['2026-11-01', '1e3', 'perMile', /as a number/],
+    ['2026-11-01', '123456789', 'perMile', /as a number/],
+  ])('refuses a change from %s at %s, naming the field %s', (from, perMile, field, message) => {
+    const change = ownMileageRate({ effectiveFrom: from, perMile }, 'USD');
+    expect(change.ok).toBe(false);
+    if (!change.ok) expect(change.error).toMatchObject({ field, message });
   });
 });

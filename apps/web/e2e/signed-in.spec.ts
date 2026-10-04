@@ -38,6 +38,14 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
   ['Home during a trip', () => '/', [], '2026-10-21T12:00:00'],
   ['Home with a trip coming up', () => '/', [], '2026-11-01T12:00:00'],
   ['Home with everything in Needs you open', () => '/', [press('Show all')]],
+  [
+    'an expense with no category and type, in Needs you',
+    () => '/',
+    [
+      press('Show all'),
+      (page) => expect(page.getByText(/^Needs a category and type/).first()).toBeVisible(),
+    ],
+  ],
   ['Receipts', () => '/receipts', []],
   ['a Ready receipt', (s) => `/receipts/${s.receipts.coffee}`, []],
   [
@@ -165,6 +173,17 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
   ],
   ['an expense with its category chosen', (s) => `/expenses/${s.expenses.folio}`, []],
   ['an expense with no category', (s) => `/expenses/${s.expenses.dinner}`, []],
+  ['mileage settings, with the rate a mile and its changes', () => '/settings/mileage', []],
+  [
+    'setting your own rate a mile',
+    () => '/settings/mileage',
+    [fill('From', '2026-12-01'), fill('Rate a mile (USD)', '0.62')],
+  ],
+  [
+    'going back to the IRS rate a mile',
+    () => '/settings/mileage',
+    [(page) => page.getByLabel('The IRS business rate').check()],
+  ],
   ['AI model settings', () => '/settings/ai-models', []],
   ['reimbursement currency settings', () => '/settings/currency', []],
   ['people settings, with a member and a link not used yet', () => '/settings/people', []],

@@ -1561,14 +1561,18 @@
               "code": {
                 "type": "string",
                 "enum": [
-                  "justification"
+                  "justification",
+                  "uncoded"
                 ],
-                "description": "justification: a local expense says nothing yet of why (FR-EXP-14)."
+                "description": "justification: a local expense says nothing yet of why (FR-EXP-14). uncoded: it has no category and type yet, while categories are on (FR-EXP-11, Q27)."
               }
             },
             "required": [
               "code"
             ]
+          },
+          "category": {
+            "$ref": "#/components/schemas/ExpenseCategory"
           }
         },
         "required": [
@@ -1576,6 +1580,85 @@
           "expense",
           "reason"
         ]
+      },
+      "ExpenseCategory": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "confirmed",
+              "suggested",
+              "missing"
+            ],
+            "description": "confirmed: a person chose them. suggested: worked out from what it shows, until a person confirms it. missing: neither, so the expense says it needs them."
+          },
+          "category": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "active": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "active"
+            ]
+          },
+          "type": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "active": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "active"
+            ]
+          },
+          "basis": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "history",
+              "keywords",
+              null
+            ],
+            "description": "For a suggestion: history, what its owner last chose for the same merchant; keywords, what its merchant or reading names. Rules, never a model (ADR-0036)."
+          }
+        },
+        "required": [
+          "state",
+          "category",
+          "type",
+          "basis"
+        ],
+        "description": "uncoded: what is suggested for it, or missing when nothing is."
       },
       "ReceiptDetail": {
         "allOf": [
@@ -2980,84 +3063,6 @@
           "updatedAt"
         ]
       },
-      "ExpenseCategory": {
-        "type": "object",
-        "properties": {
-          "state": {
-            "type": "string",
-            "enum": [
-              "confirmed",
-              "suggested",
-              "missing"
-            ],
-            "description": "confirmed: a person chose them. suggested: worked out from what it shows, until a person confirms it. missing: neither, so the expense says it needs them."
-          },
-          "category": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "properties": {
-              "id": {
-                "type": "string",
-                "format": "uuid"
-              },
-              "name": {
-                "type": "string"
-              },
-              "active": {
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "id",
-              "name",
-              "active"
-            ]
-          },
-          "type": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "properties": {
-              "id": {
-                "type": "string",
-                "format": "uuid"
-              },
-              "name": {
-                "type": "string"
-              },
-              "active": {
-                "type": "boolean"
-              }
-            },
-            "required": [
-              "id",
-              "name",
-              "active"
-            ]
-          },
-          "basis": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "enum": [
-              "history",
-              "keywords",
-              null
-            ],
-            "description": "For a suggestion: history, what its owner last chose for the same merchant; keywords, what its merchant or reading names. Rules, never a model (ADR-0036)."
-          }
-        },
-        "required": [
-          "state",
-          "category",
-          "type",
-          "basis"
-        ]
-      },
       "ExpenseDetail": {
         "allOf": [
           {
@@ -3675,7 +3680,7 @@
           "source": {
             "type": "string",
             "example": "irs-business",
-            "description": "Where it came from: irs-business is the IRS standard rate for business use."
+            "description": "Where it came from: irs-business is the IRS standard rate for business use; organization, the organization’s own rate a mile (Q28)."
           }
         },
         "required": [
@@ -3828,6 +3833,147 @@
             "example": "38.4"
           }
         },
+        "additionalProperties": false
+      },
+      "MileageRates": {
+        "type": "object",
+        "properties": {
+          "today": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-11-01",
+            "description": "The day the rate in force is for: today in UTC."
+          },
+          "inForce": {
+            "type": "object",
+            "properties": {
+              "rate": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/MileageRate"
+                  },
+                  {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "description": "What a drive dated today is paid at, and where that rate comes from."
+                  }
+                ]
+              },
+              "problem": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "Why there is none: the IRS rate for today isn’t known yet."
+              }
+            },
+            "required": [
+              "rate",
+              "problem"
+            ],
+            "description": "The rate in force today."
+          },
+          "changes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MileageRateChange"
+            },
+            "description": "Each day the organization changed the rate from, the latest first."
+          },
+          "homeCurrency": {
+            "type": "string",
+            "example": "USD",
+            "description": "What a rate of the organization’s own is set in."
+          },
+          "irsThrough": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-11-01",
+            "description": "The last day ExpenseWise knows the IRS rate for."
+          },
+          "canChange": {
+            "type": "boolean",
+            "description": "Whether the caller may change it: owners and finance admins."
+          }
+        },
+        "required": [
+          "today",
+          "inForce",
+          "changes",
+          "homeCurrency",
+          "irsThrough",
+          "canChange"
+        ]
+      },
+      "MileageRateChange": {
+        "type": "object",
+        "properties": {
+          "effectiveFrom": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-11-01",
+            "description": "The first travel date it applies to."
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "organization",
+              "irs-business"
+            ],
+            "description": "organization: its own rate a mile. irs-business: the IRS rate again."
+          },
+          "perMile": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "0.65",
+            "description": "Its own rate a mile, as a plain decimal; null for the IRS rate."
+          },
+          "currency": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "USD",
+            "description": "The home currency it was set in; null for the IRS rate."
+          },
+          "setBy": {
+            "type": "string",
+            "description": "Who set it last."
+          },
+          "setAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "effectiveFrom",
+          "source",
+          "perMile",
+          "currency",
+          "setBy",
+          "setAt"
+        ]
+      },
+      "SetMileageRate": {
+        "type": "object",
+        "properties": {
+          "perMile": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 40,
+            "example": "0.65",
+            "description": "The organization’s own rate a mile in its home currency: more than 0, 4 decimal places at most. null goes back to the IRS business rate."
+          }
+        },
+        "required": [
+          "perMile"
+        ],
         "additionalProperties": false
       },
       "Home": {
@@ -8244,7 +8390,7 @@
           "Mileage"
         ],
         "summary": "What a drive would pay, before it is logged",
-        "description": "FR-CAP-03, ADR-0038. The rate in force on the date and miles × rate, rounded half-up to the cent. Nothing is saved.",
+        "description": "FR-CAP-03, ADR-0038. The rate in force on the date, the organization’s own where it set one (Q28), and miles × rate, rounded half-up to the cent. Nothing is saved.",
         "security": [
           {
             "bearerAuth": []
@@ -8596,6 +8742,182 @@
           },
           "422": {
             "description": "A value is not valid; field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/mileage-rates": {
+      "get": {
+        "tags": [
+          "Mileage"
+        ],
+        "summary": "The rate a mile drives are paid at, and its changes",
+        "description": "Q28, NFR-DAT-04. The rate in force today and where it comes from, the IRS business rate or the organization’s own, and each day the organization changed it from. Every member reads it.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The rate in force today, and the changes, the latest day first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MileageRates"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Mileage is switched off for this organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/settings/mileage-rates/{effectiveFrom}": {
+      "put": {
+        "tags": [
+          "Mileage"
+        ],
+        "summary": "Set the rate a mile from a day, or go back to the IRS rate",
+        "description": "Q28, NFR-DAT-04. Owners and finance admins only. From the day given, drives are paid at the organization’s own rate a mile in its home currency, or with perMile null at the IRS business rate again. Setting a day again replaces its change. Drives already logged keep the rate they were paid at; each change is in the audit trail.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "example": "2026-11-01",
+              "description": "YYYY-MM-DD: the first travel date the change applies to."
+            },
+            "required": true,
+            "description": "YYYY-MM-DD: the first travel date the change applies to.",
+            "name": "effectiveFrom",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetMileageRate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The rate in force today, and the changes, with this one.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MileageRates"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The body is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or is not an owner or finance admin (forbidden_role).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Mileage is switched off for this organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The day or the rate is not valid; field names which.",
             "content": {
               "application/problem+json": {
                 "schema": {

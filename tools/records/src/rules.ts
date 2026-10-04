@@ -231,14 +231,22 @@ export const RULES: readonly Rule[] = [
     id: 'R-MILEAGE-RATE',
     name: 'The rate a drive is paid at',
     value:
-      'the IRS standard mileage rate for business use on its date: 72.5 cents a mile in 2026, 70 cents in 2025; known from 1 Jan 2022 to 31 Dec 2026',
+      'the organization’s own rate a mile from the day it takes effect, where it set one; otherwise the IRS standard mileage rate for business use on its date: 72.5 cents a mile in 2026, 70 cents in 2025; known from 1 Jan 2022 to 31 Dec 2026',
     decided: { by: 'owner', source: 'Q28' },
     code: {
       file: 'packages/domain/src/mileage.ts',
       constant: 'IRS_BUSINESS_RATES_THROUGH',
       literal: "'2026-12-31'",
     },
-    note: 'Your answer to Q28: the IRS rate by default, and your own in Settings when you want it (#77). Each year’s rate is added when the IRS announces it in December (#76 for 2027); until then a drive dated after the last day known is refused rather than paid at the old rate.',
+    note: 'Your answer to Q28: the IRS rate by default, and your own in Settings when you want it, built in PR #59 (#77). The latest change on or before a drive’s date decides: your own rate, which has no last day known, or the IRS rate again. Each year’s IRS rate is added when the IRS announces it in December (#76 for 2027); until then a drive paid at the IRS rate and dated after the last day known is refused rather than paid at the old rate.',
+  },
+  {
+    id: 'R-MILEAGE-OWN-RATE',
+    name: 'What an organization’s own rate a mile can be',
+    value: 'more than zero, to at most 4 decimal places, in the organization’s home currency',
+    decided: { by: 'claude', source: 'ADR-0038' },
+    code: { file: 'packages/domain/src/mileage.ts', constant: 'OWN_RATE_PLACES', literal: '4' },
+    note: 'Four places as the rate a drive copies on keeps them, enough for a tenth of a cent, as the IRS sets its rate. Refusing zero is Claude’s: an organization that pays nothing for miles leaves mileage switched off.',
   },
   {
     id: 'R-MILEAGE-MAX',
