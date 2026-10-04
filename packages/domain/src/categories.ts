@@ -158,7 +158,7 @@ const MILEAGE_RULE: KeywordRule = { type: 'mileage', category: 'travel' };
 export const KEYWORD_RULES: readonly KeywordRule[] = [
   { type: 'airfare', category: 'travel', documentTypes: ['airline_ticket'] },
   { type: 'lodging', category: 'travel', documentTypes: ['hotel_folio'] },
-  { type: 'ground_transport', category: 'travel', documentTypes: ['ride_receipt'] },
+  { type: 'ground_transport', category: 'travel', documentTypes: ['ride_receipt', 'rail_ticket'] },
   {
     type: 'lodging',
     category: 'travel',

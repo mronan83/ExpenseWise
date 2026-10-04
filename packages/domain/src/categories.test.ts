@@ -202,6 +202,9 @@ describe('suggesting a category and type', () => {
     expect(suggestCategory(expense({ documentType: 'ride_receipt' }), [], starter)).toMatchObject({
       typeId: 'ground_transport',
     });
+    expect(suggestCategory(expense({ documentType: 'rail_ticket' }), [], starter)).toMatchObject({
+      typeId: 'ground_transport',
+    });
   });
 
   it.each([

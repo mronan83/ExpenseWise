@@ -1043,7 +1043,7 @@ export const EXPENSE_STORIES: readonly Story[] = [
       },
       {
         id: 'AC3',
-        given: 'a receipt read as an airline ticket, a hotel folio or a ride receipt',
+        given: 'a receipt read as an airline ticket, a hotel folio, a ride receipt or a rail ticket',
         when: 'a suggestion is worked out',
         then: 'what the reading says the document is decides it, before any word of the merchant’s name',
         decided: { by: 'claude', source: 'ADR-0036' },
