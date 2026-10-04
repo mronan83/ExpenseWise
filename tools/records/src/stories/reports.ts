@@ -117,7 +117,8 @@ export const REPORT_STORIES: readonly Story[] = [
     title: 'Claim spend on no trip, saying why it was for business',
     as: 'Riley, a solo professional who self-attests',
     want: 'an expense on no trip to go on my report as a local expense, once I have said why it was for business',
-    soThat: 'everyday business spend is reimbursed too, with the reason an approver or auditor will ask for',
+    soThat:
+      'everyday business spend is reimbursed too, with the reason an approver or auditor will ask for',
     feature: 'F-50',
     requirements: ['FR-EXP-14', 'FR-EXP-05'],
     status: 'Partial',
@@ -131,13 +132,14 @@ export const REPORT_STORIES: readonly Story[] = [
         checks: [
           'db/reports.int › puts later trips and local expenses on the report already open',
           'db/reports.int › refuses a justification on a trip’s expense, or one too long',
+          'domain/reports › is a local expense needing review, or with no justification',
         ],
       },
       {
         id: 'AC2',
         given: 'a local expense',
         when: '24 hours have passed after its date',
-        then: 'it joins my open report as a local expense; one with no date yet joins no report until it has one',
+        then: 'it joins my open report as a local expense; one with no date yet joins none',
         decided: ADR29,
         checks: [
           'db/reports.int › puts later trips and local expenses on the report already open',
@@ -149,7 +151,7 @@ export const REPORT_STORIES: readonly Story[] = [
         id: 'AC3',
         given: 'a local expense',
         when: 'I open it',
-        then: 'Why it was for business asks for a reason, and Save the reason keeps what I write, trimmed',
+        then: 'its section Why it was for business asks for a reason, and Save the reason keeps what I write, trimmed',
         decided: { by: 'owner', source: 'Q21' },
         checks: [
           'api/reports › refuses to close while anything needs a justification, then closes and reopens',
@@ -199,7 +201,9 @@ export const REPORT_STORIES: readonly Story[] = [
         when: 'I open Needs you',
         then: 'it is listed as Local, asking me to add a reason',
         decided: ADR29,
-        checks: ['api/reports › asks for a justification, and says when a report is ready to close'],
+        checks: [
+          'api/reports › asks for a justification, and says when a report is ready to close',
+        ],
       },
       {
         id: 'AC8',
@@ -324,7 +328,9 @@ export const REPORT_STORIES: readonly Story[] = [
         when: 'anyone looks at the audit trail',
         then: 'it shows each step in order: opened, each trip and local expense added, closed, reopened',
         decided: ADR29,
-        checks: ['db/reports.int › refuses while anything needs review or a justification, then closes'],
+        checks: [
+          'db/reports.int › refuses while anything needs review or a justification, then closes',
+        ],
       },
     ],
     note: 'Submitting arrives with approval (#24); until then the report’s lifecycle refuses it from any state but closed (AC4). That an expense still being read or a possible duplicate holds a report open, the 7 days a reopened report gets, and reopening on any change are Claude’s (ADR-0029), yours to overturn.',
@@ -334,7 +340,8 @@ export const REPORT_STORIES: readonly Story[] = [
     title: 'My report closes itself on day 28',
     as: 'Alex, who travels for work',
     want: 'a report to close itself 28 days after it opens, with whatever is ready, and to be warned before then if something still needs me',
-    soThat: 'finished trips are reimbursed on time, and one unfinished receipt never holds up the rest',
+    soThat:
+      'finished trips are reimbursed on time, and one unfinished receipt never holds up the rest',
     feature: 'F-17',
     requirements: ['FR-EXP-12'],
     status: 'Partial',
@@ -353,9 +360,10 @@ export const REPORT_STORIES: readonly Story[] = [
       },
       {
         id: 'AC2',
-        given: 'day 28 has come, with one trip on my report still needing a look and the rest ready',
+        given:
+          'day 28 has come, with one trip on my report still needing a look and the rest ready',
         when: 'the schedule reaches it',
-        then: 'the report closes with what is ready, without being submitted, and the trip still needing a look moves to my next open report, or to a new one with its own 28 days',
+        then: 'the report closes with what is ready, without being submitted, and the trip still needing a look moves to the next report, opened for it if need be, with its own 28 days',
         decided: { by: 'owner', source: 'Q20' },
         checks: [
           'domain/reports › closes with what is ready and moves the rest on',
@@ -379,7 +387,7 @@ export const REPORT_STORIES: readonly Story[] = [
         id: 'AC4',
         given: 'an open report left holding nothing, as when its only expense moves off its trip',
         when: 'the schedule runs',
-        then: 'the report is dropped, whatever its day, and an empty trip comes off it to join again once something is on it',
+        then: 'the report is dropped, whatever its day, and the empty trip comes off it',
         decided: ADR29,
         checks: [
           'domain/reports › waits, overdue, when nothing is ready, and drops a report holding nothing',
@@ -394,7 +402,6 @@ export const REPORT_STORIES: readonly Story[] = [
         decided: OCT4,
         checks: [
           'api/reports › puts a report first in its last week with something left, and when overdue',
-          'e2e/signed-in',
         ],
       },
       {
@@ -426,7 +433,8 @@ export const REPORT_STORIES: readonly Story[] = [
     title: 'Move a trip to another report',
     as: 'Alex, who travels for work',
     want: 'to move a trip, or a local expense, to another open report or a new one',
-    soThat: 'a trip still needing a look doesn’t hold up the others, and each report holds what I want claimed together',
+    soThat:
+      'a trip still needing a look doesn’t hold up the others, and each report holds what I want claimed together',
     feature: 'F-17',
     requirements: ['FR-EXP-05'],
     status: 'Partial',
@@ -456,7 +464,7 @@ export const REPORT_STORIES: readonly Story[] = [
       },
       {
         id: 'AC3',
-        given: 'the report it is on, or the one I pick, is closed or submitted',
+        given: 'the report it is on, or the one I pick, is closed',
         when: 'I try to move it',
         then: 'it is refused: reopen it first',
         decided: ADR29,
@@ -513,7 +521,7 @@ export const REPORT_STORIES: readonly Story[] = [
         id: 'AC1',
         given: 'I have open and closed reports',
         when: 'I open Reports',
-        then: 'they are listed under Open and Closed, newest first, each with its trips and local expenses, its totals, when it closes or closed, and how many things need me',
+        then: 'they are listed under Open and Closed, each with its trips and local expenses, its totals, when it closes or closed, and how many things need me',
         decided: ADR29,
         checks: [
           'api/reports › lists the person’s reports with their trips, totals per currency and what holds them',
@@ -523,7 +531,8 @@ export const REPORT_STORIES: readonly Story[] = [
       },
       {
         id: 'AC2',
-        given: 'a report with amounts in more than one currency, or a local expense held as a possible duplicate',
+        given:
+          'a report with amounts in more than one currency, or a local expense held as a possible duplicate',
         when: 'its totals are shown',
         then: 'there is one total per currency, never converted until #62, and the possible duplicate counts in none',
         decided: ADR29,
@@ -545,7 +554,8 @@ export const REPORT_STORIES: readonly Story[] = [
       },
       {
         id: 'AC4',
-        given: 'a report overdue or in its last week with something left, a local expense needing a reason, and a report ready to close',
+        given:
+          'a report overdue or in its last week with something left, a local expense needing a reason, and a report ready to close',
         when: 'I open Needs you',
         then: 'the overdue or closing report comes first, and the report ready to close comes after the local expense',
         decided: ADR29,
@@ -777,7 +787,8 @@ export const REPORT_STORIES: readonly Story[] = [
       },
       {
         id: 'AC3',
-        given: 'an expense already in my reimbursement currency, as when my card converted it at purchase',
+        given:
+          'an expense already in my reimbursement currency, as when my card converted it at purchase',
         when: 'the report is totalled',
         then: 'it counts as it is, with no rate applied',
         decided: { by: 'owner', source: 'Q22' },
