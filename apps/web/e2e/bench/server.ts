@@ -21,6 +21,7 @@ import {
   dbReportStore,
   dbTripStore,
   dbWorkspaceStore,
+  ORG_FEATURE_KEYS,
 } from '@expensewise/api';
 import { createDatabase, runReportSchedule, setRolePasswords } from '@expensewise/db';
 import { runMigrations } from '@expensewise/db/migrate';
@@ -252,6 +253,12 @@ const { organization } = await call<{ organization: { id: string } }>(
   '/v1/me/organization',
 );
 await call('PUT', '/v1/settings/ai-providers/anthropic', { apiKey: 'sk-ant-bench-0000-wxyz' });
+// Every feature is switched on, as the owner would after checking it (ADR-0032), so each
+// flagged screen is checked here too.
+for (const key of ORG_FEATURE_KEYS) {
+  await call('PUT', `/v1/settings/features/${key}`, { enabled: true });
+}
+
 const trip = (body: Record<string, string>) => call<{ id: string }>('POST', '/v1/trips', body);
 const trips = {
   omaha: await trip({
