@@ -232,13 +232,13 @@ export const RULES: readonly Rule[] = [
     name: 'The rate a drive is paid at',
     value:
       'the IRS standard mileage rate for business use on its date: 72.5 cents a mile in 2026, 70 cents in 2025; known from 1 Jan 2022 to 31 Dec 2026',
-    decided: { by: 'claude', source: 'ADR-0038' },
+    decided: { by: 'owner', source: 'Q28' },
     code: {
       file: 'packages/domain/src/mileage.ts',
       constant: 'IRS_BUSINESS_RATES_THROUGH',
       literal: "'2026-12-31'",
     },
-    note: 'Nothing in the app held a rate, so Claude chose the IRS rate; Q28 asks whether you want your own. Each year’s rate is added when the IRS announces it in December (#76 for 2027); until then a drive dated after the last day known is refused rather than paid at the old rate.',
+    note: 'Your answer to Q28: the IRS rate by default, and your own in Settings when you want it (#77). Each year’s rate is added when the IRS announces it in December (#76 for 2027); until then a drive dated after the last day known is refused rather than paid at the old rate.',
   },
   {
     id: 'R-MILEAGE-MAX',

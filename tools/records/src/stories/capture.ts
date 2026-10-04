@@ -539,7 +539,7 @@ export const CAPTURE_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Add mileage is on the Expenses page. Miles only: kilometres and routes come with route-based mileage (#20). Which rate it pays is Claude’s choice, put to you in Q28.',
+    note: 'Add mileage is on the Expenses page. Miles only: kilometres and routes come with route-based mileage (#20). It pays the IRS business rate by default, as your answer to Q28 confirms; your own rate in Settings comes with #77.',
   },
   {
     id: 'US-MILE-02',

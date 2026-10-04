@@ -2,7 +2,7 @@
 
 Once an organization switches on AI model settings, its owners and finance admins switch each AI model on or off and choose exactly one primary. The primary reads every receipt. A model that is on but not primary is a back-up, which reads only when the models before it produced no reading, in the order set. A receipt is **Ready** on one confident reading whose sums and date pass, not on two readings that agree. With every model off, a receipt is filed for a person to fill in. The operator can stop any model for every organization at once.
 
-- **Status:** Accepted (switches, primary, back-ups, every model off and the operator switch decided by product owner, Oct 3, Q8 and Q11; the Ready rule, the defaults and the mechanism recommended, no objection yet)
+- **Status:** Accepted (switches, primary, back-ups, every model off and the operator switch decided by product owner, Oct 3, Q8 and Q11; the defaults, with all five models offered and the two larger Claude models off, confirmed by product owner, Oct 4, Q34; the Ready rule and the mechanism recommended, no objection yet)
 - **Date:** 2026-10-04
 - **Deciders:** Product owner (FR-INT-16, Q8, Q11); Claude (principal architect), for the Ready rule, the defaults and the design
 - **Decision register:** D-35

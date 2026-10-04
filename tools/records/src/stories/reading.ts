@@ -1336,8 +1336,8 @@ export const READING_STORIES: readonly Story[] = [
         id: 'AC11',
         given: 'nobody has saved a choice yet',
         when: 'a receipt is read',
-        then: 'Sonnet 5.5 is primary, then Haiku 4.5 and GPT-5.6 Luna, each while its key is there; Opus 5.5 and Fable 5.1 are off',
-        decided: MODEL_SETTINGS,
+        then: 'Sonnet 5.5 is primary, then Haiku 4.5 and GPT-5.6 Luna, each while its key is there; Opus 5.5 and Fable 5.1 are offered but off',
+        decided: { by: 'owner', source: 'Q34' },
         rules: ['R-MODEL-DEFAULTS'],
         checks: [
           'extraction/model-settings › starts with Sonnet 5.5 primary, then Haiku 4.5 and GPT-5.6 Luna, the rest off',

@@ -460,14 +460,11 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Route-based mileage',
     type: 'Feature',
     detail:
-      'Start, stops and end, with a round trip and saved places. Researched Oct 4 at your request for a free, open-source option: OpenRouteService (HeiGIT, on OpenStreetMap) has a free key with no card that does both address lookup (1,000 a day) and driving distance through up to 50 ordered stops (2,000 a day), with commercial use allowed and attribution required; one call covers a whole trip. Google Routes needs billing enabled, so it is out. GraphHopper’s free plan allows only 5 points and no commercial use; Mapbox won’t let free lookups be stored, which saved places need; self-hosting a US map needs far more memory than any free host. Fallbacks: manual miles (#17), and for lookups the US Census geocoder or Nominatim on submit only. Each claim freezes its points, the distance in metres, the provider and when it was routed, and is never re-routed. OpenRouteService’s terms bar sending personal data, and a home address arguably is, so only addresses and coordinates would be sent.',
+      'Your go-ahead of Oct 4, with your OpenRouteService account made: the key lives in Settings, checked on save (Q31); each address is sent as typed (Q32); you may change the measured miles with a reason, and the claim shows both (Q33). Start, stops and end, with a round trip and saved places. Researched Oct 4 at your request for a free, open-source option: OpenRouteService (HeiGIT, on OpenStreetMap) has a free key with no card that does both address lookup (1,000 a day) and driving distance through up to 50 ordered stops (2,000 a day), with commercial use allowed and attribution required; one call covers a whole trip. Google Routes needs billing enabled, so it is out. GraphHopper’s free plan allows only 5 points and no commercial use; Mapbox won’t let free lookups be stored, which saved places need; self-hosting a US map needs far more memory than any free host. Fallbacks: manual miles (#17), and for lookups the US Census geocoder or Nominatim on submit only. Each claim freezes its points, the distance in metres, the provider and when it was routed, and is never re-routed. OpenRouteService’s terms bar sending personal data, and a home address arguably is, so only addresses and coordinates would be sent.',
     priority: 'P2',
     effort: 'M',
     severity: 'Low',
-    blocker: {
-      kind: 'owner',
-      ask: 'Your decisions: build it on a free OpenRouteService account you sign up for, and whether sending trip addresses to it is acceptable',
-    },
+    blocker: { kind: 'none' },
     source: 'Roadmap increment 2',
     affects: ['FR-CAP-04', 'F-14'],
   },
@@ -500,6 +497,20 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none' },
     source: 'Found merging PR #58',
     affects: ['FR-CAP-03', 'F-13'],
+  },
+
+  {
+    num: 77,
+    title: 'Your own mileage rate in Settings',
+    type: 'Feature',
+    detail:
+      'Your answer to Q28: drives are paid at the IRS business rate by default, and Settings lets you set your own rate a mile instead whenever you want, applying to drives dated from the day it takes effect. Each drive keeps the rate it was paid at (NFR-DAT-04).',
+    priority: 'P2',
+    effort: 'S',
+    severity: 'Low',
+    blocker: { kind: 'none' },
+    source: 'Q28',
+    affects: ['FR-CAP-03', 'F-13', 'NFR-DAT-04'],
   },
 
   // P3: this quarter
@@ -535,7 +546,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Single-step approval',
     type: 'Feature',
     detail:
-      'Approve, or return with a comment. A one-person organization self-attests; in a team no one approves their own spend; approving someone else’s needs the second factor. Your rules (Oct 3): an expense that doesn’t match its receipt is rejected, one rejected expense returns the whole report, and the rejected ones are surfaced with why (FR-GOV-10–12). Your Q6 answer: an expense may claim less than its receipt with a reason, never more, and a report can’t be submitted while a difference has no reason (FR-EXP-10, FR-GOV-13).',
+      'Approve, or return with a comment. A one-person organization self-attests; in a team no one approves their own spend; approving someone else’s needs the second factor. Your rules (Oct 3): an expense that doesn’t match its receipt is rejected, one rejected expense returns the whole report, and the rejected ones are surfaced with why (FR-GOV-10–12). Your Q6 answer: an expense may claim less than its receipt with a reason, never more, and a report can’t be submitted while a difference has no reason (FR-EXP-10, FR-GOV-13). Your answer to Q29: from then, export takes submitted and approved reports only.',
     priority: 'P3',
     effort: 'L',
     severity: 'Medium',
@@ -734,14 +745,14 @@ export const BACKLOG: readonly BacklogItem[] = [
   },
   {
     num: 71,
-    title: 'Require a category and type where it counts, and hang rules on types',
+    title: 'List an expense without a category and type in Needs you, and hang rules on types',
     type: 'Gap',
     detail:
-      'Categories and types are built (#51), but an expense without them only says so; nothing refuses one. Once reports are submitted (#24), refuse to submit one while an expense on it has no category and type, as your answer to Q27 settles. And as each rule is built, such as meal attendees, the mileage rate (#17) or a receipt needed above a limit, attach it to the type, as US-RPT-12 assumes.',
+      'Your answer to Q27: an expense without a category and type appears in Needs you, as well as saying so on its page and in the list; it holds nothing up. And as each rule is built, such as meal attendees, the mileage rate (#17) or a receipt needed above a limit, attach it to the type, as US-RPT-12 assumes.',
     priority: 'P3',
     effort: 'M',
     severity: 'Low',
-    blocker: { kind: 'items', items: [24], then: 'and your answer to Q27' },
+    blocker: { kind: 'none' },
     source: 'GAP-28',
     affects: ['GAP-28', 'FR-EXP-11', 'F-43'],
   },

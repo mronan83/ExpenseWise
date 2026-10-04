@@ -690,6 +690,10 @@ export const QUESTIONS: readonly Question[] = [
     recommendation:
       'C, with A until reports are submitted: the expense and the list say what is missing, and submitting needs it (#71).',
     affects: ['FR-EXP-11', 'F-43', 'GAP-28'],
+    answer: {
+      date: '2026-10-04',
+      text: 'B: an expense without a category and type also appears in Needs you, and holds nothing up. Switched on for the first time, Needs you lists every expense you already have until each is coded; most carry a suggestion you confirm with a tap (#71).',
+    },
   },
   {
     id: 'Q28',
@@ -699,6 +703,10 @@ export const QUESTIONS: readonly Question[] = [
     recommendation:
       'A, while you are the only organization; B before a second organization, or anyone outside the US, joins.',
     affects: ['FR-CAP-03', 'F-13', 'NFR-DAT-04'],
+    answer: {
+      date: '2026-10-04',
+      text: 'The IRS business rate by default, and your own rate a mile in Settings whenever you want it (#77).',
+    },
   },
   {
     id: 'Q29',
@@ -707,6 +715,10 @@ export const QUESTIONS: readonly Question[] = [
     why: 'A copy of a closed report lets you check it, or send it to whoever reimburses you, before you submit; an approved report is what finance books, and the PDF says which it is. B would take away an export you have today. Posting to accounting (FR-SET-02) takes approved reports only either way.',
     recommendation: 'A.',
     affects: ['FR-SET-01', 'F-19', 'US-RPT-16', 'US-RPT-17'],
+    answer: {
+      date: '2026-10-04',
+      text: 'Once approval exists, submitted and approved reports are exported. Until then there is nothing submitted, so a closed report exports as it does today (#24).',
+    },
   },
   {
     id: 'Q30',
@@ -715,11 +727,69 @@ export const QUESTIONS: readonly Question[] = [
     why: 'Who may change a colleague’s claim is a control: if a finance admin can edit an expense, what its claimant said they spent can change under them. A list of everyone’s is how an owner would actually look at the team’s spending; today they open a record only by its link.',
     recommendation: 'A for now; decide on C when the first team starts approving reports.',
     affects: ['FR-GOV-01', 'F-61', 'ADR-0035'],
+    answer: {
+      date: '2026-10-04',
+      text: 'A, as recommended: owners and finance admins see everyone’s records and change only their own; a claim that needs fixing goes back to its person through approval (#24). A list of everyone’s waits until the first team approves reports.',
+    },
+  },
+  {
+    id: 'Q31',
+    title: 'Where the route-mileage key lives',
+    ask: 'Route-based mileage (#20) needs an OpenRouteService key. A: in the app, in Settings, like the AI provider keys: checked with a free call when saved, stored encrypted, only its last four characters shown. B: a Vercel environment variable you set, one for the whole app.',
+    why: 'In the app it takes effect at once and is checked on screen, and each organization brings its own, which suits OpenRouteService’s terms that tie a free key to one person. A server variable is less code but needs a redeploy, shows no check, and lends your personal key to every organization.',
+    recommendation: 'A.',
+    affects: ['FR-CAP-04', 'F-14'],
+    answer: {
+      date: '2026-10-04',
+      text: 'A: in the app, in Settings, checked on save and stored encrypted.',
+    },
+  },
+  {
+    id: 'Q32',
+    title: 'What may be sent to OpenRouteService',
+    ask: 'To measure a drive, each stop goes to OpenRouteService: an address to find it on the map, then the points in order for the driving distance. Its terms ask that no personal data is sent, and a home address arguably is. A: a saved place is looked up once and only its point is sent afterwards. B: each address is sent as typed, every time. C: only points dropped on a map.',
+    why: 'Names, notes and purposes are never sent in any case. A sends your home address once; B on every drive from home; C never, but is slower on a phone.',
+    recommendation: 'A.',
+    affects: ['FR-CAP-04', 'F-14'],
+    answer: {
+      date: '2026-10-04',
+      text: 'B: each address is sent as typed, every time a drive is measured; never a name, note or purpose.',
+    },
+  },
+  {
+    id: 'Q33',
+    title: 'When the measured route and the odometer disagree',
+    ask: 'OpenRouteService measures the shortest sensible route; a real drive may be longer. A: you may change the miles with a reason, and the claim shows both. B: you may change them freely. C: the measured distance is final; use manual miles for anything else.',
+    why: 'The IRS expects the miles actually driven, and a reviewer expects a change explained. Either way the claim keeps the measured distance, its source and when it was measured, and is never measured again.',
+    recommendation: 'A.',
+    affects: ['FR-CAP-04', 'F-14', 'NFR-DAT-04'],
+    answer: {
+      date: '2026-10-04',
+      text: 'A: you may change the miles with a reason; the claim and its export show the measured miles and yours.',
+    },
+  },
+  {
+    id: 'Q34',
+    title: 'Which AI models Settings offers',
+    ask: 'You approved Sonnet 5.5 and Haiku 4.5 (ADR-0017), and GPT-5.6 Luna reads for OpenAI. Settings › AI models (#52) also lists Opus 5.5 and Fable 5.1, switched off, with their list prices. A: offer only the approved ones. B: keep all five, those two off.',
+    why: 'Offering them spends nothing until one is switched on, and they read hard receipts better at several times the cost; but a switch you can flip is a choice you are offered.',
+    recommendation: 'A.',
+    affects: ['FR-INT-16', 'F-45'],
+    answer: {
+      date: '2026-10-04',
+      text: 'B: all five offered, Opus 5.5 and Fable 5.1 off until you switch one on.',
+    },
   },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-04',
+    change:
+      'Your answers of Oct 4, asked one at a time. Q27: an expense without a category and type also appears in Needs you (#71). Q28: the IRS rate by default, and your own rate in Settings (#77). Q29: once approval exists, submitted and approved reports export (#24). Q30: owners and finance admins see everyone’s records and change only their own. Q34: all five AI models offered, the two larger Claude models off. For route-based mileage (#20), unblocked with your OpenRouteService account: the key lives in Settings (Q31), addresses are sent as typed (Q32), and you may change the measured miles with a reason (Q33).',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-04',
     change:

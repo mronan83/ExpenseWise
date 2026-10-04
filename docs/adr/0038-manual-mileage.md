@@ -2,7 +2,7 @@
 
 A drive logged by hand is an ordinary expense of miles × the IRS standard business rate in force on its date, with the drive and that rate copied onto its mileage log, so trips, reports and totals take it as they take any expense.
 
-- **Status:** Accepted (logging date, destination, purpose and miles with the rate on the day copied on decided in the blueprint, journeys §4.3; the IRS rate as the source, the shape and the rules recommended by Claude, put to the product owner in Q28)
+- **Status:** Accepted (logging date, destination, purpose and miles with the rate on the day copied on decided in the blueprint, journeys §4.3; the IRS rate by default decided by product owner, Oct 4, Q28, with their own rate in Settings to come (#77); the shape and the rules recommended by Claude)
 - **Date:** 2026-10-04
 - **Deciders:** Product owner (FR-CAP-03 and NFR-DAT-04 from the blueprint, and the batch of Oct 4); Claude (principal architect), for the design
 - **Decision register:** D-40

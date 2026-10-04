@@ -66,7 +66,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
       'api/mileage › logs a drive for the caller and answers with it as an expense, its rate copied on',
       'e2e/signed-in',
     ],
-    note: 'Built in PR #58 (#17), behind the expenses.mileage flag: a drive is an expense paid at the IRS business rate in force on its date (ADR-0038), which the product owner is asked to confirm (Q28).',
+    note: 'Built in PR #58 (#17), behind the expenses.mileage flag: a drive is an expense paid at the IRS business rate in force on its date (ADR-0038), by default as your answer to Q28 confirms; your own rate in Settings comes with #77.',
   },
   {
     id: 'FR-CAP-04',
@@ -587,7 +587,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
       'api/categories › lists both trees in order, with the types each category allows, for everyone',
     ],
     shortfalls: ['GAP-28'],
-    note: 'Your requirement of Oct 3 and your answer to Q7: two trees, the category filtering the types. Claude’s assumptions, yours to overturn: a type can be allowed in several categories; the GL and tax codes sit on the category, and the rules (attendees, mileage rate, receipt needed) on the type. Built in PR #58 behind `expenses.categories`: an expense without them says so, but nothing refuses one yet, and no rule hangs off a type yet (GAP-28, Q27).',
+    note: 'Your requirement of Oct 3 and your answer to Q7: two trees, the category filtering the types. Claude’s assumptions, yours to overturn: a type can be allowed in several categories; the GL and tax codes sit on the category, and the rules (attendees, mileage rate, receipt needed) on the type. Built in PR #58 behind `expenses.categories`: an expense without them says so; your answer to Q27 adds it to Needs you (#71), and no rule hangs off a type yet (GAP-28).',
   },
   {
     id: 'FR-EXP-12',
@@ -816,7 +816,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
     features: ['F-19'],
     checks: ['domain/report-export', 'db/report-export.int', 'api/report-export'],
     shortfalls: ['#24'],
-    note: 'You asked for export (#25) before approval (#24), so until approval exists it exports closed reports, not approved ones: a closed report, or one further on, exports as CSV and as a PDF summary, and an open one is refused. Approved reports export once #24 makes them; whether export should then wait for approval is Q29.',
+    note: 'You asked for export (#25) before approval (#24), so until approval exists it exports closed reports, not approved ones: a closed report, or one further on, exports as CSV and as a PDF summary, and an open one is refused. Your answer to Q29: once approval exists, only submitted and approved reports export (#24).',
   },
   {
     id: 'FR-SET-02',

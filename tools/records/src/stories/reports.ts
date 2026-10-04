@@ -1116,7 +1116,7 @@ export const REPORT_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'An expense without a category and type says so but holds nothing up, Claude’s choice so that nothing working today is blocked by switching categories on, and so that Needs you isn’t filled with every expense you already have (ADR-0036). Whether submitting a report should need them is Q27; #71 builds the answer and its test.',
+    note: 'An expense without a category and type says so on its page and in the list, and holds nothing up. Your answer to Q27 adds it to Needs you as well; #71 builds that, with its test. Submitting a report will not need them (ADR-0036).',
   },
   {
     id: 'US-RPT-16',
@@ -1217,7 +1217,7 @@ export const REPORT_STORIES: readonly Story[] = [
         untested: 66,
       },
     ],
-    note: 'FR-SET-01 asks for approved reports. You asked for export before approval (#24), so until approval exists a closed report is exported: AC5 is Claude’s reading, yours to confirm, and Q29 asks what export should take once approval exists. The columns, who may export and the CSV’s form are Claude’s too. A converted amount joins as a column with your reimbursement currency (#62). The file’s name is checked through the API; tapping the buttons is not yet checked end to end.',
+    note: 'FR-SET-01 asks for approved reports. You asked for export before approval (#24), so until approval exists a closed report is exported: AC5 is Claude’s reading for now; your answer to Q29 narrows export to submitted and approved reports once approval exists (#24). The columns, who may export and the CSV’s form are Claude’s too. A converted amount joins as a column with your reimbursement currency (#62). The file’s name is checked through the API; tapping the buttons is not yet checked end to end.',
   },
   {
     id: 'US-RPT-17',
