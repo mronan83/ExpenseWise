@@ -12,7 +12,7 @@ import {
   type ReceiptReviewRecord,
 } from '@expensewise/db';
 import { asCaller } from './caller.ts';
-import { reportsNeedingYou, type ReportsNeedingYou } from './reports.ts';
+import { reportsNeedingYou, type NeedsYouOptions, type ReportsNeedingYou } from './reports.ts';
 
 /** What Home shows one member on one day, with the receipts that need them. */
 export interface HomeData {
@@ -21,14 +21,23 @@ export interface HomeData {
   readonly runs: ExtractionRunRecord[];
   readonly reviews: ReceiptReviewRecord[];
   readonly pairs: DuplicatePairRecord[];
-  /** The member's open and closed reports, and their unjustified local expenses. */
+  /**
+   * The member's open and closed reports, their unjustified local expenses and, while
+   * categories are on, their expenses with no category and type.
+   */
   readonly reports: ReportsNeedingYou;
 }
 
 /** What the API needs from the database for Home. Tests use an in-memory fake. */
 export interface HomeStore {
   /** Read in one transaction, so the sections agree with each other. */
-  snapshot(orgId: string, memberId: string, day: string, needsLimit: number): Promise<HomeData>;
+  snapshot(
+    orgId: string,
+    memberId: string,
+    day: string,
+    needsLimit: number,
+    options?: NeedsYouOptions,
+  ): Promise<HomeData>;
 }
 
 /**
@@ -39,7 +48,7 @@ export function dbHomeStore(db: Database): HomeStore {
   const inOrg = asCaller(db);
 
   return {
-    snapshot: (orgId, memberId, day, needsLimit) =>
+    snapshot: (orgId, memberId, day, needsLimit, options) =>
       inOrg(orgId, async (tx) => {
         const receipts = await listReceipts(tx, needsLimit, {
           statuses: ['needs_review', 'failed'],
@@ -52,7 +61,7 @@ export function dbHomeStore(db: Database): HomeStore {
           runs: await listExtractionRuns(tx, ids),
           reviews: await listReceiptReviews(tx, ids),
           pairs: await listOpenDuplicatePairs(tx, ids),
-          reports: await reportsNeedingYou(tx, memberId, needsLimit),
+          reports: await reportsNeedingYou(tx, memberId, needsLimit, options),
         };
       }),
   };

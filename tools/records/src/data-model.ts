@@ -44,7 +44,7 @@ export const DOMAINS: readonly Domain[] = [
   {
     name: 'Expenses and trips',
     about:
-      'The claim: what was spent, on which trip, coded to which category and type, the miles behind it, and what it is in the currency it is reimbursed in.',
+      'The claim: what was spent, on which trip, coded to which category and type, the miles behind it and the rate a mile the organization pays them at, and what it is in the currency it is reimbursed in.',
     tables: [
       'expenses',
       'expense_conversions',
@@ -53,6 +53,7 @@ export const DOMAINS: readonly Domain[] = [
       'expense_types',
       'category_types',
       'mileage_logs',
+      'org_mileage_rates',
     ],
   },
   {
@@ -149,7 +150,11 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   mileage_logs: {
     about:
-      'The drive behind a mileage expense, one per expense: how it was logged (manual since PR #58; route and GPS later), its date, destination, business purpose and miles, and the rate copied on when it was logged, or when its date or miles last changed: per mile, currency, the day it took effect and its source, the IRS business rate for now (NFR-DAT-04, ADR-0038). Its expense holds miles × that rate, the destination as its merchant and the purpose as its justification, so trips, reports and totals need nothing of their own for it. Read only through its expense, with the expense’s member named.',
+      'The drive behind a mileage expense, one per expense: how it was logged (manual since PR #58; route and GPS later), its date, destination, business purpose and miles, and the rate copied on when it was logged, or when its date or miles last changed: per mile, currency, the day it took effect and its source, `irs-business` for the IRS business rate or `organization` for the organization’s own (NFR-DAT-04, ADR-0038, Q28). Its expense holds miles × that rate, the destination as its merchant and the purpose as its justification, so trips, reports and totals need nothing of their own for it. Read only through its expense, with the expense’s member named.',
+  },
+  org_mileage_rates: {
+    about:
+      'What the organization pays drives at, as an owner or finance admin set it (Q28, #77): from each row’s day, its own rate a mile in the home currency of the day it was set, or, with no rate, the IRS business rate again. The latest row on or before a drive’s date decides; with none, the IRS rate. Its own rate has no last day known, unlike the IRS table in the domain. One row per organization and day, set again rather than deleted, with who set it last; each change is in the audit trail with what it replaced. It is the organization’s, not one member’s, so every member reads it to price their drives. A drive copies the rate it is paid at onto its log, so changing these never alters one already logged (NFR-DAT-04).',
   },
   reports: {
     about:
@@ -383,6 +388,19 @@ export const RULES: readonly Rule[] = [
       'mileage_logs_expense_fk',
     ],
     refs: ['NFR-DAT-04', 'FR-CAP-03', 'ADR-0038'],
+  },
+  {
+    rule: 'An organization changes its rate a mile once per day, to a rate above zero in a currency, or to none for the IRS rate.',
+    mechanism:
+      'Unique per organization and day; a rate and its currency are present together or not at all, the rate above zero and the currency an ISO code; who set it is a member of the same organization by a composite key. That a drive takes the latest change on or before its date, else the IRS rate, is one rule in the domain (`rateOn`), which every drive is priced through; who may change it, owners and finance admins, is the API’s to check.',
+    objects: [
+      'org_mileage_rates_org_day_key',
+      'org_mileage_rates_rate_and_currency',
+      'org_mileage_rates_rate_positive',
+      'org_mileage_rates_currency_iso',
+      'org_mileage_rates_set_by_fk',
+    ],
+    refs: ['FR-CAP-03', 'NFR-DAT-04', 'Q28'],
   },
   {
     rule: 'An organization has one key per AI provider, and shows only its last four characters.',

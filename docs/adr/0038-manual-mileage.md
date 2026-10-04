@@ -2,7 +2,7 @@
 
 A drive logged by hand is an ordinary expense of miles × the IRS standard business rate in force on its date, with the drive and that rate copied onto its mileage log, so trips, reports and totals take it as they take any expense.
 
-- **Status:** Accepted (logging date, destination, purpose and miles with the rate on the day copied on decided in the blueprint, journeys §4.3; the IRS rate by default decided by product owner, Oct 4, Q28, with their own rate in Settings to come (#77); the shape and the rules recommended by Claude)
+- **Status:** Accepted (logging date, destination, purpose and miles with the rate on the day copied on decided in the blueprint, journeys §4.3; the IRS rate by default, and the organization's own rate a mile in Settings, decided by product owner, Oct 4, Q28, the own rate built in PR #59 (#77, §7); the shape and the rules recommended by Claude, as is who sets the own rate)
 - **Date:** 2026-10-04
 - **Deciders:** Product owner (FR-CAP-03 and NFR-DAT-04 from the blueprint, and the batch of Oct 4); Claude (principal architect), for the design
 - **Decision register:** D-40
@@ -21,8 +21,9 @@ A drive has to behave like any expense where people see and claim them: list wit
 4. **A member's drives are their own.** Every read and change of a drive names the member as well as the organization, whatever row security adds.
 5. **Its guards are rules in the register:** at most 1,000 miles a drive (an odometer reading typed as the distance), two decimal places, and a date at most a day after today in UTC.
 6. **It ships behind `expenses.mileage`** (ADR-0032): off, its operations answer 404 `feature_off` and Add mileage and the drive's details are hidden. A drive logged while it was on stays an expense, since it is money already claimed.
+7. **An organization can pay its own rate a mile (Q28, added in PR #59).** An owner or finance admin sets it in Settings › Mileage from a day, in the organization's home currency, or goes back to the IRS rate from a day: one row per organization and day in `org_mileage_rates`, set again rather than deleted, each change audited. The latest change on or before a drive's date decides, else the IRS rate; an own rate has no last day known. One domain function, `rateOn`, prices every drive, and logging and correcting a drive read the organization's rates in their own transaction, so a quote, a new drive and a corrected one all agree. A drive copies on its rate with source `organization`, so a later change never alters it (§2's refusal now applies only where the IRS rate is in force).
 
-Out of scope: kilometres, routes and saved places (#20), automatic mileage (Phase 3), business miles on Home (#73), and rates an organization sets.
+Out of scope: kilometres, routes and saved places (#20), automatic mileage (Phase 3), business miles on Home (#73), and a rate per type or per person.
 
 ## Alternatives considered
 

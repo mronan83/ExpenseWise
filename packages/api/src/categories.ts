@@ -4,6 +4,7 @@ import {
   deleteType,
   expenseClassifications,
   listCatalog,
+  listUncodedExpenses,
   memberChoices,
   saveCategory,
   saveType,
@@ -17,10 +18,12 @@ import {
   type Database,
   type ExpenseClassification,
   type MemberChoice,
+  type Transaction,
   type TypeChange,
   type TypeRecord,
 } from '@expensewise/db';
 import { asCaller } from './caller.ts';
+import { withProofs, type ExpensesWithProof } from './expenses.ts';
 
 /** What showing expenses with their categories needs, read at once. */
 export interface Classifying {
@@ -29,6 +32,31 @@ export interface Classifying {
   readonly chosen: readonly ExpenseClassification[];
   /** What the expenses' owners chose before, newest first, for suggestions. */
   readonly history: readonly MemberChoice[];
+}
+
+/** A member's expenses with no category and type, and what to suggest for each (Q27). */
+export interface UncodedNeedingYou extends ExpensesWithProof {
+  readonly classifying: Classifying;
+}
+
+/**
+ * A member's own Ready expenses with no category and type, oldest first, with their receipts
+ * and what suggestions learn from, for Needs you (FR-EXP-11, Q27). Call inside withOrg().
+ */
+export async function uncodedNeedingYou(
+  tx: Transaction,
+  memberId: string,
+  limit: number,
+): Promise<UncodedNeedingYou> {
+  const found = await withProofs(tx, await listUncodedExpenses(tx, memberId, limit));
+  return {
+    ...found,
+    classifying: {
+      catalog: await listCatalog(tx),
+      chosen: [],
+      history: await memberChoices(tx, [memberId]),
+    },
+  };
 }
 
 /**

@@ -2,7 +2,7 @@
 
 An organization keeps its own categories and types as two lists that each nest, with the types each category allows; every expense gets one of each, and a suggestion for them is worked out by rules from what ExpenseWise already holds, at no cost.
 
-- **Status:** Accepted (two lists, the category narrowing the types, decided by product owner, Q7; the ready-made set, retiring, who keeps the lists and the suggestion rules recommended, no objection yet)
+- **Status:** Accepted (two lists, the category narrowing the types, decided by product owner, Q7; the ready-made set, retiring, who keeps the lists and the suggestion rules recommended, no objection yet; §6 amended by product owner, Oct 4, Q27: an expense without them is in Needs you as well, still holding nothing up, built in PR #59 (#71))
 - **Date:** 2026-10-04
 - **Deciders:** Product owner (FR-EXP-11, Oct 3; Q7; flagging, Q5); Claude (principal architect), for the model, the ready-made set and the suggestion rules
 - **Decision register:** D-38. Builds on [ADR-0032](0032-features-switched-per-organization.md): it ships behind `expenses.categories`.

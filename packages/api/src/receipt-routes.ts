@@ -10,6 +10,7 @@ import { detailsOf } from '@expensewise/extraction/place';
 import { receiptPath, RECEIPT_BUCKET, type ObjectStore } from '@expensewise/storage';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
+import type { CategoryStore } from './categories.ts';
 import { featureGate, type FeatureGate } from './features.ts';
 import {
   modelContext,
@@ -18,7 +19,7 @@ import {
   type ModelSettingsStore,
 } from './model-settings.ts';
 import { notYours } from './caller.ts';
-import { needsYouItems, NO_REPORTS } from './needs-you-views.ts';
+import { askForCoding, needsYouItems, NO_REPORTS } from './needs-you-views.ts';
 import { ProblemError } from './problem.ts';
 import { showConverted } from './reimbursement.ts';
 import { inboxRoute } from './routes/inbox.ts';
@@ -59,6 +60,8 @@ export interface ReceiptRouteOptions {
   readonly dispatch?: (events: readonly CommittedEvent[]) => Promise<void>;
   /** Reports and local expenses that need the person join Needs you when it is given. */
   readonly reports?: ReportStore;
+  /** Present where categories can be on, so Needs you asks for them (FR-EXP-11, Q27). */
+  readonly categories?: CategoryStore;
   /** Which features are on. Built from `workspace` when not given. */
   readonly features?: FeatureGate;
   /** Which AI models read receipts, under receipts.model-settings (FR-INT-16). */
@@ -295,7 +298,9 @@ export function registerReceiptRoutes(
       memberId: who.memberId,
     });
     const reports = options.reports
-      ? await options.reports.needsYou(who.orgId, who.memberId, LIST_LIMIT)
+      ? await options.reports.needsYou(who.orgId, who.memberId, LIST_LIMIT, {
+          uncoded: await askForCoding(options, features, who.orgId),
+        })
       : NO_REPORTS;
     const converting = await showConverted(features, who.orgId, reports.reports);
     const items = needsYouItems(

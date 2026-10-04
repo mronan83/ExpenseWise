@@ -2789,6 +2789,141 @@
       }
     },
     {
+      "name": "org_mileage_rates",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "effective_from",
+          "type": "date",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "per_mile",
+          "type": "numeric(12,4)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "currency",
+          "type": "character(3)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "set_by_member_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "org_mileage_rates_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "org_mileage_rates_set_by_fk",
+          "columns": [
+            "org_id",
+            "set_by_member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "org_mileage_rates_org_day_key",
+          "columns": [
+            "org_id",
+            "effective_from"
+          ]
+        },
+        {
+          "name": "org_mileage_rates_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "org_mileage_rates_currency_iso",
+          "definition": "CHECK (((currency IS NULL) OR (currency ~ '^[A-Z]{3}$'::text)))"
+        },
+        {
+          "name": "org_mileage_rates_rate_and_currency",
+          "definition": "CHECK (((per_mile IS NULL) = (currency IS NULL)))"
+        },
+        {
+          "name": "org_mileage_rates_rate_positive",
+          "definition": "CHECK (((per_mile IS NULL) OR (per_mile > (0)::numeric)))"
+        }
+      ],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [],
+      "grants": {
+        "expensewise_app": [
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
       "name": "organizations",
       "rls": {
         "enabled": true,

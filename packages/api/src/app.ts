@@ -26,6 +26,8 @@ import type { ModelSettingsStore } from './model-settings.ts';
 import { registerModelSettingsRoutes } from './model-settings-routes.ts';
 import type { ExpenseStore } from './expenses.ts';
 import type { MileageStore } from './mileage.ts';
+import type { MileageRateStore } from './mileage-rates.ts';
+import { registerMileageRateRoutes } from './mileage-rate-routes.ts';
 import { registerMileageRoutes } from './mileage-routes.ts';
 import type { PeopleStore } from './people.ts';
 import { registerPeopleRoutes } from './people-routes.ts';
@@ -62,6 +64,11 @@ export interface ApiOptions
   readonly trips?: TripStore;
   /** Drives logged by hand (FR-CAP-03). Without it, those routes answer 503. */
   readonly mileage?: MileageStore;
+  /**
+   * The organization's rate a mile (Q28). Without it, its routes answer 503 and a quote is at
+   * the IRS rate; logging a drive reads the rate itself.
+   */
+  readonly mileageRates?: MileageRateStore;
   /** What Home shows, read at once. Without it, Home answers 503. */
   readonly home?: HomeStore;
   /** Expense reports. Without it, those routes answer 503 and Needs you shows no reports. */
@@ -203,6 +210,7 @@ export function createApi(options: ApiOptions) {
   registerExpenseRoutes(app, routes);
   registerTripRoutes(app, routes);
   registerMileageRoutes(app, routes);
+  registerMileageRateRoutes(app, routes);
   registerHomeRoutes(app, routes);
   registerReportRoutes(app, routes);
   registerReportExportRoutes(app, routes);

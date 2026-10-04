@@ -41,7 +41,33 @@ export const MILEAGE_FLAG = 'expenses.mileage';
 /** The longest purpose kept: a drive's purpose is its expense's justification. */
 export const PURPOSE_MAX = 500;
 
-const SOURCES: Record<string, string> = { 'irs-business': 'the IRS business rate' };
+/** One day the organization changed what drives are paid at from (Q28). */
+export interface MileageRateChange {
+  effectiveFrom: string;
+  /** organization: its own rate a mile. irs-business: the IRS rate again. */
+  source: 'organization' | 'irs-business';
+  perMile: string | null;
+  currency: string | null;
+  setBy: string;
+  setAt: string;
+}
+
+/** The organization's rate a mile, as Settings › Mileage shows it (Q28, #77). */
+export interface MileageRates {
+  today: string;
+  /** What a drive dated today is paid at, or why there is no rate for today. */
+  inForce: { rate: MileageRate | null; problem: string | null };
+  /** The latest day first. */
+  changes: MileageRateChange[];
+  homeCurrency: string;
+  irsThrough: string;
+  canChange: boolean;
+}
+
+const SOURCES: Record<string, string> = {
+  'irs-business': 'the IRS business rate',
+  organization: 'your organization’s own rate',
+};
 
 /** "$0.725 a mile, the IRS business rate from Jan 1, 2026". */
 export function describeRate(rate: MileageRate): string {

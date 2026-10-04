@@ -860,7 +860,9 @@ export const MileageRateSchema = z
     effectiveFrom: isoDate().openapi({ description: 'The day the rate took effect.' }),
     source: z.string().openapi({
       example: 'irs-business',
-      description: 'Where it came from: irs-business is the IRS standard rate for business use.',
+      description:
+        'Where it came from: irs-business is the IRS standard rate for business use; ' +
+        'organization, the organization’s own rate a mile (Q28).',
     }),
   })
   .openapi('MileageRate');
@@ -1288,9 +1290,14 @@ const ExpenseInboxItemSchema = z
       receiptId: z.string().uuid().nullable(),
     }),
     reason: z.object({
-      code: z.enum(['justification']).openapi({
-        description: 'justification: a local expense says nothing yet of why (FR-EXP-14).',
+      code: z.enum(['justification', 'uncoded']).openapi({
+        description:
+          'justification: a local expense says nothing yet of why (FR-EXP-14). uncoded: it ' +
+          'has no category and type yet, while categories are on (FR-EXP-11, Q27).',
       }),
+    }),
+    category: ExpenseCategorySchema.optional().openapi({
+      description: 'uncoded: what is suggested for it, or missing when nothing is.',
     }),
   })
   .openapi('ExpenseInboxItem');

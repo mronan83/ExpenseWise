@@ -11,6 +11,7 @@ export * from './home.ts';
 export * from './organization.ts';
 export * from './inbound-routes.ts';
 export * from './mileage.ts';
+export * from './mileage-rates.ts';
 export * from './model-settings.ts';
 export * from './people.ts';
 export * from './people-schemas.ts';

@@ -6,6 +6,7 @@ import type {
   Membership,
   MemberChoice,
   ReceiptRecord,
+  ReportContents,
   TypeRecord,
 } from '@expensewise/db';
 import { catalogName, checkChoice } from '@expensewise/domain';
@@ -13,8 +14,11 @@ import { FALLBACK_MODEL, type ReceiptExtraction } from '@expensewise/extraction'
 import { describe, expect, it } from 'vitest';
 import { createApi } from '../src/app.ts';
 import type { Identity } from '../src/auth.ts';
-import type { CategoryStore } from '../src/categories.ts';
+import type { CategoryStore, UncodedNeedingYou } from '../src/categories.ts';
 import type { ExpenseStore } from '../src/expenses.ts';
+import type { HomeStore } from '../src/home.ts';
+import type { ReceiptStore } from '../src/receipts.ts';
+import type { NeedsYouOptions, ReportStore } from '../src/reports.ts';
 import type { WorkspaceStore } from '../src/workspace.ts';
 
 const ORG = '0192f7a0-0000-7000-8000-0000000000a1';
@@ -463,4 +467,226 @@ describe('with categories switched off (Q5, ADR-0032)', () => {
     expect(one.status).toBe(200);
     expect(one.body).not.toHaveProperty('category');
   });
+});
+
+/**
+ * Needs you with the member's expenses that have no category and type (Q27): the flight, read
+ * as an airline ticket, and a dinner nothing suggests anything for; beside a local coffee with
+ * no reason yet and a report ready to close.
+ */
+function needsYouSetup(flagOverrides = 'expenses.categories=on') {
+  const REPORT = id(30);
+  const receipt: ReceiptRecord = {
+    id: RECEIPT,
+    memberId: RILEY,
+    uploadedBy: 'riley',
+    source: 'upload',
+    storageKey: `orgs/${ORG}/receipts/${RECEIPT}`,
+    contentType: 'application/pdf',
+    byteSize: 40_000,
+    sha256: 'b'.repeat(64),
+    status: 'extracted',
+    expenseId: FLIGHT,
+    createdAt: NOW,
+  };
+  const runs: ExtractionRunRecord[] = [
+    {
+      id: 'run-1',
+      receiptId: RECEIPT,
+      requestId: 'request-1',
+      model: FALLBACK_MODEL,
+      promptVersion: 'extract-v1',
+      outcome: 'confident',
+      output: reading,
+      error: null,
+      latencyMs: 2500,
+      inputTokens: 2000,
+      outputTokens: 400,
+      costMicroUsd: 880,
+      createdAt: NOW,
+    },
+  ];
+  const catalog = {
+    categories: [
+      {
+        ...node(TRAVEL, 'Travel', { starterKey: 'travel' }),
+        glCode: null,
+        taxCode: null,
+        typeIds: [AIRFARE],
+      },
+    ],
+    types: [node(AIRFARE, 'Airfare', { starterKey: 'airfare' })],
+  };
+  const uncoded: UncodedNeedingYou = {
+    expenses: [
+      expense({ receiptId: RECEIPT }),
+      expense({
+        id: DINNER,
+        source: 'manual',
+        merchant: 'Juniper & Rye',
+        transactionDate: '2026-09-30',
+        currency: 'USD',
+        amountMinor: 8640,
+        tripId: id(40),
+      }),
+    ],
+    receipts: [receipt],
+    runs,
+    reviews: [],
+    classifying: { catalog, chosen: [], history: [] },
+  };
+  const coffee = expense({
+    id: COFFEE,
+    source: 'manual',
+    merchant: 'Blue Bottle Coffee',
+    currency: 'USD',
+    amountMinor: 650,
+  });
+  const ready: ReportContents = {
+    report: {
+      id: REPORT,
+      memberId: RILEY,
+      owner: 'riley',
+      title: 'Report from 3 Oct 2026',
+      status: 'open',
+      currency: 'USD',
+      closesAt: new Date('2026-10-31T12:00:00.000Z'),
+      closedAt: null,
+      submittedAt: null,
+      createdAt: new Date('2026-10-03T12:00:00.000Z'),
+    },
+    trips: [],
+    tallies: [],
+    counts: [],
+    locals: [
+      { ...coffee, id: id(31), justification: 'Client coffee', reportId: REPORT, held: false },
+    ],
+  };
+  const asked: (NeedsYouOptions | undefined)[] = [];
+  const answer = (options?: NeedsYouOptions) => {
+    asked.push(options);
+    return { reports: [ready], unjustified: [coffee], ...(options?.uncoded ? { uncoded } : {}) };
+  };
+  const reports = {
+    needsYou: (_org: string, _member: string, _limit: number, options?: NeedsYouOptions) =>
+      Promise.resolve(answer(options)),
+  } as unknown as ReportStore;
+  const home: HomeStore = {
+    snapshot: (_org, _member, _day, _limit, options) =>
+      Promise.resolve({
+        home: {
+          tripNow: null,
+          tripNext: null,
+          recentTrips: [],
+          tallies: [],
+          month: { from: '2026-10-01', until: '2026-11-01' },
+          monthExpenses: [],
+          monthTrips: 0,
+          reading: 0,
+        },
+        receipts: [],
+        runs: [],
+        reviews: [],
+        pairs: [],
+        reports: answer(options),
+      }),
+  };
+  const api = createApi({
+    version: 't',
+    verifyToken: (token) => Promise.resolve(identity(token)),
+    workspace: {
+      findMembership: () => Promise.resolve({ orgId: ORG, memberId: RILEY, role: 'owner' }),
+      featureOn: () => Promise.resolve(false),
+    } as unknown as WorkspaceStore,
+    receipts: {
+      list: () => Promise.resolve({ receipts: [], runs: [], reviews: [], pairs: [] }),
+    } as unknown as ReceiptStore,
+    reports,
+    home,
+    // Only its presence matters here: Needs you reads the expenses through the reports.
+    categories: {} as CategoryStore,
+    flagOverrides,
+    now: () => NOW,
+  });
+  const call = async (path: string) => {
+    const res = await api.request(path, { headers: { authorization: 'Bearer riley' } });
+    return {
+      status: res.status,
+      body: (await res.json()) as {
+        items?: InboxItem[];
+        needsYou?: { count: number; items: InboxItem[] };
+      },
+    };
+  };
+  return { call, asked };
+}
+
+type InboxItem = {
+  kind: string;
+  reason: { code: string };
+  expense?: { id: string };
+  category?: unknown;
+};
+
+describe('an expense without a category and type in Needs you (Q27)', () => {
+  it('asks for each of the member’s own, with its suggestion, after reasons and before reports to close', async () => {
+    const { call, asked } = needsYouSetup();
+    const { status, body } = await call('/v1/inbox');
+    expect(status).toBe(200);
+    expect(asked).toEqual([{ uncoded: true }]);
+    expect(body.items?.map((i) => [i.kind, i.reason.code, i.expense?.id])).toEqual([
+      ['expense', 'justification', COFFEE],
+      ['expense', 'uncoded', FLIGHT],
+      ['expense', 'uncoded', DINNER],
+      ['report', 'ready_to_close', undefined],
+    ]);
+    const [, flight, dinner] = body.items ?? [];
+    expect(flight).toEqual({
+      kind: 'expense',
+      expense: {
+        id: FLIGHT,
+        merchant: 'LH 0412 FRA-ORD',
+        date: '2026-09-28',
+        amount: { amountMinor: 41280, currency: 'EUR', decimal: '412.80' },
+        receiptId: RECEIPT,
+      },
+      reason: { code: 'uncoded' },
+      // Its receipt was read as an airline ticket.
+      category: {
+        state: 'suggested',
+        category: { id: TRAVEL, name: 'Travel', active: true },
+        type: { id: AIRFARE, name: 'Airfare', active: true },
+        basis: 'keywords',
+      },
+    });
+    expect(dinner?.category).toEqual({ state: 'missing', category: null, type: null, basis: null });
+  });
+
+  it('counts them on Home, as the inbox lists them', async () => {
+    const { call } = needsYouSetup();
+    const { status, body } = await call('/v1/home?day=2026-10-04');
+    expect(status).toBe(200);
+    expect(body.needsYou?.count).toBe(4);
+    expect(body.needsYou?.items.map((i) => i.reason.code)).toEqual([
+      'justification',
+      'uncoded',
+      'uncoded',
+    ]);
+  });
+
+  it.each(['expenses.categories=off', ''])(
+    'leaves Needs you as it was when categories are off (%s)',
+    async (flags) => {
+      const { call, asked } = needsYouSetup(flags);
+      const inbox = await call('/v1/inbox');
+      expect(inbox.body.items?.map((i) => i.reason.code)).toEqual([
+        'justification',
+        'ready_to_close',
+      ]);
+      expect(inbox.body.items?.every((i) => !('category' in i))).toBe(true);
+      const home = await call('/v1/home?day=2026-10-04');
+      expect(home.body.needsYou?.count).toBe(2);
+      expect(asked).toEqual([{ uncoded: false }, { uncoded: false }]);
+    },
+  );
 });

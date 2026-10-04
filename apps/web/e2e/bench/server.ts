@@ -21,6 +21,7 @@ import {
   dbReceiptStore,
   dbHomeStore,
   dbOrganizationStore,
+  dbMileageRateStore,
   dbMileageStore,
   dbModelSettingsStore,
   dbReimbursementStore,
@@ -255,6 +256,7 @@ const app = createHttpApp({
   expenses: dbExpenseStore(db),
   trips: dbTripStore(db),
   mileage: dbMileageStore(db),
+  mileageRates: dbMileageRateStore(db),
   home: dbHomeStore(db),
   people: dbPeopleStore(db),
   reports: dbReportStore(db),
@@ -612,6 +614,10 @@ expenses.mileage = (
     miles: '38.4',
   })
 ).id;
+// The organization's own rate a mile from Nov 1, and the IRS rate again from Mar 1 (Q28, #77),
+// set after the drive, which keeps the IRS rate it was logged at.
+await call('PUT', '/v1/settings/mileage-rates/2026-11-01', { perMile: '0.65' });
+await call('PUT', '/v1/settings/mileage-rates/2027-03-01', { perMile: null });
 
 // Reports (#23): the hourly schedule puts the trips that have ended, and the local expenses,
 // on one open report; Chicago then moves to a report of its own, which closes.

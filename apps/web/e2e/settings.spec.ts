@@ -46,6 +46,8 @@ test.describe('sign-in and AI provider settings', () => {
       ['PUT', '/api/v1/settings/duplicate-window'],
       ['GET', '/api/v1/categories'],
       ['GET', '/api/v1/me/reimbursement-currency'],
+      ['GET', '/api/v1/mileage-rates'],
+      ['PUT', '/api/v1/settings/mileage-rates/2026-11-01'],
     ] as const) {
       const res = await request.fetch(path, {
         method,
@@ -72,6 +74,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       '/settings/ai-models',
       '/settings/currency',
       '/settings/people',
+      '/settings/mileage',
       '/invite/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
     ]) {
       test(`${path} has no WCAG 2.2 AA violations`, async ({ page }) => {
