@@ -216,8 +216,8 @@ export const FEATURES: readonly Feature[] = [
       'packages/domain/src/capture-time.ts',
       'packages/api/src/receipt-evidence.ts',
       'packages/db/src/receipts.ts',
-      'packages/db/migrations/0023_receipt_settled_at.sql',
-      'packages/db/migrations/0024_receipt_settled_at_backfill.sql',
+      'packages/db/migrations/0025_receipt_settled_at.sql',
+      'packages/db/migrations/0026_receipt_settled_at_backfill.sql',
       'apps/web/app/receipts/page.tsx',
     ],
     checks: [
