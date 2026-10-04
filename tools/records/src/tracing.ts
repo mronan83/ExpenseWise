@@ -36,7 +36,7 @@ export const GAPS: readonly Gap[] = [
     backlog: 65,
     closed: {
       date: '2026-10-04',
-      note: 'PR #57: 108 user stories with 589 acceptance criteria cover every built requirement and feature and every planned requirement from your words. Each criterion says who decided it and which test proves it; the 82 built criteria no test proves yet are listed against #66. The register holds 18 rules, each held to the code.',
+      note: 'PR #57: 108 user stories with 588 acceptance criteria cover every built requirement and feature and every planned requirement from your words. Each criterion says who decided it and which test proves it; the 82 built criteria no test proves yet are listed against #66. The register holds 18 rules, each held to the code.',
     },
   },
   {
@@ -622,7 +622,7 @@ export const CHANGE_LOG: readonly ChangeLogEntry[] = [
   {
     date: '2026-10-04',
     change:
-      'User stories and acceptance criteria for the entire build (#65; NFR-DEL-09 and F-53 Verified; GAP-24 closed). 108 stories with 589 Given/When/Then criteria cover every built requirement and feature and every planned requirement from your words. Each criterion says who decided it: you (102), the blueprint (206), or Claude (281, listed first on the page for you to confirm). 451 of the 533 built criteria are proved by a test; the other 82 are listed against #66. A register of 18 rules, such as 28 days and 30 minutes, is held to the code. A fifth page publishes them, and each requirement on the traceability page links its stories. Writing them found: photos emailed in keep their location (GAP-25, #68); error reports don’t redact OpenAI keys (#67); nineteen requirements that say more than the build does (GAP-26, #69), among them Q5, which earlier pull requests cited although you never answered it; and a misstatement in ADR-0029, corrected here: a trip joins its report 24 to 50 hours after its return day ends, about 31 hours in US Central time, not at most 26.',
+      'User stories and acceptance criteria for the entire build (#65; NFR-DEL-09 and F-53 Verified; GAP-24 closed). 108 stories with 588 Given/When/Then criteria cover all 97 requirements that are built or planned from your words, and every built feature. Each criterion says who decided it: you (101), the blueprint (206), or Claude (281, listed first on the page for you to confirm). 456 of the 538 built criteria are proved by a test; the other 82 are listed against #66. A register of 18 rules, such as 28 days and 30 minutes, is held to the code. A fifth page publishes them, and each requirement on the traceability page links its stories. Writing them found: photos emailed in keep their location (GAP-25, #68); error reports don’t redact OpenAI keys (#67); nineteen requirements that say more than the build does (GAP-26, #69), among them Q5, which earlier pull requests cited although you never answered it; and a misstatement in ADR-0029, corrected here: a trip joins its report 24 to 50 hours after its return day ends, about 31 hours in US Central time, not at most 26.',
     by: 'Claude, at your direction',
   },
   {

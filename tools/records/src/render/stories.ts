@@ -73,7 +73,7 @@ export function renderStories(ctx: PageContext): string {
     const who = WHO[d.by];
     const cited =
       'source' in d && d.source
-        ? ` · ${T(d.source.replace(/^owner (\d{4}-\d{2}-\d{2})$/, 'you, $1'))}`
+        ? ` · ${T(d.source.replace(/^owner (\d{4}-\d{2}-\d{2})$/, '$1'))}`
         : '';
     return `<span class="dc ${who.cls}">${who.label}${cited}</span>`;
   };
@@ -84,11 +84,19 @@ export function renderStories(ctx: PageContext): string {
         ? `<span class="proof none">No test yet · ${L(`#${a.untested}`)}</span>`
         : '<span class="proof planned">Not built yet</span>';
     }
-    return `<span class="proof">${a.checks
-      .map((ref) => {
-        const c = resolveCheck(ref, tests);
-        return `<a class="chk" href="${esc(githubFile(ctx, c.file))}" target="_blank" rel="noopener" title="${esc(c.title ?? 'the whole file')}">${esc(c.alias)}</a>`;
-      })
+    // One link per test file, its tests named in the tooltip, as the traceability page does.
+    const byAlias = new Map<string, { file: string; titles: string[] }>();
+    for (const ref of a.checks) {
+      const c = resolveCheck(ref, tests);
+      const entry = byAlias.get(c.alias) ?? { file: c.file, titles: [] };
+      entry.titles.push(c.title ?? 'the whole file');
+      byAlias.set(c.alias, entry);
+    }
+    return `<span class="proof">${[...byAlias]
+      .map(
+        ([alias, { file, titles }]) =>
+          `<a class="chk" href="${esc(githubFile(ctx, file))}" target="_blank" rel="noopener" title="${esc(titles.join('\n'))}">${esc(alias)}${titles.length > 1 ? ` ×${titles.length}` : ''}</a>`,
+      )
       .join(' ')}</span>`;
   };
 
