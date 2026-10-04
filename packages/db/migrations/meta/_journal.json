@@ -162,6 +162,20 @@
       "when": 1791118492960,
       "tag": "0022_org_features_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1791120407597,
+      "tag": "0023_organization_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791120411443,
+      "tag": "0024_report_work_due_time_zone",
+      "breakpoints": true
     }
   ]
 }

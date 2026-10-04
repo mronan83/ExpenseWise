@@ -265,7 +265,7 @@ export const DUPLICATE_STORIES: readonly Story[] = [
     soThat: 'the control fits how my people buy, and nobody can loosen it for their own receipts',
     feature: 'F-52',
     requirements: ['FR-INT-19'],
-    status: 'Planned',
+    status: 'Delivered',
     criteria: [
       {
         id: 'AC1',
@@ -273,8 +273,13 @@ export const DUPLICATE_STORIES: readonly Story[] = [
         when: 'I open Settings',
         then: 'I can set the window from 0 to 120 minutes; it starts at 30, and 0 means the same minute only',
         decided: OCT4,
-        checks: [],
-        rules: ['R-DUPLICATE-WINDOW'],
+        checks: [
+          'api/organization › shows the window, 30 minutes until the owner sets another, with its bounds',
+          'api/organization › lets only the owner set it, for everyone, from 0 to 120 whole minutes, each change audited',
+          'db/organizations.int › refuses a window outside 0 to 120 whole minutes',
+          'domain/duplicates › at 0 is the same minute only, exact or possible',
+        ],
+        rules: ['R-DUPLICATE-WINDOW', 'R-DUPLICATE-WINDOW-MAX'],
       },
       {
         id: 'AC2',
@@ -282,7 +287,10 @@ export const DUPLICATE_STORIES: readonly Story[] = [
         when: 'I open Settings',
         then: 'I see the window but can’t change it',
         decided: { by: 'owner', source: 'Q24' },
-        checks: [],
+        checks: [
+          'api/organization › shows the window, 30 minutes until the owner sets another, with its bounds',
+          'api/organization › lets only the owner set it, for everyone, from 0 to 120 whole minutes, each change audited',
+        ],
       },
       {
         id: 'AC3',
@@ -290,7 +298,10 @@ export const DUPLICATE_STORIES: readonly Story[] = [
         when: 'receipts are read afterwards',
         then: 'they are judged by the new window; pairs already decided stay decided, and the audit trail records the change',
         decided: OCT4,
-        checks: [],
+        checks: [
+          'db/organizations.int › judges receipts read from then on by the window the owner set, and leaves pairs already decided',
+          'domain/duplicates › judges a pair by the window it is given: wider catches more, narrower less',
+        ],
       },
       {
         id: 'AC4',
@@ -298,8 +309,26 @@ export const DUPLICATE_STORIES: readonly Story[] = [
         when: 'I open Settings',
         then: 'it shows my role, so I can confirm each address is the owner',
         decided: { by: 'owner', source: 'Q24' },
-        checks: [],
+        checks: [
+          'api/organization › tells each of a person’s sign-ins the same role, for Settings to show (Q24)',
+          'db/sign-ins.int › lets a fresh sign-in reach the same member and organization',
+          'e2e/signed-in',
+        ],
+      },
+      {
+        id: 'AC5',
+        given: 'the duplicate window setting is switched off',
+        when: 'receipts are read, or anyone opens Settings',
+        then: 'they are judged by 30 minutes whatever was set, and the window isn’t shown or offered',
+        decided: { by: 'owner', source: 'Q5' },
+        checks: [
+          'db/organizations.int › with the setting off, keeps to 30 minutes whatever the owner set',
+          'api/organization › keeps each section to its own flag',
+          'api/organization › answers 404 feature_off while organization settings are off, so they look absent',
+        ],
+        rules: ['R-DUPLICATE-WINDOW'],
       },
     ],
+    note: 'Settings › Organization opens with the role of whoever is signed in, then the window as a section of its own; the page shows while either this setting or the organization’s details is switched on.',
   },
 ];

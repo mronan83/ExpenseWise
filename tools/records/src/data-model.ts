@@ -18,7 +18,7 @@ export const DOMAINS: readonly Domain[] = [
   {
     name: 'Organizations and people',
     about:
-      'Who is in which organization, how they sign in, the AI keys an organization brings, and the features its owner has switched on.',
+      'Who is in which organization and what its owner keeps about it, how they sign in, the AI keys an organization brings, and the features its owner has switched on.',
     tables: ['organizations', 'members', 'member_sign_ins', 'ai_provider_keys', 'org_features'],
   },
   {
@@ -60,7 +60,7 @@ export interface TableNote {
 export const TABLES: Readonly<Record<string, TableNote>> = {
   organizations: {
     about:
-      'One business or one person working alone, with its home currency. Everything else belongs to exactly one organization (ADR-0001).',
+      'One business or one person working alone, with its home currency. Everything else belongs to exactly one organization (ADR-0001). Its owner keeps its country, locale, time zone, address, industry and size here, each optional, and the duplicate time window, empty for the default of 30 minutes (FR-PLT-11, FR-INT-19). With organization settings on, the time zone says which day it is for the report schedule (ADR-0037). Each change is one audit event, from and to.',
   },
   members: {
     about:
@@ -149,7 +149,7 @@ export const FUNCTIONS: Readonly<Record<string, string>> = {
     'Hands the relay a batch of unpublished outbox events, locking them so two sweeps never take the same one. Runs as its owner, so the relay role needs no table rights.',
   mark_outbox_published: 'Marks events the relay has sent, so they are not sent again.',
   report_work_due:
-    'Which organizations have report work due at a moment: a trip or local expense whose time to join a report has come, an open report on its day 28, or one with nothing to claim. The hourly schedule asks it outside any organization; it runs as its owner and answers with organization ids only (ADR-0029).',
+    'Which organizations have report work due at a moment: a trip or local expense whose time to join a report has come, an open report on its day 28, or one with nothing to claim. The 24 hours are counted in the organization’s time zone when it keeps one, and at UTC−12 otherwise; it reads the zone whether or not the feature is on, so it may name an organization a few hours early, never late, and the run inside finds nothing due (ADR-0037). The hourly schedule asks it outside any organization; it runs as its owner and answers with organization ids only (ADR-0029).',
   member_for_sign_in_email:
     'Which member signs in with an email address, case aside, and that sign-in’s user, for an arriving email that names no organization yet. Runs as its owner and returns ids only, so the app still can’t read sign-ins outside an organization (ADR-0026).',
   reject_audit_mutation:
@@ -281,6 +281,13 @@ export const RULES: readonly Rule[] = [
       'org_features_updated_by_fk',
     ],
     refs: ['ADR-0032'],
+  },
+  {
+    rule: 'An organization’s country is a two-letter code, and its duplicate window 0 to 120 minutes.',
+    mechanism:
+      'Checks on the columns; the size is one of the bands in `organization_size`. The home currency must be one ExpenseWise supports, the locale a language tag, and the time zone one both the runtime and Postgres know, which the domain and `updateOrganization()` check when the owner sets them. Only the owner changes them, which the API checks (ADR-0037).',
+    objects: ['organizations_country_code', 'organizations_duplicate_window_range'],
+    refs: ['FR-PLT-11', 'FR-INT-19', 'ADR-0037'],
   },
   {
     rule: 'A sign-in reaches one member.',

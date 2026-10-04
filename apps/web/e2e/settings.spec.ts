@@ -40,6 +40,10 @@ test.describe('sign-in and AI provider settings', () => {
       ['PUT', '/api/v1/settings/features/expenses.mileage'],
       ['GET', '/api/v1/audit/events'],
       ['GET', '/api/v1/audit/verification'],
+      ['GET', '/api/v1/settings/organization'],
+      ['PATCH', '/api/v1/settings/organization'],
+      ['GET', '/api/v1/settings/duplicate-window'],
+      ['PUT', '/api/v1/settings/duplicate-window'],
     ] as const) {
       const res = await request.fetch(path, {
         method,
@@ -61,6 +65,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       '/settings/sign-ins',
       '/settings/features',
       '/settings/audit',
+      '/settings/organization',
     ]) {
       test(`${path} has no WCAG 2.2 AA violations`, async ({ page }) => {
         await page.goto(path);

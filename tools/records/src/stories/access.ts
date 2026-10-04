@@ -582,7 +582,7 @@ export const ACCESS_STORIES: readonly Story[] = [
       'the organization is described as it really is, not as the app guessed on my first sign-in',
     feature: 'F-51',
     requirements: ['FR-PLT-11'],
-    status: 'Planned',
+    status: 'Delivered',
     criteria: [
       {
         id: 'AC1',
@@ -590,7 +590,10 @@ export const ACCESS_STORIES: readonly Story[] = [
         when: 'I open Settings',
         then: 'I can change the organization’s details and demographics',
         decided: { by: 'owner', source: 'owner 2026-10-04' },
-        checks: [],
+        checks: [
+          'api/organization › shows every member the details and their own role, and lets only the owner change them',
+          'db/organizations.int › keeps each detail the owner sets, with one audit event listing every change',
+        ],
       },
       {
         id: 'AC2',
@@ -598,7 +601,10 @@ export const ACCESS_STORIES: readonly Story[] = [
         when: 'I change its details and demographics',
         then: 'the details are its name, home currency, country, locale, time zone and address, and the demographics its industry and size',
         decided: { by: 'claude' },
-        checks: [],
+        checks: [
+          'domain/organization › sets each detail and demographic, tidied, and says what changed',
+          'db/organizations.int › keeps each detail the owner sets, with one audit event listing every change',
+        ],
       },
       {
         id: 'AC3',
@@ -606,7 +612,9 @@ export const ACCESS_STORIES: readonly Story[] = [
         when: 'I open Settings',
         then: 'I can’t change the organization’s details',
         decided: { by: 'claude' },
-        checks: [],
+        checks: [
+          'api/organization › shows every member the details and their own role, and lets only the owner change them',
+        ],
       },
       {
         id: 'AC4',
@@ -614,7 +622,10 @@ export const ACCESS_STORIES: readonly Story[] = [
         when: 'background work, such as a report opening or closing, decides what day it is',
         then: 'it goes by the organization’s time zone',
         decided: { by: 'claude' },
-        checks: [],
+        checks: [
+          'db/organizations.int › with organization settings on, joins a trip 24 hours after its return day ends there',
+          'db/organizations.int › names a report by the day it opened where the organization is',
+        ],
       },
       {
         id: 'AC5',
@@ -622,9 +633,144 @@ export const ACCESS_STORIES: readonly Story[] = [
         when: 'anyone later looks at the audit trail',
         then: 'it records the change',
         decided: { by: 'claude' },
-        checks: [],
+        checks: [
+          'db/organizations.int › keeps each detail the owner sets, with one audit event listing every change',
+          'api/organization › shows every member the details and their own role, and lets only the owner change them',
+        ],
+      },
+      {
+        id: 'AC6',
+        given: 'I am the owner',
+        when: 'I save a value that isn’t one, such as a blank name, a three-letter country or a time zone nobody knows',
+        then: 'nothing is saved, and I am told which field and why; saving what is already there records nothing',
+        decided: { by: 'claude' },
+        checks: [
+          'domain/organization › refuses a value that isn’t one, naming the field',
+          'db/organizations.int › refuses a value that isn’t one, and changes nothing',
+          'api/organization › refuses a value that isn’t one, naming the field, and a request that changes nothing',
+        ],
+      },
+      {
+        id: 'AC7',
+        given: 'organization settings are switched off',
+        when: 'anyone opens Settings',
+        then: 'there is no Organization page to change, and its routes answer as if they weren’t there',
+        decided: { by: 'owner', source: 'Q5' },
+        checks: [
+          'api/organization › answers 404 feature_off while organization settings are off, so they look absent',
+        ],
       },
     ],
-    note: 'Your requirement of Oct 4. Today a new organization is named after its owner’s email address and starts in US dollars, and nothing can change either (US-ACC-02).',
+    note: 'Your requirement of Oct 4. A new organization is still named after its owner’s email address and starts in US dollars (US-ACC-02); now the owner can change both, and keep the rest, in Settings › Organization. The locale is kept, but nothing formats by it yet.',
+  },
+  {
+    id: 'US-ACC-09',
+    title: 'Reports keep my organization’s days',
+    as: 'Alex, who travels for work',
+    want: 'reports to open and close by the days where my organization is',
+    soThat: 'a trip is on its report a day after I get home, not a day and a half',
+    feature: 'F-51',
+    requirements: ['FR-PLT-11'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'organization settings are on and the organization keeps a time zone',
+        when: 'a trip’s return day, or a local expense’s day, ends there',
+        then: 'it joins a report 24 hours later, rather than at noon UTC two days on',
+        decided: { by: 'claude', source: 'ADR-0037' },
+        checks: [
+          'domain/reports › in the organization’s time zone, waits 24 hours after its day ends there (FR-PLT-11)',
+          'db/organizations.int › with organization settings on, joins a trip 24 hours after its return day ends there',
+        ],
+        rules: ['R-REPORT-JOIN'],
+      },
+      {
+        id: 'AC2',
+        given: 'organization settings are on and the organization keeps a time zone',
+        when: 'a report opens',
+        then: 'its day 28 is 28 days on the organization’s calendar at the time it opened, so a clock change doesn’t move it to the day before',
+        decided: { by: 'claude', source: 'ADR-0037' },
+        checks: [
+          'domain/reports › in the organization’s time zone, closes on its day 28 at the time it opened there',
+          'db/organizations.int › with organization settings on, joins a trip 24 hours after its return day ends there',
+        ],
+        rules: ['R-REPORT-WINDOW'],
+      },
+      {
+        id: 'AC3',
+        given: 'organization settings are on and the organization keeps a time zone',
+        when: 'a report opens',
+        then: 'it is named by the date it opened where the organization is',
+        decided: { by: 'claude', source: 'ADR-0037' },
+        checks: [
+          'db/organizations.int › names a report by the day it opened where the organization is',
+        ],
+      },
+      {
+        id: 'AC4',
+        given: 'organization settings are off, or the organization keeps no time zone',
+        when: 'the schedule decides what is due',
+        then: 'it counts at UTC−12 as before, whatever time zone is kept',
+        decided: { by: 'owner', source: 'Q5' },
+        checks: [
+          'db/organizations.int › with organization settings off, goes by UTC−12 as before, whatever time zone is kept',
+        ],
+        rules: ['R-REPORT-JOIN'],
+      },
+      {
+        id: 'AC5',
+        given: 'the server’s override says organization settings are on or off',
+        when: 'background work asks whether they are',
+        then: 'the override wins over the owner’s switch, as it does for screens',
+        decided: { by: 'blueprint', source: 'ADR-0032' },
+        checks: [
+          'db/organizations.int › is the server’s override first, then the organization’s switch, then off',
+        ],
+      },
+    ],
+    note: 'Claude’s reading of your requirement that the time zone tells background work what day it is (FR-PLT-11). In US Central time a trip used to join about 31 hours after its day ended; with the time zone kept it is 24, plus up to an hour for the schedule.',
+  },
+  {
+    id: 'US-ACC-10',
+    title: 'Change the home currency from now on',
+    as: 'the organization’s owner',
+    want: 'to change the organization’s home currency',
+    soThat:
+      'new reports are in the currency we work in, without rewriting what was already claimed',
+    feature: 'F-51',
+    requirements: ['FR-PLT-11'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'I change the home currency',
+        when: 'a report opens afterwards',
+        then: 'it is in the new currency',
+        decided: { by: 'claude', source: 'ADR-0037' },
+        checks: [
+          'db/organizations.int › opens reports from then on in a new home currency, and leaves those opened before as they were',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'reports already opened, and expenses already filed',
+        when: 'I change the home currency',
+        then: 'they keep the currency they had, and no amount is converted or rewritten',
+        decided: { by: 'claude', source: 'ADR-0037' },
+        checks: [
+          'db/organizations.int › opens reports from then on in a new home currency, and leaves those opened before as they were',
+        ],
+      },
+      {
+        id: 'AC3',
+        given: 'a currency ExpenseWise doesn’t support',
+        when: 'I choose it as the home currency',
+        then: 'it is refused, and the home currency stays as it was',
+        decided: { by: 'claude' },
+        checks: ['domain/organization › refuses a value that isn’t one, naming the field'],
+      },
+    ],
+    note: 'Claude’s choice, yours to overturn: a change applies only to what is worked out afterwards. Converting each amount to the currency a person is reimbursed in is #62’s, which starts from the organization’s currency.',
   },
 ];

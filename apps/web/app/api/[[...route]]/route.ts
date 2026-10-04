@@ -3,6 +3,7 @@ import {
   dbAuditStore,
   dbExpenseStore,
   dbHomeStore,
+  dbOrganizationStore,
   dbReportStore,
   dbReceiptStore,
   dbTripStore,
@@ -36,6 +37,7 @@ const handler = handle(
     readiness: createReadinessProbe(process.env.DATABASE_URL),
     // Tenant data as expensewise_app; the pool connects on first use.
     workspace: db && dbWorkspaceStore(db),
+    organization: db && dbOrganizationStore(db),
     receipts: db && dbReceiptStore(db),
     expenses: db && dbExpenseStore(db),
     trips: db && dbTripStore(db),

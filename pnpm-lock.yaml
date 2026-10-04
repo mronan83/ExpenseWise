@@ -170,6 +170,9 @@ importers:
       '@expensewise/domain':
         specifier: workspace:*
         version: link:../domain
+      '@expensewise/flags':
+        specifier: workspace:*
+        version: link:../flags
       drizzle-orm:
         specifier: ^0.45.3
         version: 0.45.3(@opentelemetry/api@1.9.1)(@types/pg@8.23.1)(pg@8.23.0)

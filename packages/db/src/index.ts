@@ -9,6 +9,7 @@ export * from './features.ts';
 export * from './home.ts';
 export * from './inbound.ts';
 export * from './members.ts';
+export * from './organizations.ts';
 export * from './role-passwords.ts';
 export * from './outbox.ts';
 export * from './readiness.ts';

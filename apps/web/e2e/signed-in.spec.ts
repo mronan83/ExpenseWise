@@ -122,6 +122,7 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
   ['a closed report', (s) => `/reports/${s.reports.closed}`, []],
   ['a local expense needing a reason', (s) => `/expenses/${s.expenses.fallback}`, []],
   ['a local expense with its reason', (s) => `/expenses/${s.expenses.lunch}`, []],
+  ['organization settings', () => '/settings/organization', []],
   ['AI provider settings', () => '/settings/ai', []],
   ['sign-in settings', () => '/settings/sign-ins', []],
   ['feature settings', () => '/settings/features', []],

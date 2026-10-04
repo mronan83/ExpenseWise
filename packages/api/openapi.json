@@ -484,6 +484,259 @@
           "enabled"
         ]
       },
+      "OrganizationSettings": {
+        "type": "object",
+        "properties": {
+          "organization": {
+            "$ref": "#/components/schemas/OrganizationDetails"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "member",
+              "approver",
+              "finance_admin",
+              "owner",
+              "auditor"
+            ],
+            "description": "The caller’s role."
+          },
+          "canEdit": {
+            "type": "boolean",
+            "description": "Only the owner changes the details."
+          }
+        },
+        "required": [
+          "organization",
+          "role",
+          "canEdit"
+        ]
+      },
+      "OrganizationDetails": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Acme Field Services"
+          },
+          "homeCurrency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "ARS",
+              "AUD",
+              "BHD",
+              "BRL",
+              "CAD",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CZK",
+              "DKK",
+              "EGP",
+              "EUR",
+              "GBP",
+              "HKD",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "ISK",
+              "JOD",
+              "JPY",
+              "KRW",
+              "KWD",
+              "MXN",
+              "MYR",
+              "NOK",
+              "NZD",
+              "OMR",
+              "PEN",
+              "PHP",
+              "PLN",
+              "QAR",
+              "SAR",
+              "SEK",
+              "SGD",
+              "THB",
+              "TND",
+              "TRY",
+              "TWD",
+              "USD",
+              "VND",
+              "ZAR"
+            ],
+            "example": "USD",
+            "description": "ISO 4217. Reports opened from now on are in it; reports already opened keep theirs, and no amount is converted."
+          },
+          "country": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "US",
+            "description": "ISO 3166-1 alpha-2."
+          },
+          "locale": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "en-US",
+            "description": "A BCP 47 tag."
+          },
+          "timeZone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "America/Chicago",
+            "description": "An IANA time zone. With organization settings on, it says when the organization’s day ends: when trips and local expenses join a report, and which day is day 28."
+          },
+          "address": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "1520 Harney St\nOmaha, NE 68102"
+          },
+          "industry": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "Professional services"
+          },
+          "size": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "just_me",
+              "2_10",
+              "11_50",
+              "51_200",
+              "201_1000",
+              "over_1000",
+              null
+            ],
+            "description": "How many people it has, in bands."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "homeCurrency",
+          "country",
+          "locale",
+          "timeZone",
+          "address",
+          "industry",
+          "size"
+        ]
+      },
+      "EditOrganization": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "The organization’s name. It can’t be blank.",
+            "example": "Acme Field Services"
+          },
+          "homeCurrency": {
+            "type": "string",
+            "maxLength": 3,
+            "description": "An ISO 4217 code ExpenseWise supports. It can’t be blank.",
+            "example": "EUR"
+          },
+          "country": {
+            "type": "string",
+            "maxLength": 2,
+            "description": "ISO 3166-1 alpha-2; blank clears it.",
+            "example": "US"
+          },
+          "locale": {
+            "type": "string",
+            "maxLength": 35,
+            "description": "A BCP 47 language tag; blank clears it.",
+            "example": "en-US"
+          },
+          "timeZone": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "An IANA time zone; blank clears it.",
+            "example": "America/Chicago"
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 300,
+            "description": "The postal address, lines and all; blank clears it.",
+            "example": "Omaha, NE"
+          },
+          "industry": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "What it does; blank clears it.",
+            "example": "Professional services"
+          },
+          "size": {
+            "type": "string",
+            "maxLength": 16,
+            "description": "One of just_me, 2_10, 11_50, 51_200, 201_1000, over_1000; blank clears it.",
+            "example": "2_10"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DuplicateWindow": {
+        "type": "object",
+        "properties": {
+          "minutes": {
+            "type": "integer",
+            "example": 30,
+            "description": "How many minutes apart two receipts at one place can be and still be one purchase. 0 is the same minute only."
+          },
+          "defaultMinutes": {
+            "type": "integer",
+            "example": 30
+          },
+          "maxMinutes": {
+            "type": "integer",
+            "example": 120
+          },
+          "canEdit": {
+            "type": "boolean",
+            "description": "Only the owner sets it, for everyone."
+          }
+        },
+        "required": [
+          "minutes",
+          "defaultMinutes",
+          "maxMinutes",
+          "canEdit"
+        ]
+      },
+      "SetDuplicateWindow": {
+        "type": "object",
+        "properties": {
+          "minutes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 120,
+            "example": 45
+          }
+        },
+        "required": [
+          "minutes"
+        ]
+      },
       "ReceiptUploadTicket": {
         "type": "object",
         "properties": {
@@ -4483,6 +4736,316 @@
           },
           "409": {
             "description": "The server overrides this feature, so a switch here would have no effect.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/settings/organization": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "The organization's details",
+        "description": "Its name, home currency, country, locale, time zone, address, industry and size, and the caller’s role. Every member can read them. Behind `settings.organization`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The details.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationSettings"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or is not its owner.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "This feature is not switched on for the organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Change the organization's details",
+        "description": "Only the owner. Each field given is checked and set; a blank clears one that may be empty. The change is recorded in the audit log, from and to. Behind `settings.organization`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditOrganization"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The details as they now are.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or is not its owner.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "This feature is not switched on for the organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not valid; `field` names it.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/settings/duplicate-window": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "The duplicate time window",
+        "description": "How far apart in time two receipts at one place can be and still be one purchase, for everyone in the organization. Every member can read it. Behind `settings.duplicate-window`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The window.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DuplicateWindow"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or is not its owner.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "This feature is not switched on for the organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Set the duplicate time window",
+        "description": "Only the owner, for everyone: 0 to 120 minutes. It judges receipts read from now on; pairs already flagged or kept stay as they are. Each change is recorded in the audit log. Behind `settings.duplicate-window`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetDuplicateWindow"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The window as it now is.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DuplicateWindow"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid: a whole number of minutes, 0 to 120.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or is not its owner.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "This feature is not switched on for the organization (feature_off).",
             "content": {
               "application/problem+json": {
                 "schema": {

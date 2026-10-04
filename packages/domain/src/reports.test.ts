@@ -3,6 +3,7 @@ import {
   cleanJustification,
   joinsReportAt,
   JUSTIFICATION_MAX,
+  lastDayToJoin,
   localExpenseReady,
   planAutoClose,
   reopenedClosesAt,
@@ -10,6 +11,7 @@ import {
   reportWarns,
   tripReady,
 } from './reports.ts';
+import { addDays } from './time-zones.ts';
 
 const at = (iso: string) => new Date(iso);
 
@@ -28,6 +30,38 @@ describe('when a trip or local expense joins a report', () => {
   it('refuses a date that is not one', () => {
     expect(() => joinsReportAt('2026-02-30')).toThrow();
   });
+
+  it('in the organization’s time zone, waits 24 hours after its day ends there (FR-PLT-11)', () => {
+    // 1 Oct ends in Chicago (CDT, UTC−5) at 2 Oct 05:00 UTC; 24 hours on, it joins.
+    expect(joinsReportAt('2026-10-01', 'America/Chicago').toISOString()).toBe(
+      '2026-10-03T05:00:00.000Z',
+    );
+    // In Tokyo, 1 Oct ends at 1 Oct 15:00 UTC.
+    expect(joinsReportAt('2026-10-01', 'Asia/Tokyo').toISOString()).toBe(
+      '2026-10-02T15:00:00.000Z',
+    );
+    // 1 Nov, when the clocks go back in Chicago, is 25 hours long; the 24 hours start when it
+    // ends, at midnight CST.
+    expect(joinsReportAt('2026-11-01', 'America/Chicago').toISOString()).toBe(
+      '2026-11-03T06:00:00.000Z',
+    );
+  });
+
+  it('asked the other way round, names the last date that has joined by a moment', () => {
+    expect(lastDayToJoin(at('2026-10-03T12:00:00Z'))).toBe('2026-10-01');
+    expect(lastDayToJoin(at('2026-10-03T11:59:59Z'))).toBe('2026-09-30');
+    expect(lastDayToJoin(at('2026-10-03T05:00:00Z'), 'America/Chicago')).toBe('2026-10-01');
+    expect(lastDayToJoin(at('2026-10-03T04:59:59Z'), 'America/Chicago')).toBe('2026-09-30');
+    // Every hour of a year, in zones east and west, both ways agree.
+    for (const zone of [undefined, 'America/Chicago', 'Pacific/Kiritimati', 'Europe/London']) {
+      for (let h = 0; h < 366 * 24; h += 7) {
+        const now = new Date(Date.UTC(2026, 0, 1, h));
+        const day = lastDayToJoin(now, zone);
+        expect(joinsReportAt(day, zone).getTime()).toBeLessThanOrEqual(now.getTime());
+        expect(joinsReportAt(addDays(day, 1), zone).getTime()).toBeGreaterThan(now.getTime());
+      }
+    }
+  });
 });
 
 describe('a report’s 28 days', () => {
@@ -39,6 +73,17 @@ describe('a report’s 28 days', () => {
     expect(reportWarns(closes, at('2026-10-24T11:59:59Z'))).toBe(false);
     expect(reportWarns(closes, at('2026-10-24T12:00:00Z'))).toBe(true);
     expect(reportWarns(closes, at('2026-11-02T00:00:00Z'))).toBe(true);
+  });
+
+  it('in the organization’s time zone, closes on its day 28 at the time it opened there', () => {
+    // Opened at 00:07 in Chicago on 5 Oct (CDT); 28 days on is 00:07 on 2 Nov (CST).
+    const openedThere = at('2026-10-05T05:07:00Z');
+    expect(reportClosesAt(openedThere, 'America/Chicago').toISOString()).toBe(
+      '2026-11-02T06:07:00.000Z',
+    );
+    // 28 days of 24 hours would end the evening before, on 1 Nov.
+    expect(reportClosesAt(openedThere).toISOString()).toBe('2026-11-02T05:07:00.000Z');
+    expect(reportClosesAt(openedThere, null)).toEqual(reportClosesAt(openedThere));
   });
 
   it('gives a reopened report a week, or keeps its own day 28 if later', () => {
