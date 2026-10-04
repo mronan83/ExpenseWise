@@ -306,6 +306,58 @@ export const BACKLOG: readonly BacklogItem[] = [
 
   // P2: this month
   {
+    num: 79,
+    title: 'Read where a journey went, and a hotel stay’s nights',
+    type: 'Feature',
+    detail:
+      'Your requirement of Oct 4. A ride receipt reads its pickup and drop-off, an airline ticket its origin and destination, a rail ticket its stations (your answer to Q41); a hotel folio reads its check-in and check-out dates and works out the nights. Each shows on the expense. A new reading version asks for them, a few output tokens more a reading; receipts already read gain them when read again.',
+    priority: 'P2',
+    effort: 'M',
+    severity: 'Low',
+    blocker: { kind: 'none' },
+    source: 'Product owner Oct 4',
+    affects: ['FR-INT-20', 'FR-INT-21', 'F-54'],
+  },
+  {
+    num: 80,
+    title: 'Show a receipt’s itemized lines under the total',
+    type: 'Feature',
+    detail:
+      'Your requirement of Oct 4. The lines the reading already holds show in an expandable section under the expense’s total, each with its amount. The view the split (#81) and exclusions (#82) work in.',
+    priority: 'P2',
+    effort: 'S',
+    severity: 'Low',
+    blocker: { kind: 'none' },
+    source: 'Product owner Oct 4',
+    affects: ['FR-INT-22', 'F-55'],
+  },
+  {
+    num: 81,
+    title: 'Split an expense into parts by category and type',
+    type: 'Feature',
+    detail:
+      'Your requirement of Oct 4 and your answers to Q37 to Q39: one expense with one receipt, made of parts, each with a category, type and amount; from itemized lines where it has them, each line given a category and type, or by amounts where it doesn’t; tax and service charges spread across the other lines in proportion, in whole cents, the largest share taking any cent left over. The parts always add up to the claim. Reports and exports total by category and type.',
+    priority: 'P2',
+    effort: 'L',
+    severity: 'Medium',
+    blocker: { kind: 'items', items: [80] },
+    source: 'Product owner Oct 4',
+    affects: ['FR-EXP-15', 'FR-EXP-06', 'F-55'],
+  },
+  {
+    num: 82,
+    title: 'Exclude a line from reimbursement, with its reason',
+    type: 'Feature',
+    detail:
+      'Your requirement of Oct 4 and your answer to Q40: in the itemized view, include or exclude each line. An excluded line takes a reason (personal, paid by someone else, not reimbursable, other) and an optional note, needed for other; the claim drops by the line and its share of tax and service charges (Q39), and a reviewer sees each excluded line and why. This is how an expense claims less than its receipt with a reason (FR-EXP-10, Q6).',
+    priority: 'P2',
+    effort: 'M',
+    severity: 'Medium',
+    blocker: { kind: 'items', items: [80] },
+    source: 'Product owner Oct 4',
+    affects: ['FR-EXP-16', 'FR-EXP-10', 'F-55'],
+  },
+  {
     num: 11,
     title: 'The outbox relay isn’t running',
     type: 'Ops',

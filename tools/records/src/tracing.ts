@@ -780,10 +780,67 @@ export const QUESTIONS: readonly Question[] = [
       text: 'B: all five offered, Opus 5.5 and Fable 5.1 off until you switch one on.',
     },
   },
+  {
+    id: 'Q37',
+    title: 'What a split expense is',
+    ask: 'You asked to split an expense into categories and types for reporting. A: it stays one expense with one receipt, made of parts, each with a category, type and amount. B: it becomes several expenses on the same receipt, each reviewed and approved on its own.',
+    why: 'One expense in parts keeps one claim for approval and one receipt as proof, while reports and exports total by category and type. Several expenses are simpler to store but multiply what is reviewed, and the receipt has to be checked against their sum.',
+    recommendation: 'A.',
+    affects: ['FR-EXP-15', 'F-55'],
+    answer: { date: '2026-10-04', text: 'A: one expense, in parts.' },
+  },
+  {
+    id: 'Q38',
+    title: 'How the parts of a split are made',
+    ask: 'A: from itemized lines where the receipt has them, each line given a category and type, or by amounts where it doesn’t. B: from lines only. C: by amounts only.',
+    why: 'Folios and itemized bills split naturally by line; card slips and taxi receipts have no lines. Either way the parts add up to the claim.',
+    recommendation: 'A.',
+    affects: ['FR-EXP-15', 'F-55'],
+    answer: { date: '2026-10-04', text: 'A: by line where itemized, by amount where not.' },
+  },
+  {
+    id: 'Q39',
+    title: 'The tax on a line split off or excluded',
+    ask: 'A: lines as printed; tax and service charges are lines of their own, split or excluded like any other. B: each tax or service line is spread across the other lines in proportion.',
+    why: 'As printed matches the receipt exactly. In proportion is closer to what finance would allocate, so excluding the minibar also takes off its share of the tax, but the amounts no longer match a printed line.',
+    recommendation: 'A.',
+    affects: ['FR-EXP-15', 'FR-EXP-16', 'F-55'],
+    answer: {
+      date: '2026-10-04',
+      text: 'B: spread in proportion, in whole cents, the largest share taking any cent left over so the parts add up to the receipt exactly.',
+    },
+  },
+  {
+    id: 'Q40',
+    title: 'The reason for an excluded line',
+    ask: 'Claiming less than a receipt needs a reason (Q6). A: the excluded line is the reason, with an optional note. B: pick a reason: personal, paid by someone else, not reimbursable, other. C: a typed note for each.',
+    why: 'A is one tap; B tells a reviewer why at a glance for one more tap; C is the most explicit and the slowest on a phone.',
+    recommendation: 'A.',
+    affects: ['FR-EXP-16', 'FR-EXP-10', 'F-55'],
+    answer: {
+      date: '2026-10-04',
+      text: 'A reason picked from the list, and an optional note. Claude assumes other needs the note, since other alone says nothing; yours to overturn.',
+    },
+  },
+  {
+    id: 'Q41',
+    title: 'Which transportation receipts read a from and to',
+    ask: 'You asked for the from and to of a ride. A: rides, airline tickets and rail tickets each read their from and to. B: rides only.',
+    why: 'The same reading reads either at a few output tokens more; one rule for every leg of a journey.',
+    recommendation: 'A.',
+    affects: ['FR-INT-20', 'F-54'],
+    answer: { date: '2026-10-04', text: 'A: rides, flights and rail.' },
+  },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-04',
+    change:
+      'Your requirements of Oct 4 for receipts, recorded as Planned with their stories: a transportation receipt reads where it went from and to, rides, flights and rail (FR-INT-20, Q41); a hotel folio reads its stay and the nights (FR-INT-21); a receipt’s itemized lines show under the total (FR-INT-22); an expense splits into parts by category and type, by line or by amount, staying one expense (FR-EXP-15, Q37, Q38); a line can be excluded from reimbursement with a reason and an optional note (FR-EXP-16, Q40); tax and service charges spread across lines in proportion (Q39). Features F-54 and F-55; backlog #79 to #82; stories US-READ-23, US-READ-24 and US-EXP-07 to US-EXP-09.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-04',
     change:

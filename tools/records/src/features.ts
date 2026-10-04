@@ -602,6 +602,15 @@ export const FEATURES: readonly Feature[] = [
     note: 'Each reading captures the time of purchase and the merchant’s address, each optional and with its confidence, and the expense carries them. The expense page shows them beside its receipt’s and edits them; the time zone follows the place unless the person picks one. A blank never holds a receipt for a look.',
   },
   {
+    id: 'F-54',
+    title: 'Journeys and stays read from transport receipts and folios',
+    group: 'Receipts',
+    kind: 'product',
+    phase: 'P1',
+    status: 'Planned',
+    backlog: 79,
+  },
+  {
     id: 'F-52',
     title: 'Duplicate time window in Settings',
     group: 'Receipts',
@@ -756,6 +765,15 @@ export const FEATURES: readonly Feature[] = [
     flags: ['expenses.categories'],
     checks: ['domain/categories', 'db/categories.int', 'api/categories', 'e2e/signed-in'],
     note: 'Two lists that each nest, and the types each category allows (Q7). Every organization starts with five categories and nine types, seeded for those that existed and for each new one; owners and finance admins rename, add, move, code and retire them, and delete one only while no expense has it. An expense without a category and type says so on its page and in the list, and blocks nothing (Q27, GAP-28). Behind `expenses.categories`, which also brings suggestions (F-15). Seven screens in the signed-in checks.',
+  },
+  {
+    id: 'F-55',
+    title: 'Itemized lines: shown, split by category and type, and excluded',
+    group: 'Expenses, trips and reports',
+    kind: 'product',
+    phase: 'P1',
+    status: 'Planned',
+    backlog: 80,
   },
   {
     id: 'F-15',
