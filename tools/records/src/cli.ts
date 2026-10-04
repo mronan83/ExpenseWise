@@ -7,13 +7,14 @@ import { PAGE_URLS, PRODUCTION_URL, REPOSITORY } from './pages.ts';
 import { renderArchitecture } from './render/architecture.ts';
 import { renderBacklog } from './render/backlog.ts';
 import { renderDataModel } from './render/data-model.ts';
+import { renderStories } from './render/stories.ts';
 import type { PageContext } from './render/shared.ts';
 import { renderTraceability } from './render/traceability.ts';
 import { REPO_ROOT } from './repo.ts';
 
 /**
- * Builds the four pages for publication after a successful release: traceability, backlog,
- * technical architecture and data model.
+ * Builds the five pages for publication after a successful release: traceability, backlog,
+ * technical architecture, data model, and user stories and acceptance criteria.
  *
  *   pnpm records:pages --out <dir> [--since <previous production commit>]
  *
@@ -88,8 +89,9 @@ async function main() {
   writeFileSync(join(out, 'backlog.html'), renderBacklog(ctx));
   writeFileSync(join(out, 'architecture.html'), renderArchitecture(ctx));
   writeFileSync(join(out, 'data-model.html'), renderDataModel(ctx));
+  writeFileSync(join(out, 'stories.html'), renderStories(ctx));
   console.log(
-    `Built four pages in ${out}: production ${productionSha.slice(0, 7)}, records ${recordsSha.slice(0, 7)}.`,
+    `Built five pages in ${out}: production ${productionSha.slice(0, 7)}, records ${recordsSha.slice(0, 7)}.`,
   );
 }
 

@@ -7,6 +7,7 @@ export const PAGE_URLS: {
   readonly backlog?: string;
   readonly architecture?: string;
   readonly dataModel?: string;
+  readonly stories?: string;
 } = {
   traceability: 'https://claude.ai/artifact/8VCWvpqvNVELSKUwQawoyN',
   backlog: 'https://claude.ai/artifact/MfctKLE69dRkcHzpYVt9TD',

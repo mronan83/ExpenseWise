@@ -179,3 +179,70 @@ export interface BacklogItem {
   readonly affects?: readonly string[];
   readonly done?: { readonly date: string; readonly in: string };
 }
+
+/**
+ * Who settled a rule, so the page can say which criteria are the product owner's and which
+ * are Claude's to confirm. owner: the product owner's own requirement or answer, cited as
+ * `owner 2026-10-04` or the question it answered (`Q19`). blueprint: the blueprint docs or a
+ * decision the product owner took in its register (`journeys §4.6`, `ADR-0006`). claude: a
+ * design choice or reading of a requirement nobody has confirmed, citing the ADR that
+ * records it when one does.
+ */
+export type Decided =
+  | { readonly by: 'owner'; readonly source: string }
+  | { readonly by: 'blueprint'; readonly source: SourceRef }
+  | { readonly by: 'claude'; readonly source?: SourceRef };
+
+/** One acceptance criterion, in Given/When/Then form. */
+export interface Criterion {
+  /** AC1, AC2… in order. Numbers are permanent within the story. */
+  readonly id: string;
+  readonly given: string;
+  readonly when: string;
+  readonly then: string;
+  readonly decided: Decided;
+  /** The tests that prove it. Empty only while untested. */
+  readonly checks: readonly CheckRef[];
+  /** While a built story's criterion has no test: the open backlog item that adds one. */
+  readonly untested?: number;
+  /** Rules from the register (R-…) whose value it depends on. */
+  readonly rules?: readonly string[];
+}
+
+/** Delivered: built, every criterion tested. Partial: built, a criterion untested. Planned: not built. */
+export type StoryStatus = 'Delivered' | 'Partial' | 'Planned';
+
+/** A user story: who wants what and why, and the criteria it is accepted on. */
+export interface Story {
+  /** US-AREA-nn. Numbers are permanent. */
+  readonly id: string;
+  readonly title: string;
+  /** "As …": a persona with their role, such as `Alex, who travels for work`. */
+  readonly as: string;
+  /** "I want …" */
+  readonly want: string;
+  /** "so that …" */
+  readonly soThat: string;
+  /** The feature it belongs to; a cross-cutting requirement's story may have none. */
+  readonly feature?: string;
+  readonly requirements: readonly string[];
+  readonly status: StoryStatus;
+  readonly criteria: readonly Criterion[];
+  readonly note?: string;
+}
+
+/**
+ * A number or setting the rules share, named once. Where the code keeps it, the integrity
+ * checks hold the code to the value written here.
+ */
+export interface Rule {
+  /** R-NAME */
+  readonly id: string;
+  readonly name: string;
+  /** As people say it: `30 minutes`. */
+  readonly value: string;
+  readonly decided: Decided;
+  /** The constant that holds it: the file must have a line naming `constant` and `literal`. */
+  readonly code?: { readonly file: string; readonly constant: string; readonly literal: string };
+  readonly note?: string;
+}

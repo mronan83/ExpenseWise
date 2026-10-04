@@ -242,6 +242,20 @@ export const BACKLOG: readonly BacklogItem[] = [
     affects: ['GAP-24', 'NFR-DEL-09', 'F-53'],
   },
 
+  {
+    num: 66,
+    title: 'Tests for the acceptance criteria no test proves yet',
+    type: 'Verify',
+    detail:
+      'Writing the user stories (#65) lists every acceptance criterion of a built story that no automated test proves; the stories page shows each one against this item. Add a test for each, most of them end-to-end steps through a screen, such as the one-tap Delete the copy and Replace the earlier one on a duplicate, and mark the story Delivered.',
+    priority: 'P2',
+    effort: 'M',
+    severity: 'Medium',
+    blocker: { kind: 'none' },
+    source: 'NFR-DEL-09',
+    affects: ['NFR-DEL-09', 'F-53'],
+  },
+
   // P2: this month
   {
     num: 11,
