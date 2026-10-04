@@ -1322,8 +1322,8 @@ export const NON_FUNCTIONAL: readonly Requirement[] = [
       'db/mileage.int › keeps the rate it was logged at when the rates change later',
       'domain/mileage › snapshots the rate it used',
     ],
-    shortfalls: ['#62', '#51'],
-    note: 'Each drive keeps the mileage rate, its currency, effective date and source on its log since PR #58 (#17). The FX rate is copied on with #62 and the category mapping with #51; a policy version waits for the policy engine (Phase 2).',
+    shortfalls: ['#62'],
+    note: 'Each drive keeps the mileage rate, its currency, effective date and source on its log since PR #58 (#17). The FX rate is copied on with #62. An expense points at its category and type rather than copying them (#51, ADR-0036): one in use is retired, never deleted, but a renamed one shows its new name on old claims. A category mapping to accounts and a policy version wait for the policy engine (Phase 2).',
   },
   {
     id: 'NFR-DAT-05',

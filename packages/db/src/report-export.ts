@@ -2,7 +2,15 @@ import type { ExportExpense, ReportStatus } from '@expensewise/domain';
 import { and, eq, not, or, sql } from 'drizzle-orm';
 import type { Transaction } from './client.ts';
 import { heldAsDuplicate } from './duplicates.ts';
-import { categories, expenses, members, organizations, reports, trips } from './schema.ts';
+import {
+  categories,
+  expenses,
+  expenseTypes,
+  members,
+  organizations,
+  reports,
+  trips,
+} from './schema.ts';
 
 /** A report as its export’s heading names it (FR-SET-01). */
 export interface ExportReportHeading {
@@ -53,6 +61,7 @@ export async function reportForExport(
       date: expenses.transactionDate,
       merchant: expenses.merchant,
       category: categories.name,
+      type: expenseTypes.name,
       trip: trips.name,
       tripPurpose: trips.purpose,
       justification: expenses.justification,
@@ -65,6 +74,10 @@ export async function reportForExport(
     .leftJoin(
       categories,
       and(eq(categories.orgId, expenses.orgId), eq(categories.id, expenses.categoryId)),
+    )
+    .leftJoin(
+      expenseTypes,
+      and(eq(expenseTypes.orgId, expenses.orgId), eq(expenseTypes.id, expenses.typeId)),
     )
     .where(
       and(
@@ -79,8 +92,7 @@ export async function reportForExport(
       date: r.date,
       merchant: r.merchant,
       category: r.category,
-      // Types arrive with the organization's own categories and types (#51).
-      type: null,
+      type: r.type,
       trip: r.trip,
       purpose: r.trip === null ? r.justification : r.tripPurpose,
       note: r.note,

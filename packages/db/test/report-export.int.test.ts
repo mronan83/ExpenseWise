@@ -4,6 +4,8 @@ import { withOrg } from '../src/client.ts';
 import { reportForExport } from '../src/report-export.ts';
 import {
   categories,
+  categoryTypes,
+  expenseTypes,
   expenses,
   receiptDuplicates,
   receipts,
@@ -55,7 +57,12 @@ async function closedReport(name: string) {
       endDate: '2026-09-03',
       reportId,
     });
-    await tx.insert(categories).values({ id: travel, orgId: org.orgId, name: 'Travel' });
+    await tx.insert(categories).values({ id: travel, orgId: org.orgId, name: 'Client travel' });
+    const lodging = newId();
+    await tx.insert(expenseTypes).values({ id: lodging, orgId: org.orgId, name: 'Hotel stay' });
+    await tx
+      .insert(categoryTypes)
+      .values({ id: newId(), orgId: org.orgId, categoryId: travel, typeId: lodging });
     const expense = async (values: Partial<typeof expenses.$inferInsert>) => {
       const id = newId();
       await tx.insert(expenses).values({
@@ -80,6 +87,8 @@ async function closedReport(name: string) {
         currency: 'EUR',
         amountMinor: 41_280,
         categoryId: travel,
+        typeId: lodging,
+        classifiedAt: new Date('2026-09-04T09:00:00Z'),
         notes: 'Two nights',
       }),
       ride: await expense({ tripId }),
@@ -138,8 +147,8 @@ describe('a report as its export lists it (FR-SET-01)', () => {
       {
         date: '2026-09-03',
         merchant: 'Hotel Lindley',
-        category: 'Travel',
-        type: null,
+        category: 'Client travel',
+        type: 'Hotel stay',
         trip: 'Chicago · partner review',
         purpose: 'Partner review',
         note: 'Two nights',
