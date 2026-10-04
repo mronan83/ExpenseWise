@@ -33,7 +33,7 @@ export const RULES: readonly Rule[] = [
     name: 'When a trip or local expense joins a report',
     value: '24 hours after its day ends, counted as noon UTC two days after it',
     decided: { by: 'owner', source: 'owner 2026-10-04' },
-    note: 'Your 24 hours. Counting them from noon UTC on the second day, so no time zone sees a trip join early, is Claude’s (ADR-0029).',
+    note: 'Your 24 hours. Counting them from noon UTC on the second day, so no time zone sees a trip join early, is Claude’s (ADR-0029). In practice the wait is 24 to 50 hours after the day ends, about 31 hours in US Central time, plus up to an hour for the schedule; the organization’s time zone (#63) can bring it to 24 hours.',
   },
   {
     id: 'R-REPORT-SCHEDULE',
@@ -70,7 +70,11 @@ export const RULES: readonly Rule[] = [
     name: 'How far apart the dates of two receipts matched on their total can be',
     value: 'a day either way',
     decided: { by: 'claude', source: 'ADR-0028' },
-    code: { file: 'packages/domain/src/duplicates.ts', constant: 'DUPLICATE_DAY_WINDOW', literal: '1' },
+    code: {
+      file: 'packages/domain/src/duplicates.ts',
+      constant: 'DUPLICATE_DAY_WINDOW',
+      literal: '1',
+    },
     note: 'Used only where the two receipts don’t both say when and where; you kept it for those (Q18).',
   },
   {
@@ -151,7 +155,7 @@ export const RULES: readonly Rule[] = [
     id: 'R-SIGN-IN-LINK',
     name: 'How long a link to add a sign-in works',
     value: '10 minutes',
-    decided: { by: 'claude' },
+    decided: { by: 'blueprint', source: 'ADR-0016' },
     code: {
       file: 'packages/api/src/workspace-routes.ts',
       constant: 'LINK_TOKEN_MAX_AGE_MS',

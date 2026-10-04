@@ -310,7 +310,7 @@ export const REPORT_STORIES: readonly Story[] = [
         decided: ADR29,
         checks: [
           'db/reports.int › reopens a closed report when something on it changes',
-          'db/trips.int › refuses while a submitted expense or a report rests on it',
+          'db/trips.int › refuses while a submitted expense rests on it, and reopens a closed report it was on',
         ],
       },
       {

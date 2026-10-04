@@ -1,5 +1,5 @@
 import { FEATURES } from './features.ts';
-import type { Decided, Requirement, Story } from './model.ts';
+import type { Decided, Requirement, Rule, Story } from './model.ts';
 import { exists, fileText } from './repo.ts';
 import { REQUIREMENTS } from './requirements.ts';
 import { RULES } from './rules.ts';
@@ -26,11 +26,17 @@ export interface StoryCheckContext {
  * adds one, every decision is attributed to a source that exists, and every rule the code
  * keeps has the value written in the register (NFR-DEL-09).
  */
-export function storyProblems(c: StoryCheckContext): void {
+export function storyProblems(
+  c: StoryCheckContext,
+  records: { readonly stories: readonly Story[]; readonly rules: readonly Rule[] } = {
+    stories: STORIES,
+    rules: RULES,
+  },
+): void {
   const { fail } = c;
   const requirements = new Map(REQUIREMENTS.map((r) => [r.id, r]));
   const features = new Map(FEATURES.map((f) => [f.id, f]));
-  const rules = new Map(RULES.map((r) => [r.id, r]));
+  const rules = new Map(records.rules.map((r) => [r.id, r]));
   const citedRules = new Set<string>();
 
   const checkDecided = (where: string, d: Decided) => {
@@ -49,7 +55,7 @@ export function storyProblems(c: StoryCheckContext): void {
   };
 
   // Rules
-  for (const r of RULES) {
+  for (const r of records.rules) {
     checkDecided(r.id, r.decided);
     c.checkText(r.id, `${r.name} ${r.value} ${r.note ?? ''}`);
     if (r.code) {
@@ -61,7 +67,10 @@ export function storyProblems(c: StoryCheckContext): void {
           .find((l) => new RegExp(`\\b${constant}\\b\\s*=`).test(l));
         if (!line) fail(r.id, `${file} has no ${constant}`);
         else if (!line.includes(`= ${literal}`)) {
-          fail(r.id, `${constant} in ${file} is not ${literal}: the code and the register disagree`);
+          fail(
+            r.id,
+            `${constant} in ${file} is not ${literal}: the code and the register disagree`,
+          );
         }
       }
     }
@@ -70,7 +79,7 @@ export function storyProblems(c: StoryCheckContext): void {
   // Stories
   const covered = new Set<string>();
   const coveredFeatures = new Set<string>();
-  for (const s of STORIES) {
+  for (const s of records.stories) {
     const built = s.status !== 'Planned';
     if (s.feature) {
       const f = features.get(s.feature);
@@ -97,8 +106,10 @@ export function storyProblems(c: StoryCheckContext): void {
     let untested = 0;
     s.criteria.forEach((a, i) => {
       const where = `${s.id} ${a.id}`;
-      if (a.id !== `AC${i + 1}`) fail(where, `should be AC${i + 1}: criteria are numbered in order`);
-      if (!a.given.trim() || !a.when.trim() || !a.then.trim()) fail(where, 'needs Given, When and Then');
+      if (a.id !== `AC${i + 1}`)
+        fail(where, `should be AC${i + 1}: criteria are numbered in order`);
+      if (!a.given.trim() || !a.when.trim() || !a.then.trim())
+        fail(where, 'needs Given, When and Then');
       checkDecided(where, a.decided);
       c.checkText(where, `${a.given} ${a.when} ${a.then}`);
       a.rules?.forEach((r) => {
@@ -114,12 +125,15 @@ export function storyProblems(c: StoryCheckContext): void {
       }
       if (a.checks.length === 0) {
         untested++;
-        if (a.untested === undefined) fail(where, 'is built but no test proves it: name the open item that adds one');
+        if (a.untested === undefined)
+          fail(where, 'is built but no test proves it: name the open item that adds one');
         else if (!c.open(a.untested)) fail(where, `#${a.untested} is not an open backlog item`);
       } else if (a.untested !== undefined) fail(where, 'has a test, so it is not untested');
     });
-    if (s.status === 'Delivered' && untested > 0) fail(s.id, 'Delivered, but a criterion is untested: Partial');
-    if (s.status === 'Partial' && untested === 0) fail(s.id, 'Partial, but every criterion is tested: Delivered');
+    if (s.status === 'Delivered' && untested > 0)
+      fail(s.id, 'Delivered, but a criterion is untested: Partial');
+    if (s.status === 'Partial' && untested === 0)
+      fail(s.id, 'Partial, but every criterion is tested: Delivered');
   }
 
   // Coverage: the whole build, and every requirement the product owner gave.
@@ -127,7 +141,12 @@ export function storyProblems(c: StoryCheckContext): void {
     if (isBuilt(r.status) && !covered.has(`${r.id}:built`)) {
       fail(r.id, `${r.status}, but no delivered story covers it`);
     }
-    if (r.status === 'Planned' && fromOwner(r) && !covered.has(`${r.id}:planned`) && !covered.has(`${r.id}:built`)) {
+    if (
+      r.status === 'Planned' &&
+      fromOwner(r) &&
+      !covered.has(`${r.id}:planned`) &&
+      !covered.has(`${r.id}:built`)
+    ) {
       fail(r.id, 'yours and planned, but no story details it');
     }
   }
@@ -137,7 +156,7 @@ export function storyProblems(c: StoryCheckContext): void {
       fail(f.id, `${f.status}, but no delivered story covers it`);
     }
   }
-  for (const r of RULES) {
+  for (const r of records.rules) {
     if (!citedRules.has(r.id)) fail(r.id, 'no acceptance criterion uses it');
   }
 }

@@ -77,7 +77,7 @@ function wrap(line: string, width: number): string[] {
  * The text of an emailed receipt as a PDF, the proof it is filed with (ADR-0027). Monospaced,
  * so columns of amounts stay lined up, at most five pages, and the same bytes every time for
  * the same text: no dates or ids are written, so a retried step stores the same file, and the
- * same email forwarded twice is recognized as one receipt.
+ * same text sent again is filed once; a forward adds text of its own, so it is caught by what it reads instead (ADR-0028).
  */
 export async function emailAsPdf(subject: string | null, body: string): Promise<Uint8Array> {
   const pdf = await PDFDocument.create({ updateMetadata: false });

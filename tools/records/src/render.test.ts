@@ -35,6 +35,10 @@ describe('the traceability page', () => {
     expect(html).toContain('<code>bbbbbbb</code>');
   });
 
+  it('lists each requirement’s user stories, linked to the stories page', () => {
+    expect(html).toContain('Stories: <span class="ref">US-DUP-01</span>');
+  });
+
   it('has a row for every requirement and every feature, by id', () => {
     for (const r of REQUIREMENTS) expect(html).toContain(`<tr id="${r.id}"`);
     for (const f of FEATURES) expect(html).toContain(`<tr id="${f.id}"`);

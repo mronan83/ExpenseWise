@@ -28,7 +28,7 @@ Three things were in the way:
      - pdf-lib lays the text out in Courier, monospaced, so columns of amounts stay lined up.
      - It is headed by "Received by email" and the subject.
      - It runs to at most five pages. Each page is read by both models at a cost to the organization's key, and no receipt needs more; a longer email is cut, with a note saying so.
-     - The same text gives the same bytes every time. Retries store one file, and the same email forwarded twice is recognized as one receipt.
+     - The same text gives the same bytes every time. Retries store one file, and the same text sent again is filed once. A forward adds text of its own, so its file differs; possible duplicates (ADR-0028) catch it by what it reads instead.
    - **After that,** the PDF is stored, filed and read by the models exactly like an upload. The receipt page shows it as the proof.
 2. **Attachments win.** When something is attached that can be a receipt, the attachments are filed and the text isn't, so one purchase is never filed twice.
 3. **Readings have fees** (`receipt-v2`).

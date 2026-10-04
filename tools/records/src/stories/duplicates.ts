@@ -17,7 +17,8 @@ export const DUPLICATE_STORIES: readonly Story[] = [
     criteria: [
       {
         id: 'AC1',
-        given: 'two of my receipts from a similar merchant, at the same place, on the same day, at the same minute and for the same total',
+        given:
+          'two of my receipts from a similar merchant, at the same place, on the same day, at the same minute and for the same total',
         when: 'the later one is read',
         then: 'it is held as an exact copy: it needs a look and counts in no total until I decide',
         decided: OCT4,
@@ -28,7 +29,8 @@ export const DUPLICATE_STORIES: readonly Story[] = [
       },
       {
         id: 'AC2',
-        given: 'two such receipts where the later one is a few minutes on and for another total, as with a card slip with the tip added, or an amended receipt',
+        given:
+          'two such receipts where the later one is a few minutes on and for another total, as with a card slip with the tip added, or an amended receipt',
         when: 'the later one is read',
         then: 'it is held as a possible duplicate',
         decided: OCT4,
@@ -40,7 +42,8 @@ export const DUPLICATE_STORIES: readonly Story[] = [
       },
       {
         id: 'AC3',
-        given: 'two receipts from one merchant at one place on one day, hours apart, even for the same total',
+        given:
+          'two receipts from one merchant at one place on one day, hours apart, even for the same total',
         when: 'the later one is read',
         then: 'neither is held: they are two purchases',
         decided: OCT4,
@@ -52,7 +55,8 @@ export const DUPLICATE_STORIES: readonly Story[] = [
       },
       {
         id: 'AC4',
-        given: 'two receipts that don’t both show a time and a place, such as receipts read before time and place were',
+        given:
+          'two receipts that don’t both show a time and a place, such as receipts read before time and place were',
         when: 'the later one is read',
         then: 'it is held as possible only if the merchant is similar, the currency and total match, and the dates are a day apart at most',
         decided: { by: 'owner', source: 'Q18' },
@@ -65,7 +69,8 @@ export const DUPLICATE_STORIES: readonly Story[] = [
       },
       {
         id: 'AC5',
-        given: 'a merchant written differently on two receipts, such as “Uber” and “Uber Technologies Inc.”, or a place written as “1200 McKinney St” and “1200 MCKINNEY STREET”',
+        given:
+          'a merchant written differently on two receipts, such as “Uber” and “Uber Technologies Inc.”, or a place written as “1200 McKinney St” and “1200 MCKINNEY STREET”',
         when: 'they are compared',
         then: 'they count as the same merchant and the same place; different businesses, cities or countries never do',
         decided: { by: 'claude', source: 'ADR-0031' },
@@ -78,7 +83,8 @@ export const DUPLICATE_STORIES: readonly Story[] = [
       },
       {
         id: 'AC6',
-        given: 'a receipt whose merchant or date nothing could read, another member’s receipt, or one that failed to read',
+        given:
+          'a receipt whose merchant or date nothing could read, another member’s receipt, or one that failed to read',
         when: 'receipts are compared',
         then: 'it is never matched: a guess is no evidence',
         decided: { by: 'claude', source: 'ADR-0028' },

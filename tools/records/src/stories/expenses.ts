@@ -496,7 +496,7 @@ export const EXPENSE_STORIES: readonly Story[] = [
         decided: ADR23,
         checks: [
           'db/trips.int › never moves a submitted expense by date',
-          'db/trips.int › refuses while a submitted expense or a report rests on it',
+          'db/trips.int › refuses while a submitted expense rests on it, and reopens a closed report it was on',
           'api/trips › deletes a trip, unless something submitted rests on it',
         ],
       },

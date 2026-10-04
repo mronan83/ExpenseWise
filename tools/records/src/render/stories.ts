@@ -32,7 +32,11 @@ const GROUPS: readonly (FeatureGroup | 'Across the product')[] = [
   'Platform and operations',
   'Across the product',
 ];
-const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+const slug = (s: string) =>
+  s
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
 const pct = (n: number, d: number) => (d === 0 ? 0 : Math.floor((n * 100) / d));
 
 const WHO: Record<Decided['by'], { label: string; cls: string }> = {
@@ -53,7 +57,8 @@ export function renderStories(ctx: PageContext): string {
   const T = (text: string) => inline(ctx, PAGE, text);
   const L = (id: string) => refLink(ctx, PAGE, id);
   const features = new Map(FEATURES.map((f) => [f.id, f]));
-  const groupOf = (s: Story) => (s.feature ? features.get(s.feature)?.group : undefined) ?? 'Across the product';
+  const groupOf = (s: Story) =>
+    (s.feature ? features.get(s.feature)?.group : undefined) ?? 'Across the product';
 
   const all = STORIES.flatMap((s) => s.criteria.map((a) => ({ s, a })));
   const built = all.filter(({ s }) => s.status !== 'Planned');
@@ -66,7 +71,10 @@ export function renderStories(ctx: PageContext): string {
 
   const source = (d: Decided) => {
     const who = WHO[d.by];
-    const cited = 'source' in d && d.source ? ` · ${T(d.source.replace(/^owner (\d{4}-\d{2}-\d{2})$/, 'you, $1'))}` : '';
+    const cited =
+      'source' in d && d.source
+        ? ` · ${T(d.source.replace(/^owner (\d{4}-\d{2}-\d{2})$/, 'you, $1'))}`
+        : '';
     return `<span class="dc ${who.cls}">${who.label}${cited}</span>`;
   };
 
@@ -96,7 +104,8 @@ export function renderStories(ctx: PageContext): string {
 
   const card = (s: Story) => {
     const tags: string[] = [s.status];
-    if (s.criteria.some((a) => s.status !== 'Planned' && a.checks.length === 0)) tags.push('Untested');
+    if (s.criteria.some((a) => s.status !== 'Planned' && a.checks.length === 0))
+      tags.push('Untested');
     if (s.criteria.some((a) => a.decided.by === 'claude')) tags.push('To confirm');
     const links = [...(s.feature ? [s.feature] : []), ...s.requirements].map(L).join('');
     return `<article class="story" id="${esc(s.id)}" data-row data-tags="${esc(tags.join('|'))}">
@@ -171,7 +180,12 @@ ${stories.map(card).join('\n')}
     : '';
 
   const usedBy = (id: string) =>
-    all.filter(({ a }) => a.rules?.includes(id)).map(({ s, a }) => `<a class="ref" href="#${esc(s.id)}-${esc(a.id)}">${esc(s.id)} ${esc(a.id)}</a>`);
+    all
+      .filter(({ a }) => a.rules?.includes(id))
+      .map(
+        ({ s, a }) =>
+          `<a class="ref" href="#${esc(s.id)}-${esc(a.id)}">${esc(s.id)} ${esc(a.id)}</a>`,
+      );
   const register = `<section id="rules" aria-labelledby="rules-h"><h2 id="rules-h">Rule register <span class="n">${RULES.length}</span></h2>
 <p>The numbers the rules share, each named once. Where the code keeps one, CI fails if the code and this register disagree.</p>
 <div class="table-wrap" tabindex="0" role="region" aria-label="Rule register"><table class="rules"><thead><tr><th scope="col">Rule</th><th scope="col">Value</th><th scope="col">Decided</th><th scope="col">In the code</th><th scope="col">Used by</th></tr></thead><tbody>
@@ -185,7 +199,10 @@ ${RULES.map(
   <li><a href="#how">How to read this</a></li>
   ${toConfirm.length ? `<li><a href="#to-confirm">For you to confirm (${toConfirm.length})</a></li>` : ''}
   ${GROUPS.filter((g) => STORIES.some((s) => groupOf(s) === g))
-    .map((g) => `<li><a href="#${slug(g)}">${esc(g)} (${STORIES.filter((s) => groupOf(s) === g).length})</a></li>`)
+    .map(
+      (g) =>
+        `<li><a href="#${slug(g)}">${esc(g)} (${STORIES.filter((s) => groupOf(s) === g).length})</a></li>`,
+    )
     .join('\n  ')}
   <li><a href="#rules">Rule register (${RULES.length})</a></li>
 </ol></nav>`;
