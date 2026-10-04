@@ -808,7 +808,7 @@
               "needs_review",
               "failed"
             ],
-            "description": "processing while it is read; extracted (shown as Ready) when both compared models read it with confidence and agree, or when a member confirmed or corrected a reading (ADR-0021); needs_review otherwise, including when only the fallback model read it; failed when no model could read it."
+            "description": "processing while it is read; extracted (shown as Ready) when both compared models read it with confidence and agree, or when a member confirmed or corrected a reading (ADR-0021); needs_review otherwise, including when only the fallback model read it; failed when no model could read it. Under the organization’s AI model settings, extracted rests on one confident reading by the first model that could read it, and needs_review with no reading means every model was off (ADR-0033)."
           },
           "source": {
             "type": "string",
@@ -992,9 +992,11 @@
                       "type": "string",
                       "enum": [
                         "compared",
-                        "fallback"
+                        "fallback",
+                        "primary",
+                        "backup"
                       ],
-                      "description": "compared: one of the models the tier decision weighs. fallback: read only because no compared model could (ADR-0020)."
+                      "description": "compared: one of the models the tier decision weighs. fallback: read only because no compared model could (ADR-0020). Under the organization’s AI model settings (FR-INT-16): primary, the model chosen to read every receipt; backup, read only because the models before it could not (ADR-0033)."
                     },
                     "readings": {
                       "type": "integer"
@@ -1150,9 +1152,10 @@
               "fallback",
               "differ",
               "checks",
-              "unsure"
+              "unsure",
+              "not_read"
             ],
-            "description": "failed: no model could read it. duplicate: it looks like the same purchase as an earlier receipt (FR-INT-18). fallback: only the fallback model read it. differ: the compared models read the filing fields differently. checks: its sums or date fail a check, or it is a purchase summary (FR-INT-04). unsure: a model was not confident, or one could not read it."
+            "description": "failed: no model could read it. duplicate: it looks like the same purchase as an earlier receipt (FR-INT-18). fallback: only the fallback model read it. differ: the compared models read the filing fields differently. checks: its sums or date fail a check, or it is a purchase summary (FR-INT-04). unsure: a model was not confident, or one could not read it. not_read: every AI model was off, so it was filed for the person to fill in (FR-INT-16)."
           },
           "fields": {
             "type": "array",
@@ -1577,9 +1580,11 @@
             "type": "string",
             "enum": [
               "compared",
-              "fallback"
+              "fallback",
+              "primary",
+              "backup"
             ],
-            "description": "compared: one of the models the tier decision weighs. fallback: read only because no compared model could (ADR-0020)."
+            "description": "compared: one of the models the tier decision weighs. fallback: read only because no compared model could (ADR-0020). Under the organization’s AI model settings (FR-INT-16): primary, the model chosen to read every receipt; backup, read only because the models before it could not (ADR-0033)."
           },
           "state": {
             "type": "string",
@@ -2513,7 +2518,7 @@
         "properties": {
           "model": {
             "type": "string",
-            "description": "The reading to confirm, by model, from the receipt’s latest readings.",
+            "description": "The reading to confirm, by model, from the receipt’s latest readings. Omitted only for a receipt nothing read, because every AI model was off: every field is then entered in corrections.",
             "example": "gpt-5.6-luna"
           },
           "corrections": {
@@ -2559,10 +2564,7 @@
             "additionalProperties": false,
             "description": "Only the fields the person changed. Omit to confirm as read."
           }
-        },
-        "required": [
-          "model"
-        ]
+        }
       },
       "CorrectReceipt": {
         "type": "object",
@@ -4672,6 +4674,228 @@
         "required": [
           "categoryId",
           "typeId"
+        ]
+      },
+      "AiModelSettings": {
+        "type": "object",
+        "properties": {
+          "primary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The model that reads every receipt; null when every model is off."
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AiModel"
+            },
+            "description": "Every model, in the order back-ups are tried."
+          },
+          "saved": {
+            "type": "boolean",
+            "description": "False while the defaults apply."
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "canChange": {
+            "type": "boolean",
+            "description": "Whether the caller may change them: owners and finance admins."
+          },
+          "comparison": {
+            "type": "object",
+            "properties": {
+              "receipts": {
+                "type": "integer"
+              },
+              "compared": {
+                "type": "integer",
+                "description": "Receipts two models read side by side."
+              },
+              "agreed": {
+                "type": "integer",
+                "description": "Of those, how many they read alike."
+              }
+            },
+            "required": [
+              "receipts",
+              "compared",
+              "agreed"
+            ],
+            "description": "Over the latest 100 receipts, as Receipts shows it."
+          }
+        },
+        "required": [
+          "primary",
+          "models",
+          "saved",
+          "updatedAt",
+          "canChange",
+          "comparison"
+        ]
+      },
+      "AiModel": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string",
+            "example": "claude-sonnet-5-5"
+          },
+          "label": {
+            "type": "string",
+            "example": "Sonnet 5.5"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "anthropic",
+              "openai"
+            ]
+          },
+          "tier": {
+            "type": "string",
+            "example": "mid"
+          },
+          "price": {
+            "type": "object",
+            "properties": {
+              "input": {
+                "type": "string",
+                "example": "2.00"
+              },
+              "output": {
+                "type": "string",
+                "example": "10.00"
+              }
+            },
+            "required": [
+              "input",
+              "output"
+            ],
+            "description": "List price in US dollars per million tokens."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Switched on for the organization. A model whose provider has no key is off."
+          },
+          "primary": {
+            "type": "boolean",
+            "description": "The one model chosen to read every receipt."
+          },
+          "reads": {
+            "type": "string",
+            "enum": [
+              "primary",
+              "backup",
+              "off"
+            ],
+            "description": "What it does with the next receipt: primary reads it first; backup reads only when the models before it could not, in the order listed; off reads nothing, being switched off or stopped by the operator."
+          },
+          "keyConfigured": {
+            "type": "boolean",
+            "description": "Whether the organization has a key for its provider."
+          },
+          "stopped": {
+            "type": "boolean",
+            "description": "Stopped for every organization by the operator; it reads nothing meanwhile."
+          },
+          "record": {
+            "$ref": "#/components/schemas/AiModelRecord"
+          }
+        },
+        "required": [
+          "model",
+          "label",
+          "provider",
+          "tier",
+          "price",
+          "enabled",
+          "primary",
+          "reads",
+          "keyConfigured",
+          "stopped",
+          "record"
+        ]
+      },
+      "AiModelRecord": {
+        "type": "object",
+        "properties": {
+          "readings": {
+            "type": "integer",
+            "description": "Its latest readings of these receipts."
+          },
+          "confident": {
+            "type": "integer",
+            "description": "Readings that would be Ready on their own, their sums and date included."
+          },
+          "unsure": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "averageLatencyMs": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "costMicroUsd": {
+            "type": "integer",
+            "description": "Spend in whole micro-dollars."
+          }
+        },
+        "required": [
+          "readings",
+          "confident",
+          "unsure",
+          "failed",
+          "averageLatencyMs",
+          "costMicroUsd"
+        ],
+        "description": "How it has read the organization’s latest receipts: the running comparison."
+      },
+      "SaveAiModelSettings": {
+        "type": "object",
+        "properties": {
+          "primary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A model that is on, or null to switch every model off.",
+            "example": "claude-sonnet-5-5"
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "model": {
+                  "type": "string"
+                },
+                "enabled": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "model",
+                "enabled"
+              ]
+            },
+            "maxItems": 20,
+            "description": "Every model once, in the order back-ups are tried."
+          }
+        },
+        "required": [
+          "primary",
+          "models"
         ]
       }
     },
@@ -9789,6 +10013,166 @@
           },
           "422": {
             "description": "No such category or type, one is retired, or the category doesn’t allow the type.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/settings/ai-models": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Which AI models read receipts",
+        "description": "Each model, on or off, the primary that reads every receipt and the back-ups that read only when it cannot, with how each has read the organization’s receipts (FR-INT-16).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The organization’s models.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiModelSettings"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "AI model settings are not switched on for this organization.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Choose which AI models read receipts",
+        "description": "Switches each model on or off and chooses the primary, for the whole organization, from the next reading on. Only owners and finance admins can. The change is recorded in the audit log.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveAiModelSettings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The organization’s models as they now are.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiModelSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only an owner or finance admin can choose the models.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "AI model settings are not switched on for this organization.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A model is unknown or listed twice, the primary is not on, or a model is switched on without a key for its provider.",
             "content": {
               "application/problem+json": {
                 "schema": {

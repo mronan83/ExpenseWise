@@ -11,7 +11,6 @@ import { receiptPath, RECEIPT_BUCKET, type ObjectStore } from '@expensewise/stor
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
 import { featureGate, type FeatureGate } from './features.ts';
-import { featureGate, type FeatureGate } from './features.ts';
 import {
   modelContext,
   readsNext,
@@ -63,8 +62,6 @@ export interface ReceiptRouteOptions {
   /** Which AI models read receipts, under receipts.model-settings (FR-INT-16). */
   readonly modelSettings?: ModelSettingsStore;
   readonly flagOverrides?: string;
-  /** Which features are on. Built from `workspace` when not given. */
-  readonly features?: FeatureGate;
   readonly now?: () => Date;
 }
 
@@ -91,7 +88,6 @@ export function registerReceiptRoutes(
     ].map((r) => r.getRoutingPath()),
   );
   for (const path of paths) app.use(path, auth);
-  const features = options.features ?? featureGate({ workspace: options.workspace });
 
   const unavailable = (what: string, code: string) =>
     new ProblemError(503, code.replaceAll('_', '-'), `${what} is not configured on this server`, {

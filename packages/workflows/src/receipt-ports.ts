@@ -52,9 +52,10 @@ export interface ReceiptReadingDeps {
     orgId: string,
     provider: ModelProvider,
   ) => Promise<StoredAnthropicKey | KeyProblem>;
-  /** FLAG_OVERRIDES, read from the environment when not given. */
-  readonly flagOverrides?: string;
-  /** FLAG_OVERRIDES, when not the server's own: the kill switches and operator stops. */
+  /**
+   * FLAG_OVERRIDES, read from the environment when not given: the kill switches and the
+   * operator's stops.
+   */
   readonly flagOverrides?: string;
 }
 
@@ -65,11 +66,11 @@ export interface ReceiptReadingDeps {
  */
 export function receiptReadingPorts(deps: ReceiptReadingDeps): ReceiptReadingPorts {
   const { inOrg } = checkedDatabase(deps.db);
-  const featureOn = featureSwitch(inOrg, deps.flagOverrides ?? process.env.FLAG_OVERRIDES);
+  const switchOn = featureSwitch(inOrg, deps.flagOverrides ?? process.env.FLAG_OVERRIDES);
   // Where the organization has switched it on, each field comes with the line it was read
   // from (GAP-14); elsewhere the request is the one every reading has always sent.
   const asked = async (orgId: string) => ({
-    fieldSources: await featureOn(orgId, 'receipts.field-sources'),
+    fieldSources: await switchOn(orgId, 'receipts.field-sources'),
   });
 
   const overrides = () => deps.flagOverrides ?? process.env.FLAG_OVERRIDES;
