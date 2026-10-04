@@ -450,12 +450,12 @@ function Duplicate({
       </table>
 
       {mode === 'choose' ? (
-        <div className="grid grid-cols-3 gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => void decide({ action: 'keep_both' })}
             disabled={busy}
-            className="rounded-lg border border-rule px-2 py-2 text-sm font-semibold disabled:opacity-60"
+            className="rounded-lg border border-rule px-3 py-2 text-sm font-semibold disabled:opacity-60"
           >
             Keep both
           </button>
@@ -463,7 +463,7 @@ function Duplicate({
             type="button"
             onClick={() => setMode('delete')}
             disabled={busy}
-            className="rounded-lg border border-rule px-2 py-2 text-sm font-semibold text-bad disabled:opacity-60"
+            className="rounded-lg border border-rule px-3 py-2 text-sm font-semibold text-bad disabled:opacity-60"
           >
             Delete one
           </button>
@@ -471,7 +471,7 @@ function Duplicate({
             type="button"
             onClick={() => setMode('merge')}
             disabled={busy}
-            className="rounded-lg border border-rule px-2 py-2 text-sm font-semibold disabled:opacity-60"
+            className="rounded-lg border border-rule px-3 py-2 text-sm font-semibold disabled:opacity-60"
           >
             Merge
           </button>
