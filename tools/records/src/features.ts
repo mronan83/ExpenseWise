@@ -427,6 +427,15 @@ export const FEATURES: readonly Feature[] = [
     note: 'Each reading captures the time of purchase and the merchant’s address, each optional and with its confidence, and the expense carries them. The expense page shows them beside its receipt’s and edits them; the time zone follows the place unless the person picks one. A blank never holds a receipt for a look.',
   },
   {
+    id: 'F-52',
+    title: 'Duplicate time window in Settings',
+    group: 'Receipts',
+    kind: 'product',
+    phase: 'P1',
+    status: 'Planned',
+    backlog: 64,
+  },
+  {
     id: 'F-48',
     title: 'Possible duplicates in review: merge, delete or keep both',
     group: 'Receipts',
@@ -905,6 +914,15 @@ export const FEATURES: readonly Feature[] = [
     delivered: 'PR #21',
     code: ['tools/records/src', 'CLAUDE.md', '.claude/hooks/after-merge.sh'],
     checks: ['records/integrity', 'records/render'],
+  },
+  {
+    id: 'F-53',
+    title: 'User stories and acceptance criteria page',
+    group: 'Platform and operations',
+    kind: 'operations',
+    phase: 'P1',
+    status: 'Planned',
+    backlog: 65,
   },
   {
     id: 'F-44',

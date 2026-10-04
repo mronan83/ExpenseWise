@@ -215,6 +215,33 @@ export const BACKLOG: readonly BacklogItem[] = [
     affects: ['GAP-22', 'NFR-UX-02'],
   },
 
+  {
+    num: 64,
+    title: 'Set the duplicate time window in Settings',
+    type: 'Feature',
+    detail:
+      'Your request of Oct 4. The window within which two receipts at the same place count as one purchase (ADR-0031) becomes a setting: 0 to 120 minutes, 30 by default, 0 meaning the same minute only. A change judges pairs from then on; pairs already decided stay decided, and the audit trail records each change. Q24 asks whether the organization’s owner sets it for everyone or each person for their own receipts.',
+    priority: 'P1',
+    effort: 'S',
+    severity: 'Low',
+    blocker: { kind: 'owner', ask: 'Your answer to Q24' },
+    source: 'Product owner Oct 4',
+    affects: ['FR-INT-19', 'F-52', 'FR-INT-18'],
+  },
+  {
+    num: 65,
+    title: 'Detailed requirements as user stories with acceptance criteria',
+    type: 'Gap',
+    detail:
+      'Your request of Oct 4 (GAP-24). Add user stories to these records, each with numbered Given/When/Then acceptance criteria, each criterion marked as decided by you or assumed by Claude and traced to the test that proves it or shown as untested; a register of the numbers the rules share (28 days, 30 minutes, 500 characters…); integrity checks that refuse a delivered story whose criteria no test covers; and a fifth published page. Then write the stories for everything delivered, starting with duplicates and expense reports, and for what is planned. Untested criteria found on the way become backlog items.',
+    priority: 'P1',
+    effort: 'L',
+    severity: 'Medium',
+    blocker: { kind: 'owner', ask: 'Your answer to Q26' },
+    source: 'Product owner Oct 4',
+    affects: ['GAP-24', 'NFR-DEL-09', 'F-53'],
+  },
+
   // P2: this month
   {
     num: 11,
@@ -384,11 +411,11 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Amounts converted to your reimbursement currency',
     type: 'Feature',
     detail:
-      'Your answer of Oct 4: everything in a report is converted to the currency you’re reimbursed in, beside the amount as spent. Your reimbursement currency is set in Settings and starts as your organization’s home currency. Your answer to Q22: cards convert at purchase, so the amount to reimburse is usually what the card charged; Q23 asks how it reaches the app. Each conversion keeps its rate, the rate’s date and its source (NFR-DAT-02), copied on so a later rate never changes it (NFR-DAT-04). Report totals (#23) use it.',
+      'Your answer of Oct 4: everything in a report is converted to the currency you’re reimbursed in, beside the amount as spent. Your reimbursement currency is set in Settings and starts as your organization’s home currency. Your answer to Q22: cards convert at purchase, so the amount to reimburse is usually what the card charged. Your answer to Q23: in your preferred currency, as set in the app; Q25 asks where the converted figure comes from. Each conversion keeps its rate, the rate’s date and its source (NFR-DAT-02), copied on so a later rate never changes it (NFR-DAT-04). Report totals (#23) use it.',
     priority: 'P1',
     effort: 'L',
     severity: 'Medium',
-    blocker: { kind: 'owner', ask: 'Your answer to Q23' },
+    blocker: { kind: 'owner', ask: 'Your answer to Q25' },
     source: 'Product owner Oct 4',
     affects: ['FR-EXP-13', 'F-49', 'NFR-DAT-02'],
   },

@@ -6,6 +6,16 @@ import type { ChangeLogEntry, Gap, Question } from './model.ts';
  */
 export const GAPS: readonly Gap[] = [
   {
+    id: 'GAP-24',
+    title: 'Detailed requirements are scattered, with no acceptance criteria you can sign off.',
+    affects: ['NFR-DEL-09', 'F-53'],
+    severity: 'Medium',
+    evidence:
+      'Your review of Oct 4. Your detailed requirements, such as those for duplicates and expense reports, are recorded, but across requirement texts and their notes, your answers to questions, decision records and the change log; the rules a test proves are written only as test names. No page lists, per requirement, the criteria it is accepted on, who decided each one, and which test proves it.',
+    fix: 'User stories with Given/When/Then acceptance criteria in these records, each criterion traced to a test or shown as untested, a register of the rules’ numbers, and a page for them (#65, Q26).',
+    backlog: 65,
+  },
+  {
     id: 'GAP-23',
     title: 'Duplicates are matched on the total, which a tip or an amended receipt changes.',
     affects: ['FR-INT-18', 'F-48'],
@@ -540,11 +550,45 @@ export const QUESTIONS: readonly Question[] = [
     why: 'You’re right that the card’s conversion, fees and all, is what you paid, so it is what you should get back. But it reaches the app only from your statement or a card feed. Cash spent abroad, or a card charged in the local currency, has no conversion at all.',
     recommendation: 'A.',
     affects: ['FR-EXP-13', 'F-49'],
+    answer: {
+      date: '2026-10-04',
+      text: 'In your preferred currency, as set in the app (FR-EXP-13). Where the converted amount comes from, a reference rate or your statement, is Q25.',
+    },
+  },
+  {
+    id: 'Q24',
+    title: 'Who sets the duplicate time window',
+    ask: 'You asked for the duplicate time window to be set in Settings (FR-INT-19). A: the organization’s owner sets it once, for everyone’s receipts. B: each person sets it for their own receipts.',
+    why: 'Catching duplicates is a control: it stops one purchase being reimbursed twice. A person who can narrow the window on their own receipts can switch that control off for themselves, which an approver or auditor would not accept once there is a team. In a one-person organization the owner is you, so A changes nothing for you today.',
+    recommendation: 'A.',
+    affects: ['FR-INT-19', 'F-52'],
+  },
+  {
+    id: 'Q25',
+    title: 'Where a converted amount comes from',
+    ask: 'Your answer to Q23 settles the currency: your preferred one. It leaves where the converted figure comes from when a receipt is in another currency. A: the app converts at the purchase date’s reference rate, shown as converted at that rate, and you can replace it with the amount your card statement shows, fees included. B: the reference rate only, never replaced. C: you always enter the amount from your statement, and nothing is reimbursed until you do.',
+    why: 'The reference rate needs no work from you and suits cash and local-currency charges, which have no conversion at all. But your card’s conversion, fees included, is what you actually paid (your answer to Q22), so A lets the statement win where you have it. Each conversion keeps its rate, the rate’s date and its source (NFR-DAT-02).',
+    recommendation: 'A.',
+    affects: ['FR-EXP-13', 'F-49', 'NFR-DAT-02'],
+  },
+  {
+    id: 'Q26',
+    title: 'How detailed requirements are written down',
+    ask: 'Your detailed requirements are recorded today across requirement texts, their notes, your answers to questions, decision records and test names, with no acceptance criteria you can read and sign off (GAP-24). Proposed: each requirement gets user stories (as a…, I want…, so that…) with numbered acceptance criteria in Given/When/Then form, each marked as decided by you or assumed by Claude, and each traced to the automated test that proves it, or shown as untested. The numbers they share, such as 28 days or 30 minutes, are named once in a register of rules. All of it lives in these records, so the checks refuse a delivered story whose criteria no test covers, and it is published as a fifth page after each release. A: as proposed. B: stories and criteria in a separate document, not checked against the code.',
+    why: 'A separate document drifts from the code within weeks; these records already fail the build when they disagree with it, and the criteria would inherit that. Stories carry who and why; the Given/When/Then criteria carry the precision, and are what you would accept or reject.',
+    recommendation: 'A.',
+    affects: ['NFR-DEL-09', 'F-53', 'GAP-24'],
   },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-04',
+    change:
+      'Your answers and requests of Oct 4, after the release. Q23: a receipt in another currency is reimbursed in your preferred currency, as set in the app; Q25 asks where the converted figure comes from. The duplicate time window is to be set in Settings, 0 to 120 minutes, 30 by default (FR-INT-19, F-52, #64); Q24 asks who sets it. Your detailed requirements are recorded but scattered, with no acceptance criteria you can sign off (GAP-24, NFR-DEL-09, F-53, #65); Q26 proposes user stories with Given/When/Then criteria, each traced to a test.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-04',
     change:
