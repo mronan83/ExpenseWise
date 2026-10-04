@@ -16,6 +16,7 @@ import {
   createHttpApp,
   createSecretBox,
   dbAuditStore,
+  dbCategoryStore,
   dbExpenseStore,
   dbReceiptStore,
   dbHomeStore,
@@ -233,6 +234,7 @@ const app = createHttpApp({
   home: dbHomeStore(db),
   reports: dbReportStore(db),
   audit: dbAuditStore(db),
+  categories: dbCategoryStore(db),
   files: store,
   dispatch,
   secrets: createSecretBox('bench-only-secret-0123456789'),
@@ -512,6 +514,16 @@ await call('PATCH', `/v1/expenses/${await expenseOf('coffee')}`, {
   merchant: 'Blue Bottle Coffee — Oxbow Public Market',
 });
 await call('PUT', `/v1/expenses/${await expenseOf('lufthansa')}/trip`, { tripId: trips.omaha.id });
+// Categories and types (FR-EXP-11): the hotel folio's chosen by hand; the rest show a
+// suggestion, or that they have none, such as the dinner at Juniper & Rye.
+const catalog = await call<{
+  categories: { id: string; name: string }[];
+  types: { id: string; name: string }[];
+}>('GET', '/v1/categories');
+await call('PUT', `/v1/expenses/${await expenseOf('folio')}/category`, {
+  categoryId: catalog.categories.find((c) => c.name === 'Travel')!.id,
+  typeId: catalog.types.find((t) => t.name === 'Lodging')!.id,
+});
 
 const expenses: Record<string, string> = {};
 for (const name of Object.keys(receipts)) expenses[name] = await expenseOf(name);

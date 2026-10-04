@@ -3,8 +3,11 @@ import { amountMatches, type DetailField } from '@expensewise/domain';
 import { timeZoneFor } from '@expensewise/extraction/place';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
-import { expenseDetail, expenseSummaries } from './expense-views.ts';
+import type { CategoryStore } from './categories.ts';
+import { categorize, detailWithCategory } from './category-views.ts';
+import { expenseSummaries } from './expense-views.ts';
 import type { ExpenseStore } from './expenses.ts';
+import { featureGate, type FeatureGate } from './features.ts';
 import { ProblemError } from './problem.ts';
 import {
   editExpenseRoute,
@@ -18,6 +21,10 @@ export interface ExpenseRouteOptions {
   readonly verifyToken?: TokenVerifier;
   readonly workspace?: WorkspaceStore;
   readonly expenses?: ExpenseStore;
+  /** Categories and types; while they are switched on, each expense shows its own. */
+  readonly categories?: CategoryStore;
+  /** Which features are on. Built from `workspace` when not given. */
+  readonly features?: FeatureGate;
 }
 
 const LIST_LIMIT = 100;
@@ -26,6 +33,12 @@ export function registerExpenseRoutes(
   app: OpenAPIHono<{ Variables: AuthVariables }>,
   options: ExpenseRouteOptions,
 ) {
+  const features = options.features ?? featureGate({ workspace: options.workspace });
+  /** The category store while categories are on for the organization (FR-EXP-11). */
+  const categoriesOn = async (orgId: string) =>
+    options.categories && (await features.isOn(orgId, 'expenses.categories'))
+      ? options.categories
+      : undefined;
   const auth = requireIdentity(options.verifyToken);
   const paths = new Set(
     [listExpensesRoute, getExpenseRoute, editExpenseRoute, setExpenseTripRoute].map((r) =>
@@ -75,15 +88,32 @@ export function registerExpenseRoutes(
       amounts,
       onTrip: onTrip === undefined ? undefined : onTrip === 'yes',
     });
-    return c.json({ expenses: expenseSummaries(found) }, 200);
+    const summaries = expenseSummaries(found);
+    const categories = await categoriesOn(who.orgId);
+    if (!categories) return c.json({ expenses: summaries }, 200);
+    const shown = await categorize(
+      categories,
+      who.orgId,
+      found.expenses.map((expense) => {
+        const receipt = found.receipts.find((r) => r.id === expense.receiptId);
+        return { expense, proof: receipt ? { ...found, receipt } : null };
+      }),
+    );
+    return c.json({ expenses: summaries.map((s) => ({ ...s, category: shown.get(s.id) })) }, 200);
   });
+
+  /** One expense as its page shows it, its category and type included while they are on. */
+  const detail = async (
+    orgId: string,
+    found: NonNullable<Awaited<ReturnType<ExpenseStore['get']>>>,
+  ) => detailWithCategory(await categoriesOn(orgId), orgId, found);
 
   app.openapi(getExpenseRoute, async (c) => {
     const who = await member(c.var.identity.userId);
     const { expenseId } = c.req.valid('param');
     const found = await stores().expenses.get(who.orgId, expenseId);
     if (!found) throw notFound();
-    return c.json(expenseDetail(found.expense, found.proof), 200);
+    return c.json(await detail(who.orgId, found), 200);
   });
 
   app.openapi(editExpenseRoute, async (c) => {
@@ -146,7 +176,7 @@ export function registerExpenseRoutes(
     }
     const found = await expenses.get(who.orgId, expenseId);
     if (!found) throw notFound();
-    return c.json(expenseDetail(found.expense, found.proof), 200);
+    return c.json(await detail(who.orgId, found), 200);
   });
 
   app.openapi(setExpenseTripRoute, async (c) => {
@@ -174,6 +204,6 @@ export function registerExpenseRoutes(
     }
     const found = await expenses.get(who.orgId, expenseId);
     if (!found) throw notFound();
-    return c.json(expenseDetail(found.expense, found.proof), 200);
+    return c.json(await detail(who.orgId, found), 200);
   });
 }

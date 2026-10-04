@@ -151,6 +151,16 @@ export default function ExpensesPage() {
                       {e.matchesReceipt === false ? (
                         <span className="text-warn"> · differs from its receipt</span>
                       ) : null}
+                      {/* Sent only while categories are switched on (FR-EXP-11). */}
+                      {e.category?.state === 'confirmed'
+                        ? ` · ${e.category.type?.name ?? ''}`
+                        : null}
+                      {e.category?.state === 'suggested' ? (
+                        <span className="text-warn"> · {e.category.type?.name}, suggested</span>
+                      ) : null}
+                      {e.category?.state === 'missing' ? (
+                        <span className="text-warn"> · no category</span>
+                      ) : null}
                     </span>
                   </span>
                   <span className="text-sm tabular-nums">

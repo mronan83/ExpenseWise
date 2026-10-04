@@ -16,6 +16,16 @@ export const GAPS: readonly Gap[] = [
     backlog: 74,
   },
   {
+    id: 'GAP-29',
+    title: 'An expense can go on without a category and type, and no rule hangs off a type.',
+    affects: ['FR-EXP-11', 'F-43'],
+    severity: 'Low',
+    evidence:
+      'Built in PR #58 behind `expenses.categories`: an expense without a category and type says so on its page and in the list, but nothing refuses one, since nothing that works today may be blocked by a feature switched on. Types carry no rules yet, because attendees, a mileage rate and a receipt needed above a limit are not built as rules.',
+    fix: 'Refuse to submit a report while an expense on it lacks them, once reports are submitted, and attach each rule to the type as it is built (#72).',
+    backlog: 72,
+  },
+  {
     id: 'GAP-25',
     title: 'Photos emailed in are stored with their location.',
     affects: ['NFR-PRV-03'],
@@ -653,6 +663,15 @@ export const QUESTIONS: readonly Question[] = [
     recommendation:
       'A, while you are the only organization; B before a second organization, or anyone outside the US, joins.',
     affects: ['FR-CAP-03', 'F-13', 'NFR-DAT-04'],
+  },
+  {
+    id: 'Q29',
+    title: 'What an expense without a category and type holds up',
+    ask: 'Every expense has a category and a type (FR-EXP-11). With categories switched on, one without them says so on its page and in the expense list, and holds nothing up. Should it also: A, stay as it is; B, appear in Needs you as well; C, stop its report from being submitted, once reports are submitted (#24); D, both B and C?',
+    why: 'Switched on for the first time, every expense you already have lacks them, so B would fill Needs you at once; it is the list of what needs you now. Submission is where finance needs the coding, and where a missing one does harm. A suggestion is shown for most expenses, so confirming one is a tap.',
+    recommendation:
+      'C, with A until reports are submitted: the expense and the list say what is missing, and submitting needs it (#72).',
+    affects: ['FR-EXP-11', 'F-43', 'GAP-29'],
   },
 ];
 

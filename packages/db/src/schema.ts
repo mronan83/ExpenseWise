@@ -195,20 +195,119 @@ export const trips = pgTable(
   ],
 );
 
+/**
+ * The categories an organization codes its expenses to, with their general ledger and tax codes
+ * (FR-EXP-11, Q7, ADR-0036). They nest, and each allows a set of types (category_types). An
+ * organization starts with a ready-made set, seeded by seed_starter_catalog(), that owners and
+ * finance admins rename, add to or retire.
+ */
 export const categories = pgTable(
   'categories',
   {
     id: id(),
     orgId: orgId(),
+    /** The category it sits under; null at the top. */
+    parentId: uuid('parent_id'),
     name: text('name').notNull(),
     glCode: text('gl_code'),
     taxCode: text('tax_code'),
+    /** False once retired: no longer offered, but kept by every expense that has it. */
     active: boolean('active').notNull().default(true),
+    /** The ready-made category it started as, such as `travel`; null for one a person added. */
+    starterKey: text('starter_key'),
+    /**
+     * Who last added or changed it; null while it is as the ready-made set left it, so an
+     * untouched set is no one's work.
+     */
+    updatedByMemberId: uuid('updated_by_member_id'),
     createdAt: createdAt(),
+    updatedAt: updatedAt(),
   },
   (t) => [
     unique('categories_org_id_id_key').on(t.orgId, t.id),
     unique('categories_org_name_key').on(t.orgId, t.name),
+    unique('categories_org_starter_key').on(t.orgId, t.starterKey),
+    foreignKey({
+      name: 'categories_parent_fk',
+      columns: [t.orgId, t.parentId],
+      foreignColumns: [t.orgId, t.id],
+    }),
+    foreignKey({
+      name: 'categories_updated_by_fk',
+      columns: [t.orgId, t.updatedByMemberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    check('categories_not_own_parent', sql`${t.parentId} IS NULL OR ${t.parentId} <> ${t.id}`),
+  ],
+);
+
+/**
+ * The types an organization's expenses are, such as Airfare or Business meal: what was bought,
+ * where rules will attach (FR-EXP-11, Q7, ADR-0036). A list of its own that nests, beside the
+ * categories; a category allows some of them.
+ */
+export const expenseTypes = pgTable(
+  'expense_types',
+  {
+    id: id(),
+    orgId: orgId(),
+    /** The type it sits under; null at the top. */
+    parentId: uuid('parent_id'),
+    name: text('name').notNull(),
+    /** False once retired: no longer offered, but kept by every expense that has it. */
+    active: boolean('active').notNull().default(true),
+    /**
+     * The ready-made type it started as, such as `airfare`. Keyword suggestions find a type by
+     * it, so a renamed one keeps its suggestions.
+     */
+    starterKey: text('starter_key'),
+    /** Who last added or changed it; null while it is as the ready-made set left it. */
+    updatedByMemberId: uuid('updated_by_member_id'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('expense_types_org_id_id_key').on(t.orgId, t.id),
+    unique('expense_types_org_name_key').on(t.orgId, t.name),
+    unique('expense_types_org_starter_key').on(t.orgId, t.starterKey),
+    foreignKey({
+      name: 'expense_types_parent_fk',
+      columns: [t.orgId, t.parentId],
+      foreignColumns: [t.orgId, t.id],
+    }),
+    foreignKey({
+      name: 'expense_types_updated_by_fk',
+      columns: [t.orgId, t.updatedByMemberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    check('expense_types_not_own_parent', sql`${t.parentId} IS NULL OR ${t.parentId} <> ${t.id}`),
+  ],
+);
+
+/** Which types each category allows (Q7): choosing a category narrows the types to these. */
+export const categoryTypes = pgTable(
+  'category_types',
+  {
+    id: id(),
+    orgId: orgId(),
+    categoryId: uuid('category_id').notNull(),
+    typeId: uuid('type_id').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('category_types_org_id_id_key').on(t.orgId, t.id),
+    unique('category_types_pair_key').on(t.orgId, t.categoryId, t.typeId),
+    foreignKey({
+      name: 'category_types_category_fk',
+      columns: [t.orgId, t.categoryId],
+      foreignColumns: [categories.orgId, categories.id],
+    }),
+    foreignKey({
+      name: 'category_types_type_fk',
+      columns: [t.orgId, t.typeId],
+      foreignColumns: [expenseTypes.orgId, expenseTypes.id],
+    }),
+    index('category_types_type_idx').on(t.orgId, t.typeId),
   ],
 );
 
@@ -260,7 +359,14 @@ export const expenses = pgTable(
     tripId: uuid('trip_id'),
     /** The report a local expense is on (FR-EXP-14); null for one on a trip. */
     reportId: uuid('report_id'),
+    /**
+     * The category and type a person chose for it (FR-EXP-11), the type one the category
+     * allowed then. A suggestion is never stored here; it is worked out when shown (FR-INT-10).
+     */
     categoryId: uuid('category_id'),
+    typeId: uuid('type_id'),
+    /** When a person last chose its category and type; it orders their history for suggestions. */
+    classifiedAt: timestamp('classified_at', { withTimezone: true }),
     status: expenseStatus('status').notNull(),
     source: expenseSource('source').notNull(),
     merchant: text('merchant'),
@@ -338,6 +444,16 @@ export const expenses = pgTable(
       foreignColumns: [categories.orgId, categories.id],
     }),
     foreignKey({
+      name: 'expenses_type_fk',
+      columns: [t.orgId, t.typeId],
+      foreignColumns: [expenseTypes.orgId, expenseTypes.id],
+    }),
+    // A category and a type are chosen together, and when.
+    check(
+      'expenses_classified_whole',
+      sql`(${t.categoryId} IS NULL AND ${t.typeId} IS NULL AND ${t.classifiedAt} IS NULL) OR (${t.categoryId} IS NOT NULL AND ${t.typeId} IS NOT NULL AND ${t.classifiedAt} IS NOT NULL)`,
+    ),
+    foreignKey({
       name: 'expenses_reversal_fk',
       columns: [t.orgId, t.reversalOfId],
       foreignColumns: [t.orgId, t.id],
@@ -357,6 +473,7 @@ export const expenses = pgTable(
     index('expenses_trip_idx').on(t.orgId, t.tripId),
     index('expenses_report_idx').on(t.orgId, t.reportId),
     index('expenses_status_idx').on(t.orgId, t.status),
+    index('expenses_member_classified_idx').on(t.orgId, t.memberId, t.classifiedAt),
   ],
 );
 

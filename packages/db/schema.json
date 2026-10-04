@@ -474,6 +474,30 @@
           "type": "timestamp with time zone",
           "nullable": false,
           "default": "now()"
+        },
+        {
+          "name": "parent_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "starter_key",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "updated_by_member_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
         }
       ],
       "primaryKey": [
@@ -487,6 +511,30 @@
           ],
           "table": "organizations",
           "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "categories_parent_fk",
+          "columns": [
+            "org_id",
+            "parent_id"
+          ],
+          "table": "categories",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "categories_updated_by_fk",
+          "columns": [
+            "org_id",
+            "updated_by_member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
             "id"
           ]
         }
@@ -505,9 +553,297 @@
             "org_id",
             "name"
           ]
+        },
+        {
+          "name": "categories_org_starter_key",
+          "columns": [
+            "org_id",
+            "starter_key"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "categories_not_own_parent",
+          "definition": "CHECK (((parent_id IS NULL) OR (parent_id <> id)))"
+        }
+      ],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "category_types",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "category_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "type_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "category_types_category_fk",
+          "columns": [
+            "org_id",
+            "category_id"
+          ],
+          "table": "categories",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "category_types_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "category_types_type_fk",
+          "columns": [
+            "org_id",
+            "type_id"
+          ],
+          "table": "expense_types",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "category_types_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "category_types_pair_key",
+          "columns": [
+            "org_id",
+            "category_id",
+            "type_id"
+          ]
         }
       ],
       "checks": [],
+      "indexes": [
+        {
+          "name": "category_types_type_idx",
+          "definition": "CREATE INDEX category_types_type_idx ON public.category_types USING btree (org_id, type_id)"
+        }
+      ],
+      "policies": [
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "expense_types",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "parent_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "active",
+          "type": "boolean",
+          "nullable": false,
+          "default": "true"
+        },
+        {
+          "name": "starter_key",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "updated_by_member_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "expense_types_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "expense_types_parent_fk",
+          "columns": [
+            "org_id",
+            "parent_id"
+          ],
+          "table": "expense_types",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "expense_types_updated_by_fk",
+          "columns": [
+            "org_id",
+            "updated_by_member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "expense_types_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "expense_types_org_name_key",
+          "columns": [
+            "org_id",
+            "name"
+          ]
+        },
+        {
+          "name": "expense_types_org_starter_key",
+          "columns": [
+            "org_id",
+            "starter_key"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "expense_types_not_own_parent",
+          "definition": "CHECK (((parent_id IS NULL) OR (parent_id <> id)))"
+        }
+      ],
       "indexes": [],
       "policies": [
         {
@@ -717,6 +1053,18 @@
           "type": "character(2)",
           "nullable": true,
           "default": null
+        },
+        {
+          "name": "type_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "classified_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
         }
       ],
       "primaryKey": [
@@ -794,6 +1142,18 @@
             "org_id",
             "id"
           ]
+        },
+        {
+          "name": "expenses_type_fk",
+          "columns": [
+            "org_id",
+            "type_id"
+          ],
+          "table": "expense_types",
+          "references": [
+            "org_id",
+            "id"
+          ]
         }
       ],
       "uniques": [
@@ -806,6 +1166,10 @@
         }
       ],
       "checks": [
+        {
+          "name": "expenses_classified_whole",
+          "definition": "CHECK ((((category_id IS NULL) AND (type_id IS NULL) AND (classified_at IS NULL)) OR ((category_id IS NOT NULL) AND (type_id IS NOT NULL) AND (classified_at IS NOT NULL))))"
+        },
         {
           "name": "expenses_complete_when_ready",
           "definition": "CHECK (((status = ANY (ARRAY['processing'::expense_status, 'needs_review'::expense_status])) OR ((amount_minor IS NOT NULL) AND (currency IS NOT NULL) AND (transaction_date IS NOT NULL))))"
@@ -832,6 +1196,10 @@
         }
       ],
       "indexes": [
+        {
+          "name": "expenses_member_classified_idx",
+          "definition": "CREATE INDEX expenses_member_classified_idx ON public.expenses USING btree (org_id, member_id, classified_at)"
+        },
         {
           "name": "expenses_member_date_idx",
           "definition": "CREATE INDEX expenses_member_date_idx ON public.expenses USING btree (org_id, member_id, transaction_date)"
@@ -3061,6 +3429,16 @@
       "returns": "SETOF uuid",
       "security": "definer",
       "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
+    },
+    {
+      "name": "seed_starter_catalog",
+      "arguments": "p_org_id uuid",
+      "returns": "void",
+      "security": "invoker",
+      "volatility": "volatile",
       "executableBy": [
         "expensewise_app"
       ]

@@ -151,6 +151,17 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
     (s) => `/settings/audit?entityType=receipt&entityId=${s.receipts.coffee}`,
     [],
   ],
+  ['category settings', () => '/settings/categories', []],
+  ['editing a category', () => '/settings/categories', [press('Edit Travel')]],
+  ['adding a type', () => '/settings/categories', [press('Add a type')]],
+  ['an expense with a suggested category', (s) => `/expenses/${s.expenses.lufthansa}`, []],
+  [
+    'choosing a category and type',
+    (s) => `/expenses/${s.expenses.coffee}`,
+    [press('Choose another')],
+  ],
+  ['an expense with its category chosen', (s) => `/expenses/${s.expenses.folio}`, []],
+  ['an expense with no category', (s) => `/expenses/${s.expenses.dinner}`, []],
 ];
 
 const session = {
