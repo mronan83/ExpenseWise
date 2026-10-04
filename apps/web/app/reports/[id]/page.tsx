@@ -333,7 +333,9 @@ export default function ReportPage() {
                             </span>
                           ) : null}
                           <span className="text-xs text-ink-2">
-                            <span className="whitespace-nowrap">{e.date ?? 'No date'}</span>
+                            <span className="whitespace-nowrap">
+                              {e.date ? showDate(e.date) : 'No date'}
+                            </span>
                             {e.held ? ' · possible duplicate' : ''}
                           </span>
                           <span

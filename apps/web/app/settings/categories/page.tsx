@@ -454,7 +454,7 @@ function CategoryForm({
         {types.map((t) => (
           <label
             key={t.id}
-            className="flex items-center gap-2 text-sm"
+            className="flex min-h-11 items-center gap-2 text-sm"
             style={{ paddingLeft: `${t.depth}rem` }}
           >
             <input

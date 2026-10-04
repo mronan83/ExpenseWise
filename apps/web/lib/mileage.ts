@@ -1,3 +1,4 @@
+import { showDate } from '@expensewise/domain';
 import type { ExpenseAmount, ExpenseDetail } from './expenses';
 
 /** The rate copied onto a drive when it was logged, or when its date or miles last changed. */
@@ -42,7 +43,7 @@ export const PURPOSE_MAX = 500;
 
 const SOURCES: Record<string, string> = { 'irs-business': 'the IRS business rate' };
 
-/** "$0.725 a mile, the IRS business rate from 2026-01-01". */
+/** "$0.725 a mile, the IRS business rate from Jan 1, 2026". */
 export function describeRate(rate: MileageRate): string {
   const digits = rate.perUnit.split('.')[1]?.length ?? 0;
   let amount: string;
@@ -58,7 +59,7 @@ export function describeRate(rate: MileageRate): string {
   }
   const per = rate.unit === 'mi' ? 'a mile' : 'a kilometre';
   const source = SOURCES[rate.source] ?? rate.source;
-  return `${amount} ${per}, ${source} from ${rate.effectiveFrom}`;
+  return `${amount} ${per}, ${source} from ${showDate(rate.effectiveFrom)}`;
 }
 
 /** "38.4 mi". */

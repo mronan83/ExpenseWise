@@ -1,3 +1,4 @@
+import { isIsoDate, showDate } from '@expensewise/domain';
 import { api, ApiProblem } from './api';
 import type { ExpenseAmount } from './expenses';
 import type { ReportSummary } from './reports';
@@ -362,7 +363,9 @@ export function describeChecks(readings: readonly Reading[]): string[] {
         ];
         said.add(`${parts.join(' + ')} doesn’t come to the ${formatMoney(f.total)} total.`);
       } else if (check === 'future_date' && f.date) {
-        said.add(`It’s dated ${f.date.value}, after the day it was uploaded.`);
+        said.add(
+          `It’s dated ${isIsoDate(f.date.value) ? showDate(f.date.value) : f.date.value}, after the day it was uploaded.`,
+        );
       } else if (check === 'old_date' && f.date) {
         said.add(`It’s dated ${f.date.value}, more than a year before it was uploaded.`);
       } else if (check === 'summary') {

@@ -1,6 +1,6 @@
 'use client';
 
-import { showDateTime } from '@expensewise/domain';
+import { isIsoDate, showDate, showDateTime } from '@expensewise/domain';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
@@ -314,13 +314,16 @@ const MERGE_LABELS: Record<MergeField, string> = {
   trip: 'Trip',
 };
 
+/** A date as it reads everywhere (Sep 30, 2026); text that is not a date stays as it is. */
+const dateText = (value: string) => (isIsoDate(value) ? showDate(value) : value);
+
 /** A field of a duplicate's expense as text; null when it has none. */
 function shown(side: DuplicateSide, field: MergeField): string | null {
   switch (field) {
     case 'merchant':
       return side.merchant;
     case 'date':
-      return side.date;
+      return side.date && dateText(side.date);
     case 'amount':
       return side.amount ? formatMoney(side.amount) : null;
     case 'notes':
@@ -727,7 +730,7 @@ function Filed({ confirmation }: { confirmation: NonNullable<ReceiptDetail['conf
   const { values, corrections } = confirmation;
   const shown: [CorrectableField, string | null][] = [
     ['merchant', values.merchant],
-    ['date', values.date],
+    ['date', values.date && dateText(values.date)],
     ['total', values.total ? formatMoney(values.total) : null],
     ['taxTotal', values.taxTotal ? formatMoney(values.taxTotal) : null],
     ['tip', values.tip ? formatMoney(values.tip) : null],
@@ -755,7 +758,9 @@ function Filed({ confirmation }: { confirmation: NonNullable<ReceiptDetail['conf
                       : `corrected; read as ${
                           MONEY_FIELDS.includes(field)
                             ? formatMoney({ decimal: fix.read, currency: values.currency })
-                            : fix.read
+                            : field === 'date'
+                              ? dateText(fix.read)
+                              : fix.read
                         }`}
                   </span>
                 ) : null}
@@ -849,6 +854,7 @@ function Correct({
   const shown = (field: CorrectableField) => {
     const value = filed[field];
     if (value === '') return null;
+    if (field === 'date') return dateText(value);
     return MONEY_FIELDS.includes(field)
       ? formatMoney({ decimal: value, currency: filed.currency })
       : value;

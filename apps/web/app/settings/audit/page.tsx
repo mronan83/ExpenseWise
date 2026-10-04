@@ -325,7 +325,8 @@ function EventRow({ event, onTarget }: { event: AuditEvent; onTarget: (r: Target
         </button>
       </p>
       {details.length > 0 ? (
-        <dl className="grid grid-cols-[auto_1fr] gap-x-2 font-mono text-xs text-ink-2">
+        // The event as it was recorded, dates included: the trail is evidence (FR-GOV-05).
+        <dl data-as-read className="grid grid-cols-[auto_1fr] gap-x-2 font-mono text-xs text-ink-2">
           {details.map(([key, value]) => (
             <div key={key} className="contents">
               <dt>{key}</dt>
