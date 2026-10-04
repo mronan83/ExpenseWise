@@ -14,6 +14,20 @@ afterAll(async () => {
   await owner.pool.end();
 });
 
+/**
+ * Claims batch after batch until the relay holds every one of these events, as the relay does
+ * over successive runs. The other test files share this database and enqueue events no relay
+ * claims, so more than one batch of older events can stand ahead of these.
+ */
+async function claimUntilHeld(wanted: readonly string[]) {
+  const held: Awaited<ReturnType<typeof claimOutboxBatch>> = [];
+  for (;;) {
+    const batch = await claimOutboxBatch(relay.db, 100);
+    held.push(...batch.filter((e) => wanted.includes(e.id)));
+    if (held.length === wanted.length || batch.length === 0) return held;
+  }
+}
+
 describe('outbox', () => {
   const ids: string[] = [];
   const orgs: string[] = [];
@@ -31,7 +45,7 @@ describe('outbox', () => {
   });
 
   it('lets the relay claim events across organizations, once, then mark them published', async () => {
-    const first = (await claimOutboxBatch(relay.db, 100)).filter((e) => ids.includes(e.id));
+    const first = await claimUntilHeld(ids);
     expect(first.map((e) => e.id).sort()).toEqual([...ids].sort());
     expect(first.every((e) => e.attempts === 1)).toBe(true);
     expect(first.map((e) => e.orgId).sort()).toEqual([...orgs].sort());
@@ -55,13 +69,13 @@ describe('outbox', () => {
     const id = await withOrg(app.db, orgId, (tx) =>
       enqueueOutbox(tx, orgId, 'receipt.uploaded', { receiptId: 'initech-r1' }),
     );
-    expect((await claimOutboxBatch(relay.db, 100)).map((e) => e.id)).toContain(id);
+    expect((await claimUntilHeld([id])).map((e) => e.id)).toEqual([id]);
 
     // A relay that crashed after claiming: age the claim past its 5-minute lease.
     await owner.db.execute(
       sql`update outbox_events set claimed_at = now() - interval '6 minutes' where id = ${id}`,
     );
-    const reclaimed = (await claimOutboxBatch(relay.db, 100)).find((e) => e.id === id);
+    const [reclaimed] = await claimUntilHeld([id]);
     expect(reclaimed?.attempts).toBe(2);
     expect(await markOutboxPublished(relay.db, [id])).toBe(1);
   });
