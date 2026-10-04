@@ -816,6 +816,14 @@
               "null"
             ],
             "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "exact",
+                  "possible"
+                ],
+                "description": "exact: the same merchant, day, time and total, and no other place. possible: the same purchase perhaps amended, such as a tip added, or matched on the total alone where the receipts don’t both say when and where (FR-INT-18, ADR-0031)."
+              },
               "receiptId": {
                 "type": "string",
                 "format": "uuid"
@@ -864,6 +872,7 @@
               }
             },
             "required": [
+              "kind",
               "receiptId",
               "merchant",
               "date",
@@ -1847,6 +1856,14 @@
       "PossibleDuplicate": {
         "type": "object",
         "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "possible"
+            ],
+            "description": "exact: the same merchant, day, time and total, and no other place. possible: the same purchase perhaps amended, such as a tip added, or matched on the total alone where the receipts don’t both say when and where (FR-INT-18, ADR-0031)."
+          },
           "held": {
             "type": "boolean",
             "description": "Whether this receipt is the later copy, which needs a look until the person decides and is left out of totals meanwhile."
@@ -1859,6 +1876,7 @@
           }
         },
         "required": [
+          "kind",
           "held",
           "self",
           "other"
@@ -1973,6 +1991,32 @@
               "id",
               "name"
             ]
+          },
+          "time": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "When it was bought, HH:MM local time."
+          },
+          "address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "city": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "country": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "ISO 3166-1 alpha-2."
           }
         },
         "required": [
@@ -1986,7 +2030,11 @@
           "date",
           "amount",
           "notes",
-          "trip"
+          "trip",
+          "time",
+          "address",
+          "city",
+          "country"
         ],
         "description": "One receipt of a possible duplicate pair, with the expense it proves."
       },

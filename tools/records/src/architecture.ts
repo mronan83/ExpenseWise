@@ -117,7 +117,7 @@ export const COMPONENTS: readonly Component[] = [
     name: 'Domain',
     technology: 'TypeScript, no I/O',
     responsibility:
-      'The rules: money, dates, lifecycles, editing an expense and its time and place, filing to trips, when two receipts look like the same purchase and how two expenses merge, when something joins a report and what day 28 does, approvals. Tested to 90% coverage or more.',
+      'The rules: money, dates, lifecycles, editing an expense and its time and place, filing to trips, when two receipts are the same purchase, exactly or possibly, and how two expenses merge, when something joins a report and what day 28 does, approvals. Tested to 90% coverage or more.',
     where: ['packages/domain'],
   },
   {

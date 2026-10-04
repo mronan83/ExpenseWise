@@ -1,5 +1,5 @@
 import {
-  looksLikeSamePurchase,
+  duplicateKind,
   mergeExpenses,
   money,
   toDecimal,
@@ -22,6 +22,14 @@ const WORKFLOW: AuditEntry['actor'] = { type: 'system', id: 'receipt-workflow' }
 /** The receipts a duplicate check compares with: read, and not being read again. */
 const COMPARABLE: ReceiptStatus[] = ['extracted', 'needs_review'];
 
+/** When and where an expense was bought, as a duplicate check compares them (ADR-0031). */
+const placeSelection = {
+  time: expenses.transactionTime,
+  address: expenses.merchantAddress,
+  city: expenses.merchantCity,
+  country: expenses.merchantCountry,
+};
+
 async function expenseOfReceipt(tx: Transaction, orgId: string, receiptId: string) {
   const [row] = await tx
     .select({
@@ -39,6 +47,7 @@ async function expenseOfReceipt(tx: Transaction, orgId: string, receiptId: strin
       amountMinor: expenses.amountMinor,
       notes: expenses.notes,
       tripId: expenses.tripId,
+      ...placeSelection,
     })
     .from(receipts)
     .leftJoin(
@@ -77,11 +86,11 @@ async function release(
 }
 
 /**
- * Compares a receipt that has just been read with its member's other receipts (FR-INT-18,
- * ADR-0028). When two look like the same purchase, the later of them is held: it needs a
- * look, whatever its reading settled to, until the person decides. Returns the receipt it
- * looks like. A receipt already held stays
- * held, remembering its new reading. A pair the person dismissed is never flagged again.
+ * Compares a receipt that has just been read with its member's other receipts dated a day
+ * either way (FR-INT-18, ADR-0028, ADR-0031). When two are one purchase, exactly or possibly,
+ * the later of them is held: it needs a look, whatever its reading settled to, until the
+ * person decides. Returns the receipt it matches. A receipt already held stays held,
+ * remembering its new reading. A pair the person dismissed is never flagged again.
  * Call after its expense is filed, in the same transaction; it never relies on row-level
  * security, so the release can run it as the schema owner.
  */
@@ -119,7 +128,10 @@ export async function checkForDuplicate(
   }
 
   const self = await expenseOfReceipt(tx, orgId, receiptId);
-  if (!self?.expenseId || self.amountMinor === null || self.currency === null) return undefined;
+  // A match needs a merchant and a date on both; candidates are dated a day either way.
+  if (!self?.expenseId || self.merchant === null || self.transactionDate === null) {
+    return undefined;
+  }
   const candidates = await tx
     .select({
       receiptId: receipts.id,
@@ -129,6 +141,7 @@ export async function checkForDuplicate(
       transactionDate: expenses.transactionDate,
       currency: expenses.currency,
       amountMinor: expenses.amountMinor,
+      ...placeSelection,
     })
     .from(receipts)
     .innerJoin(
@@ -141,8 +154,7 @@ export async function checkForDuplicate(
         eq(receipts.memberId, self.memberId),
         ne(receipts.id, receiptId),
         inArray(receipts.status, COMPARABLE),
-        eq(expenses.currency, self.currency),
-        eq(expenses.amountMinor, self.amountMinor),
+        sql`${expenses.transactionDate} between ${self.transactionDate}::date - 1 and ${self.transactionDate}::date + 1`,
         // Never paired with this receipt before, in either order, open or dismissed.
         sql`not exists (
           select 1 from ${receiptDuplicates} d
@@ -152,7 +164,9 @@ export async function checkForDuplicate(
       ),
     )
     .orderBy(asc(receipts.createdAt), asc(receipts.id));
-  const match = candidates.find((c) => looksLikeSamePurchase(self, c));
+  // An exact copy first; otherwise the earliest possible one.
+  const judged = candidates.map((c) => ({ ...c, kind: duplicateKind(self, c) }));
+  const match = judged.find((c) => c.kind === 'exact') ?? judged.find((c) => c.kind !== null);
   if (!match) return undefined;
 
   // The later of the two is the copy, whichever was read last: a receipt read again, or one
@@ -178,7 +192,7 @@ export async function checkForDuplicate(
     entityType: 'receipt',
     entityId: heldId,
     action: 'receipt.possible_duplicate',
-    payload: { of, settledStatus: heldStatus },
+    payload: { of, kind: match.kind, settledStatus: heldStatus },
   });
   await fileReceiptExpense(tx, orgId, heldId, null, actor);
   return match.receiptId;
@@ -445,6 +459,11 @@ export interface DuplicateSide {
   readonly notes: string | null;
   readonly tripId: string | null;
   readonly tripName: string | null;
+  /** When and where it was bought, HH:MM local time and the place as read (FR-INT-17). */
+  readonly time: string | null;
+  readonly address: string | null;
+  readonly city: string | null;
+  readonly country: string | null;
 }
 
 /** An open pair as one of its receipts sees it: itself, the other, and which is held. */
@@ -497,6 +516,7 @@ export async function listOpenDuplicatePairs(
       notes: expenses.notes,
       tripId: expenses.tripId,
       tripName: trips.name,
+      ...placeSelection,
     })
     .from(receipts)
     .leftJoin(

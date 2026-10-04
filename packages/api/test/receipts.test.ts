@@ -54,6 +54,8 @@ function fakeReceipts() {
   const pairs: { held: string; of: string }[] = [];
   /** Receipts whose expense is submitted or further along. */
   const locked = new Set<string>();
+  /** What a receipt's expense says beyond the ride every side starts as. */
+  const facts = new Map<string, Partial<DuplicateSide>>();
   const decisions: { receiptId: string; otherReceiptId: string; decision: DuplicateDecision }[] =
     [];
   let n = 0;
@@ -71,6 +73,11 @@ function fakeReceipts() {
     notes: null,
     tripId: null,
     tripName: null,
+    time: null,
+    address: null,
+    city: null,
+    country: null,
+    ...facts.get(id),
   });
   const pairsOf = (ids: readonly string[]): DuplicatePairRecord[] =>
     pairs.flatMap(({ held, of }) => [
@@ -268,7 +275,19 @@ function fakeReceipts() {
     const at = receipts.findIndex((r) => r.id === id);
     receipts[at] = { ...receipts[at]!, status: 'needs_review' };
   };
-  return { store, receipts, runs, reviews, events, pairs, locked, decisions, read, readByFallback };
+  return {
+    store,
+    receipts,
+    runs,
+    reviews,
+    events,
+    pairs,
+    locked,
+    facts,
+    decisions,
+    read,
+    readByFallback,
+  };
 }
 
 function setup(opts: { files?: boolean; dispatch?: 'ok' | 'fails' | 'none' } = {}) {
@@ -865,6 +884,7 @@ describe('possible duplicates (FR-INT-18)', () => {
       error: null,
       by: null,
       duplicateOf: {
+        kind: 'possible',
         receiptId: s.first,
         merchant: 'Uber',
         date: '2026-10-02',
@@ -874,12 +894,33 @@ describe('possible duplicates (FR-INT-18)', () => {
     });
   });
 
+  it('says whether a pair is exact or possible, from the time, place and total (ADR-0031)', async () => {
+    const s = await twoForwards();
+    const omaha = { time: '18:42', city: 'Omaha', country: 'US', address: null };
+    s.facts.set(s.first, omaha);
+    s.facts.set(s.copy, omaha);
+    const kind = async () => {
+      const { body } = await s.call('GET', `/v1/receipts/${s.copy}`, 'riley');
+      return (body.duplicates as { kind: string }[])[0]!.kind;
+    };
+    expect(await kind()).toBe('exact');
+    const { body } = await s.call('GET', '/v1/inbox', 'riley');
+    expect(body.items).toMatchObject([{ reason: { duplicateOf: { kind: 'exact' } } }]);
+    // A tip added a few minutes later: the same purchase, possibly.
+    s.facts.set(s.copy, { ...omaha, time: '18:47', amountMinor: 3642 });
+    expect(await kind()).toBe('possible');
+    // Edited apart since it was flagged: it stays possible until the person decides.
+    s.facts.set(s.copy, { ...omaha, time: '09:00' });
+    expect(await kind()).toBe('possible');
+  });
+
   it('shows the pair on both receipts, and refuses Looks right while the copy is held', async () => {
     const s = await twoForwards();
     const held = await s.call('GET', `/v1/receipts/${s.copy}`, 'riley');
     expect(held.body.duplicates).toHaveLength(1);
     expect(held.body.duplicates).toMatchObject([
       {
+        kind: 'possible',
         held: true,
         self: { receiptId: s.copy, merchant: 'Uber', trip: null },
         other: {

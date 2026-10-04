@@ -346,7 +346,8 @@ await capture(
     }),
   ),
 );
-// The same ride sent again: read alike, so it is held as a possible duplicate (FR-INT-18).
+// The same ride sent again: read alike, at the same time and place, so it is held as an
+// exact copy (FR-INT-18, ADR-0031).
 await capture(
   'uberAgain',
   'upload',
@@ -360,6 +361,33 @@ await capture(
         { label: 'Airport Surcharge', value: '1.50', confidence: 'high' },
       ],
       tip: { value: '2.00', confidence: 'high' },
+    }),
+  ),
+);
+// A dinner's itemized bill, then the card slip with the tip five minutes on: held as a
+// possible duplicate, its total different (ADR-0031).
+const juniper = (time: string) => ({
+  time: { value: time, confidence: 'high' },
+  address: {
+    printed: '1520 Harney St, Omaha, NE 68102',
+    city: 'Omaha',
+    region: 'NE',
+    country: 'US',
+    confidence: 'high',
+  },
+});
+await capture(
+  'dinner',
+  'camera',
+  both(reading('Juniper & Rye', '2026-09-29', 'USD', '84.50', juniper('19:58'))),
+);
+await capture(
+  'dinnerSlip',
+  'camera',
+  both(
+    reading('Juniper & Rye', '2026-09-29', 'USD', '101.40', {
+      ...juniper('20:03'),
+      tip: { value: '16.90', confidence: 'high' },
     }),
   ),
 );

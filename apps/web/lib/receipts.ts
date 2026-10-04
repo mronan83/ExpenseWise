@@ -112,13 +112,25 @@ export interface DuplicateSide {
   amount: Amount | null;
   notes: string | null;
   trip: { id: string; name: string } | null;
+  /** When and where it was bought (FR-INT-17). */
+  time: string | null;
+  address: string | null;
+  city: string | null;
+  country: string | null;
 }
 
 /**
- * Another receipt that looks like the same purchase (FR-INT-18). held: this one is the later
- * copy, which waits for the person and is left out of totals until they decide.
+ * exact: the same merchant, day, time and total. possible: the same purchase perhaps amended,
+ * as with a tip added, or matched on the total where they don't both say when (ADR-0031).
+ */
+export type DuplicateKind = 'exact' | 'possible';
+
+/**
+ * Another receipt that is the same purchase (FR-INT-18). held: this one is the later copy,
+ * which waits for the person and is left out of totals until they decide.
  */
 export interface PossibleDuplicate {
+  kind: DuplicateKind;
   held: boolean;
   self: DuplicateSide;
   other: DuplicateSide;
@@ -161,6 +173,7 @@ export interface NeedsYouReason {
   by: string | null;
   /** duplicate: the earlier receipt it looks like. */
   duplicateOf: {
+    kind: DuplicateKind;
     receiptId: string;
     merchant: string | null;
     date: string | null;
@@ -229,7 +242,7 @@ export function needsYou(item: ReceiptInboxItem): { text: string; action: string
         .filter(Boolean)
         .join(', ');
       return {
-        text: `Possible duplicate of an earlier receipt${what ? ` (${what})` : ''}.`,
+        text: `${of?.kind === 'exact' ? 'A copy' : 'Possible duplicate'} of an earlier receipt${what ? ` (${what})` : ''}.`,
         action: 'Compare',
         href: `/receipts/${receipt.id}`,
       };

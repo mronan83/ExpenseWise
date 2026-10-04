@@ -9,6 +9,7 @@ import {
   listOpenDuplicatePairs,
   mergeDuplicateReceipt,
 } from '../src/duplicates.ts';
+import type { ReceiptOffer } from '../src/expenses.ts';
 import { homeSnapshot } from '../src/home.ts';
 import {
   confirmReceipt,
@@ -45,7 +46,7 @@ const UBER: ExpenseValues = {
 /** Files a receipt and settles its reading, as the workflow does; returns its id. */
 async function readReceipt(
   org: Org,
-  values: ExpenseValues | null = UBER,
+  values: ReceiptOffer | null = UBER,
   status: 'extracted' | 'needs_review' | 'failed' = 'extracted',
 ): Promise<string> {
   const id = newId();
@@ -115,6 +116,70 @@ const actions = (org: Org, entityId: string) =>
         .where(eq(auditEvents.entityId, entityId))
     ).map((a) => a.action),
   );
+
+/** How sure the check was when it held a receipt, as its audit event says. */
+const heldAs = (org: Org, receiptId: string) =>
+  withOrg(app.db, org.orgId, async (tx) => {
+    const [event] = await tx
+      .select({ payload: auditEvents.payload })
+      .from(auditEvents)
+      .where(
+        and(
+          eq(auditEvents.entityId, receiptId),
+          eq(auditEvents.action, 'receipt.possible_duplicate'),
+        ),
+      );
+    return (event?.payload as { kind?: string } | undefined)?.kind ?? null;
+  });
+
+/** A dinner's itemized bill, in Houston; the card slip with the tip comes a few minutes on. */
+const DINNER: ReceiptOffer = {
+  merchant: 'Pappas Bros. Steakhouse',
+  transactionDate: '2026-09-23',
+  currency: 'USD',
+  amountMinor: 9310,
+  details: {
+    time: '19:58',
+    timeZone: 'America/Chicago',
+    address: '1200 McKinney St, Houston, TX 77010',
+    city: 'Houston',
+    region: 'TX',
+    country: 'US',
+  },
+};
+const at = (time: string, amountMinor = DINNER.amountMinor): ReceiptOffer => ({
+  ...DINNER,
+  amountMinor,
+  details: { ...DINNER.details!, time },
+});
+
+describe('matching on when and where (FR-INT-18, ADR-0031)', () => {
+  it('holds an exact copy: the same time, place and total', async () => {
+    const acme = await seedOrg(app.db, 'dup-exact');
+    await readReceipt(acme, DINNER);
+    const copy = await readReceipt(acme, DINNER);
+    expect((await state(acme, copy)).receipt?.status).toBe('needs_review');
+    expect(await heldAs(acme, copy)).toBe('exact');
+  });
+
+  it('holds the slip with a tip, minutes later and with another total, as possible', async () => {
+    const acme = await seedOrg(app.db, 'dup-tip');
+    const bill = await readReceipt(acme, DINNER);
+    const slip = await readReceipt(acme, at('20:03', 10810));
+    expect((await state(acme, slip)).pairs).toMatchObject([{ otherReceiptId: bill }]);
+    expect(await heldAs(acme, slip)).toBe('possible');
+    const [pair] = await withOrg(app.db, acme.orgId, (tx) => listOpenDuplicatePairs(tx, [slip]));
+    expect(pair?.self).toMatchObject({ time: '20:03', city: 'Houston', country: 'US' });
+  });
+
+  it('keeps apart two purchases at the same place hours apart, even with the same total', async () => {
+    const acme = await seedOrg(app.db, 'dup-hours');
+    await readReceipt(acme, at('08:10'));
+    const later = await readReceipt(acme, at('15:30'));
+    expect((await state(acme, later)).receipt?.status).toBe('extracted');
+    expect((await state(acme, later)).pairs).toEqual([]);
+  });
+});
 
 describe('finding a possible duplicate when a receipt is read', () => {
   it('holds a later copy of a purchase for a look, and leaves it out of Home’s totals', async () => {
