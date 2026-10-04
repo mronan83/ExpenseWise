@@ -170,6 +170,50 @@ describe('a report’s export as CSV', () => {
   });
 });
 
+describe('a report with a measured route drive (Q33)', () => {
+  const drives = [
+    expense(),
+    expense({
+      merchant: 'Eppley Airfield',
+      amountMinor: 2973,
+      miles: { measured: '38.4', claimed: '41', reason: 'Road closed at the bridge' },
+    }),
+    expense({
+      merchant: 'Acme HQ',
+      amountMinor: 725,
+      miles: { measured: null, claimed: '10', reason: null },
+    }),
+  ];
+
+  it('shows the miles measured, the miles claimed and why they differ, with where the route came from', () => {
+    const table = reportExportTable(drives);
+    expect(table.columns.map((c) => c.header).slice(9)).toEqual([
+      'Miles measured',
+      'Miles claimed',
+      'Why the miles differ',
+    ]);
+    expect(table.rows.map((r) => r.slice(9))).toEqual([
+      ['', '', ''],
+      ['38.4', '41', 'Road closed at the bridge'],
+      ['', '10', ''],
+    ]);
+    expect(table.notes).toEqual([
+      'Route © openrouteservice.org by HeiGIT · Map data © OpenStreetMap contributors',
+    ]);
+    expect(reportCsv(table).split('\r\n').slice(-3)).toEqual([
+      'Total,,,,,,,85.18,USD,,,',
+      'Route © openrouteservice.org by HeiGIT · Map data © OpenStreetMap contributors',
+      '',
+    ]);
+  });
+
+  it('is exported as it always was when no drive on it was measured', () => {
+    const table = reportExportTable([drives[0]!, drives[2]!]);
+    expect(table.columns.map((c) => c.header).join(',')).toBe(HEADER);
+    expect(table.notes).toBeUndefined();
+  });
+});
+
 describe('which reports can be exported, and by whom', () => {
   it('exports a report once it has closed, and never one still open', () => {
     expect(REPORT_STATUSES.filter(isReportExportable)).toEqual([
@@ -188,5 +232,86 @@ describe('which reports can be exported, and by whom', () => {
     expect(canExportReport('owner', false)).toBe(true);
     expect(canExportReport('finance_admin', false)).toBe(true);
     expect(canExportReport('auditor', false)).toBe(true);
+  });
+});
+
+describe('a report’s export of split expenses and excluded lines (FR-EXP-15, FR-EXP-16)', () => {
+  const folio = expense({
+    date: '2026-10-01',
+    merchant: 'Hotel Lindley',
+    category: 'Travel',
+    type: 'Lodging',
+    amountMinor: 108_276,
+    parts: [
+      { category: 'Travel', type: 'Lodging', amountMinor: 102_995 },
+      { category: 'Meals', type: 'Business meal', amountMinor: 5281 },
+    ],
+    excluded: [
+      { line: 'Minibar', amountMinor: 2124, reason: 'personal', note: null },
+      { line: 'In-room movie', amountMinor: 1499, reason: 'other', note: 'Watched with family' },
+    ],
+  });
+
+  it('writes a row per part, marked as parts of the same expense, and the totals stay the same', () => {
+    const table = reportExportTable([folio, expense()]);
+    expect(table.columns.map((c) => c.header)).toEqual([
+      'Date',
+      'Merchant',
+      'Part',
+      'Category',
+      'Type',
+      'Trip',
+      'Purpose',
+      'Note',
+      'Excluded',
+      'Amount',
+      'Currency',
+    ]);
+    expect(table.rows.map((r) => [r[1], r[2], r[3], r[4], r[9]])).toEqual([
+      ['Hotel Lindley', '1 of 2', 'Travel', 'Lodging', '1029.95'],
+      ['Hotel Lindley', '2 of 2', 'Meals', 'Business meal', '52.81'],
+      ['Lou Malnati’s', '', '', '', '48.20'],
+    ]);
+    expect(table.totals).toEqual([{ amountMinor: 108_276 + 4820, currency: 'USD' }]);
+  });
+
+  it('lists each excluded line with what it took off and why, once per expense', () => {
+    const table = reportExportTable([folio]);
+    expect(table.rows.map((r) => r[8])).toEqual([
+      'Minibar: 21.24, Personal; In-room movie: 14.99, Other (Watched with family)',
+      '',
+    ]);
+    const unsplit = reportExportTable([{ ...folio, parts: [] }]);
+    expect(unsplit.columns.map((c) => c.header)).not.toContain('Part');
+    expect(unsplit.rows).toHaveLength(1);
+    expect(unsplit.rows[0]?.[7]).toMatch(/^Minibar: 21\.24, Personal/);
+  });
+
+  it('exports every other report exactly as before', () => {
+    const table = reportExportTable([expense({ parts: [], excluded: [] })]);
+    expect(table.columns.map((c) => c.header).join(',')).toBe(HEADER);
+  });
+  it('keeps the miles columns after the rest when the report also has a measured drive', () => {
+    const drive = expense({
+      merchant: 'Eppley Airfield',
+      amountMinor: 2973,
+      miles: { measured: '38.4', claimed: '41', reason: 'Road closed at the bridge' },
+    });
+    const table = reportExportTable([folio, drive]);
+    expect(table.columns.map((c) => c.header).slice(8)).toEqual([
+      'Excluded',
+      'Amount',
+      'Currency',
+      'Miles measured',
+      'Miles claimed',
+      'Why the miles differ',
+    ]);
+    expect(table.rows.map((r) => [r[1], r[2], r[10], r[11], r[12], r[13]])).toEqual([
+      ['Hotel Lindley', '1 of 2', 'USD', '', '', ''],
+      ['Hotel Lindley', '2 of 2', 'USD', '', '', ''],
+      ['Eppley Airfield', '', 'USD', '38.4', '41', 'Road closed at the bridge'],
+    ]);
+    expect(table.totals).toEqual([{ amountMinor: 108_276 + 2973, currency: 'USD' }]);
+    expect(table.notes).toHaveLength(1);
   });
 });

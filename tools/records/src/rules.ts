@@ -151,6 +151,15 @@ export const RULES: readonly Rule[] = [
     code: { file: 'packages/api/src/report-pdf.ts', constant: 'MAX_CELL_LINES', literal: '12' },
   },
   {
+    id: 'R-STAY-NIGHTS',
+    name: 'Most nights a hotel stay is worked out for',
+    value:
+      '31; a stay read as longer, or with its check-out before its check-in, is not sure and needs a look',
+    decided: { by: 'claude', source: 'ADR-0040' },
+    code: { file: 'packages/domain/src/journeys.ts', constant: 'STAY_MAX_NIGHTS', literal: '31' },
+    note: 'A guard against a year or a month misread, as a stay of 366 nights. A longer stay is entered as two. Never put to you.',
+  },
+  {
     id: 'R-TRIP-LENGTH',
     name: 'Longest trip',
     value: '366 days',
@@ -231,14 +240,22 @@ export const RULES: readonly Rule[] = [
     id: 'R-MILEAGE-RATE',
     name: 'The rate a drive is paid at',
     value:
-      'the IRS standard mileage rate for business use on its date: 72.5 cents a mile in 2026, 70 cents in 2025; known from 1 Jan 2022 to 31 Dec 2026',
-    decided: { by: 'claude', source: 'ADR-0038' },
+      'the organization’s own rate a mile from the day it takes effect, where it set one; otherwise the IRS standard mileage rate for business use on its date: 72.5 cents a mile in 2026, 70 cents in 2025; known from 1 Jan 2022 to 31 Dec 2026',
+    decided: { by: 'owner', source: 'Q28' },
     code: {
       file: 'packages/domain/src/mileage.ts',
       constant: 'IRS_BUSINESS_RATES_THROUGH',
       literal: "'2026-12-31'",
     },
-    note: 'Nothing in the app held a rate, so Claude chose the IRS rate; Q28 asks whether you want your own. Each year’s rate is added when the IRS announces it in December (#76 for 2027); until then a drive dated after the last day known is refused rather than paid at the old rate.',
+    note: 'Your answer to Q28: the IRS rate by default, and your own in Settings when you want it, built in PR #59 (#77). The latest change on or before a drive’s date decides: your own rate, which has no last day known, or the IRS rate again. Each year’s IRS rate is added when the IRS announces it in December (#76 for 2027); until then a drive paid at the IRS rate and dated after the last day known is refused rather than paid at the old rate.',
+  },
+  {
+    id: 'R-MILEAGE-OWN-RATE',
+    name: 'What an organization’s own rate a mile can be',
+    value: 'more than zero, to at most 4 decimal places, in the organization’s home currency',
+    decided: { by: 'claude', source: 'ADR-0038' },
+    code: { file: 'packages/domain/src/mileage.ts', constant: 'OWN_RATE_PLACES', literal: '4' },
+    note: 'Four places as the rate a drive copies on keeps them, enough for a tenth of a cent, as the IRS sets its rate. Refusing zero is Claude’s: an organization that pays nothing for miles leaves mileage switched off.',
   },
   {
     id: 'R-MILEAGE-MAX',
@@ -258,6 +275,42 @@ export const RULES: readonly Rule[] = [
     value: '1 day after today in UTC, for a person ahead of UTC',
     decided: { by: 'claude', source: 'ADR-0038' },
     code: { file: 'packages/domain/src/mileage.ts', constant: 'MILEAGE_DAYS_AHEAD', literal: '1' },
+  },
+  {
+    id: 'R-ROUTE-STOPS',
+    name: 'Most places one drive by its route goes through',
+    value: '25, its start and end included',
+    decided: { by: 'claude', source: 'ADR-0039' },
+    code: {
+      file: 'packages/domain/src/route-mileage.ts',
+      constant: 'ROUTE_MAX_STOPS',
+      literal: '25',
+    },
+    note: 'OpenRouteService’s free key routes through up to 50 points; 25 leaves room for the way back on a round trip, and keeps one drive’s lookups well inside the key’s 1,000 a day.',
+  },
+  {
+    id: 'R-ROUTE-RETRIES',
+    name: 'How often a busy OpenRouteService is asked again',
+    value: '3 more times, then the drive needs a look',
+    decided: { by: 'claude', source: 'ADR-0039' },
+    code: {
+      file: 'packages/workflows/src/route-mileage.ts',
+      constant: 'ROUTE_MEASURE_RETRIES',
+      literal: '3',
+    },
+    note: 'For a used-up allowance (429) or a failure on its side (5xx). A refused key is not asked again.',
+  },
+  {
+    id: 'R-MILES-REASON-MAX',
+    name: 'Longest reason for claiming other miles than were measured',
+    value: '500 characters',
+    decided: { by: 'claude', source: 'ADR-0039' },
+    code: {
+      file: 'packages/domain/src/route-mileage.ts',
+      constant: 'ROUTE_REASON_MAX',
+      literal: '500',
+    },
+    note: 'Your answer to Q33 asks for a reason; its length is Claude’s, as long as a local expense’s justification.',
   },
   {
     id: 'R-RATE-LOOKBACK',
@@ -282,5 +335,35 @@ export const RULES: readonly Rule[] = [
       literal: "'37 * * * *'",
     },
     note: 'A request to convert normally comes as something changes, within minutes; the sweep catches a failed fetch or a missed request.',
+  },
+  {
+    id: 'R-LINES-TOLERANCE',
+    name: 'How far a receipt’s lines may miss its subtotal and total and still be used',
+    value: 'one minor unit (a cent) per line counted',
+    decided: { by: 'claude', source: 'ADR-0041' },
+    code: {
+      file: 'packages/domain/src/itemized.ts',
+      constant: 'LINE_TOLERANCE_MINOR',
+      literal: '1',
+    },
+    note: 'A receipt rounds each line on its own, as R-SUMS-TOLERANCE allows for its tax, fee and tip lines. Using lines only when they add up is Claude’s rule, yours to confirm.',
+  },
+  {
+    id: 'R-EXCLUSION-NOTE-MAX',
+    name: 'Longest note on a line left out of a claim',
+    value: '200 characters',
+    decided: { by: 'claude', source: 'ADR-0041' },
+    code: {
+      file: 'packages/domain/src/itemized.ts',
+      constant: 'EXCLUSION_NOTE_MAX',
+      literal: '200',
+    },
+  },
+  {
+    id: 'R-SPLIT-PARTS-MAX',
+    name: 'Most parts one expense is split into',
+    value: '20; a split by amount has at least 2',
+    decided: { by: 'claude', source: 'ADR-0041' },
+    code: { file: 'packages/domain/src/itemized.ts', constant: 'SPLIT_PARTS_MAX', literal: '20' },
   },
 ];

@@ -16,7 +16,7 @@ export interface MileageRate {
   readonly perUnit: string;
   readonly unit: DistanceUnit;
   readonly effectiveFrom: IsoDate;
-  /** Where the rate came from, e.g. "org-policy" or "irs-standard". */
+  /** Where the rate came from: `irs-business`, or `organization` for the organization's own. */
   readonly source: string;
 }
 
@@ -193,11 +193,63 @@ function checkMiles(typed: string): Result<string, MileageProblem> {
   return ok(plainMiles(text));
 }
 
-/** The rate in force on `date` in `table`, or why there is none. */
+/** Where a rate came from: the organization's own rate a mile, set in Settings (Q28). */
+export const ORGANIZATION_RATE_SOURCE = 'organization';
+
+/**
+ * A change an owner or finance admin made to what drives are paid at (Q28): from its day on,
+ * the organization's own rate a mile, or, with `rate` null, the IRS business rate again.
+ */
+export interface OwnMileageRate {
+  readonly effectiveFrom: IsoDate;
+  /** Its own rate a mile, in the organization's home currency; null for the IRS rate again. */
+  readonly rate: MileageRate | null;
+}
+
+/** What an organization pays drives at: the changes it made, over the IRS business rates. */
+export interface MileagePolicy {
+  readonly own: readonly OwnMileageRate[];
+  readonly irs: MileageRateTable;
+}
+
+/** The IRS table alone, or an organization's own changes over it. */
+export type MileageRates = MileageRateTable | MileagePolicy;
+
+/** An organization that has changed nothing: the IRS business rate on every date. */
+export const IRS_ONLY: MileagePolicy = Object.freeze({
+  own: Object.freeze([]),
+  irs: IRS_BUSINESS_RATES,
+});
+
+const policyOf = (rates: MileageRates): MileagePolicy =>
+  'own' in rates ? rates : { own: [], irs: rates };
+
+/** The organization's latest change on or before `date`, or undefined when it made none. */
+export function changeOn(rates: MileageRates, date: IsoDate): OwnMileageRate | undefined {
+  return policyOf(rates).own.reduce<OwnMileageRate | undefined>(
+    (best, c) =>
+      c.effectiveFrom <= date && (best === undefined || c.effectiveFrom > best.effectiveFrom)
+        ? c
+        : best,
+    undefined,
+  );
+}
+
+/**
+ * The rate in force on `date`, or why there is none. Every drive is priced through here (Q28):
+ * the organization's latest change on or before the date decides, its own rate, which has no
+ * last day known, or the IRS rate again; with no change before it, the IRS business rate.
+ */
 export function rateOn(
   date: IsoDate,
-  table: MileageRateTable = IRS_BUSINESS_RATES,
+  rates: MileageRates = IRS_BUSINESS_RATES,
 ): Result<MileageRate, MileageProblem> {
+  const change = changeOn(rates, date);
+  return change?.rate ? ok(change.rate) : irsRateOn(date, policyOf(rates).irs);
+}
+
+/** The rate in force on `date` in an IRS table, or why there is none. */
+function irsRateOn(date: IsoDate, table: MileageRateTable): Result<MileageRate, MileageProblem> {
   if (date > table.through) {
     return problem(
       'date',
@@ -216,7 +268,7 @@ export function rateOn(
 function checkDate(
   typed: string,
   today: IsoDate,
-  table: MileageRateTable,
+  table: MileageRates,
 ): Result<IsoDate, MileageProblem> {
   const date = typed.trim();
   if (!isIsoDate(date)) return problem('date', 'Enter a date as YYYY-MM-DD.');
@@ -234,7 +286,7 @@ function checkDate(
 export function quoteMileage(
   input: { readonly date: string; readonly miles: string },
   today: IsoDate,
-  table: MileageRateTable = IRS_BUSINESS_RATES,
+  table: MileageRates = IRS_BUSINESS_RATES,
 ): Result<MileageReimbursement, MileageProblem> {
   const date = checkDate(input.date, today, table);
   if (!date.ok) return date;
@@ -261,7 +313,7 @@ export function applyMileageInput(
   current: MileageValues | null,
   input: MileageInput,
   today: IsoDate,
-  table: MileageRateTable = IRS_BUSINESS_RATES,
+  table: MileageRates = IRS_BUSINESS_RATES,
 ): Result<
   {
     readonly values: MileageValues;
@@ -314,4 +366,49 @@ export function applyMileageInput(
   const rate = rateOn(values.date, table);
   if (!rate.ok) return rate;
   return ok({ values, changes, claim: reimburse(values.miles, 'mi', rate.value) });
+}
+
+export const OWN_RATE_FIELDS = ['effectiveFrom', 'perMile'] as const;
+export type OwnRateField = (typeof OWN_RATE_FIELDS)[number];
+
+export interface OwnRateProblem {
+  readonly field: OwnRateField;
+  readonly message: string;
+}
+
+/** The most decimal places an organization's own rate a mile is kept to. */
+export const OWN_RATE_PLACES = 4;
+
+/**
+ * An owner's or finance admin's change to what drives are paid at (Q28), as they typed it: from
+ * a date, their own rate a mile in `currency`, the organization's home currency, more than zero
+ * and to at most four decimal places; or, with `perMile` null, the IRS business rate again.
+ */
+export function ownMileageRate(
+  input: { readonly effectiveFrom: string; readonly perMile: string | null },
+  currency: string,
+): Result<OwnMileageRate, OwnRateProblem> {
+  const effectiveFrom = input.effectiveFrom.trim();
+  if (!isIsoDate(effectiveFrom)) {
+    return err({ field: 'effectiveFrom', message: 'Enter the day it applies from as YYYY-MM-DD.' });
+  }
+  if (input.perMile === null) return ok(Object.freeze({ effectiveFrom, rate: null }));
+  const typed = input.perMile.trim();
+  const refuse = (message: string) => err({ field: 'perMile' as const, message });
+  if (!/^\d{1,8}(\.\d+)?$/.test(typed)) {
+    return refuse('Enter the rate a mile as a number, such as 0.65.');
+  }
+  const d = parseDecimal(typed);
+  if (d.scale > OWN_RATE_PLACES) {
+    return refuse(`Enter the rate to ${OWN_RATE_PLACES} decimal places at most.`);
+  }
+  if (d.units <= 0n) return refuse('Enter more than zero, or go back to the IRS rate.');
+  const rate = mileageRate({
+    currency,
+    perUnit: formatUnits(d.units, d.scale),
+    unit: 'mi',
+    effectiveFrom,
+    source: ORGANIZATION_RATE_SOURCE,
+  });
+  return ok(Object.freeze({ effectiveFrom, rate }));
 }

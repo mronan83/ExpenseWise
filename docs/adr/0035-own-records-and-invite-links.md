@@ -2,7 +2,7 @@
 
 Inside an organization, Postgres keeps each member to their own receipts, expenses, trips and reports, using the caller's membership that every request names; owners, finance admins and auditors see everyone's, everyone changes only their own, and an auditor changes nothing. People join by a one-time link an owner makes in Settings › People, with no email sent.
 
-- **Status:** Accepted (adding #50 and inviting by link decided by product owner, Oct 4; enforcing it in the database, and what owners, finance admins and auditors may do, recommended, with Q30 open)
+- **Status:** Accepted (adding #50 and inviting by link decided by product owner, Oct 4; enforcing it in the database, recommended; what owners and finance admins may do with others’ records decided by product owner, Oct 4, Q30: see everyone’s, change only their own)
 - **Date:** 2026-10-04
 - **Deciders:** Product owner ("Add #50; invite by link", Oct 4); Claude (principal architect), for the design
 - **Decision register:** D-37. Closes GAP-20 (#50) and builds #29; extends [ADR-0001](0001-target-segment-and-tenancy.md)'s tenant isolation inside one organization and follows [ADR-0016](0016-several-sign-ins-per-person.md) for an empty organization of one's own.

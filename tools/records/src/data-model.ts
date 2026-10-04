@@ -18,13 +18,14 @@ export const DOMAINS: readonly Domain[] = [
   {
     name: 'Organizations and people',
     about:
-      'Who is in which organization and what its owner keeps about it, with what role, how they sign in and the links that let someone join, the AI keys an organization brings, the AI models it reads receipts with, and the features its owner has switched on.',
+      'Who is in which organization and what its owner keeps about it, with what role, how they sign in and the links that let someone join, the AI keys and the routing key an organization brings, the AI models it reads receipts with, and the features its owner has switched on.',
     tables: [
       'organizations',
       'members',
       'member_sign_ins',
       'member_invites',
       'ai_provider_keys',
+      'route_service_keys',
       'org_ai_models',
       'org_features',
     ],
@@ -44,15 +45,22 @@ export const DOMAINS: readonly Domain[] = [
   {
     name: 'Expenses and trips',
     about:
-      'The claim: what was spent, on which trip, coded to which category and type, the miles behind it, and what it is in the currency it is reimbursed in.',
+      'The claim: what was spent, on which trip, coded to which category and type, the miles behind it, the route they were measured on and the rate a mile the organization pays them at, the places a person drives from, and what it is in the currency it is reimbursed in; the receipt lines it keeps, those left out of it, and the parts it is split into.',
     tables: [
       'expenses',
       'expense_conversions',
+      'expense_itemizations',
+      'expense_lines',
+      'expense_parts',
       'trips',
       'categories',
       'expense_types',
       'category_types',
       'mileage_logs',
+      'org_mileage_rates',
+      'mileage_routes',
+      'mileage_route_stops',
+      'saved_places',
     ],
   },
   {
@@ -95,6 +103,10 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
     about:
       'An organization’s own Anthropic or OpenAI key, stored only as ciphertext bound to the organization and provider; only the last four characters are ever shown (ADR-0015, NFR-SEC-04).',
   },
+  route_service_keys: {
+    about:
+      'An organization’s own key for the routing service that measures route drives, OpenRouteService for now (Q31, ADR-0039): one per provider, stored only as ciphertext sealed as the AI keys are and bound to the organization and provider, with its last four characters and when OpenRouteService accepted it, on the check made as it was saved (NFR-SEC-04). Owners and finance admins set and remove it; each change is in the audit trail, by its last four characters only. A table of its own rather than a third AI provider, so it never lists among the AI keys. The measuring workflow reads it for the system.',
+  },
   org_ai_models: {
     about:
       'Which AI models read the organization’s receipts, once AI model settings are on for it (FR-INT-16, ADR-0033): one row per model, on or off, in the order back-ups are tried, and which one is primary. Owners and finance admins choose; each change is in the audit trail with the choice before and after. No rows means the defaults: Sonnet 5.5 primary, then Haiku 4.5 and GPT-5.6 Luna. A model is never deleted, only switched off.',
@@ -109,7 +121,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   extraction_runs: {
     about:
-      'One model’s reading of one receipt for one request, with its outcome, confidence, timing and cost. Its outcome is confident only when the reading would be Ready on its own, its sums and date included (FR-INT-04). Readings since `receipt-v2` also read fees and whether a document is a purchase summary; older ones read back as having no fees (ADR-0027). Since `receipt-v3` they read the time of purchase and the merchant’s address too; older ones read back without them (ADR-0030). An organization with Where each field was read switched on is asked `receipt-v4`, which also keeps in the output the line of the receipt behind each field (GAP-14); every other organization is still asked `receipt-v3`. Each request is read once per model, so a retry adds nothing (ADR-0017, NFR-DAT-06). A reading made under the organization’s AI model settings records why the model read: primary, or backup when the models before it read nothing; one made side by side has none (ADR-0033).',
+      'One model’s reading of one receipt for one request, with its outcome, confidence, timing and cost. Its outcome is confident only when the reading would be Ready on its own, its sums and date included (FR-INT-04). Readings since `receipt-v2` also read fees and whether a document is a purchase summary; older ones read back as having no fees (ADR-0027). Since `receipt-v3` they read the time of purchase and the merchant’s address too; older ones read back without them (ADR-0030). An organization with Where each field was read switched on is asked `receipt-v4`, which also keeps in the output the line of the receipt behind each field (GAP-14); every other organization is still asked `receipt-v3`. Since PR #59 a request is that base with the additions its organization has switched on, each joined onto both versions with “+”: with Journeys and stays on, `receipt-v3+journeys-v1` (or `receipt-v4+journeys-v1`) also keeps where a ride, flight or train went and a folio’s check-in and check-out, and may say a document is a rail ticket; a reading without them parses back with neither (ADR-0040). Each request is read once per model, so a retry adds nothing (ADR-0017, NFR-DAT-06). A reading made under the organization’s AI model settings records why the model read: primary, or backup when the models before it read nothing; one made side by side has none (ADR-0033).',
   },
   receipt_reviews: {
     about:
@@ -125,11 +137,23 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   expenses: {
     about:
-      'What is claimed: merchant, date, amount and currency, its status, and the trip it is filed to. It also carries when and where it was bought, as its receipt prints them: a local time with its time zone, worked out offline from the city, region and country, and the address (FR-INT-17, ADR-0030). It follows its receipt until a person edits it (ADR-0022) and files to trips by date until a person chooses (ADR-0023). One with a date and no trip is local: it carries a justification and points at its report itself, while one on a trip goes with the trip’s report (FR-EXP-14, ADR-0029). A drive is an expense with source `mileage` and a mileage log (ADR-0038). Home sums a member’s month through the member-and-date index, so it needs no index of its own. It carries the category and type a person chose, with when, all three together or none (FR-EXP-11); a suggestion is never stored, and suggestions read a member’s past choices through the member-and-chosen-at index (FR-INT-10, ADR-0036). Its Phase 0 columns for one converted amount (`home_amount_minor`, `fx_rate`, `fx_rate_date`, `fx_source`) assume one home currency per organization and stay unused: conversions are kept in `expense_conversions` (ADR-0034).',
+      'What is claimed: merchant, date, amount and currency, its status, and the trip it is filed to. It also carries when and where it was bought, as its receipt prints them: a local time with its time zone, worked out offline from the city, region and country, and the address (FR-INT-17, ADR-0030). It follows its receipt until a person edits it (ADR-0022) and files to trips by date until a person chooses (ADR-0023). One with a date and no trip is local: it carries a justification and points at its report itself, while one on a trip goes with the trip’s report (FR-EXP-14, ADR-0029). A drive is an expense with source `mileage` and a mileage log (ADR-0038). With Journeys and stays on, it carries where a ride, flight or train went (`journey_from`, `journey_to`, as printed) and a hotel stay’s `check_in` and `check_out` days, which follow the receipt the same way and are edited the same way; the nights are worked out from the two days when shown, never stored (FR-INT-20, FR-INT-21, ADR-0040). Home sums a member’s month through the member-and-date index, so it needs no index of its own. It carries the category and type a person chose, with when, all three together or none (FR-EXP-11); a suggestion is never stored, and suggestions read a member’s past choices through the member-and-chosen-at index (FR-INT-10, ADR-0036). Its Phase 0 columns for one converted amount (`home_amount_minor`, `fx_rate`, `fx_rate_date`, `fx_source`) assume one home currency per organization and stay unused: conversions are kept in `expense_conversions` (ADR-0034). Its amount is the claim: its receipt’s total less each line left out of it with its share of the tax, tip and fees, so reports, Home and conversion follow an exclusion with nothing of their own (ADR-0041).',
   },
   expense_conversions: {
     about:
       'An expense’s amount converted to the currency its report is reimbursed in (FR-EXP-13, ADR-0034): what was converted (the amount, its currency and purchase date), into which currency, and the ECB reference rate applied, with the day it was published and its source, copied on so a later rate never changes the claim (NFR-DAT-02, NFR-DAT-04). Or that the source publishes no rate for it, so it stays as spent. One per expense: a new conversion, once the amount, currency, date or reimbursement currency changes, replaces it, and every conversion is in the audit trail. A rate already recorded for a currency, date and reimbursement currency is applied to the others alike, so one day’s rate is fetched once. It goes with its expense when that is deleted. Written only while `reports.currency-conversion` is on, by the conversion workflow.',
+  },
+  expense_itemizations: {
+    about:
+      'An expense’s copy of its receipt’s itemized lines: the currency, total and subtotal of the reading they were copied from, one per expense (FR-INT-22, ADR-0041). Copied when the expense is filed and again with each new reading, while the expense follows its receipt: until a person edits it, leaves a line out or splits it, and never once it is submitted, so a submitted claim never changes under a re-read. A reading with no lines takes it away. Each copy is audited. Written whether or not `expenses.itemized` is on, so switching it on shows the lines at once.',
+  },
+  expense_lines: {
+    about:
+      'One line of that copy, numbered from 1 as printed: each item (a discount a negative one), then each tax, each fee and the tip, in the itemization’s currency. An item can be left out of the claim with a reason picked from four and a note, which other needs (FR-EXP-16, Q38), and given a category and type of its own in a split by line (FR-EXP-15, Q36). What a line and its share of the tax, tip and fees take off is the domain’s arithmetic, never stored: the claim is written to the expense’s amount. Read only through its expense, with the expense’s member named.',
+  },
+  expense_parts: {
+    about:
+      'The parts of a split expense (FR-EXP-15, Q35): each with a category and type and an amount in the expense’s currency, together its claim exactly. Split by line, they are worked out from the lines’ categories and types whenever those or an exclusion change, and the part with no category and type is the lines left with the expense’s own; split by amount, a person typed each, at least two. Reports total by them, and the export writes a row each.',
   },
   trips: {
     about:
@@ -149,7 +173,23 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   mileage_logs: {
     about:
-      'The drive behind a mileage expense, one per expense: how it was logged (manual since PR #58; route and GPS later), its date, destination, business purpose and miles, and the rate copied on when it was logged, or when its date or miles last changed: per mile, currency, the day it took effect and its source, the IRS business rate for now (NFR-DAT-04, ADR-0038). Its expense holds miles × that rate, the destination as its merchant and the purpose as its justification, so trips, reports and totals need nothing of their own for it. Read only through its expense, with the expense’s member named.',
+      'The drive behind a mileage expense, one per expense: how it was logged (manual since PR #58, route since PR #59; GPS later), its date, destination, business purpose and miles, and the rate copied on when it was logged, or when its date or miles last changed: per mile, currency, the day it took effect and its source, `irs-business` for the IRS business rate or `organization` for the organization’s own (NFR-DAT-04, ADR-0038, Q28). For a route drive the miles are those claimed, 0 until it is measured or its miles are entered, its origin is its start and its destination its end (ADR-0039). Its expense holds miles × that rate, the destination as its merchant and the purpose as its justification, so trips, reports and totals need nothing of their own for it. Read only through its expense, with the expense’s member named.',
+  },
+  org_mileage_rates: {
+    about:
+      'What the organization pays drives at, as an owner or finance admin set it (Q28, #77): from each row’s day, its own rate a mile in the home currency of the day it was set, or, with no rate, the IRS business rate again. The latest row on or before a drive’s date decides; with none, the IRS rate. Its own rate has no last day known, unlike the IRS table in the domain. One row per organization and day, set again rather than deleted, with who set it last; each change is in the audit trail with what it replaced. It is the organization’s, not one member’s, so every member reads it to price their drives. A drive copies the rate it is paid at onto its log, so changing these never alters one already logged (NFR-DAT-04).',
+  },
+  mileage_routes: {
+    about:
+      'The route behind a drive logged by its stops, one per drive, beside its mileage log (FR-CAP-04, ADR-0039). Whether it is measuring, measured or failed, with the reason in plain words when it failed; whether it is a round trip; and the measuring it waits for, the outbox event’s id, so a measurement made for stops since changed is never recorded. Once measured it keeps, copied on, the distance in whole metres (the sum of its legs, the way back included), the way back alone on a round trip, its miles in hundredths, the provider, the profile and when (NFR-DAT-04); it is never measured again unless its person changes its stops before it is submitted (Q33). The reason the miles claimed differ from those measured, or were entered by hand, is here too. Written by the member’s requests and by the measuring workflow, which acts for the system.',
+  },
+  mileage_route_stops: {
+    about:
+      'A route drive’s stops in order, the start at 0: each address as its person typed it, which is what is sent to be measured (Q32), and once measured the place it was found at, its coordinates to six places and the leg to it from the stop before in whole metres (ADR-0039). Replaced whole when the stops change before submission; the audit trail keeps what they were.',
+  },
+  saved_places: {
+    about:
+      'A place a member keeps to pick for a stop, such as Home or Office: a name, once per member whatever its case, and an address (FR-CAP-04). Picking one copies its address onto the stop; its name is never sent anywhere (Q32). A member’s own under the own-records rules (ADR-0035). The audit trail records its name and that its address changed, never the address.',
   },
   reports: {
     about:
@@ -207,6 +247,10 @@ export const FUNCTIONS: Readonly<Record<string, string>> = {
     'Which member signs in with an email address, case aside, and that sign-in’s user, for an arriving email that names no organization yet. Runs as its owner and returns ids only, so the app still can’t read sign-ins outside an organization (ADR-0026).',
   seed_starter_catalog:
     'Gives an organization the ready-made categories and types, and which types each allows, unless it has a category or type already, so running it again adds nothing. Runs as its caller: the release ran it for every organization as the owner, and the app runs it inside `withOrg()` as an organization is created, where row-level security keeps it to that one (ADR-0036).',
+  delete_expense_conversion:
+    'Fires before an expense is deleted and deletes its conversion first, while the expense is still there to say whose it is, so the `own_records` trigger on `expense_conversions` lets the member who deleted the receipt delete it too (ADR-0034, ADR-0035). Reached through the cascade instead, the expense was already gone and the member’s deletion was refused; added in PR #59. The foreign key’s cascade stays as a backstop.',
+  delete_expense_lines:
+    'Fires before an expense is deleted and deletes its lines and parts first, while the expense is still there to say whose they are, so the `own_records` trigger on each lets the member who deleted the receipt delete them too (ADR-0041). The foreign keys’ cascade stays as a backstop.',
   reject_audit_mutation:
     'Fires on any UPDATE, DELETE or TRUNCATE of audit_events and refuses it, whoever asks.',
 };
@@ -243,13 +287,14 @@ export const RULES: readonly Rule[] = [
   {
     rule: 'Inside an organization, each member sees and changes only their own records.',
     mechanism:
-      'With a member named for the transaction, a restrictive `own_records` policy shows a member or approver only their own receipts, expenses, trips, reports and emails, and the readings, confirmations, duplicate pairs and mileage that hang off them; owners, finance admins and auditors see everyone’s. An `own_records` trigger refuses any change to another member’s rows, and every change by an auditor, with an error rather than a silent skip. With no member named, the system’s own work sees and changes everything, as before (ADR-0035).',
+      'With a member named for the transaction, a restrictive `own_records` policy shows a member or approver only their own receipts, expenses, trips, reports, emails and saved places, and the readings, confirmations, duplicate pairs, conversions, mileage, routes, receipt lines and split parts that hang off them; owners, finance admins and auditors see everyone’s. An `own_records` trigger refuses any change to another member’s rows, and every change by an auditor, with an error rather than a silent skip. What hangs off an expense is deleted just before it, while it still says whose it is, so a member can delete their own receipt (`delete_expense_conversion`, `delete_expense_lines`). With no member named, the system’s own work sees and changes everything, as before (ADR-0035).',
     objects: [
       'own_records',
       'app_current_member',
       'app_sees_every_member',
       'app_changes_member',
       'enforce_own_records',
+      'delete_expense_conversion',
     ],
     refs: ['FR-GOV-01', 'GAP-20', 'ADR-0035'],
   },
@@ -285,6 +330,9 @@ export const RULES: readonly Rule[] = [
       'expense_conversions_currency_iso',
       'expense_conversions_into_iso',
       'members_reimbursement_currency_iso',
+      'expense_itemizations_currency_iso',
+      'expense_lines_currency_iso',
+      'expense_parts_currency_iso',
     ],
     refs: ['NFR-DAT-01', 'ADR-0008'],
   },
@@ -324,6 +372,38 @@ export const RULES: readonly Rule[] = [
       'conversion_work_due',
     ],
     refs: ['NFR-DAT-04', 'FR-EXP-13', 'ADR-0034'],
+  },
+  {
+    rule: 'An expense’s receipt lines are in the receipt’s currency, numbered once, and only an item is left out or split off, for a reason.',
+    mechanism:
+      'One itemization per expense, by a composite key and deleted with it; each line points at it by its organization, expense and currency, so every line is in the itemization’s currency, and has its own number. A tax, fee or tip line is never excluded or given a category of its own. An excluded line has a reason and when; other needs a note, and a note is at most 200 characters (R-EXCLUSION-NOTE-MAX). Whether lines add up, each item’s share and what the claim comes to are the domain’s (`checkLines`, `lineClaims`, `claimWithout`), under the organization’s write lock.',
+    objects: [
+      'expense_itemizations_expense_key',
+      'expense_itemizations_expense_fk',
+      'expense_lines_itemization_fk',
+      'expense_lines_position_key',
+      'expense_lines_items_only',
+      'expense_lines_excluded_whole',
+      'expense_lines_other_needs_note',
+      'expense_lines_note_length',
+      'delete_expense_lines',
+    ],
+    refs: ['FR-INT-22', 'FR-EXP-16', 'ADR-0041'],
+  },
+  {
+    rule: 'A split expense’s parts are each more than zero, in its own organization’s categories and types.',
+    mechanism:
+      'Each part points at its expense, category and type by composite keys and is more than zero; a part typed by amount has its own category and type, chosen together, and only a part made of lines may follow the expense’s own. That the parts add up to the claim exactly is the domain’s (`partsByLine`, `partsByAmount`), checked before a split is saved and whenever an exclusion changes the parts.',
+    objects: [
+      'expense_parts_expense_fk',
+      'expense_parts_category_fk',
+      'expense_parts_type_fk',
+      'expense_parts_amount_positive',
+      'expense_parts_classified_whole',
+      'expense_parts_amounts_classified',
+      'expense_lines_split_whole',
+    ],
+    refs: ['FR-EXP-15', 'Q35', 'ADR-0041'],
   },
   {
     rule: 'The audit trail can’t be changed by anyone.',
@@ -383,6 +463,71 @@ export const RULES: readonly Rule[] = [
       'mileage_logs_expense_fk',
     ],
     refs: ['NFR-DAT-04', 'FR-CAP-03', 'ADR-0038'],
+  },
+  {
+    rule: 'An organization changes its rate a mile once per day, to a rate above zero in a currency, or to none for the IRS rate.',
+    mechanism:
+      'Unique per organization and day; a rate and its currency are present together or not at all, the rate above zero and the currency an ISO code; who set it is a member of the same organization by a composite key. That a drive takes the latest change on or before its date, else the IRS rate, is one rule in the domain (`rateOn`), which every drive is priced through; who may change it, owners and finance admins, is the API’s to check.',
+    objects: [
+      'org_mileage_rates_org_day_key',
+      'org_mileage_rates_rate_and_currency',
+      'org_mileage_rates_rate_positive',
+      'org_mileage_rates_currency_iso',
+      'org_mileage_rates_set_by_fk',
+    ],
+    refs: ['FR-CAP-03', 'NFR-DAT-04', 'Q28'],
+  },
+  {
+    rule: 'A route drive’s measurement is whole, kept with its drive, and recorded only for the request it was made for.',
+    mechanism:
+      'One route per organization and drive, pointing at its mileage log by a composite key. Measured exactly when the provider, profile, time, metres and miles are all present; failed exactly when it has a reason; distances never negative, and a reason for other miles 1 to 500 characters. That a measurement is recorded only for the request the route waits for, and that the miles are claimed at the rate on the drive’s date, are the db code’s and the domain’s (`recordRouteMeasurement`, `milesFromMetres`), under the organization’s write lock.',
+    objects: [
+      'mileage_routes_expense_key',
+      'mileage_routes_log_fk',
+      'mileage_routes_measured_whole',
+      'mileage_routes_problem_when_failed',
+      'mileage_routes_distance_nonnegative',
+      'mileage_routes_reason_length',
+    ],
+    refs: ['NFR-DAT-04', 'FR-CAP-04', 'Q33', 'ADR-0039'],
+  },
+  {
+    rule: 'A route drive’s stops are in order, each place once, and a found place is whole.',
+    mechanism:
+      'One stop per drive and position, 0 to 24, pointing at its route by a composite key; an address of 1 to 200 characters; a label and both coordinates together or none, within the globe; no leg before the start, and none negative. How many stops a drive takes, 25, is the domain’s to check (R-ROUTE-STOPS), and the position range holds it in the database too.',
+    objects: [
+      'mileage_route_stops_position_key',
+      'mileage_route_stops_route_fk',
+      'mileage_route_stops_position_range',
+      'mileage_route_stops_address_length',
+      'mileage_route_stops_place_whole',
+      'mileage_route_stops_coordinates_range',
+      'mileage_route_stops_leg',
+    ],
+    refs: ['FR-CAP-04', 'ADR-0039'],
+  },
+  {
+    rule: 'A member keeps a place by a name once, and only their own.',
+    mechanism:
+      'A unique index over the organization, the member and the name in lower case; the place points at its member by a composite key; a name of 1 to 40 characters and an address of 1 to 200. The own-records policy and trigger keep it to its member.',
+    objects: [
+      'saved_places_member_name_key',
+      'saved_places_member_fk',
+      'saved_places_name_length',
+      'saved_places_address_length',
+    ],
+    refs: ['FR-CAP-04', 'ADR-0035'],
+  },
+  {
+    rule: 'An organization has one routing key per provider, and shows only its last four characters.',
+    mechanism:
+      'Unique per organization and provider; the hint is at most four characters; who last set it points at a member of the organization. Who may set it, and that it is checked with OpenRouteService first, are the API’s to check.',
+    objects: [
+      'route_service_keys_org_provider_key',
+      'route_service_keys_hint_short',
+      'route_service_keys_updated_by_fk',
+    ],
+    refs: ['NFR-SEC-04', 'Q31', 'ADR-0039'],
   },
   {
     rule: 'An organization has one key per AI provider, and shows only its last four characters.',

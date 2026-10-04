@@ -17,6 +17,11 @@ const PAGES: readonly { href: string; label: string; flag?: string | readonly st
   { href: '/settings/ai-models', label: 'AI models', flag: 'receipts.model-settings' },
   { href: '/settings/sign-ins', label: 'Sign-ins' },
   { href: '/settings/currency', label: 'Currency', flag: 'reports.currency-conversion' },
+  {
+    href: '/settings/mileage',
+    label: 'Mileage',
+    flag: ['expenses.mileage', 'expenses.route-mileage'],
+  },
   { href: '/settings/features', label: 'Features' },
   { href: '/settings/audit', label: 'Audit trail', flag: 'governance.audit-trail' },
   { href: '/settings/categories', label: 'Categories', flag: 'expenses.categories' },

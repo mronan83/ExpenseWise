@@ -14,9 +14,11 @@ import {
   ClaudeExtractor,
   isClaudeModelId,
   OpenAIExtractor,
+  type ExtractorOptions,
   type ModelProvider,
   type StoredAnthropicKey,
 } from '@expensewise/extraction';
+import type { FlagKey } from '@expensewise/flags';
 import type { ObjectStore } from '@expensewise/storage';
 import { featureSwitch } from './features.ts';
 import { featureOn } from './features.ts';
@@ -40,6 +42,23 @@ export function checkedDatabase(db: Database) {
       await safe();
       return withOrg(db, orgId, work);
     },
+  };
+}
+
+/**
+ * What a reading asks the models for an organization: each addition its own switch decides,
+ * so either, both or neither. Where the organization has switched it on, each field comes
+ * with the line it was read from (GAP-14), and a transport receipt or folio with its journey
+ * or stay (FR-INT-20, FR-INT-21); elsewhere the request is the one every reading has always
+ * sent.
+ */
+export async function extractorOptions(
+  switchOn: (orgId: string, flag: FlagKey) => Promise<boolean>,
+  orgId: string,
+): Promise<ExtractorOptions> {
+  return {
+    fieldSources: await switchOn(orgId, 'receipts.field-sources'),
+    journeys: await switchOn(orgId, 'receipts.journeys'),
   };
 }
 
@@ -67,11 +86,7 @@ export interface ReceiptReadingDeps {
 export function receiptReadingPorts(deps: ReceiptReadingDeps): ReceiptReadingPorts {
   const { inOrg } = checkedDatabase(deps.db);
   const switchOn = featureSwitch(inOrg, deps.flagOverrides ?? process.env.FLAG_OVERRIDES);
-  // Where the organization has switched it on, each field comes with the line it was read
-  // from (GAP-14); elsewhere the request is the one every reading has always sent.
-  const asked = async (orgId: string) => ({
-    fieldSources: await switchOn(orgId, 'receipts.field-sources'),
-  });
+  const asked = (orgId: string) => extractorOptions(switchOn, orgId);
 
   const overrides = () => deps.flagOverrides ?? process.env.FLAG_OVERRIDES;
 

@@ -27,7 +27,7 @@ import {
   type ReceiptReviewRecord,
   type ResolveDuplicateResult,
 } from '@expensewise/db';
-import type { ExpenseDetails, ExpenseEdit, MergeField } from '@expensewise/domain';
+import type { ExpenseDetails, ExpenseEdit, ExpenseTravel, MergeField } from '@expensewise/domain';
 import { asCaller } from './caller.ts';
 
 /** A receipt with what its expense shows of it: its readings and any confirmations. */
@@ -83,6 +83,8 @@ export interface ReceiptStore {
     actorUserId: string,
     /** The time and place of the reading confirmed (FR-INT-17). */
     details?: ExpenseDetails,
+    /** Its journey and stay, when it was asked for them (FR-INT-20, FR-INT-21). */
+    travel?: ExpenseTravel,
   ): Promise<ConfirmReceiptResult>;
   /**
    * Corrects fields of a Ready receipt (GAP-14): the review, the edit of its expense and the
@@ -144,8 +146,8 @@ export function dbReceiptStore(db: Database): ReceiptStore {
       }),
     requestReading: (orgId, receiptId, actor) =>
       inOrg(orgId, (tx) => requestReceiptReading(tx, orgId, receiptId, actor)),
-    confirm: (orgId, receiptId, review, actor, details) =>
-      inOrg(orgId, (tx) => confirmReceipt(tx, orgId, receiptId, review, actor, details)),
+    confirm: (orgId, receiptId, review, actor, details, travel) =>
+      inOrg(orgId, (tx) => confirmReceipt(tx, orgId, receiptId, review, actor, details, travel)),
     correct: (orgId, receiptId, correction, actor) =>
       inOrg(orgId, (tx) => correctReceipt(tx, orgId, receiptId, correction, actor)),
     resolveDuplicate: (orgId, receiptId, otherReceiptId, decision, actor) =>

@@ -55,6 +55,9 @@ export const RECORD_NAMES: Readonly<Record<string, string>> = {
   organization: 'Organization',
   feature: 'Feature',
   ai_provider_key: 'AI provider key',
+  mileage_rate: 'Mileage rate',
+  route_service_key: 'Route measuring key',
+  saved_place: 'Saved place',
   member_sign_in: 'Sign-in',
   inbound_email: 'Email',
 };

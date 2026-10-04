@@ -1,5 +1,6 @@
-import { isIsoDate, showDate } from '@expensewise/domain';
+import { isIsoDate, showDate, stayLine } from '@expensewise/domain';
 import { api, ApiProblem } from './api';
+import type { ExpenseCategory } from './categories';
 import type { ExpenseAmount } from './expenses';
 import type { ReportSummary } from './reports';
 import { prepareReceiptFile, sha256Hex } from './receipt-file';
@@ -45,10 +46,10 @@ export const underSettings = (readings: readonly Pick<Reading, 'role'>[]) =>
   readings.some((r) => r.role === 'primary' || r.role === 'backup');
 
 /**
- * A check a reading fails, which keeps it from being Ready: its sums or date (FR-INT-04), or
- * that it is a purchase summary (Q10).
+ * A check a reading fails, which keeps it from being Ready: its sums or date (FR-INT-04), that
+ * it is a purchase summary (Q10), or a folio's stay whose nights aren't sure (FR-INT-21).
  */
-export type ReadingCheck = 'sums' | 'future_date' | 'old_date' | 'summary';
+export type ReadingCheck = 'sums' | 'future_date' | 'old_date' | 'summary' | 'stay';
 
 export interface Reading {
   model: string;
@@ -75,6 +76,14 @@ export interface Reading {
     time: TextField | null;
     /** The merchant's address as printed. */
     address: TextField | null;
+    /**
+     * Where a ride, flight or train went, and a folio's stay, as read; only while Journeys and
+     * stays is on (FR-INT-20, FR-INT-21).
+     */
+    from?: TextField | null;
+    to?: TextField | null;
+    checkIn?: TextField | null;
+    checkOut?: TextField | null;
   } | null;
   problems: string[];
   checks: ReadingCheck[];
@@ -225,7 +234,10 @@ export interface ReportInboxItem {
   reason: { code: 'overdue' | 'closing_soon' | 'ready_to_close' };
 }
 
-/** A local expense that says nothing yet of why it was for business (FR-EXP-14). */
+/**
+ * An expense that needs the person: a local one that says nothing yet of why it was for
+ * business (FR-EXP-14), or, while categories are on, one with no category and type (Q27).
+ */
 export interface ExpenseInboxItem {
   kind: 'expense';
   expense: {
@@ -235,7 +247,9 @@ export interface ExpenseInboxItem {
     amount: ExpenseAmount | null;
     receiptId: string | null;
   };
-  reason: { code: 'justification' };
+  reason: { code: 'justification' | 'uncoded' };
+  /** uncoded: what is suggested for it, or missing when nothing is. */
+  category?: ExpenseCategory;
 }
 
 export type InboxItem = ReceiptInboxItem | ReportInboxItem | ExpenseInboxItem;
@@ -245,6 +259,7 @@ const CHECK_REASONS: Record<ReadingCheck, string> = {
   future_date: 'It’s dated after the day it was uploaded.',
   old_date: 'It’s dated more than a year before it was uploaded.',
   summary: 'It’s a purchase summary: check what was charged.',
+  stay: 'Its stay’s dates can’t be right: check the nights.',
 };
 const KEY_ERRORS = ['no_key', 'unreadable_key', 'key_rejected'];
 
@@ -268,7 +283,11 @@ export function needsYou(item: ReceiptInboxItem): { text: string; action: string
     }
     case 'duplicate': {
       const of = reason.duplicateOf;
-      const what = [of?.merchant, of?.amount ? formatMoney(of.amount) : null, of?.date]
+      const what = [
+        of?.merchant,
+        of?.amount ? formatMoney(of.amount) : null,
+        of?.date && isIsoDate(of.date) ? showDate(of.date) : of?.date,
+      ]
         .filter(Boolean)
         .join(', ');
       return {
@@ -370,6 +389,12 @@ export function describeChecks(readings: readonly Reading[]): string[] {
         said.add(`It’s dated ${f.date.value}, more than a year before it was uploaded.`);
       } else if (check === 'summary') {
         said.add('It’s a purchase summary, which shows what was ordered, not what was charged.');
+      } else if (check === 'stay') {
+        const stay = stayLine({
+          checkIn: f.checkIn?.value ?? null,
+          checkOut: f.checkOut?.value ?? null,
+        });
+        said.add(`${stay ?? 'Its stay’s nights aren’t sure'}. Check the dates.`);
       }
     }
   }

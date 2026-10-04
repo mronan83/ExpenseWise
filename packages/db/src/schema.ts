@@ -1,10 +1,15 @@
 import {
   DISTANCE_UNITS,
+  EXCLUSION_NOTE_MAX,
+  EXCLUSION_REASONS,
   EXPENSE_SOURCES,
   EXPENSE_STATUSES,
+  LINE_KINDS,
   MEMBER_ROLES,
   ORGANIZATION_SIZES,
   REPORT_STATUSES,
+  ROUTE_PROVIDERS,
+  ROUTE_STATUSES,
   newId,
 } from '@expensewise/domain';
 import { sql } from 'drizzle-orm';
@@ -57,6 +62,8 @@ export const mileageMethod = pgEnum('mileage_method', ['manual', 'route', 'gps']
 export const actorType = pgEnum('actor_type', ['user', 'system']);
 export const aiProvider = pgEnum('ai_provider', ['anthropic', 'openai']);
 export const aiAuthScheme = pgEnum('ai_auth_scheme', ['api_key', 'bearer']);
+export const routeProvider = pgEnum('route_provider', ROUTE_PROVIDERS);
+export const routeStatus = pgEnum('route_status', ROUTE_STATUSES);
 
 const id = () => uuid('id').primaryKey().$defaultFn(newId);
 const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
@@ -460,6 +467,15 @@ export const expenses = pgTable(
     merchantRegion: text('merchant_region'),
     /** ISO 3166-1 alpha-2. */
     merchantCountry: char('merchant_country', { length: 2 }),
+    /**
+     * Where a ride, flight or train went, each end as its receipt prints it (FR-INT-20), and a
+     * hotel stay's check-in and check-out days (FR-INT-21). Read only where Journeys and stays
+     * is on. The nights are worked out from the two days when shown, never kept.
+     */
+    journeyFrom: text('journey_from'),
+    journeyTo: text('journey_to'),
+    checkIn: date('check_in', { mode: 'string' }),
+    checkOut: date('check_out', { mode: 'string' }),
     notes: text('notes'),
     /**
      * Why a local expense, one on no trip, was for business. Its report can't close without
@@ -601,6 +617,176 @@ export const expenseConversions = pgTable(
       sql`(${t.outcome} = 'converted' AND ${t.convertedMinor} IS NOT NULL AND ${t.rate} IS NOT NULL AND ${t.rate} > 0 AND ${t.rateDate} IS NOT NULL AND ${t.rateDate} <= ${t.purchaseDate}) OR (${t.outcome} = 'unavailable' AND ${t.convertedMinor} IS NULL AND ${t.rate} IS NULL AND ${t.rateDate} IS NULL)`,
     ),
     check('expense_conversions_source_named', sql`length(trim(${t.source})) > 0`),
+  ],
+);
+
+export const lineKind = pgEnum('line_kind', LINE_KINDS);
+export const exclusionReason = pgEnum('exclusion_reason', EXCLUSION_REASONS);
+export const splitBasis = pgEnum('split_basis', ['lines', 'amounts']);
+
+/**
+ * A receipt's itemized lines as its expense keeps them (FR-INT-22, ADR-0041): the currency,
+ * total and subtotal of the reading they were copied from. Copied when the expense is filed,
+ * and again with each new reading, until a person edits the expense, excludes a line or splits
+ * it; from then on they stay as they were, as the expense's values do (ADR-0022). One per
+ * expense; it goes with its expense when that is deleted.
+ */
+export const expenseItemizations = pgTable(
+  'expense_itemizations',
+  {
+    id: id(),
+    orgId: orgId(),
+    expenseId: uuid('expense_id').notNull(),
+    currency: char('currency', { length: 3 }).notNull(),
+    /** The receipt's total and subtotal as read, in `currency`'s minor units; null when unread. */
+    totalMinor: bigint('total_minor', { mode: 'number' }),
+    subtotalMinor: bigint('subtotal_minor', { mode: 'number' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('expense_itemizations_org_id_id_key').on(t.orgId, t.id),
+    unique('expense_itemizations_expense_key').on(t.orgId, t.expenseId),
+    // What each line points at, so its currency is the itemization's.
+    unique('expense_itemizations_expense_currency_key').on(t.orgId, t.expenseId, t.currency),
+    foreignKey({
+      name: 'expense_itemizations_expense_fk',
+      columns: [t.orgId, t.expenseId],
+      foreignColumns: [expenses.orgId, expenses.id],
+    }).onDelete('cascade'),
+    check('expense_itemizations_currency_iso', isoCurrency(t.currency)),
+  ],
+);
+
+/**
+ * One line of an expense's receipt, numbered from 1 as printed: each item (a discount is a
+ * negative item), then each tax, each fee and the tip. An item line can be excluded from the
+ * claim with a reason, and a note that other needs (FR-EXP-16, Q38), and given a category and
+ * type of its own, which makes it a part of the expense (FR-EXP-15, Q36).
+ */
+export const expenseLines = pgTable(
+  'expense_lines',
+  {
+    id: id(),
+    orgId: orgId(),
+    expenseId: uuid('expense_id').notNull(),
+    position: integer('position').notNull(),
+    kind: lineKind('kind').notNull(),
+    /** As printed. */
+    description: text('description').notNull(),
+    quantity: text('quantity'),
+    /** As read, in `currency`'s minor units; negative for a discount. */
+    amountMinor: bigint('amount_minor', { mode: 'number' }).notNull(),
+    currency: char('currency', { length: 3 }).notNull(),
+    /** Why it is left out of the claim, with a note, and when; null while it is claimed. */
+    excludedReason: exclusionReason('excluded_reason'),
+    excludedNote: text('excluded_note'),
+    excludedAt: timestamp('excluded_at', { withTimezone: true }),
+    /** The category and type a person gave it in a split by line; null: the expense's own. */
+    categoryId: uuid('category_id'),
+    typeId: uuid('type_id'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('expense_lines_org_id_id_key').on(t.orgId, t.id),
+    unique('expense_lines_position_key').on(t.orgId, t.expenseId, t.position),
+    foreignKey({
+      name: 'expense_lines_itemization_fk',
+      columns: [t.orgId, t.expenseId, t.currency],
+      foreignColumns: [
+        expenseItemizations.orgId,
+        expenseItemizations.expenseId,
+        expenseItemizations.currency,
+      ],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'expense_lines_category_fk',
+      columns: [t.orgId, t.categoryId],
+      foreignColumns: [categories.orgId, categories.id],
+    }),
+    foreignKey({
+      name: 'expense_lines_type_fk',
+      columns: [t.orgId, t.typeId],
+      foreignColumns: [expenseTypes.orgId, expenseTypes.id],
+    }),
+    check('expense_lines_position_positive', sql`${t.position} > 0`),
+    check('expense_lines_currency_iso', isoCurrency(t.currency)),
+    // Only an item is excluded or split off; tax, tip and fees go with the items.
+    check(
+      'expense_lines_items_only',
+      sql`${t.kind} = 'item' OR (${t.excludedReason} IS NULL AND ${t.categoryId} IS NULL)`,
+    ),
+    check(
+      'expense_lines_excluded_whole',
+      sql`(${t.excludedReason} IS NULL AND ${t.excludedNote} IS NULL AND ${t.excludedAt} IS NULL) OR (${t.excludedReason} IS NOT NULL AND ${t.excludedAt} IS NOT NULL)`,
+    ),
+    check(
+      'expense_lines_other_needs_note',
+      sql`${t.excludedReason} IS DISTINCT FROM 'other' OR coalesce(length(trim(${t.excludedNote})), 0) > 0`,
+    ),
+    check(
+      'expense_lines_note_length',
+      sql`${t.excludedNote} IS NULL OR char_length(${t.excludedNote}) <= ${sql.raw(String(EXCLUSION_NOTE_MAX))}`,
+    ),
+    check(
+      'expense_lines_split_whole',
+      sql`(${t.categoryId} IS NULL AND ${t.typeId} IS NULL) OR (${t.categoryId} IS NOT NULL AND ${t.typeId} IS NOT NULL)`,
+    ),
+  ],
+);
+
+/**
+ * The parts of a split expense (FR-EXP-15, Q35): one expense with one receipt, each part with
+ * its own category and type and an amount, in the expense's currency, adding up to its claim.
+ * Split by line, the parts are worked out from its lines' categories and types whenever they or
+ * its exclusions change, and a part with no category and type is the lines left with the
+ * expense's own; split by amount, a person typed each one. It goes with its expense.
+ */
+export const expenseParts = pgTable(
+  'expense_parts',
+  {
+    id: id(),
+    orgId: orgId(),
+    expenseId: uuid('expense_id').notNull(),
+    position: integer('position').notNull(),
+    basis: splitBasis('basis').notNull(),
+    categoryId: uuid('category_id'),
+    typeId: uuid('type_id'),
+    amountMinor: bigint('amount_minor', { mode: 'number' }).notNull(),
+    currency: char('currency', { length: 3 }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('expense_parts_org_id_id_key').on(t.orgId, t.id),
+    unique('expense_parts_position_key').on(t.orgId, t.expenseId, t.position),
+    foreignKey({
+      name: 'expense_parts_expense_fk',
+      columns: [t.orgId, t.expenseId],
+      foreignColumns: [expenses.orgId, expenses.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'expense_parts_category_fk',
+      columns: [t.orgId, t.categoryId],
+      foreignColumns: [categories.orgId, categories.id],
+    }),
+    foreignKey({
+      name: 'expense_parts_type_fk',
+      columns: [t.orgId, t.typeId],
+      foreignColumns: [expenseTypes.orgId, expenseTypes.id],
+    }),
+    check('expense_parts_position_positive', sql`${t.position} > 0`),
+    check('expense_parts_currency_iso', isoCurrency(t.currency)),
+    check('expense_parts_amount_positive', sql`${t.amountMinor} > 0`),
+    check(
+      'expense_parts_classified_whole',
+      sql`(${t.categoryId} IS NULL AND ${t.typeId} IS NULL) OR (${t.categoryId} IS NOT NULL AND ${t.typeId} IS NOT NULL)`,
+    ),
+    // A part typed by amount has its own category and type; only lines stay with the expense's.
+    check(
+      'expense_parts_amounts_classified',
+      sql`${t.basis} = 'lines' OR ${t.categoryId} IS NOT NULL`,
+    ),
   ],
 );
 
@@ -872,6 +1058,147 @@ export const mileageLogs = pgTable(
   ],
 );
 
+/**
+ * The route behind a mileage expense logged by its stops (FR-CAP-04, ADR-0039): one per
+ * drive, beside its mileage log, whose distance is the miles claimed. It keeps how the drive
+ * was measured, copied on when it was (NFR-DAT-04), and is never measured again unless the
+ * person changes its stops before it is submitted (Q33).
+ */
+export const mileageRoutes = pgTable(
+  'mileage_routes',
+  {
+    id: id(),
+    orgId: orgId(),
+    expenseId: uuid('expense_id').notNull(),
+    /** It returns to the start after the end. */
+    roundTrip: boolean('round_trip').notNull().default(false),
+    status: routeStatus('status').notNull(),
+    /**
+     * The measuring asked for last: its outbox event's id. A measurement made for an earlier
+     * request, before the stops changed again, is never recorded.
+     */
+    requestId: uuid('request_id').notNull(),
+    /** Why it could not be measured, in plain words, while it is not. */
+    problem: text('problem'),
+    /** Who measured it, how, and when: set together, only once it is measured. */
+    provider: routeProvider('provider'),
+    profile: text('profile'),
+    measuredAt: timestamp('measured_at', { withTimezone: true }),
+    /** The whole route in whole metres: the sum of its legs, the way back included. */
+    distanceMetres: integer('distance_metres'),
+    /** The way back from the end to the start, on a round trip, in whole metres. */
+    returnMetres: integer('return_metres'),
+    /** The metres in hundredths of a mile, rounded half up (ADR-0039). */
+    measuredMiles: numeric('measured_miles', { precision: 10, scale: 2 }),
+    /**
+     * Why the miles claimed differ from those measured, or were entered by hand when it
+     * could not be measured (Q33). Empty when the measured miles are claimed.
+     */
+    milesReason: text('miles_reason'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('mileage_routes_org_id_id_key').on(t.orgId, t.id),
+    unique('mileage_routes_expense_key').on(t.orgId, t.expenseId),
+    foreignKey({
+      name: 'mileage_routes_log_fk',
+      columns: [t.orgId, t.expenseId],
+      foreignColumns: [mileageLogs.orgId, mileageLogs.expenseId],
+    }),
+    check(
+      'mileage_routes_measured_whole',
+      sql`(${t.status} = 'measured') = (${t.provider} IS NOT NULL AND ${t.profile} IS NOT NULL AND ${t.measuredAt} IS NOT NULL AND ${t.distanceMetres} IS NOT NULL AND ${t.measuredMiles} IS NOT NULL)`,
+    ),
+    check(
+      'mileage_routes_problem_when_failed',
+      sql`(${t.status} = 'failed') = (${t.problem} IS NOT NULL)`,
+    ),
+    check(
+      'mileage_routes_distance_nonnegative',
+      sql`${t.distanceMetres} >= 0 AND ${t.returnMetres} >= 0 AND ${t.measuredMiles} >= 0`,
+    ),
+    check(
+      'mileage_routes_reason_length',
+      sql`${t.milesReason} IS NULL OR length(${t.milesReason}) BETWEEN 1 AND 500`,
+    ),
+  ],
+);
+
+/**
+ * A route drive's stops, in order: each address as the person typed it, which is what is
+ * sent to be measured (Q32), and once measured the place it was found at and the leg to it.
+ */
+export const mileageRouteStops = pgTable(
+  'mileage_route_stops',
+  {
+    id: id(),
+    orgId: orgId(),
+    expenseId: uuid('expense_id').notNull(),
+    /** 0 is the start; the highest is the end. */
+    position: integer('position').notNull(),
+    address: text('address').notNull(),
+    /** The place the address was found at, as the routing service names it. */
+    label: text('label'),
+    longitude: numeric('longitude', { precision: 9, scale: 6 }),
+    latitude: numeric('latitude', { precision: 8, scale: 6 }),
+    /** The leg from the stop before this one, in whole metres; none for the start. */
+    legMetres: integer('leg_metres'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('mileage_route_stops_org_id_id_key').on(t.orgId, t.id),
+    unique('mileage_route_stops_position_key').on(t.orgId, t.expenseId, t.position),
+    foreignKey({
+      name: 'mileage_route_stops_route_fk',
+      columns: [t.orgId, t.expenseId],
+      foreignColumns: [mileageRoutes.orgId, mileageRoutes.expenseId],
+    }),
+    check('mileage_route_stops_position_range', sql`${t.position} BETWEEN 0 AND 24`),
+    check('mileage_route_stops_address_length', sql`length(${t.address}) BETWEEN 1 AND 200`),
+    check(
+      'mileage_route_stops_place_whole',
+      sql`(${t.label} IS NULL) = (${t.longitude} IS NULL) AND (${t.label} IS NULL) = (${t.latitude} IS NULL)`,
+    ),
+    check(
+      'mileage_route_stops_coordinates_range',
+      sql`${t.longitude} BETWEEN -180 AND 180 AND ${t.latitude} BETWEEN -90 AND 90`,
+    ),
+    check(
+      'mileage_route_stops_leg',
+      sql`${t.legMetres} >= 0 AND (${t.position} > 0 OR ${t.legMetres} IS NULL)`,
+    ),
+  ],
+);
+
+/**
+ * A place a member keeps to pick for a drive's stops, such as Home or Office. Only its address
+ * is ever used for a drive, copied onto the stop; its name is never sent anywhere (Q32).
+ */
+export const savedPlaces = pgTable(
+  'saved_places',
+  {
+    id: id(),
+    orgId: orgId(),
+    memberId: uuid('member_id').notNull(),
+    name: text('name').notNull(),
+    address: text('address').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('saved_places_org_id_id_key').on(t.orgId, t.id),
+    uniqueIndex('saved_places_member_name_key').on(t.orgId, t.memberId, sql`lower(${t.name})`),
+    foreignKey({
+      name: 'saved_places_member_fk',
+      columns: [t.orgId, t.memberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    check('saved_places_name_length', sql`length(${t.name}) BETWEEN 1 AND 40`),
+    check('saved_places_address_length', sql`length(${t.address}) BETWEEN 1 AND 200`),
+  ],
+);
+
 export const approvalSteps = pgTable(
   'approval_steps',
   {
@@ -981,6 +1308,37 @@ export const aiProviderKeys = pgTable(
 );
 
 /**
+ * An organization's key for the routing service that measures route drives (Q31, ADR-0039):
+ * ciphertext only, bound to the organization and the provider, with its last four characters
+ * to tell it by. Owners and finance admins set and remove it.
+ */
+export const routeServiceKeys = pgTable(
+  'route_service_keys',
+  {
+    id: id(),
+    orgId: orgId(),
+    provider: routeProvider('provider').notNull(),
+    ciphertext: text('ciphertext').notNull(),
+    keyHint: text('key_hint').notNull(),
+    /** When the routing service last accepted it: on the check made as it was saved. */
+    verifiedAt: timestamp('verified_at', { withTimezone: true }),
+    updatedByMemberId: uuid('updated_by_member_id').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('route_service_keys_org_id_id_key').on(t.orgId, t.id),
+    unique('route_service_keys_org_provider_key').on(t.orgId, t.provider),
+    foreignKey({
+      name: 'route_service_keys_updated_by_fk',
+      columns: [t.orgId, t.updatedByMemberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    check('route_service_keys_hint_short', sql`length(${t.keyHint}) <= 4`),
+  ],
+);
+
+/**
  * A feature switched on or off for one organization by its owner (Q5, NFR-DEL-05). A feature
  * with no row is off. FLAG_OVERRIDES in the environment still wins, as a kill switch.
  */
@@ -1043,5 +1401,46 @@ export const orgAiModels = pgTable(
     check('org_ai_models_model_format', sql`${t.model} ~ '^[a-z0-9][a-z0-9.-]*$'`),
     check('org_ai_models_primary_is_on', sql`${t.enabled} OR NOT ${t.isPrimary}`),
     check('org_ai_models_position_not_negative', sql`${t.position} >= 0`),
+  ],
+);
+
+/**
+ * What an organization pays drives at, as its owner or a finance admin set it (Q28, #77): from
+ * each row's day, its own rate a mile, or, with no rate, the IRS business rate again. With no
+ * row on or before a drive's date, the IRS rate. A drive copies the rate it is paid at onto its
+ * mileage log, so changing these never alters one already logged (NFR-DAT-04).
+ */
+export const orgMileageRates = pgTable(
+  'org_mileage_rates',
+  {
+    id: id(),
+    orgId: orgId(),
+    /** The first travel date it applies to. One change per organization and day. */
+    effectiveFrom: date('effective_from', { mode: 'string' }).notNull(),
+    /** Its own rate a mile, in major units of `currency`; null for the IRS rate again. */
+    perMile: numeric('per_mile', { precision: 12, scale: 4 }),
+    /** The organization's home currency when it was set; null with no rate of its own. */
+    currency: char('currency', { length: 3 }),
+    setByMemberId: uuid('set_by_member_id').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('org_mileage_rates_org_id_id_key').on(t.orgId, t.id),
+    unique('org_mileage_rates_org_day_key').on(t.orgId, t.effectiveFrom),
+    foreignKey({
+      name: 'org_mileage_rates_set_by_fk',
+      columns: [t.orgId, t.setByMemberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    check(
+      'org_mileage_rates_currency_iso',
+      sql`${t.currency} IS NULL OR ${isoCurrency(t.currency)}`,
+    ),
+    check(
+      'org_mileage_rates_rate_and_currency',
+      sql`(${t.perMile} IS NULL) = (${t.currency} IS NULL)`,
+    ),
+    check('org_mileage_rates_rate_positive', sql`${t.perMile} IS NULL OR ${t.perMile} > 0`),
   ],
 );

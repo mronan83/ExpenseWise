@@ -41,8 +41,8 @@ export const quoteMileageRoute = createRoute({
   tags: ['Mileage'],
   summary: 'What a drive would pay, before it is logged',
   description:
-    'FR-CAP-03, ADR-0038. The rate in force on the date and miles × rate, rounded half-up to ' +
-    'the cent. Nothing is saved.',
+    'FR-CAP-03, ADR-0038. The rate in force on the date, the organization’s own where it set ' +
+    'one (Q28), and miles × rate, rounded half-up to the cent. Nothing is saved.',
   ...secured,
   request: { query: MileageQuoteQuerySchema },
   responses: {
@@ -112,7 +112,9 @@ export const editMileageRoute = createRoute({
     200: entry('The drive as it is now.'),
     ...common,
     404: problem(`No such drive of the caller’s, or ${OFF.toLowerCase()}.`),
-    409: problem('It is submitted or later. An approved drive is corrected by a reversal.'),
+    409: problem(
+      'It is submitted or later, and an approved drive is corrected by a reversal; or it is a route drive, changed by its stops (route).',
+    ),
     422: problem('A value is not valid; field names which.'),
   },
 });

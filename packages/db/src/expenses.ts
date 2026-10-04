@@ -1,10 +1,12 @@
 import {
   applyDetailsEdit,
   applyExpenseEdit,
+  applyTravelEdit,
   isComplete,
   NO_DETAILS,
   NO_VALUES,
   sameDetails,
+  sameTravel,
   newId,
   receiptExpenseStatus,
   type DetailChange,
@@ -16,8 +18,13 @@ import {
   type ExpenseEditProblem,
   type ExpenseSource,
   type ExpenseStatus,
+  type ExpenseTravel,
   type ExpenseValues,
   type AmountMatch,
+  type TravelChange,
+  type TravelEdit,
+  type TravelEditProblem,
+  type Itemization,
 } from '@expensewise/domain';
 import {
   and,
@@ -35,11 +42,16 @@ import {
 import { appendAuditEvent, lockOrgWrites, type AuditEntry } from './audit.ts';
 import type { Transaction } from './client.ts';
 import { heldAsDuplicate } from './duplicates.ts';
+import { claimFromLines, copyReadLines } from './itemized.ts';
 import { reopenChangedReports, reportsOfExpenses } from './report-touch.ts';
 import { expenses, members, receipts, trips } from './schema.ts';
 import { containing, fileExpenseToTrip } from './trips.ts';
 
-export interface ExpenseRecord extends ExpenseValues, ExpenseDetails {
+/**
+ * An expense as it is read back. Its journey and stay (FR-INT-20, FR-INT-21) are always read
+ * from the database; a record made elsewhere, such as a test's, may leave them out.
+ */
+export interface ExpenseRecord extends ExpenseValues, ExpenseDetails, Partial<ExpenseTravel> {
   readonly id: string;
   readonly memberId: string;
   readonly owner: string;
@@ -83,6 +95,10 @@ const expenseColumns = {
   city: expenses.merchantCity,
   region: expenses.merchantRegion,
   country: expenses.merchantCountry,
+  journeyFrom: expenses.journeyFrom,
+  journeyTo: expenses.journeyTo,
+  checkIn: expenses.checkIn,
+  checkOut: expenses.checkOut,
   reportId: expenses.reportId,
   tripReportId: trips.reportId,
   justification: expenses.justification,
@@ -205,6 +221,30 @@ export function listUnjustifiedExpenses(
     .limit(limit);
 }
 
+/**
+ * A member's own expenses with no category and type yet, oldest first (FR-EXP-11, Q27). Only
+ * Ready ones: one being read or needing a look is in Needs you for that already, or soon will
+ * be, and a submitted one keeps what it went in with. One held as a possible duplicate waits
+ * for the person's decision on the pair, so it isn't asked for twice. Call inside withOrg().
+ */
+export function listUncodedExpenses(
+  tx: Transaction,
+  memberId: string,
+  limit: number,
+): Promise<ExpenseRecord[]> {
+  return withProof(tx)
+    .where(
+      and(
+        eq(expenses.memberId, memberId),
+        eq(expenses.status, 'ready'),
+        isNull(expenses.typeId),
+        sql`not ${heldAsDuplicate(expenses.id)}`,
+      ),
+    )
+    .orderBy(sql`${expenses.transactionDate} asc nulls last`, expenses.createdAt, expenses.id)
+    .limit(limit);
+}
+
 /** One expense, or undefined. Call inside withOrg(). */
 export async function getExpense(
   tx: Transaction,
@@ -218,6 +258,16 @@ export async function getExpense(
 export interface ReceiptOffer extends ExpenseValues {
   /** Absent: the time and place stay as they are. */
   readonly details?: ExpenseDetails;
+  /**
+   * Its journey and stay, from a reading asked for them (FR-INT-20, FR-INT-21). Absent: they
+   * stay as they are, as for a reading made before, or with Journeys and stays off.
+   */
+  readonly travel?: ExpenseTravel;
+  /**
+   * The reading's itemized lines (ADR-0041); null when it prints none. Absent, as from a
+   * confirmation, the lines stay as they are.
+   */
+  readonly lines?: Itemization | null;
 }
 
 /** The time and place as columns. */
@@ -254,6 +304,21 @@ const detailSelection = {
   merchantRegion: expenses.merchantRegion,
   merchantCountry: expenses.merchantCountry,
 };
+
+/** The journey and stay, as their columns are named. */
+const travelSelection = {
+  journeyFrom: expenses.journeyFrom,
+  journeyTo: expenses.journeyTo,
+  checkIn: expenses.checkIn,
+  checkOut: expenses.checkOut,
+};
+
+const travelOf = (row: ExpenseTravel): ExpenseTravel => ({
+  journeyFrom: row.journeyFrom,
+  journeyTo: row.journeyTo,
+  checkIn: row.checkIn,
+  checkOut: row.checkOut,
+});
 
 const valuesOf = (v: ExpenseValues): ExpenseValues => ({
   merchant: v.merchant,
@@ -306,6 +371,7 @@ export async function fileReceiptExpense(
       source: receipt.source,
       ...values,
       ...detailColumns(offered?.details ?? NO_DETAILS),
+      ...(offered?.travel ? travelOf(offered.travel) : {}),
     });
     await tx.update(receipts).set({ expenseId: id }).where(eq(receipts.id, receiptId));
     await appendAuditEvent(tx, orgId, {
@@ -315,6 +381,7 @@ export async function fileReceiptExpense(
       action: 'expense.created',
       payload: { receiptId, status },
     });
+    if (offered?.lines) await copyReadLines(tx, orgId, id, offered.lines, actor);
     await fileExpenseToTrip(tx, orgId, id, actor);
     return;
   }
@@ -328,6 +395,7 @@ export async function fileReceiptExpense(
       currency: expenses.currency,
       amountMinor: expenses.amountMinor,
       ...detailSelection,
+      ...travelSelection,
     })
     .from(expenses)
     .where(eq(expenses.id, receipt.expenseId))
@@ -339,21 +407,42 @@ export async function fileReceiptExpense(
   const fresh = offered !== null && expense.editedAt === null;
   const values = fresh ? valuesOf(offered) : current;
   const details = fresh && offered.details ? offered.details : currentDetails;
+  // The journey and stay follow the same rule: a reading asked for them, until an edit.
+  const currentTravel = travelOf(expense);
+  const travel = fresh && offered.travel ? offered.travel : currentTravel;
   const status = receiptExpenseStatus(expense.status, receipt.status, values);
   if (status === null) return;
+  // Its lines follow the receipt as its values do, until a person edits it (ADR-0041).
+  if (fresh && offered.lines !== undefined) {
+    await copyReadLines(tx, orgId, receipt.expenseId, offered.lines, actor);
+  }
   const refreshed = !sameValues(values, current);
   const placed = !sameDetails(details, currentDetails);
-  if (status === expense.status && !refreshed && !placed) return;
+  const travelled = !sameTravel(travel, currentTravel);
+  if (status === expense.status && !refreshed && !placed && !travelled) return;
   await tx
     .update(expenses)
-    .set({ status, ...values, ...detailColumns(details), updatedAt: new Date() })
+    .set({
+      status,
+      ...values,
+      ...detailColumns(details),
+      ...travelOf(travel),
+      updatedAt: new Date(),
+    })
     .where(eq(expenses.id, receipt.expenseId));
   await appendAuditEvent(tx, orgId, {
     actor,
     entityType: 'expense',
     entityId: receipt.expenseId,
     action: 'expense.filed',
-    payload: { receiptId, status, previous: expense.status, refreshed, placed },
+    payload: {
+      receiptId,
+      status,
+      previous: expense.status,
+      refreshed,
+      placed,
+      ...(travelled ? { travelled } : {}),
+    },
   });
   await reopenChangedReports(
     tx,
@@ -370,15 +459,25 @@ export type EditExpenseResult =
       readonly status: 'edited';
       readonly changes: readonly ExpenseChange[];
       readonly detailChanges: readonly DetailChange[];
+      /** Its journey and stay, when the edit changed them (FR-INT-20, FR-INT-21). */
+      readonly travelChanges?: readonly TravelChange[];
     }
   /** The values were already those. Nothing changed and nothing was recorded. */
   | { readonly status: 'unchanged' }
-  | { readonly status: 'invalid'; readonly problem: ExpenseEditProblem | DetailsEditProblem }
+  | {
+      readonly status: 'invalid';
+      readonly problem: ExpenseEditProblem | DetailsEditProblem | TravelEditProblem;
+    }
   | { readonly status: 'missing' }
   /** Being read, or submitted or later: not open to edits (FR-EXP-09). */
   | { readonly status: 'not_editable'; readonly current: ExpenseStatus }
   /** A mileage expense: its amount is miles × its rate, so it is edited as mileage (ADR-0038). */
-  | { readonly status: 'mileage' };
+  | { readonly status: 'mileage' }
+  /**
+   * Its amount is made of its lines or parts: a line is excluded, or it is split. Its amount or
+   * currency changes only once those go (ADR-0041).
+   */
+  | { readonly status: 'itemized' };
 
 /**
  * Applies a person's edit (FR-EXP-09) with its audit event, and sets the status again: a
@@ -389,7 +488,7 @@ export async function editExpense(
   tx: Transaction,
   orgId: string,
   expenseId: string,
-  edit: ExpenseEdit & { readonly details?: DetailsEdit },
+  edit: ExpenseEdit & { readonly details?: DetailsEdit; readonly travel?: TravelEdit },
   actorUserId: string,
 ): Promise<EditExpenseResult> {
   await lockOrgWrites(tx, orgId);
@@ -402,6 +501,7 @@ export async function editExpense(
       currency: expenses.currency,
       amountMinor: expenses.amountMinor,
       ...detailSelection,
+      ...travelSelection,
     })
     .from(expenses)
     .where(eq(expenses.id, expenseId))
@@ -411,14 +511,27 @@ export async function editExpense(
     return { status: 'not_editable', current: expense.status };
   }
   if (expense.source === 'mileage') return { status: 'mileage' };
-  const { details: detailsEdit, ...valuesEdit } = edit;
+  const { details: detailsEdit, travel: travelEdit, ...valuesEdit } = edit;
   const result = applyExpenseEdit(valuesOf(expense), valuesEdit);
   if (!result.ok) return { status: 'invalid', problem: result.error };
   const placed = applyDetailsEdit(detailsOf(expense), detailsEdit ?? {});
   if (!placed.ok) return { status: 'invalid', problem: placed.error };
+  const travelled = applyTravelEdit(travelOf(expense), travelEdit ?? {});
+  if (!travelled.ok) return { status: 'invalid', problem: travelled.error };
   const { values, changes } = result.value;
   const { details, changes: detailChanges } = placed.value;
-  if (changes.length === 0 && detailChanges.length === 0) return { status: 'unchanged' };
+  const { travel, changes: travelChanges } = travelled.value;
+  if (changes.length === 0 && detailChanges.length === 0 && travelChanges.length === 0) {
+    return { status: 'unchanged' };
+  }
+  if (
+    changes.some((c) => c.field === 'amount' || c.field === 'currency') &&
+    (await claimFromLines(tx, expenseId))
+  ) {
+    return { status: 'itemized' };
+  }
+  // Recorded only when the journey or stay changed, so other edits record what they always did.
+  const travelRecord = travelChanges.length > 0 ? { travelChanges } : {};
 
   const [proof] = await tx
     .select({ id: receipts.id, status: receipts.status })
@@ -432,14 +545,21 @@ export async function editExpense(
   const now = new Date();
   await tx
     .update(expenses)
-    .set({ ...values, ...detailColumns(details), status, editedAt: now, updatedAt: now })
+    .set({
+      ...values,
+      ...detailColumns(details),
+      ...travelOf(travel),
+      status,
+      editedAt: now,
+      updatedAt: now,
+    })
     .where(eq(expenses.id, expenseId));
   await appendAuditEvent(tx, orgId, {
     actor: { type: 'user', id: actorUserId },
     entityType: 'expense',
     entityId: expenseId,
     action: 'expense.edited',
-    payload: { changes, detailChanges, status, previous: expense.status },
+    payload: { changes, detailChanges, ...travelRecord, status, previous: expense.status },
   });
   await reopenChangedReports(
     tx,
@@ -451,5 +571,5 @@ export async function editExpense(
   if (changes.some((c) => c.field === 'date')) {
     await fileExpenseToTrip(tx, orgId, expenseId, { type: 'user', id: actorUserId });
   }
-  return { status: 'edited', changes, detailChanges };
+  return { status: 'edited', changes, detailChanges, ...travelRecord };
 }

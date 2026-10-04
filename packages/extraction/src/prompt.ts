@@ -23,5 +23,18 @@ Extract what is printed on the document into the requested structure.
  */
 export const SOURCES_PROMPT_VERSION = 'extract-v4';
 
+/** What asking for the line behind each field adds to the instructions. */
+export const SOURCES_INSTRUCTIONS = `- In sources, copy for each field the line or lines of the document you read it from, exactly as printed, lines joined with " / ". Use null for a field you left null, and never write a line the document doesn't print.`;
+
 export const SOURCES_SYSTEM_PROMPT = `${SYSTEM_PROMPT}
-- In sources, copy for each field the line or lines of the document you read it from, exactly as printed, lines joined with " / ". Use null for a field you left null, and never write a line the document doesn't print.`;
+${SOURCES_INSTRUCTIONS}`;
+
+/**
+ * What asking for journeys and stays adds to the instructions, for an organization that has
+ * switched on `receipts.journeys` (FR-INT-20, FR-INT-21, Q39). Its version is added to the
+ * prompt's, so a stored reading says it was asked; with the switch off nothing is added.
+ */
+export const JOURNEYS_INSTRUCTIONS = `- A train or rail ticket, or its receipt, is a rail_ticket.
+- For a ride receipt, an airline ticket or a rail ticket, read in journey where it went from and to, exactly as printed: a ride's pickup and drop-off, a flight's origin and destination as airport codes or cities, a train's departure and arrival stations. A ticket of several legs goes from where the first leg starts to where the outbound journey ends, so a return ticket SFO to ORD and back reads SFO to ORD.
+- For a hotel folio, read in stay its check-in and check-out dates as YYYY-MM-DD. Never work a date out from the number of nights.
+- Leave journey and stay null for any other document, and leave out an end or a date the document doesn't print.`;

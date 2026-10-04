@@ -1,7 +1,6 @@
 import {
   applyMileageInput,
   initialExpenseStatus,
-  IRS_BUSINESS_RATES,
   isExpenseEditable,
   mileageRate,
   newId,
@@ -13,13 +12,14 @@ import {
   type MileageInput,
   type MileageProblem,
   type MileageRate,
-  type MileageRateTable,
+  type MileageRates,
   type MileageReimbursement,
   type MileageValues,
 } from '@expensewise/domain';
 import { and, eq } from 'drizzle-orm';
 import { appendAuditEvent, lockOrgWrites } from './audit.ts';
 import type { Transaction } from './client.ts';
+import { mileagePolicy } from './mileage-rates.ts';
 import { reopenChangedReports, reportsOfExpenses } from './report-touch.ts';
 import { expenses, mileageLogs } from './schema.ts';
 import { fileExpenseToTrip } from './trips.ts';
@@ -132,7 +132,9 @@ export type LogMileageResult =
 /**
  * Logs a drive for a member (FR-CAP-03): an expense of miles × the rate in force on its date,
  * Ready at once, with the drive and that rate copied onto its mileage log, and its audit event.
- * It files to the member's trip its date falls in, as any expense does. Call inside withOrg().
+ * It files to the member's trip its date falls in, as any expense does. The rate is the
+ * organization's (Q28), read in this transaction, unless a test passes `rates` to price it
+ * at instead. Call inside withOrg().
  */
 export async function logMileage(
   tx: Transaction,
@@ -141,9 +143,9 @@ export async function logMileage(
   input: MileageInput,
   actorUserId: string,
   today: IsoDate,
-  rates: MileageRateTable = IRS_BUSINESS_RATES,
+  rates?: MileageRates,
 ): Promise<LogMileageResult> {
-  const applied = applyMileageInput(null, input, today, rates);
+  const applied = applyMileageInput(null, input, today, rates ?? (await mileagePolicy(tx)));
   if (!applied.ok) return { status: 'invalid', problem: applied.error };
   const { values, claim } = applied.value;
   if (!claim) throw new Error('A new mileage entry was not priced');
@@ -206,13 +208,16 @@ export type EditMileageResult =
   /** No such entry of this member's. */
   | { readonly status: 'missing' }
   /** Submitted or later: an approved entry is corrected by a reversal. */
-  | { readonly status: 'not_editable'; readonly current: ExpenseStatus };
+  | { readonly status: 'not_editable'; readonly current: ExpenseStatus }
+  /** A route drive: it is changed by its stops, and its miles with a reason (ADR-0039). */
+  | { readonly status: 'route' };
 
 /**
  * A member corrects one of their mileage entries before it is submitted, with its audit event.
  * A new date or new miles price it again at the rate in force on its date, copied on afresh;
  * a new destination or purpose leaves the rate and amount alone. A closed report it is on
- * reopens, and a new date files it again by date. Call inside withOrg().
+ * reopens, and a new date files it again by date. The rate is the organization's (Q28), read
+ * in this transaction, unless a test passes `rates`. Call inside withOrg().
  */
 export async function editMileage(
   tx: Transaction,
@@ -222,14 +227,15 @@ export async function editMileage(
   input: MileageInput,
   actorUserId: string,
   today: IsoDate,
-  rates: MileageRateTable = IRS_BUSINESS_RATES,
+  rates?: MileageRates,
 ): Promise<EditMileageResult> {
   await lockOrgWrites(tx, orgId);
   const [row] = await mine(tx, memberId, expenseId).for('update');
   if (!row) return { status: 'missing' };
   if (!isExpenseEditable(row.status)) return { status: 'not_editable', current: row.status };
+  if (row.method === 'route') return { status: 'route' };
   const current = recordOf(row);
-  const applied = applyMileageInput(current, input, today, rates);
+  const applied = applyMileageInput(current, input, today, rates ?? (await mileagePolicy(tx)));
   if (!applied.ok) return { status: 'invalid', problem: applied.error };
   const { values, changes, claim } = applied.value;
   if (changes.length === 0) return { status: 'unchanged' };

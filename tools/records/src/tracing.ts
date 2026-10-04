@@ -17,13 +17,13 @@ export const GAPS: readonly Gap[] = [
   },
   {
     id: 'GAP-28',
-    title: 'An expense can go on without a category and type, and no rule hangs off a type.',
+    title: 'No rule hangs off a type yet.',
     affects: ['FR-EXP-11', 'F-43'],
     severity: 'Low',
     evidence:
-      'Built in PR #58 behind `expenses.categories`: an expense without a category and type says so on its page and in the list, but nothing refuses one, since nothing that works today may be blocked by a feature switched on. Types carry no rules yet, because attendees, a mileage rate and a receipt needed above a limit are not built as rules.',
-    fix: 'Refuse to submit a report while an expense on it lacks them, once reports are submitted, and attach each rule to the type as it is built (#71).',
-    backlog: 71,
+      'Built in PR #58 behind `expenses.categories`: an expense without a category and type says so on its page and in the list, and since PR #59 in Needs you too (#71); by your answer to Q27 it holds nothing up, so nothing refuses one. Types carry no rules yet, because attendees and a receipt needed above a limit are not built as rules; the mileage rate is the organization’s, by your answer to Q28.',
+    fix: 'Attach each rule to the type as it is built (#78).',
+    backlog: 78,
   },
   {
     id: 'GAP-29',
@@ -690,6 +690,10 @@ export const QUESTIONS: readonly Question[] = [
     recommendation:
       'C, with A until reports are submitted: the expense and the list say what is missing, and submitting needs it (#71).',
     affects: ['FR-EXP-11', 'F-43', 'GAP-28'],
+    answer: {
+      date: '2026-10-04',
+      text: 'B: an expense without a category and type also appears in Needs you, and holds nothing up. Switched on for the first time, Needs you lists every expense you already have until each is coded; most carry a suggestion you confirm with a tap (#71).',
+    },
   },
   {
     id: 'Q28',
@@ -699,6 +703,10 @@ export const QUESTIONS: readonly Question[] = [
     recommendation:
       'A, while you are the only organization; B before a second organization, or anyone outside the US, joins.',
     affects: ['FR-CAP-03', 'F-13', 'NFR-DAT-04'],
+    answer: {
+      date: '2026-10-04',
+      text: 'The IRS business rate by default, and your own rate a mile in Settings whenever you want it (#77).',
+    },
   },
   {
     id: 'Q29',
@@ -707,6 +715,10 @@ export const QUESTIONS: readonly Question[] = [
     why: 'A copy of a closed report lets you check it, or send it to whoever reimburses you, before you submit; an approved report is what finance books, and the PDF says which it is. B would take away an export you have today. Posting to accounting (FR-SET-02) takes approved reports only either way.',
     recommendation: 'A.',
     affects: ['FR-SET-01', 'F-19', 'US-RPT-16', 'US-RPT-17'],
+    answer: {
+      date: '2026-10-04',
+      text: 'Once approval exists, submitted and approved reports are exported. Until then there is nothing submitted, so a closed report exports as it does today (#24).',
+    },
   },
   {
     id: 'Q30',
@@ -715,11 +727,132 @@ export const QUESTIONS: readonly Question[] = [
     why: 'Who may change a colleague’s claim is a control: if a finance admin can edit an expense, what its claimant said they spent can change under them. A list of everyone’s is how an owner would actually look at the team’s spending; today they open a record only by its link.',
     recommendation: 'A for now; decide on C when the first team starts approving reports.',
     affects: ['FR-GOV-01', 'F-61', 'ADR-0035'],
+    answer: {
+      date: '2026-10-04',
+      text: 'A, as recommended: owners and finance admins see everyone’s records and change only their own; a claim that needs fixing goes back to its person through approval (#24). A list of everyone’s waits until the first team approves reports.',
+    },
+  },
+  {
+    id: 'Q31',
+    title: 'Where the route-mileage key lives',
+    ask: 'Route-based mileage (#20) needs an OpenRouteService key. A: in the app, in Settings, like the AI provider keys: checked with a free call when saved, stored encrypted, only its last four characters shown. B: a Vercel environment variable you set, one for the whole app.',
+    why: 'In the app it takes effect at once and is checked on screen, and each organization brings its own, which suits OpenRouteService’s terms that tie a free key to one person. A server variable is less code but needs a redeploy, shows no check, and lends your personal key to every organization.',
+    recommendation: 'A.',
+    affects: ['FR-CAP-04', 'F-14'],
+    answer: {
+      date: '2026-10-04',
+      text: 'A: in the app, in Settings, checked on save and stored encrypted.',
+    },
+  },
+  {
+    id: 'Q32',
+    title: 'What may be sent to OpenRouteService',
+    ask: 'To measure a drive, each stop goes to OpenRouteService: an address to find it on the map, then the points in order for the driving distance. Its terms ask that no personal data is sent, and a home address arguably is. A: a saved place is looked up once and only its point is sent afterwards. B: each address is sent as typed, every time. C: only points dropped on a map.',
+    why: 'Names, notes and purposes are never sent in any case. A sends your home address once; B on every drive from home; C never, but is slower on a phone.',
+    recommendation: 'A.',
+    affects: ['FR-CAP-04', 'F-14'],
+    answer: {
+      date: '2026-10-04',
+      text: 'B: each address is sent as typed, every time a drive is measured; never a name, note or purpose.',
+    },
+  },
+  {
+    id: 'Q33',
+    title: 'When the measured route and the odometer disagree',
+    ask: 'OpenRouteService measures the shortest sensible route; a real drive may be longer. A: you may change the miles with a reason, and the claim shows both. B: you may change them freely. C: the measured distance is final; use manual miles for anything else.',
+    why: 'The IRS expects the miles actually driven, and a reviewer expects a change explained. Either way the claim keeps the measured distance, its source and when it was measured, and is never measured again.',
+    recommendation: 'A.',
+    affects: ['FR-CAP-04', 'F-14', 'NFR-DAT-04'],
+    answer: {
+      date: '2026-10-04',
+      text: 'A: you may change the miles with a reason; the claim and its export show the measured miles and yours.',
+    },
+  },
+  {
+    id: 'Q34',
+    title: 'Which AI models Settings offers',
+    ask: 'You approved Sonnet 5.5 and Haiku 4.5 (ADR-0017), and GPT-5.6 Luna reads for OpenAI. Settings › AI models (#52) also lists Opus 5.5 and Fable 5.1, switched off, with their list prices. A: offer only the approved ones. B: keep all five, those two off.',
+    why: 'Offering them spends nothing until one is switched on, and they read hard receipts better at several times the cost; but a switch you can flip is a choice you are offered.',
+    recommendation: 'A.',
+    affects: ['FR-INT-16', 'F-45'],
+    answer: {
+      date: '2026-10-04',
+      text: 'B: all five offered, Opus 5.5 and Fable 5.1 off until you switch one on.',
+    },
+  },
+  {
+    id: 'Q35',
+    title: 'What a split expense is',
+    ask: 'You asked to split an expense into categories and types for reporting. A: it stays one expense with one receipt, made of parts, each with a category, type and amount. B: it becomes several expenses on the same receipt, each reviewed and approved on its own.',
+    why: 'One expense in parts keeps one claim for approval and one receipt as proof, while reports and exports total by category and type. Several expenses are simpler to store but multiply what is reviewed, and the receipt has to be checked against their sum.',
+    recommendation: 'A.',
+    affects: ['FR-EXP-15', 'F-55'],
+    answer: { date: '2026-10-04', text: 'A: one expense, in parts.' },
+  },
+  {
+    id: 'Q36',
+    title: 'How the parts of a split are made',
+    ask: 'A: from itemized lines where the receipt has them, each line given a category and type, or by amounts where it doesn’t. B: from lines only. C: by amounts only.',
+    why: 'Folios and itemized bills split naturally by line; card slips and taxi receipts have no lines. Either way the parts add up to the claim.',
+    recommendation: 'A.',
+    affects: ['FR-EXP-15', 'F-55'],
+    answer: { date: '2026-10-04', text: 'A: by line where itemized, by amount where not.' },
+  },
+  {
+    id: 'Q37',
+    title: 'The tax on a line split off or excluded',
+    ask: 'A: lines as printed; tax and service charges are lines of their own, split or excluded like any other. B: each tax or service line is spread across the other lines in proportion.',
+    why: 'As printed matches the receipt exactly. In proportion is closer to what finance would allocate, so excluding the minibar also takes off its share of the tax, but the amounts no longer match a printed line.',
+    recommendation: 'A.',
+    affects: ['FR-EXP-15', 'FR-EXP-16', 'F-55'],
+    answer: {
+      date: '2026-10-04',
+      text: 'B: spread in proportion, in whole cents, the largest share taking any cent left over so the parts add up to the receipt exactly.',
+    },
+  },
+  {
+    id: 'Q38',
+    title: 'The reason for an excluded line',
+    ask: 'Claiming less than a receipt needs a reason (Q6). A: the excluded line is the reason, with an optional note. B: pick a reason: personal, paid by someone else, not reimbursable, other. C: a typed note for each.',
+    why: 'A is one tap; B tells a reviewer why at a glance for one more tap; C is the most explicit and the slowest on a phone.',
+    recommendation: 'A.',
+    affects: ['FR-EXP-16', 'FR-EXP-10', 'F-55'],
+    answer: {
+      date: '2026-10-04',
+      text: 'A reason picked from the list, and an optional note. Claude assumes other needs the note, since other alone says nothing; yours to overturn.',
+    },
+  },
+  {
+    id: 'Q39',
+    title: 'Which transportation receipts read a from and to',
+    ask: 'You asked for the from and to of a ride. A: rides, airline tickets and rail tickets each read their from and to. B: rides only.',
+    why: 'The same reading reads either at a few output tokens more; one rule for every leg of a journey.',
+    recommendation: 'A.',
+    affects: ['FR-INT-20', 'F-54'],
+    answer: { date: '2026-10-04', text: 'A: rides, flights and rail.' },
   },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-04',
+    change:
+      'PR #59, built behind its own switches, each off until you switch it on in Settings › Features. Route mileage (#20, F-14, ADR-0039): a drive by its start, stops and end, with saved places and a round trip, measured by car with OpenRouteService on your organization’s own key, kept in Settings › Mileage, and other miles claimed with a reason (Q31 to Q33). Your own rate a mile from a day, or the IRS rate again (#77, Q28), which route drives are paid at too. An expense without a category and type is listed in Needs you (#71, Q27). Journeys and stays (#79, F-54, ADR-0040): a ride, flight or rail ticket reads its from and to, and a hotel folio its check-in and check-out, with the nights worked out. Itemized lines under the total (#80), a line left out of the claim with its reason (#82), and an expense split into parts by category and type (#81) (F-55, ADR-0041, Q35 to Q38). Fixed on the way: a member can delete a receipt whose expense was converted to their currency, which the own-records rules had refused since PR #58; a possible duplicate’s date in Needs you reads Sep 29, 2026; a rail ticket suggests Ground transport.',
+    by: 'Claude, at your direction',
+  },
+  {
+    date: '2026-10-04',
+    change:
+      'Your requirements of Oct 4 for receipts, recorded as Planned with their stories: a transportation receipt reads where it went from and to, rides, flights and rail (FR-INT-20, Q39); a hotel folio reads its stay and the nights (FR-INT-21); a receipt’s itemized lines show under the total (FR-INT-22); an expense splits into parts by category and type, by line or by amount, staying one expense (FR-EXP-15, Q35, Q36); a line can be excluded from reimbursement with a reason and an optional note (FR-EXP-16, Q38); tax and service charges spread across lines in proportion (Q37). Features F-54 and F-55; backlog #79 to #82; stories US-READ-23, US-READ-24 and US-EXP-07 to US-EXP-09.',
+    by: 'Claude, at your direction',
+  },
+  {
+    date: '2026-10-04',
+    change:
+      'Your answers of Oct 4, asked one at a time. Q27: an expense without a category and type also appears in Needs you (#71). Q28: the IRS rate by default, and your own rate in Settings (#77). Q29: once approval exists, submitted and approved reports export (#24). Q30: owners and finance admins see everyone’s records and change only their own. Q34: all five AI models offered, the two larger Claude models off. For route-based mileage (#20), unblocked with your OpenRouteService account: the key lives in Settings (Q31), addresses are sent as typed (Q32), and you may change the measured miles with a reason (Q33).',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-04',
     change:

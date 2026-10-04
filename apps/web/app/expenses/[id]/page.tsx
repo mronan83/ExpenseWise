@@ -1,6 +1,6 @@
 'use client';
 
-import { showDate } from '@expensewise/domain';
+import { journeyLine, showDate, stayLine } from '@expensewise/domain';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
@@ -18,17 +18,25 @@ import {
   placeOf,
   timeOf,
   timeZones,
+  TRAVEL_LABELS,
+  travelOf,
   type DetailField,
   type ExpenseDetail,
   type ExpenseField,
+  type Journey,
+  type Stay,
+  type TravelField,
 } from '../../../lib/expenses';
 import { useFeatures } from '../../../lib/features';
 import { describeRate, distanceOf, MILEAGE_FLAG, type MileageEntry } from '../../../lib/mileage';
+import { ROUTE_MILEAGE_FLAG } from '../../../lib/route-mileage';
 import { formatMoney, RECEIPT_STATUS } from '../../../lib/receipts';
 import { supabase } from '../../../lib/supabase';
 import { tripDates, type TripSummary } from '../../../lib/trips';
 import { HistoryLink } from '../../history-link';
 import { MileageForm } from '../../mileage/mileage-form';
+import { RouteDriveDetails } from '../../mileage/route-drive';
+import { ItemizedLines, SplitParts } from './itemized';
 
 type Load =
   | { state: 'loading' }
@@ -80,6 +88,7 @@ export default function ExpensePage() {
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <h1 className="text-2xl font-bold">{expense?.merchant ?? 'Expense'}</h1>
+        {expense ? <Travel journey={expense.journey} stay={expense.stay} /> : null}
         {load.state === 'loading' ? <p className="text-sm text-ink-2">Loading…</p> : null}
         {load.state === 'signed-out' ? (
           <p className="text-sm">
@@ -110,6 +119,11 @@ export default function ExpensePage() {
                 onSaved={(next) => setLoad({ state: 'ready', expense: next })}
               />
             )}
+            {/* Sent only while each is switched on for the organization (FR-INT-22, FR-EXP-15). */}
+            <ItemizedLines
+              expense={expense}
+              onSaved={(next) => setLoad({ state: 'ready', expense: next })}
+            />
             {/* Sent only while categories are switched on for the organization. */}
             {expense.category ? (
               <CategoryChoice
@@ -119,6 +133,11 @@ export default function ExpensePage() {
                 onSaved={(next) => setLoad({ state: 'ready', expense: next })}
               />
             ) : null}
+            <SplitParts
+              key={`split-${expense.updatedAt}`}
+              expense={expense}
+              onSaved={(next) => setLoad({ state: 'ready', expense: next })}
+            />
             <TripChoice
               expense={expense}
               onSaved={(next) => setLoad({ state: 'ready', expense: next })}
@@ -142,7 +161,14 @@ function Verdict({ expense }: { expense: ExpenseDetail }) {
   const status = EXPENSE_STATUS[expense.status];
   const proof = expense.proof;
   let text: string;
-  if (expense.status === 'processing') {
+  let label = status.label;
+  if (expense.source === 'mileage' && expense.status === 'processing') {
+    // A drive by its route, being measured (ADR-0039).
+    label = 'Measuring…';
+    text = 'Its route is being measured. This takes a few seconds.';
+  } else if (expense.source === 'mileage' && expense.status === 'needs_review') {
+    text = 'Its route couldn’t be measured. Fix a stop and measure it again, or enter its miles.';
+  } else if (expense.status === 'processing') {
     text = 'Its receipt is being read. This takes a few seconds.';
   } else if (expense.status === 'needs_review' && proof?.status === 'failed') {
     text = 'No model could read its receipt. Enter the details there, then this expense is Ready.';
@@ -161,15 +187,33 @@ function Verdict({ expense }: { expense: ExpenseDetail }) {
     <p role="status" className="rounded-xl border border-rule bg-sheet px-4 py-3 text-sm">
       {/* "Reading…" already ends the sentence. */}
       <span className={`font-semibold ${status.tone}`}>
-        {status.label.endsWith('…') ? status.label : `${status.label}.`}
+        {label.endsWith('…') ? label : `${label}.`}
       </span>{' '}
       {text}
     </p>
   );
 }
 
-type Draft = Record<ExpenseField | DetailField, string>;
-const LABELS = { ...EXPENSE_FIELD_LABELS, ...DETAIL_LABELS };
+/**
+ * Where a ride, flight or train went, and a hotel stay with its nights, in a line each under
+ * the merchant: "SFO → ORD", "2 nights, Sep 29 – Oct 1, 2026" (FR-INT-20, FR-INT-21). Sent only
+ * while Journeys and stays is on.
+ */
+function Travel({ journey, stay }: { journey?: Journey | null; stay?: Stay | null }) {
+  const travel = travelOf(journey, stay);
+  const went = journeyLine(travel);
+  const stayed = stayLine(travel);
+  if (!went && !stayed) return null;
+  return (
+    <div className="-mt-3 flex flex-col gap-0.5 text-sm text-ink-2">
+      {went ? <p>{went}</p> : null}
+      {stayed ? <p className={stay?.doubt ? 'text-warn' : undefined}>{stayed}</p> : null}
+    </div>
+  );
+}
+
+type Draft = Record<ExpenseField | DetailField | TravelField, string>;
+const LABELS = { ...EXPENSE_FIELD_LABELS, ...DETAIL_LABELS, ...TRAVEL_LABELS };
 const draftOf = (e: ExpenseDetail): Draft => ({
   merchant: e.merchant ?? '',
   date: e.date ?? '',
@@ -181,6 +225,11 @@ const draftOf = (e: ExpenseDetail): Draft => ({
   city: e.city ?? '',
   region: e.region ?? '',
   country: e.country ?? '',
+  // Blank while Journeys and stays is off, so never sent.
+  journeyFrom: e.journey?.from ?? '',
+  journeyTo: e.journey?.to ?? '',
+  checkIn: e.stay?.checkIn ?? '',
+  checkOut: e.stay?.checkOut ?? '',
 });
 
 /** What the expense claims. Editable while it needs a look or is Ready (FR-EXP-09). */
@@ -287,6 +336,20 @@ function Claim({
               </select>
             </label>
           </fieldset>
+          {/* Only while Journeys and stays is on: the expense then carries both. */}
+          {expense.journey && expense.stay ? (
+            <fieldset className="flex flex-col gap-3 pt-1">
+              <legend className="mb-2 text-xs font-semibold text-ink">Journey and stay</legend>
+              <div className="grid grid-cols-2 gap-3">
+                {input('journeyFrom', { maxLength: 200, autoComplete: 'off' })}
+                {input('journeyTo', { maxLength: 200, autoComplete: 'off' })}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {input('checkIn', { type: 'date' })}
+                {input('checkOut', { type: 'date' })}
+              </div>
+            </fieldset>
+          ) : null}
           <div className="flex flex-wrap gap-3">
             <button
               type="submit"
@@ -390,6 +453,11 @@ function Drive({
   }, [expense.id]);
 
   const drive = entry?.mileage;
+  const featureOn = useFeatures();
+  // A drive by its route shows its stops and how it was measured (FR-CAP-04).
+  if (drive?.method === 'route' && featureOn(ROUTE_MILEAGE_FLAG)) {
+    return <RouteDriveDetails expense={expense} onSaved={onSaved} />;
+  }
   return (
     <section
       aria-labelledby="drive-title"
@@ -476,17 +544,30 @@ function Row({ label, value, differs }: { label: string; value: string | null; d
 /** What its receipt shows: the proof, never changed by editing the expense (FR-EXP-08). */
 function Proof({ expense }: { expense: ExpenseDetail }) {
   const proof = expense.proof;
+  // With route mileage on, a drive may be measured rather than logged by hand (ADR-0039).
+  const routes = useFeatures()(ROUTE_MILEAGE_FLAG);
   if (!proof) {
     return (
       <p className="rounded-xl border border-rule bg-sheet px-4 py-3 text-sm text-ink-2">
         {expense.source === 'mileage'
-          ? 'A drive, logged by hand: it needs no receipt.'
+          ? routes
+            ? 'A drive: it needs no receipt.'
+            : 'A drive, logged by hand: it needs no receipt.'
           : 'Typed in by hand, with no receipt.'}
       </p>
     );
   }
   const status = RECEIPT_STATUS[proof.status];
   const fields = proof.differences.map((f) => EXPENSE_FIELD_LABELS[f].toLowerCase());
+  // Its journey and stay as the receipt reads them, while Journeys and stays is on.
+  const read = travelOf(proof.journey, proof.stay);
+  const went = journeyLine(read);
+  const stayed = stayLine(read);
+  const differs = new Set(proof.travelDifferences ?? []);
+  const travelDiffers = [
+    ...(differs.has('journeyFrom') || differs.has('journeyTo') ? ['journey'] : []),
+    ...(differs.has('checkIn') || differs.has('checkOut') ? ['stay'] : []),
+  ];
   return (
     <section
       aria-labelledby="proof-title"
@@ -513,7 +594,16 @@ function Proof({ expense }: { expense: ExpenseDetail }) {
         />
         <Row label="Time" value={proof.time} differs={false} />
         <Row label="Place" value={placeOf(proof)} differs={false} />
+        {went ? <Row label="Journey" value={went} differs={false} /> : null}
+        {stayed ? <Row label="Stay" value={stayed} differs={false} /> : null}
       </dl>
+      {travelDiffers.length > 0 ? (
+        <p className="text-sm text-ink-2">
+          This expense’s {travelDiffers.join(' and ')}{' '}
+          {travelDiffers.length === 1 ? 'differs' : 'differ'} from its receipt’s. That is shown,
+          never a reason to reject it.
+        </p>
+      ) : null}
       {fields.length > 0 ? (
         <p className="text-sm text-warn">
           This expense differs from its receipt in the{' '}

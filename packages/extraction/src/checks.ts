@@ -5,10 +5,12 @@ import type { NormalizedExtraction } from './normalize.ts';
  * What makes a confident reading implausible (FR-INT-04, journeys §4.6). sums: the subtotal,
  * taxes and tip don't come to the total. future_date: dated after the day it was uploaded.
  * old_date: dated more than a year before that day. summary: a purchase summary, which shows
- * what was ordered but not what was charged (FR-CAP-02, Q10). A reading that fails one is never
- * Ready on its own; a person looks, and the receipt says which check failed.
+ * what was ordered but not what was charged (FR-CAP-02, Q10). stay: a folio's check-out is
+ * before its check-in, or its stay is longer than the most nights worked out (FR-INT-21), so
+ * the nights aren't sure; only read where journeys and stays are switched on. A reading that
+ * fails one is never Ready on its own; a person looks, and the receipt says which check failed.
  */
-export const READING_CHECKS = ['sums', 'future_date', 'old_date', 'summary'] as const;
+export const READING_CHECKS = ['sums', 'future_date', 'old_date', 'summary', 'stay'] as const;
 export type ReadingCheck = (typeof READING_CHECKS)[number];
 
 /** The merchant's day can run ahead of the UTC day the receipt was uploaded on. */
@@ -54,5 +56,6 @@ export function readingChecks(n: NormalizedExtraction, uploadedAt: Date): Readin
     if (daysBetween(uploadedOn, date) > DAYS_AHEAD) failed.push('future_date');
     else if (date < aYearBefore(uploadedOn)) failed.push('old_date');
   }
+  if (n.stay?.nights && !n.stay.nights.sure) failed.push('stay');
   return failed;
 }

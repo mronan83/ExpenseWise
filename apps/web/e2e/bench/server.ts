@@ -20,24 +20,35 @@ import {
   dbExpenseStore,
   dbReceiptStore,
   dbHomeStore,
+  dbItemizedStore,
   dbOrganizationStore,
+  dbMileageRateStore,
   dbMileageStore,
   dbModelSettingsStore,
   dbReimbursementStore,
   dbPeopleStore,
   dbReportStore,
+  dbRouteKeyStore,
+  dbRouteMileageStore,
   dbTripStore,
   dbWorkspaceStore,
   ORG_FEATURE_KEYS,
 } from '@expensewise/api';
-import { createDatabase, runReportSchedule, setRolePasswords } from '@expensewise/db';
+import {
+  createDatabase,
+  ROUTE_MEASURE_REQUESTED,
+  runReportSchedule,
+  setRolePasswords,
+} from '@expensewise/db';
 import { runMigrations } from '@expensewise/db/migrate';
 import { COMPARISON_MODELS, FALLBACK_MODEL, type ModelId } from '@expensewise/extraction';
 import {
   conversionPorts,
   convertOrganization,
+  measureRoute,
   readWith,
   receiptReadingPorts,
+  routeMeasuringPorts,
   settleReading,
 } from '@expensewise/workflows';
 import { BENCH_PORT, E2E_USER, type Seeded } from './config';
@@ -184,11 +195,61 @@ const both = (r: Record<string, unknown>): Script => ({
   [COMPARISON_MODELS[1]]: r,
 });
 
-/** The real reading workflow, with each model's answer scripted. */
+/**
+ * OpenRouteService as the bench answers it (ADR-0039): the addresses it knows, and each leg's
+ * distance by the stops it joins. The bench never calls the real service.
+ */
+const ROUTE_PLACES: Record<string, [number, number, string]> = {
+  '1520 Harney St, Omaha, NE': [-95.936117, 41.257163, '1520 Harney Street, Omaha, NE, USA'],
+  'Acme HQ, 1200 Dodge St, Omaha, NE': [-95.932468, 41.261511, '1200 Dodge Street, Omaha, NE, USA'],
+  'Eppley Airfield, Omaha, NE': [-95.894069, 41.303166, 'Eppley Airfield, Omaha, NE, USA'],
+};
+const ROUTE_LEGS = [9400.4, 52399.5, 60000];
+const openRouteServiceFake = (input: string | URL | Request, init?: RequestInit) => {
+  const url = new URL(input instanceof Request ? input.url : String(input));
+  const json = (body: unknown) => Promise.resolve(Response.json(body, { status: 200 }));
+  if (url.pathname === '/geocode/search') {
+    const found = ROUTE_PLACES[url.searchParams.get('text') ?? ''];
+    return json({
+      type: 'FeatureCollection',
+      features: found
+        ? [
+            {
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: [found[0], found[1]] },
+              properties: { label: found[2] },
+            },
+          ]
+        : [],
+    });
+  }
+  const { coordinates = [] } = JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as {
+    coordinates?: unknown[];
+  };
+  return json({
+    routes: [
+      { segments: coordinates.slice(1).map((_, i) => ({ distance: ROUTE_LEGS[i] ?? 5000 })) },
+    ],
+  });
+};
+const measuring = routeMeasuringPorts({
+  db,
+  routeKey: () => Promise.resolve({ key: 'ors-bench-key-0000-wxyz' }),
+  service: { fetch: openRouteServiceFake },
+});
+
+/** The real reading and route-measuring workflows, with each answer scripted. */
 async function dispatch(
-  events: readonly { orgId: string; outboxId: string; payload: unknown }[],
+  events: readonly { orgId: string; outboxId: string; topic?: string; payload: unknown }[],
 ): Promise<void> {
   for (const event of events) {
+    if (event.topic === ROUTE_MEASURE_REQUESTED) {
+      const { expenseId } = event.payload as { expenseId: string };
+      const request = { orgId: event.orgId, expenseId, requestId: event.outboxId };
+      const outcome = await measureRoute(measuring, request);
+      if (outcome !== 'stale') await measuring.settle(request, outcome);
+      continue;
+    }
     const { receiptId } = event.payload as { receiptId: string };
     const script = scripts.get(receiptId);
     if (!script) continue; // left reading
@@ -255,17 +316,22 @@ const app = createHttpApp({
   expenses: dbExpenseStore(db),
   trips: dbTripStore(db),
   mileage: dbMileageStore(db),
+  mileageRates: dbMileageRateStore(db),
+  routeMileage: dbRouteMileageStore(db),
+  routeKeys: dbRouteKeyStore(db),
   home: dbHomeStore(db),
   people: dbPeopleStore(db),
   reports: dbReportStore(db),
   audit: dbAuditStore(db),
   categories: dbCategoryStore(db),
+  itemized: dbItemizedStore(db),
   modelSettings: dbModelSettingsStore(db),
   reimbursement: dbReimbursementStore(db),
   files: store,
   dispatch,
   secrets: createSecretBox('bench-only-secret-0123456789'),
   verifyProviderKey: () => Promise.resolve({ ok: true, authScheme: 'api_key' }),
+  verifyRouteKey: () => Promise.resolve({ ok: true }),
 });
 
 /** Calls the API as `user`, whom the bench signs in by name. */
@@ -574,6 +640,89 @@ await capture(
   ),
 );
 await capture('lunch', 'camera', both(reading('Zuni Café', '2026-09-27', 'USD', '48.20')));
+// Journeys and stays (FR-INT-20, FR-INT-21), read as a model asked for them answers: a ride
+// with its pickup and drop-off, a flight with its airports, a folio with its stay, and a
+// folio whose dates can't be right, which needs a look rather than a wrong count of nights.
+const end = (value: string) => ({ value, confidence: 'high' });
+await capture(
+  'ride',
+  'camera',
+  both(
+    reading('Lyft', '2026-09-30', 'USD', '18.40', {
+      documentType: 'ride_receipt',
+      journey: { from: end('Hilton Omaha, 1001 Cass St'), to: end('1520 Harney St') },
+      stay: null,
+    }),
+  ),
+);
+await capture(
+  'flight',
+  'upload',
+  both(
+    reading('United Airlines', '2026-09-29', 'USD', '389.20', {
+      documentType: 'airline_ticket',
+      journey: { from: end('SFO'), to: end('OMA') },
+      stay: null,
+    }),
+  ),
+);
+await capture(
+  'stay',
+  'upload',
+  both(
+    reading('Hilton Omaha', '2026-10-01', 'USD', '412.60', {
+      documentType: 'hotel_folio',
+      journey: null,
+      stay: { checkIn: end('2026-09-29'), checkOut: end('2026-10-01') },
+    }),
+  ),
+);
+await capture(
+  'stayUnsure',
+  'upload',
+  both(
+    reading('Embassy Suites Omaha Downtown', '2026-09-30', 'USD', '236.80', {
+      documentType: 'hotel_folio',
+      journey: null,
+      stay: { checkIn: end('2026-10-01'), checkOut: end('2026-09-30') },
+    }),
+  ),
+);
+// A hotel folio read line by line (FR-INT-22), on the Omaha trip; and a bistro bill whose lines
+// miss its subtotal, so they can't be left out or split by line (ADR-0041).
+await capture(
+  'folioLines',
+  'upload',
+  both(
+    reading('Hotel Indigo Omaha', '2026-10-01', 'USD', '1129.10', {
+      documentType: 'hotel_folio',
+      subtotal: { value: '985.50', confidence: 'high' },
+      taxes: [{ label: 'Occupancy tax', value: '128.12', confidence: 'high' }],
+      fees: [{ label: 'Resort fee', value: '15.48', confidence: 'high' }],
+      lineItems: [
+        { description: 'Room, 2 nights', quantity: '2', amount: '898.00' },
+        { description: 'Minibar', quantity: null, amount: '18.50' },
+        { description: 'Room service', quantity: null, amount: '46.00' },
+        { description: 'Valet parking', quantity: null, amount: '23.00' },
+      ],
+    }),
+  ),
+);
+await capture(
+  'linesShort',
+  'camera',
+  both(
+    reading('Harney Street Bistro', '2026-09-30', 'USD', '58.43', {
+      subtotal: { value: '45.50', confidence: 'high' },
+      taxes: [{ label: 'Sales tax', value: '4.43', confidence: 'high' }],
+      tip: { value: '8.50', confidence: 'high' },
+      lineItems: [
+        { description: 'Steak frites', quantity: '1', amount: '29.00' },
+        { description: 'Caesar salad', quantity: '1', amount: '13.50' },
+      ],
+    }),
+  ),
+);
 
 // A confirmed correction, an expense edited away from its receipt, one put on a trip by hand.
 await call('POST', `/v1/receipts/${receipts.steak}/confirm`, {
@@ -600,6 +749,24 @@ await call('PUT', `/v1/expenses/${await expenseOf('folio')}/category`, {
   categoryId: catalog.categories.find((c) => c.name === 'Travel')!.id,
   typeId: catalog.types.find((t) => t.name === 'Lodging')!.id,
 });
+// The folio read line by line: lodging, its room service split off to Meals (FR-EXP-15) and
+// its minibar left out as personal (FR-EXP-16).
+const folioLines = await expenseOf('folioLines');
+await call('PUT', `/v1/expenses/${folioLines}/category`, {
+  categoryId: catalog.categories.find((c) => c.name === 'Travel')!.id,
+  typeId: catalog.types.find((t) => t.name === 'Lodging')!.id,
+});
+await call('PUT', `/v1/expenses/${folioLines}/split`, {
+  basis: 'lines',
+  lines: [
+    {
+      position: 3,
+      categoryId: catalog.categories.find((c) => c.name === 'Meals')!.id,
+      typeId: catalog.types.find((t) => t.name === 'Business meal')!.id,
+    },
+  ],
+});
+await call('PUT', `/v1/expenses/${folioLines}/lines/2/exclusion`, { reason: 'personal' });
 
 const expenses: Record<string, string> = {};
 for (const name of Object.keys(receipts)) expenses[name] = await expenseOf(name);
@@ -610,6 +777,42 @@ expenses.mileage = (
     destination: 'Eppley Airfield, Omaha',
     purpose: 'Drive to the airport for the Q4 architect meeting',
     miles: '38.4',
+  })
+).id;
+// The organization's own rate a mile from Nov 1, and the IRS rate again from Mar 1 (Q28, #77),
+// set after the drive, which keeps the IRS rate it was logged at.
+await call('PUT', '/v1/settings/mileage-rates/2026-11-01', { perMile: '0.65' });
+await call('PUT', '/v1/settings/mileage-rates/2027-03-01', { perMile: null });
+// Route mileage (FR-CAP-04): the organization's OpenRouteService key, Riley's saved places,
+// a round trip measured and claimed at more miles with a reason (Q33), and a drive with a stop
+// that can't be found, which needs a look.
+await call('PUT', '/v1/settings/mileage/route-key', { apiKey: 'ors-bench-key-0000-wxyz' });
+await call('POST', '/v1/me/places', { name: 'Office', address: '1520 Harney St, Omaha, NE' });
+await call('POST', '/v1/me/places', {
+  name: 'Acme HQ',
+  address: 'Acme HQ, 1200 Dodge St, Omaha, NE',
+});
+expenses.routeMeasured = (
+  await call<{ id: string }>('POST', '/v1/mileage/routes', {
+    date: '2026-09-30',
+    purpose: 'Client visit at Acme, then the airport',
+    stops: [
+      '1520 Harney St, Omaha, NE',
+      'Acme HQ, 1200 Dodge St, Omaha, NE',
+      'Eppley Airfield, Omaha, NE',
+    ],
+    roundTrip: true,
+  })
+).id;
+await call('PUT', `/v1/mileage/${expenses.routeMeasured}/route/miles`, {
+  miles: '78',
+  reason: 'Abbott Drive was closed, so I took the detour by the river',
+});
+expenses.routeNotFound = (
+  await call<{ id: string }>('POST', '/v1/mileage/routes', {
+    date: '2026-09-30',
+    purpose: 'Site visit for the Q4 architect meeting',
+    stops: ['1520 Harney St, Omaha, NE', '9 Nowhere Lane, Omaha, NE'],
   })
 ).id;
 

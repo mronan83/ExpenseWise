@@ -1,4 +1,4 @@
-import type { ReportForExport } from '@expensewise/db';
+import { ROUTE_MILEAGE_FLAG, type ReportForExport } from '@expensewise/db';
 import {
   canExportReport,
   isReportExportable,
@@ -95,7 +95,26 @@ export function registerReportExportRoutes(
         detail: 'It is still open. Close it first.',
       });
     }
-    return found;
+    return { ...found, expenses: await shownRows(who.orgId, found) };
+  };
+
+  /**
+   * Each expense with its parts while splits are on, its excluded lines while itemized lines
+   * are on (FR-EXP-15, FR-EXP-16), and a drive's measured and claimed miles while route mileage
+   * is on (Q33); off, the export reads as it always has.
+   */
+  const shownRows = async (orgId: string, found: ReportForExport) => {
+    const split =
+      (await features.isOn(orgId, 'expenses.split')) &&
+      (await features.isOn(orgId, 'expenses.categories'));
+    const lines = await features.isOn(orgId, 'expenses.itemized');
+    const routes = await features.isOn(orgId, ROUTE_MILEAGE_FLAG);
+    return found.expenses.map(({ parts, excluded, miles, ...e }) => ({
+      ...e,
+      ...(routes && miles ? { miles } : {}),
+      ...(split && parts ? { parts } : {}),
+      ...(lines && excluded ? { excluded } : {}),
+    }));
   };
 
   const download = (found: ReportForExport, extension: 'csv' | 'pdf', contentType: string) => ({

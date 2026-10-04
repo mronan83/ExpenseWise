@@ -306,6 +306,75 @@ export const BACKLOG: readonly BacklogItem[] = [
 
   // P2: this month
   {
+    num: 79,
+    title: 'Read where a journey went, and a hotel stay’s nights',
+    type: 'Feature',
+    detail:
+      'Your requirement of Oct 4. A ride receipt reads its pickup and drop-off, an airline ticket its origin and destination, a rail ticket its stations (your answer to Q39); a hotel folio reads its check-in and check-out dates and works out the nights. Each shows on the expense. A new reading version asks for them, a few output tokens more a reading; receipts already read gain them when read again.',
+    priority: 'P2',
+    effort: 'M',
+    severity: 'Low',
+    blocker: { kind: 'none' },
+    source: 'Product owner Oct 4',
+    affects: ['FR-INT-20', 'FR-INT-21', 'F-54'],
+    done: { date: '2026-10-04', in: 'PR #59' },
+  },
+  {
+    num: 83,
+    title: 'Show a journey’s from and to and a stay’s nights in a report’s export',
+    type: 'Feature',
+    detail:
+      'Follows #79. A journey and a stay show on the expense, but a report’s CSV and PDF don’t carry them yet: the export’s columns were being changed for splits (#81) at the same time, so they were left for after. Two columns, From and to, and Stay, only when a report has one, so every other report exports as before.',
+    priority: 'P3',
+    effort: 'S',
+    severity: 'Low',
+    blocker: { kind: 'none' },
+    source: 'Claude, building #79',
+    affects: ['FR-INT-20', 'FR-INT-21', 'FR-SET-01', 'F-54'],
+  },
+  {
+    num: 80,
+    title: 'Show a receipt’s itemized lines under the total',
+    type: 'Feature',
+    detail:
+      'Your requirement of Oct 4. The lines the reading already holds show in an expandable section under the expense’s total, each with its amount. The view the split (#81) and exclusions (#82) work in.',
+    priority: 'P2',
+    effort: 'S',
+    severity: 'Low',
+    blocker: { kind: 'none' },
+    source: 'Product owner Oct 4',
+    affects: ['FR-INT-22', 'F-55'],
+    done: { date: '2026-10-04', in: 'PR #59' },
+  },
+  {
+    num: 81,
+    title: 'Split an expense into parts by category and type',
+    type: 'Feature',
+    detail:
+      'Your requirement of Oct 4 and your answers to Q35 to Q37: one expense with one receipt, made of parts, each with a category, type and amount; from itemized lines where it has them, each line given a category and type, or by amounts where it doesn’t; tax and service charges spread across the other lines in proportion, in whole cents, the largest share taking any cent left over. The parts always add up to the claim. Reports and exports total by category and type.',
+    priority: 'P2',
+    effort: 'L',
+    severity: 'Medium',
+    blocker: { kind: 'none' },
+    source: 'Product owner Oct 4',
+    affects: ['FR-EXP-15', 'FR-EXP-06', 'F-55'],
+    done: { date: '2026-10-04', in: 'PR #59' },
+  },
+  {
+    num: 82,
+    title: 'Exclude a line from reimbursement, with its reason',
+    type: 'Feature',
+    detail:
+      'Your requirement of Oct 4 and your answer to Q38: in the itemized view, include or exclude each line. An excluded line takes a reason (personal, paid by someone else, not reimbursable, other) and an optional note, needed for other; the claim drops by the line and its share of tax and service charges (Q37), and a reviewer sees each excluded line and why. This is how an expense claims less than its receipt with a reason (FR-EXP-10, Q6).',
+    priority: 'P2',
+    effort: 'M',
+    severity: 'Medium',
+    blocker: { kind: 'none' },
+    source: 'Product owner Oct 4',
+    affects: ['FR-EXP-16', 'FR-EXP-10', 'F-55'],
+    done: { date: '2026-10-04', in: 'PR #59' },
+  },
+  {
     num: 11,
     title: 'The outbox relay isn’t running',
     type: 'Ops',
@@ -460,16 +529,14 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Route-based mileage',
     type: 'Feature',
     detail:
-      'Start, stops and end, with a round trip and saved places. Researched Oct 4 at your request for a free, open-source option: OpenRouteService (HeiGIT, on OpenStreetMap) has a free key with no card that does both address lookup (1,000 a day) and driving distance through up to 50 ordered stops (2,000 a day), with commercial use allowed and attribution required; one call covers a whole trip. Google Routes needs billing enabled, so it is out. GraphHopper’s free plan allows only 5 points and no commercial use; Mapbox won’t let free lookups be stored, which saved places need; self-hosting a US map needs far more memory than any free host. Fallbacks: manual miles (#17), and for lookups the US Census geocoder or Nominatim on submit only. Each claim freezes its points, the distance in metres, the provider and when it was routed, and is never re-routed. OpenRouteService’s terms bar sending personal data, and a home address arguably is, so only addresses and coordinates would be sent.',
+      'Your go-ahead of Oct 4, with your OpenRouteService account made: the key lives in Settings, checked on save (Q31); each address is sent as typed (Q32); you may change the measured miles with a reason, and the claim shows both (Q33). Start, stops and end, with a round trip and saved places. Researched Oct 4 at your request for a free, open-source option: OpenRouteService (HeiGIT, on OpenStreetMap) has a free key with no card that does both address lookup (1,000 a day) and driving distance through up to 50 ordered stops (2,000 a day), with commercial use allowed and attribution required; one call covers a whole trip. Google Routes needs billing enabled, so it is out. GraphHopper’s free plan allows only 5 points and no commercial use; Mapbox won’t let free lookups be stored, which saved places need; self-hosting a US map needs far more memory than any free host. Fallbacks: manual miles (#17), and for lookups the US Census geocoder or Nominatim on submit only. Each claim freezes its points, the distance in metres, the provider and when it was routed, and is never re-routed. OpenRouteService’s terms bar sending personal data, and a home address arguably is, so only addresses and coordinates would be sent.',
     priority: 'P2',
     effort: 'M',
     severity: 'Low',
-    blocker: {
-      kind: 'owner',
-      ask: 'Your decisions: build it on a free OpenRouteService account you sign up for, and whether sending trip addresses to it is acceptable',
-    },
+    blocker: { kind: 'none' },
     source: 'Roadmap increment 2',
     affects: ['FR-CAP-04', 'F-14'],
+    done: { date: '2026-10-04', in: 'PR #59' },
   },
   {
     num: 48,
@@ -500,6 +567,21 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none' },
     source: 'Found merging PR #58',
     affects: ['FR-CAP-03', 'F-13'],
+  },
+
+  {
+    num: 77,
+    title: 'Your own mileage rate in Settings',
+    type: 'Feature',
+    detail:
+      'Your answer to Q28: drives are paid at the IRS business rate by default, and Settings lets you set your own rate a mile instead whenever you want, applying to drives dated from the day it takes effect. Each drive keeps the rate it was paid at (NFR-DAT-04). Built in PR #59 behind `expenses.mileage`: Settings › Mileage shows the rate in force today and each change; an owner or finance admin sets your own rate from a day, in your home currency, or goes back to the IRS rate from a day, each change audited (US-MILE-11).',
+    priority: 'P2',
+    effort: 'S',
+    severity: 'Low',
+    blocker: { kind: 'none' },
+    source: 'Q28',
+    affects: ['FR-CAP-03', 'F-13', 'NFR-DAT-04'],
+    done: { date: '2026-10-04', in: 'PR #59' },
   },
 
   // P3: this quarter
@@ -535,7 +617,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Single-step approval',
     type: 'Feature',
     detail:
-      'Approve, or return with a comment. A one-person organization self-attests; in a team no one approves their own spend; approving someone else’s needs the second factor. Your rules (Oct 3): an expense that doesn’t match its receipt is rejected, one rejected expense returns the whole report, and the rejected ones are surfaced with why (FR-GOV-10–12). Your Q6 answer: an expense may claim less than its receipt with a reason, never more, and a report can’t be submitted while a difference has no reason (FR-EXP-10, FR-GOV-13).',
+      'Approve, or return with a comment. A one-person organization self-attests; in a team no one approves their own spend; approving someone else’s needs the second factor. Your rules (Oct 3): an expense that doesn’t match its receipt is rejected, one rejected expense returns the whole report, and the rejected ones are surfaced with why (FR-GOV-10–12). Your Q6 answer: an expense may claim less than its receipt with a reason, never more, and a report can’t be submitted while a difference has no reason (FR-EXP-10, FR-GOV-13). Your answer to Q29: from then, export takes submitted and approved reports only.',
     priority: 'P3',
     effort: 'L',
     severity: 'Medium',
@@ -734,14 +816,28 @@ export const BACKLOG: readonly BacklogItem[] = [
   },
   {
     num: 71,
-    title: 'Require a category and type where it counts, and hang rules on types',
+    title: 'List an expense without a category and type in Needs you',
     type: 'Gap',
     detail:
-      'Categories and types are built (#51), but an expense without them only says so; nothing refuses one. Once reports are submitted (#24), refuse to submit one while an expense on it has no category and type, as your answer to Q27 settles. And as each rule is built, such as meal attendees, the mileage rate (#17) or a receipt needed above a limit, attach it to the type, as US-RPT-12 assumes.',
+      'Your answer to Q27: an expense without a category and type appears in Needs you, as well as saying so on its page and in the list; it holds nothing up. Built in PR #59 behind `expenses.categories`: each of your Ready expenses with neither is in Needs you, after local expenses needing a reason and before reports ready to close, with the suggestion when there is one, and Home counts it (US-RPT-18). Hanging rules on types moved to #78.',
     priority: 'P3',
     effort: 'M',
     severity: 'Low',
-    blocker: { kind: 'items', items: [24], then: 'and your answer to Q27' },
+    blocker: { kind: 'none' },
+    source: 'GAP-28',
+    affects: ['FR-EXP-11', 'F-43'],
+    done: { date: '2026-10-04', in: 'PR #59' },
+  },
+  {
+    num: 78,
+    title: 'Hang each rule on its type as the rule is built',
+    type: 'Gap',
+    detail:
+      'As each rule is built, such as meal attendees or a receipt needed above a limit, attach it to the type, as US-RPT-12 assumes. The mileage rate is the organization’s, by your answer to Q28 (#77), so it stays off the type.',
+    priority: 'P3',
+    effort: 'M',
+    severity: 'Low',
+    blocker: { kind: 'none' },
     source: 'GAP-28',
     affects: ['GAP-28', 'FR-EXP-11', 'F-43'],
   },

@@ -20,11 +20,23 @@ import {
   withReportAmounts,
 } from '@expensewise/db';
 import { asCaller } from './caller.ts';
+import { uncodedNeedingYou, type UncodedNeedingYou } from './categories.ts';
 
 /** What Needs you shows of reports: a member's open and closed ones, and unjustified expenses. */
 export interface ReportsNeedingYou {
   readonly reports: ReportContents[];
   readonly unjustified: ExpenseRecord[];
+  /**
+   * With categories on and asked for: the member's expenses with no category and type, with
+   * what each would be suggested (Q27).
+   */
+  readonly uncoded?: UncodedNeedingYou;
+}
+
+/** What else Needs you is asked to read. */
+export interface NeedsYouOptions {
+  /** The member's expenses with no category and type, while categories are on (Q27). */
+  readonly uncoded?: boolean;
 }
 
 /** What the API needs from the database for reports (FR-EXP-05). Tests use an in-memory fake. */
@@ -33,7 +45,12 @@ export interface ReportStore {
   list(orgId: string, memberId: string, limit: number): Promise<ReportContents[]>;
   get(orgId: string, reportId: string): Promise<ReportContents | undefined>;
   /** What of a member's reports and local expenses may need them. */
-  needsYou(orgId: string, memberId: string, limit: number): Promise<ReportsNeedingYou>;
+  needsYou(
+    orgId: string,
+    memberId: string,
+    limit: number,
+    options?: NeedsYouOptions,
+  ): Promise<ReportsNeedingYou>;
   close(orgId: string, reportId: string, actorUserId: string): Promise<CloseReportResult>;
   reopen(orgId: string, reportId: string, actorUserId: string): Promise<ReopenReportResult>;
   move(
@@ -52,17 +69,22 @@ export interface ReportStore {
   forExport(orgId: string, reportId: string): Promise<ReportForExport | undefined>;
 }
 
-/** A member's open and closed reports, and their unjustified local expenses. */
+/**
+ * A member's open and closed reports, and their unjustified local expenses; asked for, their
+ * expenses with no category and type too.
+ */
 export async function reportsNeedingYou(
   tx: Transaction,
   memberId: string,
   limit: number,
+  options: NeedsYouOptions = {},
 ): Promise<ReportsNeedingYou> {
   const reports = await listReports(tx, limit, { memberId, statuses: ['open', 'closed'] });
   return {
     // With each amount's conversion, shown while it is on (FR-EXP-13).
     reports: await withReportAmounts(tx, reports),
     unjustified: await listUnjustifiedExpenses(tx, memberId, limit),
+    ...(options.uncoded ? { uncoded: await uncodedNeedingYou(tx, memberId, limit) } : {}),
   };
 }
 
@@ -81,8 +103,8 @@ export function dbReportStore(db: Database): ReportStore {
         const found = await getReport(tx, reportId);
         return found && (await withReportAmounts(tx, [found]))[0];
       }),
-    needsYou: (orgId, memberId, limit) =>
-      inOrg(orgId, (tx) => reportsNeedingYou(tx, memberId, limit)),
+    needsYou: (orgId, memberId, limit, options) =>
+      inOrg(orgId, (tx) => reportsNeedingYou(tx, memberId, limit, options)),
     close: (orgId, reportId, actor) =>
       inOrg(orgId, (tx) => closeReport(tx, orgId, reportId, actor)),
     reopen: (orgId, reportId, actor) =>

@@ -253,6 +253,62 @@
       "when": 1791137893564,
       "tag": "0035_own_records_conversions",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1791146215684,
+      "tag": "0036_org_mileage_rates",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1791146219983,
+      "tag": "0037_org_mileage_rates_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1791148851580,
+      "tag": "0038_route_mileage",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1791148859464,
+      "tag": "0039_route_mileage_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1791149330240,
+      "tag": "0040_expense_journeys_and_stays",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1791150553179,
+      "tag": "0041_itemized_lines",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1791150569947,
+      "tag": "0042_itemized_lines_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1791150791174,
+      "tag": "0043_expense_conversion_first",
+      "breakpoints": true
     }
   ]
 }

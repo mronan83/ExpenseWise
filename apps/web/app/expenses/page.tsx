@@ -4,7 +4,7 @@ import { showDate } from '@expensewise/domain';
 import Link from 'next/link';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, ApiProblem } from '../../lib/api';
-import { EXPENSE_STATUS, type ExpenseSummary } from '../../lib/expenses';
+import { statusOf, type ExpenseSummary } from '../../lib/expenses';
 import { useFeatures } from '../../lib/features';
 import { formText } from '../../lib/form';
 import { MILEAGE_FLAG } from '../../lib/mileage';
@@ -143,9 +143,7 @@ export default function ExpensesPage() {
                       {e.merchant ?? (e.status === 'processing' ? 'A receipt' : 'Expense')}
                     </span>
                     <span className="text-xs text-ink-2">
-                      <span className={EXPENSE_STATUS[e.status].tone}>
-                        {EXPENSE_STATUS[e.status].label}
-                      </span>
+                      <span className={statusOf(e).tone}>{statusOf(e).label}</span>
                       {e.date ? ` · ${showDate(e.date)}` : ''}
                       {e.source === 'mileage' ? ' · Mileage' : ''}
                       {e.trip ? ` · ${e.trip.name}` : ''}

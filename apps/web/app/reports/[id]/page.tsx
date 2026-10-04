@@ -24,6 +24,9 @@ import {
 import { supabase } from '../../../lib/supabase';
 import { tripDates } from '../../../lib/trips';
 import { HistoryLink } from '../../history-link';
+import { CATEGORIES_FLAG } from '../../../lib/categories';
+import { SPLIT_FLAG } from '../../../lib/itemized';
+import { ByCategory } from './by-category';
 
 type Load =
   | { state: 'loading' }
@@ -371,6 +374,10 @@ export default function ReportPage() {
                   })}
                 </ul>
               </section>
+            ) : null}
+
+            {features(SPLIT_FLAG) && features(CATEGORIES_FLAG) ? (
+              <ByCategory key={JSON.stringify(report.totals)} reportId={id} />
             ) : null}
 
             {report.rates && report.rates.length > 0 ? (

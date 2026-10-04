@@ -919,6 +919,595 @@
       }
     },
     {
+      "name": "expense_itemizations",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "expense_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "currency",
+          "type": "character(3)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "total_minor",
+          "type": "bigint",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "subtotal_minor",
+          "type": "bigint",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "expense_itemizations_expense_fk",
+          "columns": [
+            "org_id",
+            "expense_id"
+          ],
+          "table": "expenses",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "expense_itemizations_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "expense_itemizations_expense_currency_key",
+          "columns": [
+            "org_id",
+            "expense_id",
+            "currency"
+          ]
+        },
+        {
+          "name": "expense_itemizations_expense_key",
+          "columns": [
+            "org_id",
+            "expense_id"
+          ]
+        },
+        {
+          "name": "expense_itemizations_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "expense_itemizations_currency_iso",
+          "definition": "CHECK ((currency ~ '^[A-Z]{3}$'::text))"
+        }
+      ],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (EXISTS ( SELECT 1\n   FROM expenses e\n  WHERE ((e.org_id = expense_itemizations.org_id) AND (e.id = expense_itemizations.expense_id)))))",
+          "check": null
+        },
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.expense_itemizations FOR EACH ROW EXECUTE FUNCTION enforce_own_records('expense')"
+        }
+      ],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "expense_lines",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "expense_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "position",
+          "type": "integer",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "kind",
+          "type": "line_kind",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "quantity",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "amount_minor",
+          "type": "bigint",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "currency",
+          "type": "character(3)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "excluded_reason",
+          "type": "exclusion_reason",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "excluded_note",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "excluded_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "category_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "type_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "expense_lines_category_fk",
+          "columns": [
+            "org_id",
+            "category_id"
+          ],
+          "table": "categories",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "expense_lines_itemization_fk",
+          "columns": [
+            "org_id",
+            "expense_id",
+            "currency"
+          ],
+          "table": "expense_itemizations",
+          "references": [
+            "org_id",
+            "expense_id",
+            "currency"
+          ]
+        },
+        {
+          "name": "expense_lines_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "expense_lines_type_fk",
+          "columns": [
+            "org_id",
+            "type_id"
+          ],
+          "table": "expense_types",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "expense_lines_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "expense_lines_position_key",
+          "columns": [
+            "org_id",
+            "expense_id",
+            "position"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "expense_lines_currency_iso",
+          "definition": "CHECK ((currency ~ '^[A-Z]{3}$'::text))"
+        },
+        {
+          "name": "expense_lines_excluded_whole",
+          "definition": "CHECK ((((excluded_reason IS NULL) AND (excluded_note IS NULL) AND (excluded_at IS NULL)) OR ((excluded_reason IS NOT NULL) AND (excluded_at IS NOT NULL))))"
+        },
+        {
+          "name": "expense_lines_items_only",
+          "definition": "CHECK (((kind = 'item'::line_kind) OR ((excluded_reason IS NULL) AND (category_id IS NULL))))"
+        },
+        {
+          "name": "expense_lines_note_length",
+          "definition": "CHECK (((excluded_note IS NULL) OR (char_length(excluded_note) <= 200)))"
+        },
+        {
+          "name": "expense_lines_other_needs_note",
+          "definition": "CHECK (((excluded_reason IS DISTINCT FROM 'other'::exclusion_reason) OR (COALESCE(length(TRIM(BOTH FROM excluded_note)), 0) > 0)))"
+        },
+        {
+          "name": "expense_lines_position_positive",
+          "definition": "CHECK ((\"position\" > 0))"
+        },
+        {
+          "name": "expense_lines_split_whole",
+          "definition": "CHECK ((((category_id IS NULL) AND (type_id IS NULL)) OR ((category_id IS NOT NULL) AND (type_id IS NOT NULL))))"
+        }
+      ],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (EXISTS ( SELECT 1\n   FROM expenses e\n  WHERE ((e.org_id = expense_lines.org_id) AND (e.id = expense_lines.expense_id)))))",
+          "check": null
+        },
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.expense_lines FOR EACH ROW EXECUTE FUNCTION enforce_own_records('expense')"
+        }
+      ],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "expense_parts",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "expense_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "position",
+          "type": "integer",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "basis",
+          "type": "split_basis",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "category_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "type_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "amount_minor",
+          "type": "bigint",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "currency",
+          "type": "character(3)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "expense_parts_category_fk",
+          "columns": [
+            "org_id",
+            "category_id"
+          ],
+          "table": "categories",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "expense_parts_expense_fk",
+          "columns": [
+            "org_id",
+            "expense_id"
+          ],
+          "table": "expenses",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "expense_parts_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "expense_parts_type_fk",
+          "columns": [
+            "org_id",
+            "type_id"
+          ],
+          "table": "expense_types",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "expense_parts_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "expense_parts_position_key",
+          "columns": [
+            "org_id",
+            "expense_id",
+            "position"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "expense_parts_amount_positive",
+          "definition": "CHECK ((amount_minor > 0))"
+        },
+        {
+          "name": "expense_parts_amounts_classified",
+          "definition": "CHECK (((basis = 'lines'::split_basis) OR (category_id IS NOT NULL)))"
+        },
+        {
+          "name": "expense_parts_classified_whole",
+          "definition": "CHECK ((((category_id IS NULL) AND (type_id IS NULL)) OR ((category_id IS NOT NULL) AND (type_id IS NOT NULL))))"
+        },
+        {
+          "name": "expense_parts_currency_iso",
+          "definition": "CHECK ((currency ~ '^[A-Z]{3}$'::text))"
+        },
+        {
+          "name": "expense_parts_position_positive",
+          "definition": "CHECK ((\"position\" > 0))"
+        }
+      ],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (EXISTS ( SELECT 1\n   FROM expenses e\n  WHERE ((e.org_id = expense_parts.org_id) AND (e.id = expense_parts.expense_id)))))",
+          "check": null
+        },
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.expense_parts FOR EACH ROW EXECUTE FUNCTION enforce_own_records('expense')"
+        }
+      ],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
       "name": "expense_types",
       "rls": {
         "enabled": true,
@@ -1269,6 +1858,30 @@
           "type": "timestamp with time zone",
           "nullable": true,
           "default": null
+        },
+        {
+          "name": "journey_from",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "journey_to",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "check_in",
+          "type": "date",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "check_out",
+          "type": "date",
+          "nullable": true,
+          "default": null
         }
       ],
       "primaryKey": [
@@ -1444,6 +2057,14 @@
         }
       ],
       "triggers": [
+        {
+          "name": "expense_conversion_first",
+          "definition": "CREATE TRIGGER expense_conversion_first BEFORE DELETE ON public.expenses FOR EACH ROW EXECUTE FUNCTION delete_expense_conversion()"
+        },
+        {
+          "name": "expense_lines_first",
+          "definition": "CREATE TRIGGER expense_lines_first BEFORE DELETE ON public.expenses FOR EACH ROW EXECUTE FUNCTION delete_expense_lines()"
+        },
         {
           "name": "own_records",
           "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.expenses FOR EACH ROW EXECUTE FUNCTION enforce_own_records('member')"
@@ -2480,6 +3101,380 @@
       }
     },
     {
+      "name": "mileage_route_stops",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "expense_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "position",
+          "type": "integer",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "address",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "label",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "longitude",
+          "type": "numeric(9,6)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "latitude",
+          "type": "numeric(8,6)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "leg_metres",
+          "type": "integer",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "mileage_route_stops_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "mileage_route_stops_route_fk",
+          "columns": [
+            "org_id",
+            "expense_id"
+          ],
+          "table": "mileage_routes",
+          "references": [
+            "org_id",
+            "expense_id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "mileage_route_stops_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "mileage_route_stops_position_key",
+          "columns": [
+            "org_id",
+            "expense_id",
+            "position"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "mileage_route_stops_address_length",
+          "definition": "CHECK (((length(address) >= 1) AND (length(address) <= 200)))"
+        },
+        {
+          "name": "mileage_route_stops_coordinates_range",
+          "definition": "CHECK ((((longitude >= ('-180'::integer)::numeric) AND (longitude <= (180)::numeric)) AND ((latitude >= ('-90'::integer)::numeric) AND (latitude <= (90)::numeric))))"
+        },
+        {
+          "name": "mileage_route_stops_leg",
+          "definition": "CHECK (((leg_metres >= 0) AND ((\"position\" > 0) OR (leg_metres IS NULL))))"
+        },
+        {
+          "name": "mileage_route_stops_place_whole",
+          "definition": "CHECK ((((label IS NULL) = (longitude IS NULL)) AND ((label IS NULL) = (latitude IS NULL))))"
+        },
+        {
+          "name": "mileage_route_stops_position_range",
+          "definition": "CHECK (((\"position\" >= 0) AND (\"position\" <= 24)))"
+        }
+      ],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (EXISTS ( SELECT 1\n   FROM expenses e\n  WHERE ((e.org_id = mileage_route_stops.org_id) AND (e.id = mileage_route_stops.expense_id)))))",
+          "check": null
+        },
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.mileage_route_stops FOR EACH ROW EXECUTE FUNCTION enforce_own_records('expense')"
+        }
+      ],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "mileage_routes",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "expense_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "round_trip",
+          "type": "boolean",
+          "nullable": false,
+          "default": "false"
+        },
+        {
+          "name": "status",
+          "type": "route_status",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "request_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "problem",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "provider",
+          "type": "route_provider",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "profile",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "measured_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "distance_metres",
+          "type": "integer",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "return_metres",
+          "type": "integer",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "measured_miles",
+          "type": "numeric(10,2)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "miles_reason",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "mileage_routes_log_fk",
+          "columns": [
+            "org_id",
+            "expense_id"
+          ],
+          "table": "mileage_logs",
+          "references": [
+            "org_id",
+            "expense_id"
+          ]
+        },
+        {
+          "name": "mileage_routes_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "mileage_routes_expense_key",
+          "columns": [
+            "org_id",
+            "expense_id"
+          ]
+        },
+        {
+          "name": "mileage_routes_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "mileage_routes_distance_nonnegative",
+          "definition": "CHECK (((distance_metres >= 0) AND (return_metres >= 0) AND (measured_miles >= (0)::numeric)))"
+        },
+        {
+          "name": "mileage_routes_measured_whole",
+          "definition": "CHECK (((status = 'measured'::route_status) = ((provider IS NOT NULL) AND (profile IS NOT NULL) AND (measured_at IS NOT NULL) AND (distance_metres IS NOT NULL) AND (measured_miles IS NOT NULL))))"
+        },
+        {
+          "name": "mileage_routes_problem_when_failed",
+          "definition": "CHECK (((status = 'failed'::route_status) = (problem IS NOT NULL)))"
+        },
+        {
+          "name": "mileage_routes_reason_length",
+          "definition": "CHECK (((miles_reason IS NULL) OR ((length(miles_reason) >= 1) AND (length(miles_reason) <= 500))))"
+        }
+      ],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (EXISTS ( SELECT 1\n   FROM expenses e\n  WHERE ((e.org_id = mileage_routes.org_id) AND (e.id = mileage_routes.expense_id)))))",
+          "check": null
+        },
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.mileage_routes FOR EACH ROW EXECUTE FUNCTION enforce_own_records('expense')"
+        }
+      ],
+      "grants": {
+        "expensewise_app": [
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
       "name": "ops.heartbeat",
       "rls": {
         "enabled": true,
@@ -2764,6 +3759,141 @@
         {
           "name": "org_features_flag_format",
           "definition": "CHECK ((flag ~ '^[a-z]+\\.[a-z-]+$'::text))"
+        }
+      ],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [],
+      "grants": {
+        "expensewise_app": [
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "org_mileage_rates",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "effective_from",
+          "type": "date",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "per_mile",
+          "type": "numeric(12,4)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "currency",
+          "type": "character(3)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "set_by_member_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "org_mileage_rates_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "org_mileage_rates_set_by_fk",
+          "columns": [
+            "org_id",
+            "set_by_member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "org_mileage_rates_org_day_key",
+          "columns": [
+            "org_id",
+            "effective_from"
+          ]
+        },
+        {
+          "name": "org_mileage_rates_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "org_mileage_rates_currency_iso",
+          "definition": "CHECK (((currency IS NULL) OR (currency ~ '^[A-Z]{3}$'::text)))"
+        },
+        {
+          "name": "org_mileage_rates_rate_and_currency",
+          "definition": "CHECK (((per_mile IS NULL) = (currency IS NULL)))"
+        },
+        {
+          "name": "org_mileage_rates_rate_positive",
+          "definition": "CHECK (((per_mile IS NULL) OR (per_mile > (0)::numeric)))"
         }
       ],
       "indexes": [],
@@ -3736,6 +4866,279 @@
       }
     },
     {
+      "name": "route_service_keys",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "provider",
+          "type": "route_provider",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "ciphertext",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "key_hint",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "verified_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "updated_by_member_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "route_service_keys_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "route_service_keys_updated_by_fk",
+          "columns": [
+            "org_id",
+            "updated_by_member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "route_service_keys_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "route_service_keys_org_provider_key",
+          "columns": [
+            "org_id",
+            "provider"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "route_service_keys_hint_short",
+          "definition": "CHECK ((length(key_hint) <= 4))"
+        }
+      ],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "saved_places",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "member_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "address",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "saved_places_member_fk",
+          "columns": [
+            "org_id",
+            "member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "saved_places_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "saved_places_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "saved_places_address_length",
+          "definition": "CHECK (((length(address) >= 1) AND (length(address) <= 200)))"
+        },
+        {
+          "name": "saved_places_name_length",
+          "definition": "CHECK (((length(name) >= 1) AND (length(name) <= 40)))"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "saved_places_member_name_key",
+          "definition": "CREATE UNIQUE INDEX saved_places_member_name_key ON public.saved_places USING btree (org_id, member_id, lower(name))"
+        }
+      ],
+      "policies": [
+        {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (member_id = app_current_member()))",
+          "check": null
+        },
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.saved_places FOR EACH ROW EXECUTE FUNCTION enforce_own_records('member')"
+        }
+      ],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
       "name": "trips",
       "rls": {
         "enabled": true,
@@ -3966,6 +5369,15 @@
       ]
     },
     {
+      "name": "exclusion_reason",
+      "values": [
+        "personal",
+        "paid_by_someone_else",
+        "not_reimbursable",
+        "other"
+      ]
+    },
+    {
       "name": "expense_source",
       "values": [
         "camera",
@@ -4001,6 +5413,15 @@
         "filed",
         "no_attachments",
         "unverified"
+      ]
+    },
+    {
+      "name": "line_kind",
+      "values": [
+        "item",
+        "tax",
+        "fee",
+        "tip"
       ]
     },
     {
@@ -4050,6 +5471,27 @@
         "in_approval",
         "approved",
         "settled"
+      ]
+    },
+    {
+      "name": "route_provider",
+      "values": [
+        "openrouteservice"
+      ]
+    },
+    {
+      "name": "route_status",
+      "values": [
+        "measuring",
+        "measured",
+        "failed"
+      ]
+    },
+    {
+      "name": "split_basis",
+      "values": [
+        "lines",
+        "amounts"
       ]
     },
     {
@@ -4161,6 +5603,22 @@
       "executableBy": [
         "expensewise_app"
       ]
+    },
+    {
+      "name": "delete_expense_conversion",
+      "arguments": "",
+      "returns": "trigger",
+      "security": "invoker",
+      "volatility": "volatile",
+      "executableBy": []
+    },
+    {
+      "name": "delete_expense_lines",
+      "arguments": "",
+      "returns": "trigger",
+      "security": "invoker",
+      "volatility": "volatile",
+      "executableBy": []
     },
     {
       "name": "delete_receipt",

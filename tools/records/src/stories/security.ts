@@ -974,7 +974,7 @@ export const SECURITY_STORIES: readonly Story[] = [
         given: 'a finance admin or an owner looking at another member’s record',
         when: 'they try to change it',
         then: 'it is refused: they can change only their own records, and nothing changes',
-        decided: ADR_0035,
+        decided: { by: 'owner', source: 'Q30' },
         checks: [
           "api/own-records.int › lets a finance admin open both members' records, and change neither",
           "db/own-records.int › lets a finance admin see both members' records, and change neither",
@@ -986,7 +986,7 @@ export const SECURITY_STORIES: readonly Story[] = [
         given: 'anyone, whatever their role',
         when: 'they open Receipts, Expenses or Trips',
         then: 'those list their own records, as Home, Needs you and Reports do',
-        decided: ADR_0035,
+        decided: { by: 'owner', source: 'Q30' },
         checks: [
           'api/expenses › searches by merchant, dates, amount in any currency, and trip (FR-INS-02)',
           'api/trips › searches by text and dates, and refuses a date that does not exist',
@@ -994,7 +994,7 @@ export const SECURITY_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Whether owners and finance admins should also change others’ records, or get a list of everyone’s, is Q30. Today an owner who opens a colleague’s record still sees its buttons, and the server refuses them.',
+    note: 'Your answer to Q30: owners and finance admins see everyone’s records and change only their own; a list of everyone’s waits until the first team approves reports. Today an owner who opens a colleague’s record still sees its buttons, and the server refuses them.',
   },
   {
     id: 'US-SEC-16',

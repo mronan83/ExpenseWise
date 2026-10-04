@@ -65,11 +65,25 @@ export const FLAGS = {
     description:
       'How the models compare shows the 95th-percentile time from capture to Ready (GAP-16, #32).',
   },
+  'receipts.journeys': {
+    name: 'Journeys and stays',
+    description:
+      'A ride, flight or train receipt reads where it went from and to, and a hotel folio its ' +
+      'check-in and check-out, with the nights worked out; each shows on the expense, which can ' +
+      'correct it (FR-INT-20, FR-INT-21, #79). A receipt read before gains them when read again.',
+  },
   'expenses.mileage': {
     name: 'Mileage',
     description:
       'Add a mileage expense: date, destination, purpose and miles, at the rate in force on the ' +
       'day (FR-CAP-03, #17).',
+  },
+  'expenses.route-mileage': {
+    name: 'Route mileage',
+    description:
+      'Add a drive by its start, stops and end, measured by OpenRouteService with your ' +
+      'organization’s own key in Settings › Mileage, with saved places and a reason for any ' +
+      'change to the measured miles (FR-CAP-04, #20).',
   },
   'reports.export': {
     name: 'Report export',
@@ -86,6 +100,18 @@ export const FLAGS = {
     description:
       'Settings › People: invite someone by link with a role, change their role or revoke it ' +
       '(FR-PLT-07, #29).',
+  },
+  'expenses.itemized': {
+    name: 'Itemized lines',
+    description:
+      'A receipt’s lines show under the expense’s total, each with its share of the tax, tip ' +
+      'and fees; leave a line out of the claim with a reason (FR-INT-22, FR-EXP-16, #80, #82).',
+  },
+  'expenses.split': {
+    name: 'Split an expense',
+    description:
+      'Split an expense into parts by category and type, by line or by amount, and total ' +
+      'reports by category and type. Needs categories and types on (FR-EXP-15, #81).',
   },
   // The operator's switch per AI model (FR-INT-16, US-READ-18). Unlike a feature, it acts
   // only when FLAG_OVERRIDES turns it off: then that model reads no organization's receipts,

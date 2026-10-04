@@ -1,7 +1,7 @@
 import { euroRate, newId } from '@expensewise/domain';
 import { asc, eq, sql } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
-import { withOrg } from '../src/client.ts';
+import { withMember, withOrg } from '../src/client.ts';
 import {
   CONVERSION_FLAG,
   CONVERSIONS_DUE,
@@ -452,7 +452,7 @@ describe('asking for conversions (ADR-0034)', () => {
     expect(events.map((e) => e.payload)).toEqual([{ flag: CONVERSION_FLAG, enabled: true }]);
   });
 
-  it('goes with its expense when the receipt that proves it is deleted', async () => {
+  it('goes with its expense when its member deletes the receipt that proves it', async () => {
     const w = await workspace('fx-delete');
     const id = await w.expense('2026-09-27', 'EUR', 41280);
     await runReportSchedule(app.db, w.org.orgId, JOINS);
@@ -472,7 +472,11 @@ describe('asking for conversions (ADR-0034)', () => {
         status: 'extracted',
       }),
     );
-    await w.inOrg((tx) => tx.execute(sql`select * from delete_receipt(${receiptId})`));
+    // As the API deletes it: as the member, under the own-records rules (ADR-0035).
+    const member = { orgId: w.org.orgId, memberId: w.org.memberId, role: 'owner' as const };
+    await withMember(app.db, member, (tx) =>
+      tx.execute(sql`select * from delete_receipt(${receiptId})`),
+    );
     expect(await w.conversion(id)).toBeUndefined();
     expect(await w.inOrg((tx) => tx.select().from(expenses).where(eq(expenses.id, id)))).toEqual(
       [],

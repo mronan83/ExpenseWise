@@ -550,3 +550,94 @@ describe('sniffMediaType', () => {
     expect(sniffMediaType(new TextEncoder().encode('<html>'))).toBeUndefined();
   });
 });
+
+describe('journeys and stays (FR-INT-20, FR-INT-21)', () => {
+  const flight = reading({
+    documentType: 'airline_ticket',
+    merchant: { name: 'United Airlines', confidence: 'high' },
+    journey: {
+      from: { value: 'SFO', confidence: 'high' },
+      to: { value: 'ORD', confidence: 'high' },
+    },
+    stay: null,
+  });
+
+  it('files a journey with its expense from a reading asked for it, and none from one not asked', async () => {
+    const asked = world({ 'claude-haiku-4-5': flight, 'claude-sonnet-5-5': flight });
+    await run(asked);
+    expect(asked.settled[0]).toMatchObject({
+      status: 'extracted',
+      values: {
+        merchant: 'United Airlines',
+        travel: { journeyFrom: 'SFO', journeyTo: 'ORD', checkIn: null, checkOut: null },
+      },
+    });
+    const before = world({});
+    await run(before);
+    expect(before.settled[0]?.values).not.toHaveProperty('travel');
+  });
+
+  it('asks for a look when a folio’s nights aren’t sure, and still files its dates as read', async () => {
+    const folio = reading({
+      documentType: 'hotel_folio',
+      merchant: { name: 'Hilton Omaha', confidence: 'high' },
+      journey: null,
+      stay: {
+        checkIn: { value: '2026-10-01', confidence: 'high' },
+        checkOut: { value: '2026-09-24', confidence: 'high' },
+      },
+    });
+    const w = world({ 'claude-haiku-4-5': folio, 'claude-sonnet-5-5': folio });
+    const { result } = await run(w);
+    expect(result).toEqual({ status: 'needs_review', differences: [] });
+    expect(w.runs.map((r) => r.outcome)).toEqual(['unsure', 'unsure']);
+    expect(w.settled[0]).toMatchObject({
+      values: { travel: { checkIn: '2026-10-01', checkOut: '2026-09-24' } },
+    });
+  });
+
+  it('stores a reading asked for them under the version asked, with them', () => {
+    const stored = toStoredRun(
+      RECEIPT,
+      REQUEST,
+      {
+        outcome: 'extracted',
+        extraction: flight,
+        model: 'claude-sonnet-5-5',
+        promptVersion: 'extract-v4+journeys-v1',
+        schemaVersion: 'receipt-v4+journeys-v1',
+        latencyMs: 1800,
+        usage: { inputTokens: 1500, outputTokens: 300, cacheReadTokens: 0, cacheWriteTokens: 0 },
+        costNanoUsd: 4_500_400n,
+      },
+      new Date('2026-09-24T18:00:00Z'),
+    );
+    expect(stored).toMatchObject({
+      promptVersion: 'extract-v4+journeys-v1',
+      schemaVersion: 'receipt-v4+journeys-v1',
+      outcome: 'confident',
+      output: { journey: { from: { value: 'SFO' } } },
+    });
+  });
+});
+
+describe('the lines a reading files its expense with (ADR-0041)', () => {
+  it('hands on the itemized lines of the reading the expense is filed with, and none when it prints none', async () => {
+    const itemized = reading({
+      subtotal: { value: '6.00', confidence: 'high' },
+      taxes: [{ label: 'Sales tax', value: '0.50', confidence: 'high' }],
+      lineItems: [
+        { description: 'Latte', quantity: '1', amount: '4.50' },
+        { description: 'Croissant', quantity: null, amount: '1.50' },
+      ],
+    });
+    const w = world({ 'claude-haiku-4-5': itemized, 'claude-sonnet-5-5': itemized });
+    await run(w);
+    const { lines } = w.settled[0] as { lines?: { lines: { description: string }[] } | null };
+    expect(lines?.lines.map((l) => l.description)).toEqual(['Latte', 'Croissant', 'Sales tax']);
+
+    const plain = world({});
+    await run(plain);
+    expect((plain.settled[0] as { lines?: unknown }).lines).toBeNull();
+  });
+});

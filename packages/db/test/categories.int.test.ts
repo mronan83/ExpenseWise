@@ -14,8 +14,16 @@ import {
   type CatalogRecord,
 } from '../src/categories.ts';
 import { withOrg } from '../src/client.ts';
+import { listUncodedExpenses } from '../src/expenses.ts';
 import { ensureOwnerOrganization } from '../src/members.ts';
-import { auditEvents, expenses, reports } from '../src/schema.ts';
+import {
+  auditEvents,
+  expenses,
+  members,
+  receiptDuplicates,
+  receipts,
+  reports,
+} from '../src/schema.ts';
 import { linkSignIn } from '../src/sign-ins.ts';
 import { connectAs, expectDbError, seedOrg } from './helpers.ts';
 
@@ -419,5 +427,71 @@ describe('a category and type on each expense (FR-EXP-11, FR-INT-10)', () => {
     expect(await org.inOrg((tx) => expenseClassifications(tx, []))).toEqual([]);
     // Another organization's choices are its own.
     expect(await other.inOrg((tx) => memberChoices(tx, [org.memberId]))).toEqual([]);
+  });
+});
+
+describe('expenses without a category and type, for Needs you (FR-EXP-11, Q27)', () => {
+  it('lists a member’s own Ready ones, oldest first, but not one submitted or held as a duplicate', async () => {
+    const org = await freshOrg('uncoded');
+    const { category, type } = named(await org.inOrg((tx) => listCatalog(tx)));
+    const later = await addExpense(org, 'Uber', { transactionDate: '2026-09-26' });
+    const earlier = await addExpense(org, 'Zuni Café', { transactionDate: '2026-09-20' });
+    const coded = await addExpense(org, 'Hotel Lindley');
+    await org.inOrg((tx) =>
+      classifyExpense(
+        tx,
+        org.orgId,
+        coded,
+        { categoryId: category('Travel').id, typeId: type('Lodging').id },
+        org.userId,
+      ),
+    );
+    await addExpense(org, 'Delta', { status: 'submitted' });
+    await addExpense(org, 'Being read', { status: 'processing', amountMinor: null });
+    // A copy of the Uber receipt, held as a possible duplicate until the person decides.
+    const copy = await addExpense(org, 'Uber', { transactionDate: '2026-09-26' });
+    await org.inOrg(async (tx) => {
+      const receipt = (expenseId: string, sha: string) => ({
+        id: newId(),
+        orgId: org.orgId,
+        memberId: org.memberId,
+        expenseId,
+        source: 'camera' as const,
+        storageKey: `k/${sha}`,
+        contentType: 'image/jpeg',
+        byteSize: 10,
+        sha256: sha.repeat(64),
+        status: 'extracted' as const,
+      });
+      const first = receipt(later, 'a');
+      const second = receipt(copy, 'b');
+      await tx.insert(receipts).values([first, second]);
+      await tx.insert(receiptDuplicates).values({
+        orgId: org.orgId,
+        receiptId: second.id,
+        otherReceiptId: first.id,
+        settledStatus: 'extracted',
+      });
+    });
+    // A colleague's expense, which an owner may see but which isn't theirs to code.
+    const jordan = newId();
+    await org.inOrg((tx) =>
+      tx.insert(members).values({
+        id: jordan,
+        orgId: org.orgId,
+        userId: `user_${jordan}`,
+        email: `${jordan}@example.com`,
+        displayName: 'Jordan',
+        role: 'member',
+      }),
+    );
+    await addExpense(org, 'Jordan’s lunch', { memberId: jordan });
+
+    const listed = await org.inOrg((tx) => listUncodedExpenses(tx, org.memberId, 10));
+    expect(listed.map((e) => e.merchant)).toEqual(['Zuni Café', 'Uber']);
+    expect(listed.map((e) => e.id)).toEqual([earlier, later]);
+    expect(await org.inOrg((tx) => listUncodedExpenses(tx, org.memberId, 1))).toHaveLength(1);
+    const theirs = await org.inOrg((tx) => listUncodedExpenses(tx, jordan, 10));
+    expect(theirs.map((e) => e.merchant)).toEqual(['Jordan’s lunch']);
   });
 });

@@ -205,6 +205,13 @@ async function layOut(heading: ReportPdfHeading, table: ReportExportTable): Prom
     y -= 3;
     for (const cells of table.totalRows) row(cells, bold);
   }
+  // Notes after the totals, such as where a measured route came from (ADR-0039).
+  for (const note of table.notes ?? []) {
+    if (y - 2 * LEADING < PAGE.margin) newPage();
+    y -= 6;
+    write(printable(note, regular), PAGE.margin, 7.5, regular);
+    y -= LEADING;
+  }
   return { pdf, pages, font: regular, printable };
 }
 

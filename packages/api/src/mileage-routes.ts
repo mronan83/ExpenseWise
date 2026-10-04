@@ -4,6 +4,7 @@ import type { OpenAPIHono } from '@hono/zod-openapi';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
 import { featureGate, type FeatureGate } from './features.ts';
 import type { MileageStore } from './mileage.ts';
+import type { MileageRateStore } from './mileage-rates.ts';
 import { mileageEntry, mileageQuote } from './mileage-views.ts';
 import { ProblemError } from './problem.ts';
 import {
@@ -18,6 +19,8 @@ export interface MileageRouteOptions {
   readonly verifyToken?: TokenVerifier;
   readonly workspace?: WorkspaceStore;
   readonly mileage?: MileageStore;
+  /** The organization's rate a mile, to quote a drive at (Q28). Without it, the IRS rate. */
+  readonly mileageRates?: MileageRateStore;
   /** Which features are on. Built from `workspace` and the overrides when not given. */
   readonly features?: FeatureGate;
   readonly flagOverrides?: string;
@@ -80,9 +83,11 @@ export function registerMileageRoutes(
   };
 
   app.openapi(quoteMileageRoute, async (c) => {
-    await member(c.var.identity.userId);
+    const who = await member(c.var.identity.userId);
     const { date, miles } = c.req.valid('query');
-    const quote = quoteMileage({ date, miles }, today());
+    // At the organization's own rate where it has one, as logging the drive will be (Q28).
+    const rates = await options.mileageRates?.policy(who.orgId);
+    const quote = quoteMileage({ date, miles }, today(), rates);
     if (!quote.ok) throw invalid(quote.error);
     return c.json(mileageQuote(date.trim(), quote.value), 200);
   });
@@ -124,6 +129,12 @@ export function registerMileageRoutes(
       throw new ProblemError(409, 'not-editable', 'This drive can’t be changed now', {
         code: 'locked',
         detail: 'It is submitted or approved. An approved drive is corrected by a reversal.',
+      });
+    }
+    if (result.status === 'route') {
+      throw new ProblemError(409, 'route-drive', 'This drive is changed by its route', {
+        code: 'route',
+        detail: 'Change its stops, or claim other miles with a reason (ADR-0039).',
       });
     }
     return c.json(await shown(who, expenseId), 200);

@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, ApiProblem } from '../../../lib/api';
-import { EXPENSE_STATUS, type ExpenseSummary } from '../../../lib/expenses';
+import { statusOf, type ExpenseSummary } from '../../../lib/expenses';
 import { formText } from '../../../lib/form';
 import { formatMoney } from '../../../lib/receipts';
 import { supabase } from '../../../lib/supabase';
@@ -185,7 +185,7 @@ function Timeline({ trip }: { trip: TripDetail }) {
 }
 
 function Flags({ expense }: { expense: ExpenseSummary }) {
-  const status = EXPENSE_STATUS[expense.status];
+  const status = statusOf(expense);
   return (
     <span className="text-xs text-ink-2">
       <span className={status.tone}>{status.label}</span>

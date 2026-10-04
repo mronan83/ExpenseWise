@@ -1,12 +1,22 @@
-import type { ExportExpense, ReportStatus } from '@expensewise/domain';
+import {
+  lineClaims,
+  plainMiles,
+  type ExportExclusion,
+  type ExportExpense,
+  type ExportPart,
+  type ReportStatus,
+} from '@expensewise/domain';
 import { and, eq, not, or, sql } from 'drizzle-orm';
 import type { Transaction } from './client.ts';
 import { heldAsDuplicate } from './duplicates.ts';
+import { itemizationsOf, partsOf } from './itemized.ts';
 import {
   categories,
   expenses,
   expenseTypes,
   members,
+  mileageLogs,
+  mileageRoutes,
   organizations,
   reports,
   trips,
@@ -58,6 +68,7 @@ export async function reportForExport(
   if (!report) return undefined;
   const rows = await tx
     .select({
+      id: expenses.id,
       date: expenses.transactionDate,
       merchant: expenses.merchant,
       category: categories.name,
@@ -68,6 +79,10 @@ export async function reportForExport(
       note: expenses.notes,
       amountMinor: expenses.amountMinor,
       currency: expenses.currency,
+      method: mileageLogs.method,
+      claimedMiles: mileageLogs.distance,
+      measuredMiles: mileageRoutes.measuredMiles,
+      milesReason: mileageRoutes.milesReason,
     })
     .from(expenses)
     .leftJoin(trips, and(eq(trips.orgId, expenses.orgId), eq(trips.id, expenses.tripId)))
@@ -79,6 +94,14 @@ export async function reportForExport(
       expenseTypes,
       and(eq(expenseTypes.orgId, expenses.orgId), eq(expenseTypes.id, expenses.typeId)),
     )
+    .leftJoin(
+      mileageLogs,
+      and(eq(mileageLogs.orgId, expenses.orgId), eq(mileageLogs.expenseId, expenses.id)),
+    )
+    .leftJoin(
+      mileageRoutes,
+      and(eq(mileageRoutes.orgId, expenses.orgId), eq(mileageRoutes.expenseId, expenses.id)),
+    )
     .where(
       and(
         or(eq(expenses.reportId, reportId), eq(trips.reportId, reportId)),
@@ -86,18 +109,64 @@ export async function reportForExport(
       ),
     )
     .orderBy(sql`${expenses.transactionDate} asc nulls last`, expenses.createdAt, expenses.id);
+  const ids = rows.map((r) => r.id);
+  const parts = await partsOf(tx, ids);
+  const lines = await itemizationsOf(tx, ids);
   return {
     report,
-    expenses: rows.map((r) => ({
-      date: r.date,
-      merchant: r.merchant,
-      category: r.category,
-      type: r.type,
-      trip: r.trip,
-      purpose: r.trip === null ? r.justification : r.tripPurpose,
-      note: r.note,
-      amountMinor: r.amountMinor,
-      currency: r.currency,
-    })),
+    expenses: rows.map((r) => {
+      const split: ExportPart[] = parts
+        .filter((p) => p.expenseId === r.id)
+        .map((p) => ({
+          // A part of the lines left with the expense's own is under its category and type.
+          category: p.categoryId === null ? r.category : p.category,
+          type: p.typeId === null ? r.type : p.type,
+          amountMinor: p.amountMinor,
+        }));
+      const excluded = excludedLines(lines.find((l) => l.expenseId === r.id));
+      return {
+        date: r.date,
+        merchant: r.merchant,
+        category: r.category,
+        type: r.type,
+        trip: r.trip,
+        purpose: r.trip === null ? r.justification : r.tripPurpose,
+        note: r.note,
+        amountMinor: r.amountMinor,
+        currency: r.currency,
+        // A drive's miles: measured on its route, if it was, and claimed, with why they differ.
+        ...(r.method === null || r.claimedMiles === null
+          ? {}
+          : {
+              miles: {
+                measured: r.measuredMiles === null ? null : plainMiles(r.measuredMiles),
+                claimed: plainMiles(r.claimedMiles),
+                reason: r.milesReason,
+              },
+            }),
+        ...(split.length > 0 ? { parts: split } : {}),
+        ...(excluded.length > 0 ? { excluded } : {}),
+      };
+    }),
   };
+}
+
+/** An expense's excluded lines, each with what it and its share of tax, tip and fees took off. */
+function excludedLines(lines: Awaited<ReturnType<typeof itemizationsOf>>[number] | undefined) {
+  if (!lines) return [];
+  const claims = lineClaims(lines) ?? [];
+  return lines.lines.flatMap((l): ExportExclusion[] =>
+    l.excluded
+      ? [
+          {
+            line: l.description,
+            amountMinor:
+              claims.find((c) => c.position === l.position)?.claimed.amountMinor ??
+              l.amount.amountMinor,
+            reason: l.excluded.reason,
+            note: l.excluded.note,
+          },
+        ]
+      : [],
+  );
 }

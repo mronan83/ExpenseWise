@@ -3,6 +3,7 @@ import {
   type DetailsEditProblem,
   type ExpenseEdit,
   type ExpenseEditProblem,
+  type TravelEditProblem,
 } from '@expensewise/domain';
 import { desc, eq } from 'drizzle-orm';
 import { appendAuditEvent, lockOrgWrites } from './audit.ts';
@@ -29,7 +30,10 @@ export type CorrectReceiptResult =
   /** Its expense is submitted or further along: locked (FR-EXP-03). */
   | { readonly status: 'locked' }
   /** The expense can't take the value, such as an amount its currency can't hold. */
-  | { readonly status: 'invalid'; readonly problem: ExpenseEditProblem | DetailsEditProblem };
+  | {
+      readonly status: 'invalid';
+      readonly problem: ExpenseEditProblem | DetailsEditProblem | TravelEditProblem;
+    };
 
 /**
  * Corrects fields of a Ready receipt (GAP-14): a new review row with every value it is now

@@ -25,7 +25,11 @@ import { registerOrganizationRoutes } from './organization-routes.ts';
 import type { ModelSettingsStore } from './model-settings.ts';
 import { registerModelSettingsRoutes } from './model-settings-routes.ts';
 import type { ExpenseStore } from './expenses.ts';
+import type { ItemizedStore } from './itemized.ts';
+import { registerItemizedRoutes } from './itemized-routes.ts';
 import type { MileageStore } from './mileage.ts';
+import type { MileageRateStore } from './mileage-rates.ts';
+import { registerMileageRateRoutes } from './mileage-rate-routes.ts';
 import { registerMileageRoutes } from './mileage-routes.ts';
 import type { PeopleStore } from './people.ts';
 import { registerPeopleRoutes } from './people-routes.ts';
@@ -35,6 +39,8 @@ import { registerReimbursementRoutes } from './reimbursement-routes.ts';
 import type { ReimbursementStore } from './reimbursement.ts';
 import { registerReportRoutes } from './report-routes.ts';
 import type { ReportStore } from './reports.ts';
+import type { RouteKeyStore, RouteKeyVerifier, RouteMileageStore } from './route-mileage.ts';
+import { registerRouteMileageRoutes } from './route-mileage-routes.ts';
 import { registerTripRoutes } from './trip-routes.ts';
 import type { TripStore } from './trips.ts';
 import { registerWorkspaceRoutes } from './workspace-routes.ts';
@@ -62,6 +68,17 @@ export interface ApiOptions
   readonly trips?: TripStore;
   /** Drives logged by hand (FR-CAP-03). Without it, those routes answer 503. */
   readonly mileage?: MileageStore;
+  /**
+   * The organization's rate a mile (Q28). Without it, its routes answer 503 and a quote is at
+   * the IRS rate; logging a drive reads the rate itself.
+   */
+  readonly mileageRates?: MileageRateStore;
+  /** Drives logged by their stops, and saved places (FR-CAP-04). Without it, those answer 503. */
+  readonly routeMileage?: RouteMileageStore;
+  /** The organization's OpenRouteService key (Q31). Without it, Settings › Mileage answers 503. */
+  readonly routeKeys?: RouteKeyStore;
+  /** Checks an OpenRouteService key with one short route as it is saved (ADR-0039). */
+  readonly verifyRouteKey?: RouteKeyVerifier;
   /** What Home shows, read at once. Without it, Home answers 503. */
   readonly home?: HomeStore;
   /** Expense reports. Without it, those routes answer 503 and Needs you shows no reports. */
@@ -70,6 +87,8 @@ export interface ApiOptions
   readonly audit?: AuditStore;
   /** Categories and types (FR-EXP-11). Without it, those routes answer 503 and expenses show none. */
   readonly categories?: CategoryStore;
+  /** Receipts' itemized lines and expenses' splits. Without it, those routes answer 503. */
+  readonly itemized?: ItemizedStore;
   /** Which AI models read receipts (FR-INT-16). Without it, Settings › AI models answers 503. */
   readonly modelSettings?: ModelSettingsStore;
   /** The currency each person is reimbursed in. Without it, those routes answer 503. */
@@ -203,6 +222,8 @@ export function createApi(options: ApiOptions) {
   registerExpenseRoutes(app, routes);
   registerTripRoutes(app, routes);
   registerMileageRoutes(app, routes);
+  registerMileageRateRoutes(app, routes);
+  registerRouteMileageRoutes(app, routes);
   registerHomeRoutes(app, routes);
   registerReportRoutes(app, routes);
   registerReportExportRoutes(app, routes);
@@ -210,6 +231,7 @@ export function createApi(options: ApiOptions) {
   registerInboundRoutes(app, routes);
   registerAuditRoutes(app, routes);
   registerCategoryRoutes(app, routes);
+  registerItemizedRoutes(app, routes);
   registerModelSettingsRoutes(app, routes);
   registerPeopleRoutes(app, routes);
 

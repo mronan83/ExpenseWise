@@ -6,6 +6,8 @@ import type { CategoryStore } from './categories.ts';
 import { catalogView, categoryView, detailWithCategory, typeView } from './category-views.ts';
 import type { ExpenseStore } from './expenses.ts';
 import { featureGate, type FeatureGate } from './features.ts';
+import type { ItemizedStore } from './itemized.ts';
+import { itemizedSections } from './itemized-routes.ts';
 import { ProblemError } from './problem.ts';
 import {
   classifyExpenseRoute,
@@ -25,6 +27,8 @@ export interface CategoryRouteOptions {
   readonly expenses?: ExpenseStore;
   /** Categories and types. Without it, these routes answer 503. */
   readonly categories?: CategoryStore;
+  /** Lines and splits, shown on the expense a choice answers with while they are on. */
+  readonly itemized?: ItemizedStore;
   /** Which features are on. Built from `workspace` when not given. */
   readonly features?: FeatureGate;
 }
@@ -239,6 +243,12 @@ export function registerCategoryRoutes(
     }
     const found = await options.expenses.get(who.orgId, expenseId);
     if (!found) throw notFound('expense');
-    return c.json(await detailWithCategory(store(), who.orgId, found), 200);
+    return c.json(
+      {
+        ...(await detailWithCategory(store(), who.orgId, found)),
+        ...(await itemizedSections(options.itemized, features)(who.orgId, found)),
+      },
+      200,
+    );
   });
 }
