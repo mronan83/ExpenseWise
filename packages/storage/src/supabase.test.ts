@@ -121,6 +121,15 @@ describe('supabaseStorage', () => {
     });
   });
 
+  it('removes an object by its path', async () => {
+    const { fetch, seen } = fakeFetch(() => json([{ name: path }]));
+    await store(fetch).remove(path);
+    const removed = seen.at(-1)!;
+    expect(removed.method).toBe('DELETE');
+    expect(removed.url).toBe('https://proj.supabase.co/storage/v1/object/receipts');
+    expect(removed.body).toEqual({ prefixes: [path] });
+  });
+
   it('fails loudly on anything else', async () => {
     const { fetch } = fakeFetch(() => json({ error: 'Unauthorized', message: 'Invalid key' }, 403));
     await expect(store(fetch).download(path)).rejects.toBeInstanceOf(StorageError);

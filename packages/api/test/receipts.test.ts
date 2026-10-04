@@ -1,5 +1,7 @@
 import type {
   CommittedEvent,
+  DuplicatePairRecord,
+  DuplicateSide,
   ExtractionRunRecord,
   Membership,
   NewReceipt,
@@ -11,7 +13,7 @@ import { memoryObjectStore } from '@expensewise/storage';
 import { describe, expect, it } from 'vitest';
 import { createApi } from '../src/app.ts';
 import type { Identity } from '../src/auth.ts';
-import type { ReceiptStore } from '../src/receipts.ts';
+import type { DuplicateDecision, ReceiptStore } from '../src/receipts.ts';
 import type { WorkspaceStore } from '../src/workspace.ts';
 
 const ORG = '0192f7a0-0000-7000-8000-0000000000a1';
@@ -46,7 +48,53 @@ function fakeReceipts() {
   const runs: ExtractionRunRecord[] = [];
   const reviews: ReceiptReviewRecord[] = [];
   const events: CommittedEvent[] = [];
+  /** Open pairs, as the held receipt sees them: receiptId is the later copy. */
+  const pairs: { held: string; of: string }[] = [];
+  /** Receipts whose expense is submitted or further along. */
+  const locked = new Set<string>();
+  const decisions: { receiptId: string; otherReceiptId: string; decision: DuplicateDecision }[] =
+    [];
   let n = 0;
+  const side = (id: string): DuplicateSide => ({
+    receiptId: id,
+    source: 'email',
+    contentType: 'application/pdf',
+    createdAt: NOW,
+    expenseId: `expense-${id}`,
+    expenseStatus: 'needs_review',
+    merchant: 'Uber',
+    transactionDate: '2026-10-02',
+    currency: 'USD',
+    amountMinor: 3142,
+    notes: null,
+    tripId: null,
+    tripName: null,
+  });
+  const pairsOf = (ids: readonly string[]): DuplicatePairRecord[] =>
+    pairs.flatMap(({ held, of }) => [
+      ...(ids.includes(held)
+        ? [
+            {
+              receiptId: held,
+              otherReceiptId: of,
+              heldReceiptId: held,
+              self: side(held),
+              other: side(of),
+            },
+          ]
+        : []),
+      ...(ids.includes(of)
+        ? [
+            {
+              receiptId: of,
+              otherReceiptId: held,
+              heldReceiptId: held,
+              self: side(of),
+              other: side(held),
+            },
+          ]
+        : []),
+    ]);
   const store: ReceiptStore = {
     findBySha256: (_org, sha) => Promise.resolve(receipts.find((r) => r.sha256 === sha)?.id),
     file: (orgId, input: NewReceipt) => {
@@ -71,19 +119,24 @@ function fakeReceipts() {
       events.push(event);
       return Promise.resolve({ status: 'filed', receipt, event });
     },
-    list: (_org, _limit, filter = {}) =>
-      Promise.resolve({
-        receipts: receipts.filter(
-          (r) =>
-            (!filter.statuses || filter.statuses.includes(r.status)) &&
-            (!filter.memberId || r.memberId === filter.memberId),
-        ),
+    list: (_org, _limit, filter = {}) => {
+      const shown = receipts.filter(
+        (r) =>
+          (!filter.statuses || filter.statuses.includes(r.status)) &&
+          (!filter.memberId || r.memberId === filter.memberId),
+      );
+      return Promise.resolve({
+        receipts: shown,
         runs,
         reviews,
-      }),
+        pairs: pairsOf(shown.map((r) => r.id)),
+      });
+    },
     get: (_org, id) => {
       const receipt = receipts.find((r) => r.id === id);
-      return Promise.resolve(receipt ? { receipt, runs, reviews } : undefined);
+      return Promise.resolve(
+        receipt ? { receipt, runs, reviews, pairs: pairsOf([id]) } : undefined,
+      );
     },
     confirm: (_org, id, review) => {
       const i = receipts.findIndex((r) => r.id === id);
@@ -95,6 +148,7 @@ function fakeReceipts() {
         .filter((r) => r.receiptId === id)
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
       if ((latest?.requestId ?? null) !== review.requestId) return Promise.resolve('stale');
+      if (pairs.some((p) => p.held === id)) return Promise.resolve('duplicate');
       const { memberId: _member, ...values } = review;
       reviews.unshift({
         ...values,
@@ -118,6 +172,36 @@ function fakeReceipts() {
       };
       events.push(event);
       return Promise.resolve(event);
+    },
+    resolveDuplicate: (_org, receiptId, otherReceiptId, decision) => {
+      decisions.push({ receiptId, otherReceiptId, decision });
+      const at = pairs.findIndex(
+        (p) =>
+          (p.held === receiptId && p.of === otherReceiptId) ||
+          (p.held === otherReceiptId && p.of === receiptId),
+      );
+      if (at === -1) return Promise.resolve({ status: 'not_a_pair' as const });
+      const pair = pairs[at]!;
+      if (decision.action === 'keep_both') {
+        pairs.splice(at, 1);
+        const held = receipts.findIndex((r) => r.id === pair.held);
+        receipts[held] = { ...receipts[held]!, status: 'extracted' };
+        return Promise.resolve({ status: 'kept_both' as const });
+      }
+      const kept = decision.action === 'delete' ? decision.keep : decision.primary;
+      const doomed = kept === receiptId ? otherReceiptId : receiptId;
+      if (locked.has(doomed) || (decision.action === 'merge' && locked.has(kept))) {
+        return Promise.resolve({ status: 'locked' as const });
+      }
+      pairs.splice(at, 1);
+      const gone = receipts.findIndex((r) => r.id === doomed);
+      const { storageKey } = receipts[gone]!;
+      receipts.splice(gone, 1);
+      return Promise.resolve(
+        decision.action === 'delete'
+          ? { status: 'deleted' as const, kept, storageKey }
+          : { status: 'merged' as const, kept, storageKey, taken: [...decision.fields] },
+      );
     },
   };
   /** Stands in for the workflow: both models read the receipt, then it is settled. */
@@ -182,7 +266,7 @@ function fakeReceipts() {
     const at = receipts.findIndex((r) => r.id === id);
     receipts[at] = { ...receipts[at]!, status: 'needs_review' };
   };
-  return { store, receipts, runs, reviews, events, read, readByFallback };
+  return { store, receipts, runs, reviews, events, pairs, locked, decisions, read, readByFallback };
 }
 
 function setup(opts: { files?: boolean; dispatch?: 'ok' | 'fails' | 'none' } = {}) {
@@ -724,7 +808,14 @@ describe('the Needs you inbox', () => {
     }
     const { body } = await s.call('GET', '/v1/inbox', 'riley');
     expect((body.items as { reason: unknown }[]).map((i) => i.reason)).toEqual([
-      { code: 'checks', fields: [], checks: ['future_date'], error: null, by: null },
+      {
+        code: 'checks',
+        fields: [],
+        checks: ['future_date'],
+        error: null,
+        by: null,
+        duplicateOf: null,
+      },
     ]);
   });
 
@@ -733,5 +824,164 @@ describe('the Needs you inbox', () => {
     expect((await s.call('GET', '/v1/inbox', 'riley')).body).toEqual({ items: [] });
     expect((await s.call('GET', '/v1/inbox')).status).toBe(401);
     expect((await s.call('GET', '/v1/inbox', 'mallory')).status).toBe(403);
+  });
+});
+
+describe('possible duplicates (FR-INT-18)', () => {
+  /** Two forwards of one receipt, both read alike; the later is held as a possible copy. */
+  const twoForwards = async () => {
+    const s = setup();
+    const ids: string[] = [];
+    for (const sha256 of ['1'.repeat(64), '2'.repeat(64)]) {
+      const file = { ...s.file, sha256 };
+      const { body: ticket } = await s.call('POST', '/v1/receipts/uploads', 'riley', file);
+      await s.call('POST', '/v1/receipts', 'riley', {
+        id: ticket.receiptId,
+        source: 'upload',
+        ...file,
+      });
+      const id = ticket.receiptId as string;
+      s.files.put(`orgs/${ORG}/receipts/${id}`, new Uint8Array([1]));
+      ids.push(id);
+    }
+    const [first, copy] = ids as [string, string];
+    s.read(first, ['6.50', '6.50'], 'extracted');
+    s.read(copy, ['6.50', '6.50'], 'needs_review');
+    s.pairs.push({ held: copy, of: first });
+    return { ...s, first, copy };
+  };
+
+  it('puts the later copy in Needs you, naming the receipt it looks like', async () => {
+    const s = await twoForwards();
+    const { body } = await s.call('GET', '/v1/inbox', 'riley');
+    const items = body.items as { receipt: { id: string }; reason: unknown }[];
+    expect(items.map((i) => i.receipt.id)).toEqual([s.copy]);
+    expect(items[0]!.reason).toEqual({
+      code: 'duplicate',
+      fields: [],
+      checks: [],
+      error: null,
+      by: null,
+      duplicateOf: {
+        receiptId: s.first,
+        merchant: 'Uber',
+        date: '2026-10-02',
+        amount: { amountMinor: 3142, currency: 'USD', decimal: '31.42' },
+        createdAt: NOW.toISOString(),
+      },
+    });
+  });
+
+  it('shows the pair on both receipts, and refuses Looks right while the copy is held', async () => {
+    const s = await twoForwards();
+    const held = await s.call('GET', `/v1/receipts/${s.copy}`, 'riley');
+    expect(held.body.duplicates).toHaveLength(1);
+    expect(held.body.duplicates).toMatchObject([
+      {
+        held: true,
+        self: { receiptId: s.copy, merchant: 'Uber', trip: null },
+        other: {
+          receiptId: s.first,
+          amount: { amountMinor: 3142, currency: 'USD', decimal: '31.42' },
+        },
+      },
+    ]);
+    const original = await s.call('GET', `/v1/receipts/${s.first}`, 'riley');
+    expect(original.body.duplicates).toMatchObject([
+      { held: false, self: { receiptId: s.first }, other: { receiptId: s.copy } },
+    ]);
+
+    const confirm = await s.call('POST', `/v1/receipts/${s.copy}/confirm`, 'riley', {
+      model: 'claude-sonnet-5-5',
+    });
+    expect(confirm.status).toBe(409);
+    expect(confirm.body.code).toBe('possible_duplicate');
+    expect(s.reviews).toHaveLength(0);
+  });
+
+  it('keeps both: nothing is deleted', async () => {
+    const s = await twoForwards();
+    const res = await s.call('POST', `/v1/receipts/${s.copy}/duplicates/${s.first}`, 'riley', {
+      action: 'keep_both',
+    });
+    expect(res).toEqual({
+      status: 200,
+      body: { outcome: 'kept_both', kept: s.copy, deleted: null, taken: [] },
+    });
+    expect(s.files.objects.size).toBe(2);
+  });
+
+  it('deletes the one not kept, then its file', async () => {
+    const s = await twoForwards();
+    const res = await s.call('POST', `/v1/receipts/${s.copy}/duplicates/${s.first}`, 'riley', {
+      action: 'delete',
+      keep: s.first,
+    });
+    expect(res).toEqual({
+      status: 200,
+      body: { outcome: 'deleted', kept: s.first, deleted: s.copy, taken: [] },
+    });
+    expect(s.receipts.map((r) => r.id)).toEqual([s.first]);
+    expect([...s.files.objects.keys()]).toEqual([`orgs/${ORG}/receipts/${s.first}`]);
+  });
+
+  it('merges into the primary chosen, from either receipt’s page', async () => {
+    const s = await twoForwards();
+    const res = await s.call('POST', `/v1/receipts/${s.first}/duplicates/${s.copy}`, 'riley', {
+      action: 'merge',
+      primary: s.copy,
+      fields: ['notes', 'trip'],
+    });
+    expect(res.body).toEqual({
+      outcome: 'merged',
+      kept: s.copy,
+      deleted: s.first,
+      taken: ['notes', 'trip'],
+    });
+    expect(s.decisions.at(-1)?.decision).toEqual({
+      action: 'merge',
+      primary: s.copy,
+      fields: ['notes', 'trip'],
+    });
+    expect([...s.files.objects.keys()]).toEqual([`orgs/${ORG}/receipts/${s.copy}`]);
+  });
+
+  it('refuses a receipt outside the pair, a pair already decided, and a locked expense', async () => {
+    const s = await twoForwards();
+    const path = `/v1/receipts/${s.copy}/duplicates/${s.first}`;
+    const outside = await s.call('POST', path, 'riley', { action: 'delete', keep: MEMBER });
+    expect([outside.status, outside.body.code]).toEqual([422, 'not_in_pair']);
+    expect(s.decisions).toHaveLength(0);
+
+    const badField = await s.call('POST', path, 'riley', {
+      action: 'merge',
+      primary: s.first,
+      fields: ['category'],
+    });
+    expect(badField.status).toBe(400);
+
+    s.locked.add(s.copy);
+    const locked = await s.call('POST', path, 'riley', { action: 'delete', keep: s.first });
+    expect([locked.status, locked.body.code]).toEqual([409, 'locked']);
+    expect(s.files.objects.size).toBe(2);
+
+    await s.call('POST', path, 'riley', { action: 'keep_both' });
+    const again = await s.call('POST', path, 'riley', { action: 'keep_both' });
+    expect([again.status, again.body.code]).toEqual([404, 'not_a_pair']);
+  });
+
+  it('still deletes when the file can’t be removed, and needs a signed-in member', async () => {
+    const s = await twoForwards();
+    s.files.remove = () => Promise.reject(new Error('storage down'));
+    const res = await s.call('POST', `/v1/receipts/${s.copy}/duplicates/${s.first}`, 'riley', {
+      action: 'delete',
+      keep: s.first,
+    });
+    expect(res.status).toBe(200);
+    expect(s.receipts.map((r) => r.id)).toEqual([s.first]);
+
+    const path = `/v1/receipts/${s.first}/duplicates/${s.copy}`;
+    expect((await s.call('POST', path, undefined, { action: 'keep_both' })).status).toBe(401);
+    expect((await s.call('POST', path, 'mallory', { action: 'keep_both' })).status).toBe(403);
   });
 });

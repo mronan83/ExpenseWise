@@ -110,21 +110,21 @@ export const COMPONENTS: readonly Component[] = [
     name: 'API',
     technology: 'Hono with zod-openapi; jose for tokens',
     responsibility:
-      'Verifies the sign-in token, finds the caller’s membership, and serves every operation, including Home, read in one transaction: the Needs you inbox, which says why each item needs the person, then their trip, month and recent trips. Takes Bird’s signed email webhook, checked against the exact bytes before anything parses them. Generates the OpenAPI contract and answers errors as problem documents.',
+      'Verifies the sign-in token, finds the caller’s membership, and serves every operation, including Home, read in one transaction: the Needs you inbox, which says why each item needs the person, then their trip, month and recent trips. Takes Bird’s signed email webhook, checked against the exact bytes before anything parses them. Settles possible duplicates as the person decides, removing a deleted receipt’s file only after the deletion commits. Generates the OpenAPI contract and answers errors as problem documents.',
     where: ['packages/api'],
   },
   {
     name: 'Domain',
     technology: 'TypeScript, no I/O',
     responsibility:
-      'The rules: money, dates, lifecycles, editing an expense, filing to trips, approvals. Tested to 90% coverage or more.',
+      'The rules: money, dates, lifecycles, editing an expense, filing to trips, when two receipts look like the same purchase and how two expenses merge, approvals. Tested to 90% coverage or more.',
     where: ['packages/domain'],
   },
   {
     name: 'Data access',
     technology: 'Drizzle ORM on node-postgres',
     responsibility:
-      'The schema and migrations, `withOrg()` and every query and write, each with its audit event. Runs migrations and the data steps on release, one of which takes back anything Supabase’s Data API roles hold. Holds the restore drill’s database checks.',
+      'The schema and migrations, `withOrg()` and every query and write, each with its audit event. Runs migrations and the data steps on release: one takes back anything Supabase’s Data API roles hold, another compares each receipt read before duplicates were looked for, once. Compares each receipt as its reading settles and holds a later copy; deletes a receipt only through `delete_receipt()`. Holds the restore drill’s database checks.',
     where: ['packages/db'],
   },
   {
@@ -145,7 +145,7 @@ export const COMPONENTS: readonly Component[] = [
     name: 'File storage',
     technology: 'Supabase Storage over its REST API',
     responsibility:
-      'The private receipts bucket: one-time signed uploads, short-lived signed reads, server-side saves for emailed files, size and type limits.',
+      'The private receipts bucket: one-time signed uploads, short-lived signed reads, server-side saves for emailed files, removal of a deleted receipt’s file, size and type limits.',
     where: ['packages/storage'],
   },
   {
@@ -265,7 +265,7 @@ export const FLOWS: readonly Flow[] = [
     A->>M: OpenAI fallback
   end
   Note over A: Ready needs confident readings that agree,<br/>sums that make the total and a plausible date
-  A->>DB: One transaction: receipt settles, expense follows, files to its trip by date
+  A->>DB: One transaction: receipt settles, expense follows, files to its trip by date,<br/>and a later copy of another receipt is held for a look
   Note over DB: Ready only when the receipt is Ready and the claim is complete
   P->>W: Opens Home
   W->>A: GET /v1/home, with the person’s own day
@@ -305,6 +305,32 @@ export const FLOWS: readonly Flow[] = [
     A->>DB: Email kept as unverified, nothing filed
   end`,
     refs: ['ADR-0024', 'ADR-0026', 'ADR-0027', 'FR-CAP-02'],
+  },
+  {
+    id: 'duplicates',
+    title: 'A possible duplicate',
+    about:
+      'Judged on what was read, not the file: a forward differs byte for byte, so its fingerprint never matches. The later receipt waits in Needs you and counts in no total until the person decides. Deleting goes through one owner-run function, since the app can’t delete receipts or expenses itself, and the file goes only after that commits: a failure leaves an orphaned file, never a receipt without one (ADR-0028).',
+    diagram: `sequenceDiagram
+  actor P as Person
+  participant W as Web app
+  participant A as API
+  participant DB as Postgres
+  participant S as Storage
+  Note over DB: A reading settles: same member, currency and total,<br/>a day apart, a similar merchant? The later is held
+  P->>W: Opens it from Needs you
+  W->>A: GET /v1/receipts/{id}
+  A-->>W: Both receipts and their expenses, side by side
+  P->>W: Keep both, delete one, or merge into the one chosen
+  W->>A: POST /v1/receipts/{id}/duplicates/{other}
+  alt Keep both
+    A->>DB: Pair dismissed, held receipt released, audit
+  else Delete or merge
+    A->>DB: One transaction: merged fields and their audit,<br/>the deletion’s audit, delete_receipt(), re-check any copy of it
+    A->>S: Remove its file, after commit
+  end
+  A-->>W: Which receipt remains`,
+    refs: ['FR-INT-18', 'ADR-0028', 'FR-EXP-03'],
   },
   {
     id: 'request',

@@ -91,6 +91,7 @@ function setup(data: Partial<HomeData> = {}, opts: { home?: boolean } = {}) {
         receipts: [],
         runs: [],
         reviews: [],
+        pairs: [],
         ...data,
       });
     },

@@ -1,20 +1,9 @@
 import type { ExpenseRecord } from '@expensewise/db';
-import {
-  isCurrencyCode,
-  isExpenseEditable,
-  money,
-  toDecimal,
-  type ExpenseValues,
-} from '@expensewise/domain';
+import { isExpenseEditable, type ExpenseValues } from '@expensewise/domain';
 import { proofDifferences } from '@expensewise/extraction';
 import type { ExpensesWithProof } from './expenses.ts';
-import { currentReview, receiptSummary } from './receipt-views.ts';
+import { amountView, currentReview, receiptSummary } from './receipt-views.ts';
 import type { ReceiptWithReadings } from './receipts.ts';
-
-const amountView = (amountMinor: number | null, currency: string | null) =>
-  amountMinor === null || currency === null || !isCurrencyCode(currency)
-    ? null
-    : { amountMinor, currency, decimal: toDecimal(money(amountMinor, currency)) };
 
 /**
  * What an expense's receipt shows: what a person confirmed on it, else the reading its status

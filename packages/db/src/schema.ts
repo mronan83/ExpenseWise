@@ -300,6 +300,12 @@ export const receipts = pgTable(
     sha256: char('sha256', { length: 64 }).notNull(),
     perceptualHash: text('perceptual_hash'),
     status: receiptStatus('status').notNull().default('processing'),
+    /**
+     * When it was last compared with its member's other receipts for possible duplicates
+     * (FR-INT-18). Null for a receipt read before that check existed, which the release
+     * checks once.
+     */
+    duplicatesCheckedAt: timestamp('duplicates_checked_at', { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => [
@@ -405,6 +411,48 @@ export const receiptReviews = pgTable(
       sql`${t.totalMinor} >= 0 AND coalesce(${t.taxMinor}, 0) >= 0 AND coalesce(${t.tipMinor}, 0) >= 0`,
     ),
     index('receipt_reviews_receipt_idx').on(t.orgId, t.receiptId),
+  ],
+);
+
+export const duplicateState = pgEnum('duplicate_state', ['open', 'dismissed']);
+
+/**
+ * A receipt held as a possible duplicate of an earlier one of its member's (FR-INT-18,
+ * ADR-0028): the same currency and total, a day apart at most, a similar merchant. While open,
+ * the receipt needs a look and its expense counts in no total. Dismissed means the person said
+ * the two are different purchases, so the pair is never flagged again. A merge or a deletion
+ * removes the pair with the receipt it deletes.
+ */
+export const receiptDuplicates = pgTable(
+  'receipt_duplicates',
+  {
+    id: id(),
+    orgId: orgId(),
+    /** The receipt held: the later of the two. */
+    receiptId: uuid('receipt_id').notNull(),
+    /** The earlier receipt it looks like. */
+    otherReceiptId: uuid('other_receipt_id').notNull(),
+    state: duplicateState('state').notNull().default('open'),
+    /** What the held receipt's reading settled to, which it returns to once resolved. */
+    settledStatus: receiptStatus('settled_status').notNull(),
+    createdAt: createdAt(),
+    resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  },
+  (t) => [
+    unique('receipt_duplicates_org_id_id_key').on(t.orgId, t.id),
+    unique('receipt_duplicates_pair_key').on(t.orgId, t.receiptId, t.otherReceiptId),
+    foreignKey({
+      name: 'receipt_duplicates_receipt_fk',
+      columns: [t.orgId, t.receiptId],
+      foreignColumns: [receipts.orgId, receipts.id],
+    }),
+    foreignKey({
+      name: 'receipt_duplicates_other_fk',
+      columns: [t.orgId, t.otherReceiptId],
+      foreignColumns: [receipts.orgId, receipts.id],
+    }),
+    check('receipt_duplicates_two_receipts', sql`${t.receiptId} <> ${t.otherReceiptId}`),
+    index('receipt_duplicates_other_idx').on(t.orgId, t.otherReceiptId),
   ],
 );
 

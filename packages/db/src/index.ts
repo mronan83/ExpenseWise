@@ -3,6 +3,7 @@ export * from './audit.ts';
 export * from './client.ts';
 export * from './connection.ts';
 export * from './data-api.ts';
+export * from './duplicates.ts';
 export * from './expenses.ts';
 export * from './home.ts';
 export * from './inbound.ts';

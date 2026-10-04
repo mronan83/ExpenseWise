@@ -2,10 +2,12 @@ import {
   assertRowSecurityApplies,
   homeSnapshot,
   listExtractionRuns,
+  listOpenDuplicatePairs,
   listReceiptReviews,
   listReceipts,
   withOrg,
   type Database,
+  type DuplicatePairRecord,
   type ExtractionRunRecord,
   type HomeSnapshot,
   type ReceiptRecord,
@@ -18,6 +20,7 @@ export interface HomeData {
   readonly receipts: ReceiptRecord[];
   readonly runs: ExtractionRunRecord[];
   readonly reviews: ReceiptReviewRecord[];
+  readonly pairs: DuplicatePairRecord[];
 }
 
 /** What the API needs from the database for Home. Tests use an in-memory fake. */
@@ -49,6 +52,7 @@ export function dbHomeStore(db: Database): HomeStore {
           receipts,
           runs: await listExtractionRuns(tx, ids),
           reviews: await listReceiptReviews(tx, ids),
+          pairs: await listOpenDuplicatePairs(tx, ids),
         };
       });
     },

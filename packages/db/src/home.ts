@@ -1,6 +1,7 @@
 import type { ExpenseStatus } from '@expensewise/domain';
-import { and, asc, count, desc, eq, gt, gte, lt, lte, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, gte, lt, lte, not, sql } from 'drizzle-orm';
 import type { Transaction } from './client.ts';
+import { heldAsDuplicate } from './duplicates.ts';
 import { expenses, receipts, trips } from './schema.ts';
 import { safeMinor, tallyTrips, tripsWithOwner, type TripRecord, type TripTally } from './trips.ts';
 
@@ -90,6 +91,7 @@ export async function homeSnapshot(
         eq(expenses.memberId, memberId),
         gte(expenses.transactionDate, month.from),
         lt(expenses.transactionDate, month.until),
+        not(heldAsDuplicate(expenses.id)),
       ),
     )
     .groupBy(expenses.status, expenses.currency, sql`${expenses.tripId} is not null`);

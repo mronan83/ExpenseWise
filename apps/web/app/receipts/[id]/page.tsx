@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { api, ApiProblem } from '../../../lib/api';
 import {
@@ -12,9 +12,14 @@ import {
   formatCost,
   formatMoney,
   formatSeconds,
+  isLocked,
+  MERGE_FIELDS,
   RECEIPT_STATUS,
   type CorrectableField,
+  type DuplicateSide,
+  type MergeField,
   type MoneyField,
+  type PossibleDuplicate,
   type Reading,
   type ReceiptDetail,
   type TextField,
@@ -52,6 +57,7 @@ const POLL_LIMIT_MS = 3 * 60 * 1000;
 /** One receipt, read by each compared model, side by side (ADR-0017). */
 export default function ReceiptPage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -112,6 +118,14 @@ export default function ReceiptPage() {
   }
 
   const receipt = load.state === 'ready' ? load.receipt : null;
+  const held = receipt?.duplicates.some((d) => d.held) ?? false;
+
+  /** After a decision: this page if this receipt was kept, else the one that was. */
+  async function decided(result: Resolution) {
+    setMessage(RESOLVED[result.outcome]);
+    if (result.kept === id) await refresh();
+    else router.replace(`/receipts/${result.kept}`);
+  }
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]">
@@ -140,7 +154,14 @@ export default function ReceiptPage() {
         {receipt ? (
           <>
             <Verdict receipt={receipt} stale={reading && stale} />
-            {receipt.status === 'needs_review' || receipt.status === 'failed' ? (
+            {receipt.duplicates.map((pair) => (
+              <Duplicate
+                key={pair.other.receiptId}
+                pair={pair}
+                onDecided={(result) => void decided(result)}
+              />
+            ))}
+            {!held && (receipt.status === 'needs_review' || receipt.status === 'failed') ? (
               <Review
                 key={receipt.readings.map((r) => r.model + r.state).join()}
                 receipt={receipt}
@@ -204,6 +225,8 @@ function Verdict({ receipt, stale }: { receipt: ReceiptDetail; stale: boolean })
     text = 'Both models read it with confidence and agree.';
   } else if (receipt.status === 'failed') {
     text = 'No model could read it. See why below.';
+  } else if (receipt.duplicates.some((d) => d.held)) {
+    text = 'It looks like the same purchase as another receipt. Decide below before it counts.';
   } else if (fallback?.fields) {
     text = [
       `Claude couldn't read it, so ${fallback.label} did. One reading, so check it before you rely on it.`,
@@ -224,6 +247,351 @@ function Verdict({ receipt, stale }: { receipt: ReceiptDetail; stale: boolean })
       </span>{' '}
       {text}
     </p>
+  );
+}
+
+interface Resolution {
+  outcome: 'kept_both' | 'deleted' | 'merged';
+  kept: string;
+  deleted: string | null;
+  taken: MergeField[];
+}
+
+const RESOLVED: Record<Resolution['outcome'], string> = {
+  kept_both: 'Kept both: they won’t be flagged as duplicates again.',
+  deleted: 'Deleted the duplicate, its file and its expense.',
+  merged: 'Merged, and deleted the receipt merged in.',
+};
+
+const MERGE_LABELS: Record<MergeField, string> = {
+  merchant: 'Merchant',
+  date: 'Date',
+  amount: 'Amount',
+  notes: 'Notes',
+  trip: 'Trip',
+};
+
+/** A field of a duplicate's expense as text; null when it has none. */
+function shown(side: DuplicateSide, field: MergeField): string | null {
+  switch (field) {
+    case 'merchant':
+      return side.merchant;
+    case 'date':
+      return side.date;
+    case 'amount':
+      return side.amount ? formatMoney(side.amount) : null;
+    case 'notes':
+      return side.notes;
+    case 'trip':
+      return side.trip?.name ?? null;
+  }
+}
+
+const added = (side: DuplicateSide) =>
+  `${new Date(side.createdAt).toLocaleString(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  })}, by ${side.source}`;
+
+type Which = 'self' | 'other';
+
+/**
+ * Another receipt that looks like the same purchase (FR-INT-18, ADR-0028), side by side with
+ * this one, and what the person decides: keep both, delete one, or merge one into the other.
+ * Deleting goes with the receipt's file and expense, so it asks first.
+ */
+function Duplicate({
+  pair,
+  onDecided,
+}: {
+  pair: PossibleDuplicate;
+  onDecided: (result: Resolution) => void;
+}) {
+  const { self, other, held } = pair;
+  const sides: Record<Which, DuplicateSide> = { self, other };
+  // The later copy is the one held; the earlier is the one to keep, unless it is locked.
+  const copy: Which = held ? 'self' : 'other';
+  const original: Which = held ? 'other' : 'self';
+  const [mode, setMode] = useState<'choose' | 'delete' | 'merge'>('choose');
+  const [doomed, setDoomed] = useState<Which>(copy);
+  const [primary, setPrimary] = useState<Which>(isLocked(sides[copy]) ? copy : original);
+  const [fields, setFields] = useState<MergeField[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const name: Record<Which, string> = { self: 'This receipt', other: 'The other receipt' };
+  const kept = sides[primary];
+  const mergedIn = sides[primary === 'self' ? 'other' : 'self'];
+  const fills = MERGE_FIELDS.filter((f) => shown(kept, f) === null && shown(mergedIn, f) !== null);
+  const choices = MERGE_FIELDS.filter((f) => {
+    const mine = shown(kept, f);
+    const theirs = shown(mergedIn, f);
+    return mine !== null && theirs !== null && mine !== theirs;
+  });
+  const mergeable = (which: Which) =>
+    sides[which].expenseStatus === 'needs_review' || sides[which].expenseStatus === 'ready';
+
+  async function decide(body: Record<string, unknown>) {
+    setBusy(true);
+    setError(null);
+    try {
+      onDecided(
+        await api<Resolution>(`/v1/receipts/${self.receiptId}/duplicates/${other.receiptId}`, {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }),
+      );
+    } catch (e) {
+      setError(describeError(e));
+      setBusy(false);
+    }
+  }
+
+  const keep = (which: Which) => sides[which === 'self' ? 'other' : 'self'].receiptId;
+  const choice = (
+    group: string,
+    value: Which,
+    current: Which,
+    set: (w: Which) => void,
+    disabled: boolean,
+    note?: string,
+  ) => (
+    <label key={value} className="flex min-h-11 items-center gap-2">
+      <input
+        type="radio"
+        name={`${group}-${other.receiptId}`}
+        value={value}
+        checked={current === value}
+        disabled={disabled}
+        onChange={() => set(value)}
+      />
+      <span>
+        {name[value]}
+        {note ? <span className="block text-xs text-ink-2">{note}</span> : null}
+      </span>
+    </label>
+  );
+
+  return (
+    <section
+      aria-labelledby={`duplicate-${other.receiptId}`}
+      className="flex flex-col gap-3 rounded-xl border border-rule bg-sheet p-4 text-sm"
+    >
+      <h2 id={`duplicate-${other.receiptId}`} className="text-base font-semibold">
+        Possible duplicate
+      </h2>
+      <p>
+        {held
+          ? 'This looks like the same purchase as an earlier receipt. It stays out of your totals until you decide.'
+          : 'A later receipt looks like the same purchase as this one. It stays out of your totals until you decide.'}
+      </p>
+      <table className="w-full table-fixed">
+        <caption className="sr-only">This receipt and the other, side by side</caption>
+        <thead>
+          <tr className="text-left">
+            <th scope="col" className="w-1/4 pb-2 text-xs font-medium text-ink-2">
+              <span className="sr-only">Field</span>
+            </th>
+            <th scope="col" className="pb-2 font-semibold">
+              This receipt
+            </th>
+            <th scope="col" className="pb-2 font-semibold">
+              <Link href={`/receipts/${other.receiptId}`} className="tap text-carbon underline">
+                The other
+              </Link>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {MERGE_FIELDS.map((field) => {
+            const mine = shown(self, field);
+            const theirs = shown(other, field);
+            const differs = mine !== theirs;
+            return (
+              <tr
+                key={field}
+                className={`border-t border-rule align-top ${differs ? 'bg-carbon-wash' : ''}`}
+              >
+                <th scope="row" className="py-2 text-left text-xs font-medium text-ink-2">
+                  {MERGE_LABELS[field]}
+                  {differs ? <span className="block text-warn">differs</span> : null}
+                </th>
+                {[mine, theirs].map((value, i) => (
+                  <td key={i} className="py-2 pr-2 break-words">
+                    {value === null ? (
+                      <span className="text-ink-3">–</span>
+                    ) : (
+                      <span
+                        className={
+                          field === 'amount' || field === 'date'
+                            ? 'whitespace-nowrap tabular-nums'
+                            : ''
+                        }
+                      >
+                        {value}
+                      </span>
+                    )}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
+          <tr className="border-t border-rule align-top">
+            <th scope="row" className="py-2 text-left text-xs font-medium text-ink-2">
+              Added
+            </th>
+            {[self, other].map((side) => (
+              <td key={side.receiptId} className="py-2 pr-2 text-xs text-ink-2">
+                {added(side)}
+              </td>
+            ))}
+          </tr>
+        </tbody>
+      </table>
+
+      {mode === 'choose' ? (
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void decide({ action: 'keep_both' })}
+            disabled={busy}
+            className="rounded-lg border border-rule px-3 py-2 text-sm font-semibold disabled:opacity-60"
+          >
+            Keep both
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('delete')}
+            disabled={busy}
+            className="rounded-lg border border-rule px-3 py-2 text-sm font-semibold text-bad disabled:opacity-60"
+          >
+            Delete one
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('merge')}
+            disabled={busy}
+            className="rounded-lg border border-rule px-3 py-2 text-sm font-semibold disabled:opacity-60"
+          >
+            Merge
+          </button>
+        </div>
+      ) : null}
+
+      {mode === 'delete' ? (
+        <div className="flex flex-col gap-3">
+          <fieldset className="flex flex-col">
+            <legend className="mb-1 text-xs font-medium text-ink-2">Delete</legend>
+            {(['self', 'other'] as const).map((which) =>
+              choice(
+                'delete',
+                which,
+                doomed,
+                setDoomed,
+                isLocked(sides[which]),
+                isLocked(sides[which]) ? 'Its expense is submitted, so it stays.' : undefined,
+              ),
+            )}
+          </fieldset>
+          <p>
+            Delete {name[doomed].toLowerCase()}? Its file, readings and expense go too, and this
+            can’t be undone. The audit trail keeps a note of what it was.
+          </p>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => void decide({ action: 'delete', keep: keep(doomed) })}
+              disabled={busy || isLocked(sides[doomed])}
+              className="rounded-lg bg-bad px-4 py-2 text-sm font-semibold text-paper disabled:opacity-60"
+            >
+              {busy ? 'Deleting…' : `Delete ${name[doomed].toLowerCase()}`}
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('choose')}
+              disabled={busy}
+              className="rounded-lg border border-rule px-4 py-2 text-sm font-semibold"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {mode === 'merge' ? (
+        <div className="flex flex-col gap-3">
+          <fieldset className="flex flex-col">
+            <legend className="mb-1 text-xs font-medium text-ink-2">Keep</legend>
+            {(['self', 'other'] as const).map((which) =>
+              choice(
+                'primary',
+                which,
+                primary,
+                (w) => {
+                  setPrimary(w);
+                  setFields([]);
+                },
+                !mergeable(which),
+                mergeable(which) ? undefined : 'Its expense can’t be changed now.',
+              ),
+            )}
+          </fieldset>
+          <p>
+            {name[primary]} stays, and takes what it lacks from the other
+            {fills.length > 0
+              ? ` (${fills.map((f) => MERGE_LABELS[f].toLowerCase()).join(', ')})`
+              : ''}
+            . The other is then deleted with its file, and this can’t be undone.
+          </p>
+          {choices.length > 0 ? (
+            <fieldset className="flex flex-col">
+              <legend className="mb-1 text-xs font-medium text-ink-2">
+                Also take from the other
+              </legend>
+              {choices.map((field) => (
+                <label key={field} className="flex min-h-11 items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={fields.includes(field)}
+                    onChange={(e) =>
+                      setFields(
+                        e.target.checked ? [...fields, field] : fields.filter((f) => f !== field),
+                      )
+                    }
+                  />
+                  <span className="break-words">
+                    {MERGE_LABELS[field]}: {shown(mergedIn, field)}
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+          ) : null}
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => void decide({ action: 'merge', primary: kept.receiptId, fields })}
+              disabled={busy || !mergeable(primary)}
+              className="rounded-lg bg-carbon px-4 py-2 text-sm font-semibold text-carbon-ink disabled:opacity-60"
+            >
+              {busy ? 'Merging…' : 'Merge and delete the other'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('choose')}
+              disabled={busy}
+              className="rounded-lg border border-rule px-4 py-2 text-sm font-semibold"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
+      {error ? (
+        <p role="alert" className="text-sm text-warn">
+          {error}
+        </p>
+      ) : null}
+    </section>
   );
 }
 

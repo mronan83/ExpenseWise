@@ -127,6 +127,10 @@ const store = {
     files.set(path, bytes);
     return Promise.resolve();
   },
+  remove: (path: string) => {
+    files.delete(path);
+    return Promise.resolve();
+  },
 };
 
 /** What each model answers for a receipt: a reading, or nothing usable. */
@@ -306,6 +310,22 @@ await capture(
   'camera',
   both(
     reading('Uber', '2026-09-30', 'USD', '31.45', {
+      documentType: 'ride_receipt',
+      subtotal: { value: '25.20', confidence: 'high' },
+      fees: [
+        { label: 'Booking Fee', value: '2.75', confidence: 'high' },
+        { label: 'Airport Surcharge', value: '1.50', confidence: 'high' },
+      ],
+      tip: { value: '2.00', confidence: 'high' },
+    }),
+  ),
+);
+// The same ride sent again: read alike, so it is held as a possible duplicate (FR-INT-18).
+await capture(
+  'uberAgain',
+  'upload',
+  both(
+    reading('Uber Technologies Inc.', '2026-09-30', 'USD', '31.45', {
       documentType: 'ride_receipt',
       subtotal: { value: '25.20', confidence: 'high' },
       fees: [

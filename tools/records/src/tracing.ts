@@ -463,6 +463,12 @@ export const QUESTIONS: readonly Question[] = [
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
   {
+    date: '2026-10-04',
+    change:
+      'Possible duplicates are caught in review (#60, FR-INT-18 and F-48 Verified, ADR-0028). When a receipt is read it is compared with your other receipts: same currency and total, a day apart at most, a similar merchant. The later of a pair waits in Needs you as a possible duplicate and counts in no total. On either receipt’s page you keep both, delete one, or merge one into the one you keep, taking its missing fields and any you tick; the other is deleted with its file and expense, and the audit trail records what it was. A submitted or approved expense is never deleted. The app can no longer delete receipts, readings or expenses except through one database function. Receipts filed before this, such as the eight Uber forwards, are checked once on release.',
+    by: 'Claude, at your direction',
+  },
+  {
     date: '2026-10-03',
     change:
       'Your requirement: possible duplicates are caught in review, then merged, deleted or kept (FR-INT-18, F-48, #60, all Planned). Your answers: no reference copy is kept; a merge keeps the primary you choose, takes the other’s missing or chosen fields, and deletes it; #60 is built before #23. The same Uber receipt, forwarded eight times, was filed eight times: each forward differed slightly, so the file fingerprint didn’t match. Duplicates will be judged on what was read: same person, currency and total, within a day, a similar merchant.',

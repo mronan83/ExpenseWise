@@ -9,9 +9,10 @@ import {
   type TripValues,
   type TripWindow,
 } from '@expensewise/domain';
-import { and, desc, eq, exists, gte, inArray, lte, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, exists, gte, inArray, lte, not, or, sql, type SQL } from 'drizzle-orm';
 import { appendAuditEvent, lockOrgWrites, type AuditEntry } from './audit.ts';
 import type { Transaction } from './client.ts';
+import { heldAsDuplicate } from './duplicates.ts';
 import { expenses, members, reports, trips } from './schema.ts';
 
 export interface TripRecord extends TripValues {
@@ -121,7 +122,7 @@ export async function tallyTrips(
       amountMinor: sql<string | null>`sum(${expenses.amountMinor})::text`,
     })
     .from(expenses)
-    .where(inArray(expenses.tripId, [...tripIds]))
+    .where(and(inArray(expenses.tripId, [...tripIds]), not(heldAsDuplicate(expenses.id))))
     .groupBy(expenses.tripId, expenses.status, expenses.currency);
   return rows.map((r) => ({
     ...r,
