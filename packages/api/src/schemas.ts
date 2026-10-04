@@ -1,4 +1,4 @@
-import { isIsoDate, SUPPORTED_CURRENCIES } from '@expensewise/domain';
+import { isIsoDate, MERGE_FIELDS, SUPPORTED_CURRENCIES } from '@expensewise/domain';
 import { CORRECTABLE_FIELDS, READING_CHECKS } from '@expensewise/extraction';
 import { z } from '@hono/zod-openapi';
 
@@ -272,6 +272,46 @@ export const ReceiptConfirmationSchema = z
   })
   .openapi('ReceiptConfirmation');
 
+const DuplicateAmountSchema = z
+  .object({
+    amountMinor: z.number().int().openapi({ description: 'Integer minor units, e.g. cents.' }),
+    currency: z.string().openapi({ example: 'USD' }),
+    decimal: z.string().openapi({ example: '31.42', description: 'The same amount, for display.' }),
+  })
+  .nullable();
+
+const DuplicateSideSchema = z
+  .object({
+    receiptId: z.string().uuid(),
+    source: z.enum(['camera', 'upload', 'email', 'card', 'manual', 'mileage']),
+    contentType: z.string(),
+    createdAt: z.string().datetime(),
+    expenseId: z.string().uuid().nullable(),
+    expenseStatus: z
+      .enum(['processing', 'needs_review', 'ready', 'submitted', 'approved', 'settled'])
+      .nullable(),
+    merchant: z.string().nullable(),
+    date: z.string().nullable(),
+    amount: DuplicateAmountSchema,
+    notes: z.string().nullable(),
+    trip: z.object({ id: z.string().uuid(), name: z.string() }).nullable(),
+  })
+  .openapi('DuplicateSide', {
+    description: 'One receipt of a possible duplicate pair, with the expense it proves.',
+  });
+
+export const PossibleDuplicateSchema = z
+  .object({
+    held: z.boolean().openapi({
+      description:
+        'Whether this receipt is the later copy, which needs a look until the person decides ' +
+        'and is left out of totals meanwhile.',
+    }),
+    self: DuplicateSideSchema,
+    other: DuplicateSideSchema,
+  })
+  .openapi('PossibleDuplicate');
+
 export const ReceiptDetailSchema = ReceiptSummarySchema.extend({
   imageUrl: z
     .string()
@@ -285,6 +325,11 @@ export const ReceiptDetailSchema = ReceiptSummarySchema.extend({
     description:
       'Set when a member confirmed this reading; the merchant, date and total above are then ' +
       'the confirmed values.',
+  }),
+  duplicates: z.array(PossibleDuplicateSchema).openapi({
+    description:
+      'Receipts that look like the same purchase as this one: same member, currency and ' +
+      'total, dates a day apart at most, and a similar merchant (FR-INT-18).',
   }),
 }).openapi('ReceiptDetail');
 
@@ -314,9 +359,10 @@ export const ConfirmReceiptSchema = z
 
 export const NeedsYouReasonSchema = z
   .object({
-    code: z.enum(['failed', 'fallback', 'differ', 'checks', 'unsure']).openapi({
+    code: z.enum(['failed', 'duplicate', 'fallback', 'differ', 'checks', 'unsure']).openapi({
       description:
-        'failed: no model could read it. fallback: only the fallback model read it. differ: ' +
+        'failed: no model could read it. duplicate: it looks like the same purchase as an ' +
+        'earlier receipt (FR-INT-18). fallback: only the fallback model read it. differ: ' +
         'the compared models read the filing fields differently. checks: its sums or date ' +
         'fail a check, or it is a purchase summary (FR-INT-04). unsure: a model was not ' +
         'confident, or one could not read it.',
@@ -334,8 +380,69 @@ export const NeedsYouReasonSchema = z
       .string()
       .nullable()
       .openapi({ description: 'fallback: the model that read it.', example: 'GPT-5.6 Luna' }),
+    duplicateOf: z
+      .object({
+        receiptId: z.string().uuid(),
+        merchant: z.string().nullable(),
+        date: z.string().nullable(),
+        amount: DuplicateAmountSchema,
+        createdAt: z.string().datetime(),
+      })
+      .nullable()
+      .openapi({ description: 'duplicate: the earlier receipt it looks like.' }),
   })
   .openapi('NeedsYouReason');
+
+const MergeFieldSchema = z.enum(MERGE_FIELDS);
+
+export const ResolveDuplicateSchema = z
+  .discriminatedUnion('action', [
+    z.object({ action: z.literal('keep_both') }).openapi({
+      description: 'Different purchases: both stay, and the pair is never flagged again.',
+    }),
+    z
+      .object({
+        action: z.literal('delete'),
+        keep: z.string().uuid().openapi({ description: 'The receipt to keep, one of the two.' }),
+      })
+      .openapi({
+        description:
+          'The other receipt is deleted with its file, readings and expense. Its audit trail ' +
+          'stays, saying what it was.',
+      }),
+    z
+      .object({
+        action: z.literal('merge'),
+        primary: z.string().uuid().openapi({ description: 'The receipt to keep, one of the two.' }),
+        fields: z
+          .array(MergeFieldSchema)
+          .max(MERGE_FIELDS.length)
+          .openapi({
+            description:
+              'Fields the primary takes from the other even though it has them. It takes every ' +
+              'field it lacks anyway. amount brings its currency.',
+          }),
+      })
+      .openapi({
+        description:
+          'The primary’s expense takes the other’s missing and chosen fields, then the other ' +
+          'is deleted as delete deletes it.',
+      }),
+  ])
+  .openapi('ResolveDuplicate');
+
+export const DuplicateResolutionSchema = z
+  .object({
+    outcome: z.enum(['kept_both', 'deleted', 'merged']),
+    kept: z.string().uuid().openapi({
+      description: 'The receipt that remains; for kept_both, the one in the path.',
+    }),
+    deleted: z.string().uuid().nullable().openapi({ description: 'The receipt deleted.' }),
+    taken: z.array(MergeFieldSchema).openapi({
+      description: 'merged: the fields the primary took from the receipt merged into it.',
+    }),
+  })
+  .openapi('DuplicateResolution');
 
 export const InboxItemSchema = z
   .object({

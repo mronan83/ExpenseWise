@@ -1,5 +1,11 @@
-import type { ExtractionRunRecord, ReceiptRecord, ReceiptReviewRecord } from '@expensewise/db';
-import { money, toDecimal, zero, type Money } from '@expensewise/domain';
+import type {
+  DuplicatePairRecord,
+  DuplicateSide,
+  ExtractionRunRecord,
+  ReceiptRecord,
+  ReceiptReviewRecord,
+} from '@expensewise/db';
+import { isCurrencyCode, money, toDecimal, zero, type Money } from '@expensewise/domain';
 import {
   assumedZeros,
   COMPARISON_MODELS,
@@ -39,6 +45,12 @@ const assumedZeroView = (currency: string) => {
     assumed: true,
   };
 };
+
+/** An expense's amount, for display; null until both its amount and currency are known. */
+export const amountView = (amountMinor: number | null, currency: string | null) =>
+  amountMinor === null || currency === null || !isCurrencyCode(currency)
+    ? null
+    : { amountMinor, currency, decimal: toDecimal(money(amountMinor, currency)) };
 
 const textView = (field: Field<string> | null) =>
   field ? { value: field.value, confidence: field.confidence } : null;
@@ -221,19 +233,77 @@ export function receiptSummary(
   };
 }
 
+/** One receipt of a possible duplicate pair, with the expense it proves (FR-INT-18). */
+function duplicateSideView(side: DuplicateSide) {
+  return {
+    receiptId: side.receiptId,
+    source: side.source,
+    contentType: side.contentType,
+    createdAt: side.createdAt.toISOString(),
+    expenseId: side.expenseId,
+    expenseStatus: side.expenseStatus,
+    merchant: side.merchant,
+    date: side.transactionDate,
+    amount: amountView(side.amountMinor, side.currency),
+    notes: side.notes,
+    trip: side.tripId && side.tripName ? { id: side.tripId, name: side.tripName } : null,
+  };
+}
+
+/**
+ * The receipts this one may duplicate, side by side with it, for the person to keep both,
+ * delete one, or merge one into the other (FR-INT-18). held: this receipt is the later copy,
+ * which waits for the decision.
+ */
+export function duplicatesOf(receiptId: string, pairs: readonly DuplicatePairRecord[]) {
+  return pairs
+    .filter((p) => p.receiptId === receiptId)
+    .map((p) => ({
+      held: p.heldReceiptId === receiptId,
+      self: duplicateSideView(p.self),
+      other: duplicateSideView(p.other),
+    }));
+}
+
 /**
  * Why a receipt needs the person, for the Needs you inbox (FR-EXP-02). failed: no model
- * could read it, with the first compared reading's error. fallback: only the fallback read
- * it. differ: the compared models read the filing fields differently. checks: they agree,
- * and the sums or date fail a check (FR-INT-04). unsure: a model wasn't confident, or one
- * couldn't read it. Null when it doesn't need the person.
+ * could read it, with the first compared reading's error. duplicate: it looks like the same
+ * purchase as an earlier receipt, which it names (FR-INT-18). fallback: only the fallback
+ * read it. differ: the compared models read the filing fields differently. checks: they
+ * agree, and the sums or date fail a check (FR-INT-04). unsure: a model wasn't confident, or
+ * one couldn't read it. Null when it doesn't need the person.
  */
-export function needsYouReason(receipt: ReceiptRecord, runs: readonly ExtractionRunRecord[]) {
+export function needsYouReason(
+  receipt: ReceiptRecord,
+  runs: readonly ExtractionRunRecord[],
+  pairs: readonly DuplicatePairRecord[] = [],
+) {
   if (receipt.status !== 'needs_review' && receipt.status !== 'failed') return null;
   const readings = readingsOf(receipt, runs);
   const compared = readings.filter((r) => r.role === 'compared');
   const fallback = readings.find((r) => r.role === 'fallback' && r.fields);
-  const none = { fields: [] as string[], checks: [] as ReadingCheck[], error: null, by: null };
+  const none = {
+    fields: [] as string[],
+    checks: [] as ReadingCheck[],
+    error: null,
+    by: null,
+    duplicateOf: null,
+  };
+  const held = pairs.find((p) => p.receiptId === receipt.id && p.heldReceiptId === receipt.id);
+  if (held && receipt.status === 'needs_review') {
+    const { other } = held;
+    return {
+      ...none,
+      code: 'duplicate' as const,
+      duplicateOf: {
+        receiptId: other.receiptId,
+        merchant: other.merchant,
+        date: other.transactionDate,
+        amount: amountView(other.amountMinor, other.currency),
+        createdAt: other.createdAt.toISOString(),
+      },
+    };
+  }
   if (receipt.status === 'failed') {
     return {
       ...none,
@@ -254,8 +324,9 @@ export function inboxItem(
   receipt: ReceiptRecord,
   runs: readonly ExtractionRunRecord[],
   reviews: readonly ReceiptReviewRecord[],
+  pairs: readonly DuplicatePairRecord[] = [],
 ) {
-  const reason = needsYouReason(receipt, runs);
+  const reason = needsYouReason(receipt, runs, pairs);
   return reason
     ? { kind: 'receipt' as const, receipt: receiptSummary(receipt, runs, reviews), reason }
     : null;
@@ -266,6 +337,7 @@ export function receiptDetail(
   runs: readonly ExtractionRunRecord[],
   imageUrl: string | null,
   reviews: readonly ReceiptReviewRecord[] = [],
+  pairs: readonly DuplicatePairRecord[] = [],
 ) {
   const review = currentReview(receipt, runs, reviews);
   return {
@@ -274,6 +346,7 @@ export function receiptDetail(
     readings: readingsOf(receipt, runs),
     differences: differencesOf(receipt, runs),
     confirmation: review ? confirmationView(review) : null,
+    duplicates: duplicatesOf(receipt.id, pairs),
   };
 }
 

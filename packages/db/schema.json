@@ -808,7 +808,6 @@
       "triggers": [],
       "grants": {
         "expensewise_app": [
-          "DELETE",
           "INSERT",
           "SELECT",
           "UPDATE"
@@ -985,7 +984,6 @@
       "triggers": [],
       "grants": {
         "expensewise_app": [
-          "DELETE",
           "INSERT",
           "SELECT",
           "UPDATE"
@@ -1786,6 +1784,151 @@
       }
     },
     {
+      "name": "receipt_duplicates",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "receipt_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "other_receipt_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "state",
+          "type": "duplicate_state",
+          "nullable": false,
+          "default": "'open'::duplicate_state"
+        },
+        {
+          "name": "settled_status",
+          "type": "receipt_status",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "resolved_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "receipt_duplicates_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "receipt_duplicates_other_fk",
+          "columns": [
+            "org_id",
+            "other_receipt_id"
+          ],
+          "table": "receipts",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "receipt_duplicates_receipt_fk",
+          "columns": [
+            "org_id",
+            "receipt_id"
+          ],
+          "table": "receipts",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "receipt_duplicates_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "receipt_duplicates_pair_key",
+          "columns": [
+            "org_id",
+            "receipt_id",
+            "other_receipt_id"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "receipt_duplicates_two_receipts",
+          "definition": "CHECK ((receipt_id <> other_receipt_id))"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "receipt_duplicates_other_idx",
+          "definition": "CREATE INDEX receipt_duplicates_other_idx ON public.receipt_duplicates USING btree (org_id, other_receipt_id)"
+        }
+      ],
+      "policies": [
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [],
+      "grants": {
+        "expensewise_app": [
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
       "name": "receipt_reviews",
       "rls": {
         "enabled": true,
@@ -2039,6 +2182,12 @@
           "type": "timestamp with time zone",
           "nullable": false,
           "default": "now()"
+        },
+        {
+          "name": "duplicates_checked_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
         }
       ],
       "primaryKey": [
@@ -2122,7 +2271,6 @@
       "triggers": [],
       "grants": {
         "expensewise_app": [
-          "DELETE",
           "INSERT",
           "SELECT",
           "UPDATE"
@@ -2469,6 +2617,13 @@
       ]
     },
     {
+      "name": "duplicate_state",
+      "values": [
+        "open",
+        "dismissed"
+      ]
+    },
+    {
       "name": "expense_source",
       "values": [
         "camera",
@@ -2581,6 +2736,16 @@
       "volatility": "volatile",
       "executableBy": [
         "expensewise_relay"
+      ]
+    },
+    {
+      "name": "delete_receipt",
+      "arguments": "target uuid",
+      "returns": "TABLE(storage_key text, expense_id uuid)",
+      "security": "definer",
+      "volatility": "volatile",
+      "executableBy": [
+        "expensewise_app"
       ]
     },
     {

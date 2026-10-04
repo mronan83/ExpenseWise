@@ -85,12 +85,56 @@ export interface Confirmation {
   corrections: { field: CorrectableField; read: string | null; corrected: string }[];
 }
 
+/** An expense's amount, as the API sends it. */
+export interface Amount {
+  amountMinor: number;
+  currency: string;
+  decimal: string;
+}
+
+/** One receipt of a possible duplicate pair, with the expense it proves. */
+export interface DuplicateSide {
+  receiptId: string;
+  source: string;
+  contentType: string;
+  createdAt: string;
+  expenseId: string | null;
+  expenseStatus:
+    'processing' | 'needs_review' | 'ready' | 'submitted' | 'approved' | 'settled' | null;
+  merchant: string | null;
+  date: string | null;
+  amount: Amount | null;
+  notes: string | null;
+  trip: { id: string; name: string } | null;
+}
+
+/**
+ * Another receipt that looks like the same purchase (FR-INT-18). held: this one is the later
+ * copy, which waits for the person and is left out of totals until they decide.
+ */
+export interface PossibleDuplicate {
+  held: boolean;
+  self: DuplicateSide;
+  other: DuplicateSide;
+}
+
+/** The fields a merge can take from the receipt merged in. */
+export type MergeField = 'merchant' | 'date' | 'amount' | 'notes' | 'trip';
+export const MERGE_FIELDS: MergeField[] = ['merchant', 'date', 'amount', 'notes', 'trip'];
+
+/** An expense submitted or further along is never deleted or merged into. */
+export const isLocked = (side: Pick<DuplicateSide, 'expenseStatus'>) =>
+  side.expenseStatus === 'submitted' ||
+  side.expenseStatus === 'approved' ||
+  side.expenseStatus === 'settled';
+
 export interface ReceiptDetail extends ReceiptSummary {
   imageUrl: string | null;
   readings: Reading[];
   differences: string[];
   /** Set when a member confirmed a reading; the headline values are then theirs. */
   confirmation: Confirmation | null;
+  duplicates: PossibleDuplicate[];
 }
 
 export const FIELD_LABELS: Record<CorrectableField, string> = {
@@ -104,11 +148,19 @@ export const FIELD_LABELS: Record<CorrectableField, string> = {
 
 /** Why a receipt is in the Needs you inbox (FR-EXP-02). */
 export interface NeedsYouReason {
-  code: 'failed' | 'fallback' | 'differ' | 'checks' | 'unsure';
+  code: 'failed' | 'duplicate' | 'fallback' | 'differ' | 'checks' | 'unsure';
   fields: string[];
   checks: ReadingCheck[];
   error: string | null;
   by: string | null;
+  /** duplicate: the earlier receipt it looks like. */
+  duplicateOf: {
+    receiptId: string;
+    merchant: string | null;
+    date: string | null;
+    amount: Amount | null;
+    createdAt: string;
+  } | null;
 }
 
 export interface InboxItem {
@@ -142,6 +194,17 @@ export function needsYou(item: InboxItem): { text: string; action: string; href:
       }
       const open = reason.error?.startsWith('unavailable') ? 'Open it' : 'Fill it in';
       return { text, action: open, href: `/receipts/${receipt.id}` };
+    }
+    case 'duplicate': {
+      const of = reason.duplicateOf;
+      const what = [of?.merchant, of?.amount ? formatMoney(of.amount) : null, of?.date]
+        .filter(Boolean)
+        .join(', ');
+      return {
+        text: `Possible duplicate of an earlier receipt${what ? ` (${what})` : ''}.`,
+        action: 'Compare',
+        href: `/receipts/${receipt.id}`,
+      };
     }
     case 'fallback':
       return { text: `Only ${reason.by ?? 'the fallback'} could read it.`, ...check };

@@ -55,6 +55,7 @@ ExpenseWise is a receipt-first, automation-first expense, receipt, mileage and t
 | D-27 | No staging environment in Phase 1; a changed screen is checked on an iPhone in production right after its release | [ADR-0025](adr/0025-no-staging-in-phase-1.md) | Accepted (decided by product owner) |
 | D-28 | Email-in reads a Bird agent mailbox: the webhook verifies and hands off, and a workflow fetches the raw message, checks its DKIM alignment and files its attachments | [ADR-0026](adr/0026-email-in-through-a-bird-mailbox.md) | Accepted (mailbox and allowlist set up by product owner; how it is read and checked recommended, no objection) |
 | D-29 | An emailed receipt with nothing attached is filed as its text laid out as a PDF; readings gain fees and purchase summaries, which are never Ready on their own | [ADR-0027](adr/0027-email-text-as-a-pdf-receipt.md) | Accepted (product owner asked for HTML email bodies first; how recommended, no objection) |
+| D-30 | Two receipts that read as the same purchase are a possible duplicate: the later is held for the person, who keeps both, deletes one or merges one into the other; a receipt is deleted whole, only through one owner-run function | [ADR-0028](adr/0028-possible-duplicates.md) | Accepted (requirement, merge and delete decided by product owner; matching and mechanism recommended, no objection) |
 
 ## Visual version
 

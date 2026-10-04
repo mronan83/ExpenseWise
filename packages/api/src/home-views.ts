@@ -58,7 +58,7 @@ function tripView(home: HomeSnapshot, day: string) {
 export function homeView(data: HomeData, day: string, shown: number) {
   const { home } = data;
   const items = data.receipts
-    .map((r) => inboxItem(r, data.runs, data.reviews))
+    .map((r) => inboxItem(r, data.runs, data.reviews, data.pairs))
     .filter((item) => item !== null);
   const month = home.monthExpenses;
   const offTrip = month.filter((r) => !r.onTrip);

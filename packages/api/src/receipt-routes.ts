@@ -22,6 +22,7 @@ import {
   listReceiptsRoute,
   readReceiptAgainRoute,
   receiptUploadRoute,
+  resolveDuplicateRoute,
 } from './routes/receipts.ts';
 import type { WorkspaceStore } from './workspace.ts';
 
@@ -53,6 +54,7 @@ export function registerReceiptRoutes(
       getReceiptRoute,
       readReceiptAgainRoute,
       confirmReceiptRoute,
+      resolveDuplicateRoute,
       inboxRoute,
     ].map((r) => r.getRoutingPath()),
   );
@@ -101,6 +103,11 @@ export function registerReceiptRoutes(
         ? 'It was read again after these readings were shown. Refresh and look again.'
         : 'It is being read, or it is already Ready.',
     });
+  const heldAsDuplicate = () =>
+    new ProblemError(409, 'possible-duplicate', 'This receipt may be a duplicate', {
+      code: 'possible_duplicate',
+      detail: 'Keep both, delete one or merge them first.',
+    });
   const unprocessable = (code: string, title: string, extra: Record<string, unknown> = {}) =>
     new ProblemError(422, code.replaceAll('_', '-'), title, { code, ...extra });
 
@@ -110,6 +117,16 @@ export function registerReceiptRoutes(
     } catch {
       // A missing or unreachable file still shows the readings.
       return null;
+    }
+  };
+
+  /** Removes a deleted receipt's file. Best effort: the receipt is already gone (ADR-0028). */
+  const removeFile = async (storageKey: string) => {
+    try {
+      if (!options.files) throw new Error('file storage is not configured');
+      await options.files.remove(storageKey);
+    } catch (error) {
+      console.warn('Removing a deleted receipt’s file failed', { storageKey, error });
     }
   };
 
@@ -174,11 +191,13 @@ export function registerReceiptRoutes(
   app.openapi(inboxRoute, async (c) => {
     const who = await member(c.var.identity.userId);
     // What needs this person: their own receipts (FR-EXP-02).
-    const { receipts, runs, reviews } = await stores().receipts.list(who.orgId, LIST_LIMIT, {
+    const { receipts, runs, reviews, pairs } = await stores().receipts.list(who.orgId, LIST_LIMIT, {
       statuses: ['needs_review', 'failed'],
       memberId: who.memberId,
     });
-    const items = receipts.map((r) => inboxItem(r, runs, reviews)).filter((item) => item !== null);
+    const items = receipts
+      .map((r) => inboxItem(r, runs, reviews, pairs))
+      .filter((item) => item !== null);
     return c.json({ items }, 200);
   });
 
@@ -188,7 +207,10 @@ export function registerReceiptRoutes(
     const found = await stores().receipts.get(who.orgId, receiptId);
     if (!found) throw notFound();
     const imageUrl = await imageOf(found.receipt.storageKey);
-    return c.json(receiptDetail(found.receipt, found.runs, imageUrl, found.reviews), 200);
+    return c.json(
+      receiptDetail(found.receipt, found.runs, imageUrl, found.reviews, found.pairs),
+      200,
+    );
   });
 
   app.openapi(readReceiptAgainRoute, async (c) => {
@@ -215,6 +237,7 @@ export function registerReceiptRoutes(
     if (found.receipt.status !== 'needs_review' && found.receipt.status !== 'failed') {
       throw notWaiting(false);
     }
+    if (found.pairs.some((p) => p.heldReceiptId === receiptId)) throw heldAsDuplicate();
     const run = latestRuns(receiptId, found.runs).find((r) => r.model === body.model);
     if (!run) {
       throw unprocessable('no_such_reading', 'This receipt has no such reading', {
@@ -253,10 +276,67 @@ export function registerReceiptRoutes(
       caller.userId,
     );
     if (outcome === 'missing') throw notFound();
+    if (outcome === 'duplicate') throw heldAsDuplicate();
     if (outcome !== 'confirmed') throw notWaiting(outcome === 'stale');
     const after = await receipts.get(who.orgId, receiptId);
     if (!after) throw notFound();
     const imageUrl = await imageOf(after.receipt.storageKey);
-    return c.json(receiptDetail(after.receipt, after.runs, imageUrl, after.reviews), 200);
+    return c.json(
+      receiptDetail(after.receipt, after.runs, imageUrl, after.reviews, after.pairs),
+      200,
+    );
+  });
+
+  app.openapi(resolveDuplicateRoute, async (c) => {
+    const caller = c.var.identity;
+    const who = await member(caller.userId);
+    const { receiptId, otherReceiptId } = c.req.valid('param');
+    const decision = c.req.valid('json');
+    const kept =
+      decision.action === 'delete'
+        ? decision.keep
+        : decision.action === 'merge'
+          ? decision.primary
+          : receiptId;
+    if (kept !== receiptId && kept !== otherReceiptId) {
+      throw unprocessable('not_in_pair', 'The receipt to keep is not one of the two', {
+        detail: `Keep ${receiptId} or ${otherReceiptId}.`,
+      });
+    }
+    const result = await stores().receipts.resolveDuplicate(
+      who.orgId,
+      receiptId,
+      otherReceiptId,
+      decision,
+      caller.userId,
+    );
+    if (result.status === 'not_a_pair') {
+      throw new ProblemError(404, 'not-a-pair', 'These receipts are not flagged as duplicates', {
+        code: 'not_a_pair',
+        detail: 'Either it was already decided, or they never looked alike.',
+      });
+    }
+    if (result.status === 'locked') {
+      throw new ProblemError(409, 'locked', 'Its expense is submitted or further along', {
+        code: 'locked',
+        detail: 'A submitted or approved expense is never deleted or merged into.',
+      });
+    }
+    if (result.status === 'kept_both') {
+      return c.json({ outcome: 'kept_both' as const, kept, deleted: null, taken: [] }, 200);
+    }
+    // After the commit: a failure here leaves a file nothing points to, never a receipt
+    // without its file.
+    await removeFile(result.storageKey);
+    const deleted = kept === receiptId ? otherReceiptId : receiptId;
+    return c.json(
+      {
+        outcome: result.status,
+        kept: result.kept,
+        deleted,
+        taken: result.status === 'merged' ? result.taken : [],
+      },
+      200,
+    );
   });
 }

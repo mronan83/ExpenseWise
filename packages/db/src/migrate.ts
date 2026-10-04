@@ -3,6 +3,7 @@ import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { createDatabase } from './client.ts';
 import { describeConnection, retryWhilePoolerRejectsPassword } from './connection.ts';
 import { lockDownDataApi } from './data-api.ts';
+import { checkUncheckedReceipts } from './duplicates.ts';
 import { fileMissingReceiptExpenses } from './receipts.ts';
 
 export const migrationsFolder = fileURLToPath(new URL('../migrations', import.meta.url));
@@ -14,15 +15,17 @@ export const migrationsFolder = fileURLToPath(new URL('../migrations', import.me
  */
 export async function runMigrations(
   connectionString: string,
-): Promise<{ filedExpenses: number; dataApiObjects: number }> {
+): Promise<{ filedExpenses: number; heldDuplicates: number; dataApiObjects: number }> {
   const { db, pool } = createDatabase(connectionString);
   try {
     await migrate(db, { migrationsFolder });
     // Receipts captured before #6 get the expense they prove (ADR-0022).
     const filedExpenses = await fileMissingReceiptExpenses(db);
+    // Receipts read before duplicates were looked for are compared once (FR-INT-18).
+    const heldDuplicates = await checkUncheckedReceipts(db);
     // Supabase's Data API roles get nothing, even after a restore has given it back (ADR-0013).
     const dataApiObjects = await lockDownDataApi(db);
-    return { filedExpenses, dataApiObjects };
+    return { filedExpenses, heldDuplicates, dataApiObjects };
   } finally {
     await pool.end();
   }
@@ -52,6 +55,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   console.log('Migrations applied.');
   if (done.filedExpenses > 0) {
     console.log(`Filed an expense for ${done.filedExpenses} receipt(s) captured before expenses.`);
+  }
+  if (done.heldDuplicates > 0) {
+    console.log(`Held ${done.heldDuplicates} receipt(s) as possible duplicates for a look.`);
   }
   if (done.dataApiObjects > 0) {
     console.log(

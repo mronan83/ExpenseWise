@@ -116,6 +116,14 @@ export function supabaseStorage(options: SupabaseStorageOptions): ObjectStore {
       if (!res.ok) return fail('Saving an object', res);
     },
 
+    async remove(path) {
+      const res = await call(`/object/${options.bucket}`, {
+        method: 'DELETE',
+        body: JSON.stringify({ prefixes: [path] }),
+      });
+      if (!res.ok) return fail('Removing an object', res);
+    },
+
     async download(path) {
       const res = await call(`/object/authenticated/${objectPath(path)}`);
       if (res.ok) return new Uint8Array(await res.arrayBuffer());

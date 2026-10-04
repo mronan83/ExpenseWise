@@ -746,12 +746,13 @@
             "type": "string",
             "enum": [
               "failed",
+              "duplicate",
               "fallback",
               "differ",
               "checks",
               "unsure"
             ],
-            "description": "failed: no model could read it. fallback: only the fallback model read it. differ: the compared models read the filing fields differently. checks: its sums or date fail a check, or it is a purchase summary (FR-INT-04). unsure: a model was not confident, or one could not read it."
+            "description": "failed: no model could read it. duplicate: it looks like the same purchase as an earlier receipt (FR-INT-18). fallback: only the fallback model read it. differ: the compared models read the filing fields differently. checks: its sums or date fail a check, or it is a purchase summary (FR-INT-04). unsure: a model was not confident, or one could not read it."
           },
           "fields": {
             "type": "array",
@@ -787,6 +788,68 @@
             ],
             "description": "fallback: the model that read it.",
             "example": "GPT-5.6 Luna"
+          },
+          "duplicateOf": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "receiptId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "merchant": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "date": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "amount": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "amountMinor": {
+                    "type": "integer",
+                    "description": "Integer minor units, e.g. cents."
+                  },
+                  "currency": {
+                    "type": "string",
+                    "example": "USD"
+                  },
+                  "decimal": {
+                    "type": "string",
+                    "example": "31.42",
+                    "description": "The same amount, for display."
+                  }
+                },
+                "required": [
+                  "amountMinor",
+                  "currency",
+                  "decimal"
+                ]
+              },
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "receiptId",
+              "merchant",
+              "date",
+              "amount",
+              "createdAt"
+            ],
+            "description": "duplicate: the earlier receipt it looks like."
           }
         },
         "required": [
@@ -794,7 +857,8 @@
           "fields",
           "checks",
           "error",
-          "by"
+          "by",
+          "duplicateOf"
         ]
       },
       "ReceiptDetail": {
@@ -827,13 +891,21 @@
               },
               "confirmation": {
                 "$ref": "#/components/schemas/ReceiptConfirmation"
+              },
+              "duplicates": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/PossibleDuplicate"
+                },
+                "description": "Receipts that look like the same purchase as this one: same member, currency and total, dates a day apart at most, and a similar merchant (FR-INT-18)."
               }
             },
             "required": [
               "imageUrl",
               "readings",
               "differences",
-              "confirmation"
+              "confirmation",
+              "duplicates"
             ]
           }
         ]
@@ -1458,6 +1530,152 @@
         ],
         "description": "Set when a member confirmed this reading; the merchant, date and total above are then the confirmed values."
       },
+      "PossibleDuplicate": {
+        "type": "object",
+        "properties": {
+          "held": {
+            "type": "boolean",
+            "description": "Whether this receipt is the later copy, which needs a look until the person decides and is left out of totals meanwhile."
+          },
+          "self": {
+            "$ref": "#/components/schemas/DuplicateSide"
+          },
+          "other": {
+            "$ref": "#/components/schemas/DuplicateSide"
+          }
+        },
+        "required": [
+          "held",
+          "self",
+          "other"
+        ]
+      },
+      "DuplicateSide": {
+        "type": "object",
+        "properties": {
+          "receiptId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "camera",
+              "upload",
+              "email",
+              "card",
+              "manual",
+              "mileage"
+            ]
+          },
+          "contentType": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expenseId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "expenseStatus": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "processing",
+              "needs_review",
+              "ready",
+              "submitted",
+              "approved",
+              "settled",
+              null
+            ]
+          },
+          "merchant": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "amount": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "amountMinor": {
+                "type": "integer",
+                "description": "Integer minor units, e.g. cents."
+              },
+              "currency": {
+                "type": "string",
+                "example": "USD"
+              },
+              "decimal": {
+                "type": "string",
+                "example": "31.42",
+                "description": "The same amount, for display."
+              }
+            },
+            "required": [
+              "amountMinor",
+              "currency",
+              "decimal"
+            ]
+          },
+          "notes": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "trip": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          }
+        },
+        "required": [
+          "receiptId",
+          "source",
+          "contentType",
+          "createdAt",
+          "expenseId",
+          "expenseStatus",
+          "merchant",
+          "date",
+          "amount",
+          "notes",
+          "trip"
+        ],
+        "description": "One receipt of a possible duplicate pair, with the expense it proves."
+      },
       "ConfirmReceipt": {
         "type": "object",
         "properties": {
@@ -1512,6 +1730,129 @@
         },
         "required": [
           "model"
+        ]
+      },
+      "DuplicateResolution": {
+        "type": "object",
+        "properties": {
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "kept_both",
+              "deleted",
+              "merged"
+            ]
+          },
+          "kept": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The receipt that remains; for kept_both, the one in the path."
+          },
+          "deleted": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The receipt deleted."
+          },
+          "taken": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "merchant",
+                "date",
+                "amount",
+                "notes",
+                "trip"
+              ]
+            },
+            "description": "merged: the fields the primary took from the receipt merged into it."
+          }
+        },
+        "required": [
+          "outcome",
+          "kept",
+          "deleted",
+          "taken"
+        ]
+      },
+      "ResolveDuplicate": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "keep_both"
+                ]
+              }
+            },
+            "required": [
+              "action"
+            ],
+            "description": "Different purchases: both stay, and the pair is never flagged again."
+          },
+          {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "delete"
+                ]
+              },
+              "keep": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The receipt to keep, one of the two."
+              }
+            },
+            "required": [
+              "action",
+              "keep"
+            ],
+            "description": "The other receipt is deleted with its file, readings and expense. Its audit trail stays, saying what it was."
+          },
+          {
+            "type": "object",
+            "properties": {
+              "action": {
+                "type": "string",
+                "enum": [
+                  "merge"
+                ]
+              },
+              "primary": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The receipt to keep, one of the two."
+              },
+              "fields": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "merchant",
+                    "date",
+                    "amount",
+                    "notes",
+                    "trip"
+                  ]
+                },
+                "maxItems": 5,
+                "description": "Fields the primary takes from the other even though it has them. It takes every field it lacks anyway. amount brings its currency."
+              }
+            },
+            "required": [
+              "action",
+              "primary",
+              "fields"
+            ],
+            "description": "The primary’s expense takes the other’s missing and chosen fields, then the other is deleted as delete deletes it."
+          }
         ]
       },
       "ExpenseList": {
@@ -3487,7 +3828,7 @@
             }
           },
           "409": {
-            "description": "It is not waiting for a look: being read, already Ready, or read again since its readings were shown.",
+            "description": "It is not waiting for a look: being read, already Ready, read again since its readings were shown, or held as a possible duplicate until that is decided.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -3498,6 +3839,122 @@
           },
           "422": {
             "description": "No such reading, a value that is not valid, or a filing field still missing; field or fields name which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in, the database or file storage is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/receipts/{receiptId}/duplicates/{otherReceiptId}": {
+      "post": {
+        "tags": [
+          "Receipts"
+        ],
+        "summary": "Decide about two receipts flagged as possible duplicates",
+        "description": "Keep both, delete one, or merge one into the primary the person chose (FR-INT-18, ADR-0028). A deleted receipt goes with its file, readings, confirmations and expense; the audit trail records what it was. Either receipt of the pair may be in the path.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "receiptId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "otherReceiptId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveDuplicate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Decided.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DuplicateResolution"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "These receipts are not flagged as possible duplicates of each other, or it was decided.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The expense to delete, or to merge into, is submitted or further along.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The receipt to keep is not one of the two.",
             "content": {
               "application/problem+json": {
                 "schema": {

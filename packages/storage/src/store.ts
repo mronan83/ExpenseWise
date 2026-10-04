@@ -20,6 +20,11 @@ export interface ObjectStore {
    * again replaces it, so a retried step leaves one object.
    */
   save(path: string, bytes: Uint8Array, contentType: string): Promise<void>;
+  /**
+   * Removes an object, such as the file of a receipt deleted as a duplicate (ADR-0028).
+   * Removing one that isn't there is not an error.
+   */
+  remove(path: string): Promise<void>;
 }
 
 export class StorageError extends Error {

@@ -3,9 +3,17 @@ import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { appendAuditEvent } from './audit.ts';
 import type { Transaction } from './client.ts';
 import { fileReceiptExpense } from './expenses.ts';
+import { checkForDuplicate } from './duplicates.ts';
 import { enqueueOutbox } from './outbox.ts';
 import type { receiptStatus } from './schema.ts';
-import { auditEvents, extractionRuns, members, receiptReviews, receipts } from './schema.ts';
+import {
+  auditEvents,
+  extractionRuns,
+  members,
+  receiptDuplicates,
+  receiptReviews,
+  receipts,
+} from './schema.ts';
 
 export type ReceiptStatus = (typeof receiptStatus.enumValues)[number];
 
@@ -329,6 +337,8 @@ export async function settleReceipt(
     type: 'system',
     id: 'receipt-workflow',
   });
+  // A copy of a purchase already filed waits for the person (FR-INT-18).
+  await checkForDuplicate(tx, orgId, receiptId, outcome.status);
 }
 
 /** A member's confirmation of a reading that needed a look (ADR-0021). */
@@ -397,6 +407,8 @@ export type ConfirmReceiptResult =
   | 'confirmed'
   /** No such receipt in this organization. */
   | 'missing'
+  /** Held as a possible duplicate: the person decides that first (FR-INT-18). */
+  | 'duplicate'
   /** It is not waiting for a look: being read, or already Ready. */
   | 'not_waiting'
   /** It was read again after the readings the person confirmed were shown. */
@@ -422,6 +434,12 @@ export async function confirmReceipt(
   if (!current) return 'missing';
   // Not read counts too: a person enters every field, so its expense isn't a dead end.
   if (current.status !== 'needs_review' && current.status !== 'failed') return 'not_waiting';
+  const [held] = await tx
+    .select({ id: receiptDuplicates.id })
+    .from(receiptDuplicates)
+    .where(and(eq(receiptDuplicates.receiptId, receiptId), eq(receiptDuplicates.state, 'open')))
+    .limit(1);
+  if (held) return 'duplicate';
   const [latest] = await tx
     .select({ requestId: extractionRuns.requestId })
     .from(extractionRuns)

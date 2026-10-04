@@ -3,6 +3,7 @@ export * from './audit.ts';
 export * from './currency.ts';
 export * from './dates.ts';
 export * from './decimal.ts';
+export * from './duplicates.ts';
 export * from './errors.ts';
 export * from './expense-values.ts';
 export * from './fx.ts';

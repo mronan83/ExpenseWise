@@ -1,6 +1,7 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import {
   ConfirmReceiptSchema,
+  DuplicateResolutionSchema,
   FileReceiptSchema,
   ProblemSchema,
   ReceiptDetailSchema,
@@ -8,6 +9,7 @@ import {
   ReceiptSummarySchema,
   ReceiptUploadRequestSchema,
   ReceiptUploadTicketSchema,
+  ResolveDuplicateSchema,
 } from '../schemas.ts';
 
 const problem = (description: string) => ({
@@ -154,12 +156,45 @@ export const confirmReceiptRoute = createRoute({
     ...common,
     404: problem('No such receipt in this organization.'),
     409: problem(
-      'It is not waiting for a look: being read, already Ready, or read again since its ' +
-        'readings were shown.',
+      'It is not waiting for a look: being read, already Ready, read again since its ' +
+        'readings were shown, or held as a possible duplicate until that is decided.',
     ),
     422: problem(
       'No such reading, a value that is not valid, or a filing field still missing; field ' +
         'or fields name which.',
     ),
+  },
+});
+
+export const resolveDuplicateRoute = createRoute({
+  method: 'post',
+  path: '/v1/receipts/{receiptId}/duplicates/{otherReceiptId}',
+  tags: ['Receipts'],
+  summary: 'Decide about two receipts flagged as possible duplicates',
+  description:
+    'Keep both, delete one, or merge one into the primary the person chose (FR-INT-18, ' +
+    'ADR-0028). A deleted receipt goes with its file, readings, confirmations and expense; ' +
+    'the audit trail records what it was. Either receipt of the pair may be in the path.',
+  ...secured,
+  request: {
+    params: receiptParam.extend({
+      otherReceiptId: z
+        .string()
+        .uuid()
+        .openapi({ param: { name: 'otherReceiptId', in: 'path' } }),
+    }),
+    body: { content: { 'application/json': { schema: ResolveDuplicateSchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'Decided.',
+      content: { 'application/json': { schema: DuplicateResolutionSchema } },
+    },
+    ...common,
+    404: problem(
+      'These receipts are not flagged as possible duplicates of each other, or it was decided.',
+    ),
+    409: problem('The expense to delete, or to merge into, is submitted or further along.'),
+    422: problem('The receipt to keep is not one of the two.'),
   },
 });

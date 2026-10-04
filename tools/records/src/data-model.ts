@@ -24,8 +24,14 @@ export const DOMAINS: readonly Domain[] = [
   {
     name: 'Receipts and reading',
     about:
-      'The proof: each captured file, every model’s reading of it, what a person confirmed, and the emails receipts arrived in.',
-    tables: ['receipts', 'extraction_runs', 'receipt_reviews', 'inbound_emails'],
+      'The proof: each captured file, every model’s reading of it, what a person confirmed, the receipts that may be the same purchase, and the emails receipts arrived in.',
+    tables: [
+      'receipts',
+      'extraction_runs',
+      'receipt_reviews',
+      'receipt_duplicates',
+      'inbound_emails',
+    ],
   },
   {
     name: 'Expenses and trips',
@@ -70,7 +76,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   receipts: {
     about:
-      'A captured file: where it is stored, its fingerprint, and whether it has been read. It stays linked to the expense it proves (FR-EXP-08, ADR-0022). Home lists a member’s own that need a look or failed, and counts those still being read.',
+      'A captured file: where it is stored, its fingerprint, whether it has been read, and when it was last compared for duplicates. It stays linked to the expense it proves (FR-EXP-08, ADR-0022). Home lists a member’s own that need a look or failed, and counts those still being read. The app can’t delete one directly; only `delete_receipt()` can (ADR-0028).',
   },
   extraction_runs: {
     about:
@@ -79,6 +85,10 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   receipt_reviews: {
     about:
       'A person confirming a reading that needed a look, as read or corrected. Append-only; each correction keeps what the model read (ADR-0021).',
+  },
+  receipt_duplicates: {
+    about:
+      'Two of a member’s receipts that read as the same purchase: same currency and total, dated a day apart at most, a similar merchant (FR-INT-18). The later one is held: it needs a look, whatever its reading settled to, which is kept here to restore, and its expense counts in no total. Open until the person decides. Keep both dismisses the pair, which is never flagged again; delete and merge remove the row with the receipt (ADR-0028).',
   },
   inbound_emails: {
     about:
@@ -129,6 +139,8 @@ export const FUNCTIONS: Readonly<Record<string, string>> = {
     'The organization this transaction works in, from `app.org_id`, which `withOrg()` sets. Every tenant policy compares against it; with no setting it is null and no row matches.',
   app_current_user:
     'The signed-in user for this transaction, from `app.user_id`, set from a verified token. Lets a person find their own memberships before an organization is chosen.',
+  delete_receipt:
+    'Deletes one receipt of the current organization with its readings, confirmations, duplicate pairs and, unless another receipt proves it, its expense; returns the file to remove. Refuses a receipt whose expense is submitted or further along. Runs as its owner, because the app holds no DELETE right on receipts, readings, confirmations or expenses (ADR-0028).',
   claim_outbox_batch:
     'Hands the relay a batch of unpublished outbox events, locking them so two sweeps never take the same one. Runs as its owner, so the relay role needs no table rights.',
   mark_outbox_published: 'Marks events the relay has sent, so they are not sent again.',
@@ -259,6 +271,25 @@ export const RULES: readonly Rule[] = [
       'One row per organization, provider and message id; the workflow derives every id from the message, so a repeat delivery or a retried step files nothing twice. The sender is found through one owner-run function that answers with ids, and the row points at its member by a composite key.',
     objects: ['inbound_emails_message_key', 'member_for_sign_in_email', 'inbound_emails_member_fk'],
     refs: ['ADR-0026', 'NFR-DAT-06'],
+  },
+  {
+    rule: 'A receipt is deleted whole, only through one function, and never once its expense is submitted.',
+    mechanism:
+      'The app has no DELETE right on receipts, readings, confirmations or expenses. `delete_receipt()` is the one way: it removes the receipt with everything that hangs off it in one statement, within the current organization, and refuses a submitted, approved or settled expense. The audit event saying what was deleted is written first, in the same transaction.',
+    objects: ['delete_receipt'],
+    refs: ['FR-INT-18', 'ADR-0028', 'FR-EXP-03'],
+  },
+  {
+    rule: 'Two receipts are flagged as possible duplicates once.',
+    mechanism:
+      'A pair is unique per organization, held receipt and other receipt, the two must differ, and both point into the same organization by composite keys. The check looks for an earlier pair in either order, open or dismissed, so a pair the person kept is never flagged again.',
+    objects: [
+      'receipt_duplicates_pair_key',
+      'receipt_duplicates_two_receipts',
+      'receipt_duplicates_receipt_fk',
+      'receipt_duplicates_other_fk',
+    ],
+    refs: ['FR-INT-18', 'ADR-0028'],
   },
   {
     rule: 'The relay can do one thing.',

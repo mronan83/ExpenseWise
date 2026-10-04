@@ -1,17 +1,22 @@
 import {
   assertRowSecurityApplies,
   confirmReceipt,
+  deleteDuplicateReceipt,
   fileReceipt,
   findReceiptBySha256,
   getReceipt,
+  keepBothReceipts,
   listExtractionRuns,
+  listOpenDuplicatePairs,
   listReceiptReviews,
   listReceipts,
+  mergeDuplicateReceipt,
   requestReceiptReading,
   withOrg,
   type CommittedEvent,
   type ConfirmReceiptResult,
   type Database,
+  type DuplicatePairRecord,
   type ExtractionRunRecord,
   type FileReceiptResult,
   type NewReceipt,
@@ -19,14 +24,30 @@ import {
   type ReceiptRecord,
   type ReceiptFilter,
   type ReceiptReviewRecord,
+  type ResolveDuplicateResult,
 } from '@expensewise/db';
+import type { MergeField } from '@expensewise/domain';
 
-/** A receipt with everything shown about it: its readings and any confirmations. */
+/** A receipt with what its expense shows of it: its readings and any confirmations. */
 export interface ReceiptWithReadings {
   readonly receipt: ReceiptRecord;
   readonly runs: ExtractionRunRecord[];
   readonly reviews: ReceiptReviewRecord[];
 }
+
+/** A receipt with everything its page shows, the possible duplicates too (FR-INT-18). */
+export interface ReceiptInReview extends ReceiptWithReadings {
+  readonly pairs: DuplicatePairRecord[];
+}
+
+/**
+ * What the person decided about two receipts flagged as possible duplicates (FR-INT-18):
+ * different purchases; one to delete, keeping the other; or one merged into the primary.
+ */
+export type DuplicateDecision =
+  | { readonly action: 'keep_both' }
+  | { readonly action: 'delete'; readonly keep: string }
+  | { readonly action: 'merge'; readonly primary: string; readonly fields: readonly MergeField[] };
 
 /**
  * What the API needs from the database for receipts. Filing and asking for a reading write
@@ -44,8 +65,9 @@ export interface ReceiptStore {
     receipts: ReceiptRecord[];
     runs: ExtractionRunRecord[];
     reviews: ReceiptReviewRecord[];
+    pairs: DuplicatePairRecord[];
   }>;
-  get(orgId: string, receiptId: string): Promise<ReceiptWithReadings | undefined>;
+  get(orgId: string, receiptId: string): Promise<ReceiptInReview | undefined>;
   requestReading(
     orgId: string,
     receiptId: string,
@@ -58,6 +80,17 @@ export interface ReceiptStore {
     review: NewReceiptReview,
     actorUserId: string,
   ): Promise<ConfirmReceiptResult>;
+  /**
+   * Settles an open pair as the person decided. The receipt kept is one of the two; any other
+   * is deleted with its expense, and the caller removes its file once this returns.
+   */
+  resolveDuplicate(
+    orgId: string,
+    receiptId: string,
+    otherReceiptId: string,
+    decision: DuplicateDecision,
+    actorUserId: string,
+  ): Promise<ResolveDuplicateResult>;
 }
 
 /** The receipt store on Postgres, as expensewise_app. It checks the role once. */
@@ -83,7 +116,8 @@ export function dbReceiptStore(db: Database): ReceiptStore {
         const ids = receipts.map((r) => r.id);
         const runs = await listExtractionRuns(tx, ids);
         const reviews = await listReceiptReviews(tx, ids);
-        return { receipts, runs, reviews };
+        const pairs = await listOpenDuplicatePairs(tx, ids);
+        return { receipts, runs, reviews, pairs };
       }),
     get: (orgId, receiptId) =>
       inOrg(orgId, async (tx) => {
@@ -93,11 +127,23 @@ export function dbReceiptStore(db: Database): ReceiptStore {
           receipt,
           runs: await listExtractionRuns(tx, [receiptId]),
           reviews: await listReceiptReviews(tx, [receiptId]),
+          pairs: await listOpenDuplicatePairs(tx, [receiptId]),
         };
       }),
     requestReading: (orgId, receiptId, actor) =>
       inOrg(orgId, (tx) => requestReceiptReading(tx, orgId, receiptId, actor)),
     confirm: (orgId, receiptId, review, actor) =>
       inOrg(orgId, (tx) => confirmReceipt(tx, orgId, receiptId, review, actor)),
+    resolveDuplicate: (orgId, receiptId, otherReceiptId, decision, actor) =>
+      inOrg(orgId, (tx) => {
+        if (decision.action === 'keep_both') {
+          return keepBothReceipts(tx, orgId, receiptId, otherReceiptId, actor);
+        }
+        const kept = decision.action === 'delete' ? decision.keep : decision.primary;
+        const other = kept === receiptId ? otherReceiptId : receiptId;
+        return decision.action === 'delete'
+          ? deleteDuplicateReceipt(tx, orgId, other, kept, actor)
+          : mergeDuplicateReceipt(tx, orgId, kept, other, decision.fields, actor);
+      }),
   };
 }

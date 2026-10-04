@@ -18,5 +18,9 @@ export function memoryObjectStore(): ObjectStore & {
       objects.set(path, bytes);
       return Promise.resolve();
     },
+    remove: (path) => {
+      objects.delete(path);
+      return Promise.resolve();
+    },
   };
 }
