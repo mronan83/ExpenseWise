@@ -88,6 +88,11 @@ export const members = pgTable(
     role: memberRole('role').notNull().default('member'),
     managerMemberId: uuid('manager_member_id'),
     createdAt: createdAt(),
+    /**
+     * When an owner removed them (FR-PLT-07): they no longer sign in here, and their records
+     * and history stay. Null while they are a member.
+     */
+    deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
   },
   (t) => [
     unique('members_org_id_id_key').on(t.orgId, t.id),
@@ -126,6 +131,58 @@ export const memberSignIns = pgTable(
       foreignColumns: [members.orgId, members.id],
     }),
     index('member_sign_ins_member_idx').on(t.orgId, t.memberId),
+  ],
+);
+
+/**
+ * A link that lets one person join the organization with a role (FR-PLT-07, ADR-0035). Only
+ * the SHA-256 of its token is kept: the link itself is shown once, to the owner who made it.
+ * It works once, until it expires or is revoked; an accepted or revoked invite stays as a
+ * record of who let whom in.
+ */
+export const memberInvites = pgTable(
+  'member_invites',
+  {
+    id: id(),
+    orgId: orgId(),
+    /** The role the person joins with. */
+    role: memberRole('role').notNull(),
+    /** The owner's note of who it is for, shown only to the organization's owners. */
+    label: text('label'),
+    /** SHA-256 of the token in the link, as hex. The token itself is never stored. */
+    tokenHash: char('token_hash', { length: 64 }).notNull(),
+    createdByMemberId: uuid('created_by_member_id').notNull(),
+    createdAt: createdAt(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+    acceptedByMemberId: uuid('accepted_by_member_id'),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (t) => [
+    unique('member_invites_org_id_id_key').on(t.orgId, t.id),
+    unique('member_invites_token_hash_key').on(t.tokenHash),
+    foreignKey({
+      name: 'member_invites_created_by_fk',
+      columns: [t.orgId, t.createdByMemberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    foreignKey({
+      name: 'member_invites_accepted_by_fk',
+      columns: [t.orgId, t.acceptedByMemberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    check('member_invites_token_hash_hex', sql`${t.tokenHash} ~ '^[0-9a-f]{64}$'`),
+    check(
+      'member_invites_accepted_by_someone',
+      sql`(${t.acceptedAt} IS NULL) = (${t.acceptedByMemberId} IS NULL)`,
+    ),
+    check(
+      'member_invites_accepted_or_revoked',
+      sql`${t.acceptedAt} IS NULL OR ${t.revokedAt} IS NULL`,
+    ),
+    check('member_invites_expires_after_made', sql`${t.expiresAt} > ${t.createdAt}`),
+    check('member_invites_label_short', sql`${t.label} IS NULL OR length(${t.label}) <= 80`),
+    index('member_invites_org_created_idx').on(t.orgId, t.createdAt),
   ],
 );
 

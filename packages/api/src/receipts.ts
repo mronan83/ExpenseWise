@@ -1,5 +1,4 @@
 import {
-  assertRowSecurityApplies,
   confirmReceipt,
   deleteDuplicateReceipt,
   fileReceipt,
@@ -12,7 +11,6 @@ import {
   listReceipts,
   mergeDuplicateReceipt,
   requestReceiptReading,
-  withOrg,
   type CommittedEvent,
   type ConfirmReceiptResult,
   type Database,
@@ -27,6 +25,7 @@ import {
   type ResolveDuplicateResult,
 } from '@expensewise/db';
 import type { ExpenseDetails, MergeField } from '@expensewise/domain';
+import { asCaller } from './caller.ts';
 
 /** A receipt with what its expense shows of it: its readings and any confirmations. */
 export interface ReceiptWithReadings {
@@ -95,18 +94,12 @@ export interface ReceiptStore {
   ): Promise<ResolveDuplicateResult>;
 }
 
-/** The receipt store on Postgres, as expensewise_app. It checks the role once. */
+/**
+ * The receipt store on Postgres, as expensewise_app, for the request's caller: they see and
+ * change only what their role allows (ADR-0035). It checks the role once.
+ */
 export function dbReceiptStore(db: Database): ReceiptStore {
-  let checked: Promise<void> | undefined;
-  const safe = () =>
-    (checked ??= assertRowSecurityApplies(db).catch((error: unknown) => {
-      checked = undefined;
-      throw error;
-    }));
-  const inOrg = async <T>(orgId: string, work: Parameters<typeof withOrg<T>>[2]) => {
-    await safe();
-    return withOrg(db, orgId, work);
-  };
+  const inOrg = asCaller(db);
 
   return {
     findBySha256: (orgId, sha256) =>

@@ -177,8 +177,11 @@ export type FileReceiptResult =
   | { readonly status: 'filed'; readonly receipt: ReceiptRecord; readonly event: CommittedEvent }
   /** The same id was filed before: a retried request. Nothing changes. */
   | { readonly status: 'exists'; readonly receipt: ReceiptRecord }
-  /** Another receipt holds the same file. */
-  | { readonly status: 'duplicate'; readonly receiptId: string };
+  /**
+   * Another receipt holds the same file. Its id is null when it is another member's that the
+   * caller can't see (ADR-0035): one file is claimed once in an organization.
+   */
+  | { readonly status: 'duplicate'; readonly receiptId: string | null };
 
 /**
  * Files an uploaded receipt: the row, the event that has it read, and the audit event, in the
@@ -200,7 +203,14 @@ export async function fileReceipt(
   const same = await findReceiptBySha256(tx, input.sha256);
   if (same) return { status: 'duplicate', receiptId: same.id };
 
-  await tx.insert(receipts).values({ ...input, orgId, status: 'processing' });
+  // A member sees only their own receipts, so the same file filed by a colleague shows up
+  // only here, as a conflict on the organization's one-file-once key.
+  const inserted = await tx
+    .insert(receipts)
+    .values({ ...input, orgId, status: 'processing' })
+    .onConflictDoNothing()
+    .returning({ id: receipts.id });
+  if (inserted.length === 0) return { status: 'duplicate', receiptId: null };
   const payload = { receiptId: input.id };
   const outboxId = await enqueueOutbox(tx, orgId, RECEIPT_UPLOADED, payload);
   await appendAuditEvent(tx, orgId, {

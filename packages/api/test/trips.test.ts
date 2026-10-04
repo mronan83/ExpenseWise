@@ -184,7 +184,13 @@ describe('trips', () => {
   it('searches by text and dates, and refuses a date that does not exist', async () => {
     const { call, filters } = setup();
     await call('GET', '/v1/trips?q=houston&from=2026-09-01&to=2026-09-30', 'riley');
-    expect(filters.at(-1)).toEqual({ q: 'houston', from: '2026-09-01', to: '2026-09-30' });
+    // Only the caller's own, whatever their role lets them open (ADR-0035).
+    expect(filters.at(-1)).toEqual({
+      q: 'houston',
+      from: '2026-09-01',
+      to: '2026-09-30',
+      memberId: MEMBER,
+    });
     expect((await call('GET', '/v1/trips?from=2026-02-30', 'riley')).status).toBe(400);
   });
 

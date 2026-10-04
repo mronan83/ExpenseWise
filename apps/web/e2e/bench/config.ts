@@ -28,4 +28,9 @@ export interface Seeded {
   readonly expenses: Record<string, string>;
   /** open: still needing review, with a justified and an unjustified local expense. */
   readonly reports: Record<'open' | 'closed', string>;
+  /**
+   * Links to another organization (#29): one Riley's own work stops Riley joining, and one its
+   * owner revoked.
+   */
+  readonly invites: Record<'join' | 'revoked', string>;
 }

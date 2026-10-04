@@ -125,6 +125,10 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
   ['AI provider settings', () => '/settings/ai', []],
   ['sign-in settings', () => '/settings/sign-ins', []],
   ['feature settings', () => '/settings/features', []],
+  ['people settings, with a member and a link not used yet', () => '/settings/people', []],
+  ['removing someone', () => '/settings/people', [press('Remove sam')]],
+  ['an invite link this account can’t use', (s) => `/invite/${s.invites.join}`, []],
+  ['a revoked invite link', (s) => `/invite/${s.invites.revoked}`, []],
 ];
 
 const session = {

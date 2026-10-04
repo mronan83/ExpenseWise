@@ -11,6 +11,7 @@ export * from './inbound.ts';
 export * from './members.ts';
 export * from './role-passwords.ts';
 export * from './outbox.ts';
+export * from './people.ts';
 export * from './readiness.ts';
 export * from './report-touch.ts';
 export * from './reports.ts';

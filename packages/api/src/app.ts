@@ -1,7 +1,9 @@
+import { isOwnRecordsRefusal } from '@expensewise/db';
 import { DomainError } from '@expensewise/domain';
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { Hono, type Context, type ErrorHandler, type NotFoundHandler } from 'hono';
 import type { ProviderKeyVerifier } from './ai-providers.ts';
+import { callerScope, notYours, recordingCaller } from './caller.ts';
 import { featureGate, type FeatureGate } from './features.ts';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
 import { problem, ProblemError } from './problem.ts';
@@ -15,6 +17,8 @@ import type { HomeStore } from './home.ts';
 import { registerHomeRoutes } from './home-routes.ts';
 import { registerInboundRoutes, type InboundRouteOptions } from './inbound-routes.ts';
 import type { ExpenseStore } from './expenses.ts';
+import type { PeopleStore } from './people.ts';
+import { registerPeopleRoutes } from './people-routes.ts';
 import { registerReceiptRoutes, type ReceiptRouteOptions } from './receipt-routes.ts';
 import { registerReportRoutes } from './report-routes.ts';
 import type { ReportStore } from './reports.ts';
@@ -45,6 +49,8 @@ export interface ApiOptions
   readonly home?: HomeStore;
   /** Expense reports. Without it, those routes answer 503 and Needs you shows no reports. */
   readonly reports?: ReportStore;
+  /** People and invite links (#29). Without it, those routes answer 503. */
+  readonly people?: PeopleStore;
   /** Encrypts AI provider keys at rest. Without it, saving or testing a key answers 503. */
   readonly secrets?: SecretBox;
   /** Checks AI provider keys with a free call to the provider. */
@@ -100,6 +106,11 @@ function errorHandler(reportError?: (error: unknown) => void): ErrorHandler {
         code: error.code,
       });
     }
+    // The database refused a change that isn't the caller's own (ADR-0035): expected, not a bug.
+    if (isOwnRecordsRefusal(error)) {
+      const refusal = notYours();
+      return problem(c, refusal.status, refusal.slug, refusal.title, refusal.extra);
+    }
     console.error(error);
     reportError?.(error);
     return problem(c, 500, 'internal', 'Something went wrong on our side', { code: 'internal' });
@@ -123,6 +134,9 @@ export function createApi(options: ApiOptions) {
       }
     },
   });
+
+  // First, before any route: each request gets a slot for who it acts for (ADR-0035).
+  app.use('*', callerScope);
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'bearerAuth', {
     type: 'http',
@@ -154,7 +168,10 @@ export function createApi(options: ApiOptions) {
 
   // One gate for every route: a feature that is off answers 404 feature_off.
   const features: FeatureGate = featureGate(options);
-  const routes = { ...options, features };
+  // Each route resolves its caller through the workspace store, which records them as who the
+  // request acts for, so members' records are read and changed as them (ADR-0035).
+  const workspace = options.workspace && recordingCaller(options.workspace);
+  const routes = { ...options, workspace, features };
   registerWorkspaceRoutes(app, routes);
   registerReceiptRoutes(app, routes);
   registerExpenseRoutes(app, routes);
@@ -162,6 +179,7 @@ export function createApi(options: ApiOptions) {
   registerHomeRoutes(app, routes);
   registerReportRoutes(app, routes);
   registerInboundRoutes(app, routes);
+  registerPeopleRoutes(app, routes);
 
   app.doc31('/v1/openapi.json', OPENAPI_INFO);
 

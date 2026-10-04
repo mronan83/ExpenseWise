@@ -152,6 +152,14 @@ export const RULES: readonly Rule[] = [
     },
   },
   {
+    id: 'R-INVITE-DAYS',
+    name: 'How long an invite link works',
+    value: '7 days from when it is made, once',
+    decided: { by: 'claude', source: 'ADR-0035' },
+    code: { file: 'packages/domain/src/people.ts', constant: 'INVITE_DAYS', literal: '7' },
+    note: 'You chose invites by link on Oct 4; the 7 days are Claude’s.',
+  },
+  {
     id: 'R-SIGN-IN-LINK',
     name: 'How long a link to add a sign-in works',
     value: '10 minutes',

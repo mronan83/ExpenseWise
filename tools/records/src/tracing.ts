@@ -6,6 +6,17 @@ import type { ChangeLogEntry, Gap, Question } from './model.ts';
  */
 export const GAPS: readonly Gap[] = [
   {
+    id: 'GAP-34',
+    title:
+      'Inside an organization, the audit trail and the outbox are kept to the organization, not to each member.',
+    affects: ['FR-GOV-01'],
+    severity: 'Low',
+    evidence:
+      'Found building #50 (ADR-0035). Members see only their own receipts, expenses, trips and reports, but every member’s transaction can read the organization’s whole audit trail, which it reads to chain the next event, and its outbox. No screen or API operation shows either to a member, so nothing reaches one through the app; a screen that read them would show colleagues’ merchants and amounts.',
+    fix: 'Hold reading the trail to owners, finance admins and auditors, with the chain’s last link read by an owner-run function, and the outbox to the system (#77).',
+    backlog: 77,
+  },
+  {
     id: 'GAP-25',
     title: 'Photos emailed in are stored with their location.',
     affects: ['NFR-PRV-03'],
@@ -113,6 +124,10 @@ export const GAPS: readonly Gap[] = [
       'Row-level security keeps organizations apart, but inside one the API checks only that the caller is a member. Found while building trips (#16), which follow the same rule as expenses. Harmless while every organization has one person; the first invite (#29) would show a new member their colleagues’ spending.',
     fix: 'A member sees and changes their own; an approver sees what they approve; finance admins see everything, and auditors read it. Enforced in the API, with a test for each role, before anyone is invited (#50).',
     backlog: 50,
+    closed: {
+      date: '2026-10-04',
+      note: 'PR #58 (ADR-0035): enforced in the database, not only the API. Each request names its caller to Postgres; a member or approver sees only their own receipts, expenses, trips and reports and what hangs off them, owners, finance admins and auditors see everyone’s, everyone changes only their own, and an auditor nothing. Tested for each role by API and directly as the app’s database role. Approval isn’t built, so an approver sees only their own until #24.',
+    },
   },
   {
     id: 'GAP-19',
@@ -618,6 +633,14 @@ export const QUESTIONS: readonly Question[] = [
       date: '2026-10-04',
       text: 'A, the user story format as laid out. Go back through the entire build and capture every user story and its acceptance criteria. Asked where they live: in these records (tools/records/src/stories), beside the requirements, and published as a fifth page, User stories & acceptance criteria, after each release; the traceability page links each requirement to its stories.',
     },
+  },
+  {
+    id: 'Q34',
+    title: 'What owners and finance admins may do with others’ records',
+    ask: 'Since #50, owners, finance admins and auditors can open everyone’s receipts, expenses and trips, but each person changes only their own, and Receipts, Expenses and Trips list only your own. A: as built: see everyone’s, change only your own; a claim that needs fixing goes back to its person, through approval (#24). B: owners and finance admins can also change anyone’s records, each change audited. C: as A, plus a list of everyone’s records for owners and finance admins.',
+    why: 'Who may change a colleague’s claim is a control: if a finance admin can edit an expense, what its claimant said they spent can change under them. A list of everyone’s is how an owner would actually look at the team’s spending; today they open a record only by its link.',
+    recommendation: 'A for now; decide on C when the first team starts approving reports.',
+    affects: ['FR-GOV-01', 'F-61', 'ADR-0035'],
   },
 ];
 

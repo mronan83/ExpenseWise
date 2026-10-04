@@ -1,5 +1,4 @@
 import {
-  assertRowSecurityApplies,
   editExpense,
   getExpense,
   getReceipt,
@@ -8,7 +7,6 @@ import {
   listReceiptReviews,
   receiptsById,
   setExpenseTrip,
-  withOrg,
   type Database,
   type EditExpenseResult,
   type ExpenseFilter,
@@ -21,6 +19,7 @@ import {
   type TripChoice,
 } from '@expensewise/db';
 import type { DetailsEdit, ExpenseEdit } from '@expensewise/domain';
+import { asCaller } from './caller.ts';
 import type { ReceiptWithReadings } from './receipts.ts';
 
 /** Expenses with what their receipts show: the receipts, their readings and reviews. */
@@ -68,18 +67,12 @@ export interface ExpenseStore {
   ): Promise<SetExpenseTripResult>;
 }
 
-/** The expense store on Postgres, as expensewise_app. It checks the role once. */
+/**
+ * The expense store on Postgres, as expensewise_app, for the request's caller: they see and
+ * change only what their role allows (ADR-0035). It checks the role once.
+ */
 export function dbExpenseStore(db: Database): ExpenseStore {
-  let checked: Promise<void> | undefined;
-  const safe = () =>
-    (checked ??= assertRowSecurityApplies(db).catch((error: unknown) => {
-      checked = undefined;
-      throw error;
-    }));
-  const inOrg = async <T>(orgId: string, work: Parameters<typeof withOrg<T>>[2]) => {
-    await safe();
-    return withOrg(db, orgId, work);
-  };
+  const inOrg = asCaller(db);
 
   return {
     list: (orgId, limit, filter) =>

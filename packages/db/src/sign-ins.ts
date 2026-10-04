@@ -6,6 +6,7 @@ import {
   aiProviderKeys,
   categories,
   expenses,
+  memberInvites,
   memberSignIns,
   members,
   mileageLogs,
@@ -37,14 +38,27 @@ export function listSignIns(tx: Transaction, memberId: string): Promise<SignIn[]
     .orderBy(asc(memberSignIns.createdAt));
 }
 
-/** Tables whose rows mean an organization holds someone's work. */
-const WORK_TABLES = [receipts, expenses, trips, mileageLogs, reports, categories, aiProviderKeys];
+/**
+ * Tables whose rows mean an organization holds someone's work. An invite counts: someone may
+ * be about to join it.
+ */
+const WORK_TABLES = [
+  receipts,
+  expenses,
+  trips,
+  mileageLogs,
+  reports,
+  categories,
+  aiProviderKeys,
+  memberInvites,
+];
 
 /**
  * Whether the current organization can be left behind without losing anything: one member,
- * one sign-in, and none of the tables that hold work. Call inside withOrg().
+ * one sign-in, and none of the tables that hold work. Call inside withOrg(), or after
+ * switchOrg(), for the system: a member's own view would miss colleagues' work.
  */
-async function isEmptySoloOrganization(tx: Transaction): Promise<boolean> {
+export async function isEmptySoloOrganization(tx: Transaction): Promise<boolean> {
   const [people] = await tx.select({ n: sql<number>`count(*)::int` }).from(members);
   const [ways] = await tx.select({ n: sql<number>`count(*)::int` }).from(memberSignIns);
   if (people?.n !== 1 || ways?.n !== 1) return false;

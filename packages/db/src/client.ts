@@ -1,4 +1,4 @@
-import { isUuid } from '@expensewise/domain';
+import { isUuid, MEMBER_ROLES, type MemberRole } from '@expensewise/domain';
 import { sql } from 'drizzle-orm';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
@@ -49,33 +49,101 @@ export async function assertRowSecurityApplies(db: Database): Promise<void> {
 }
 
 /**
+ * The member a transaction acts for, and their role (ADR-0035). Row-level security then shows
+ * a member or approver only their own receipts, expenses, trips and reports, and what hangs
+ * off them; owners, finance admins and auditors see everyone's. Everyone changes only their
+ * own, and an auditor changes nothing.
+ */
+export interface MemberScope {
+  readonly memberId: string;
+  readonly role: MemberRole;
+}
+
+export interface OrgOptions {
+  /** The signed-in user, for the policies that show a user their own sign-ins. */
+  readonly userId?: string;
+  /**
+   * The member the work is done for. Leave it out for the system's own work, such as a
+   * workflow or the release, which sees and changes every member's records in the
+   * organization. The API passes the caller's membership for everything a member asks for.
+   */
+  readonly member?: MemberScope;
+}
+
+/**
  * Runs `work` in a transaction bound to one organization. Row-level security reads
- * `app.org_id`, so every query inside sees and writes only that organization's rows.
- * The setting is transaction-local, which is also what makes it safe behind a
- * transaction-mode connection pooler.
+ * `app.org_id`, so every query inside sees and writes only that organization's rows; with a
+ * `member`, only the rows that member may see and change (ADR-0035). The settings are
+ * transaction-local, which is also what makes them safe behind a transaction-mode connection
+ * pooler.
  */
 export async function withOrg<T>(
   db: Database,
   orgId: string,
   work: (tx: Transaction) => Promise<T>,
-  options: { userId?: string } = {},
+  options: OrgOptions = {},
 ): Promise<T> {
   if (!isUuid(orgId)) throw new Error(`withOrg needs an organization UUID, got "${orgId}"`);
+  if (options.member) checkMember(options.member);
   return db.transaction(async (tx) => {
     await tx.execute(sql`select set_config('app.org_id', ${orgId}, true)`);
     if (options.userId) await setUser(tx, options.userId);
+    if (options.member) await setMember(tx, options.member);
     return work(tx);
   });
 }
 
 /**
+ * Runs `work` for one member of one organization: withOrg() with their membership, so they
+ * see and change only what their role allows (ADR-0035).
+ */
+export function withMember<T>(
+  db: Database,
+  membership: MemberScope & { readonly orgId: string },
+  work: (tx: Transaction) => Promise<T>,
+): Promise<T> {
+  return withOrg(db, membership.orgId, work, {
+    member: { memberId: membership.memberId, role: membership.role },
+  });
+}
+
+/**
  * Moves an open withOrg() transaction to another organization: from here on it sees and
- * writes only `orgId`'s rows. Only for one person's change that spans two organizations
- * they sign in to, such as moving a sign-in out of an empty organization.
+ * writes only `orgId`'s rows, for the system rather than for any one member. Only for one
+ * person's change that spans two organizations, such as moving a sign-in out of an empty
+ * organization or joining one by an invite.
  */
 export async function switchOrg(tx: Transaction, orgId: string): Promise<void> {
   if (!isUuid(orgId)) throw new Error(`switchOrg needs an organization UUID, got "${orgId}"`);
   await tx.execute(sql`select set_config('app.org_id', ${orgId}, true)`);
+  await tx.execute(sql`select set_config('app.member_id', '', true)`);
+  await tx.execute(sql`select set_config('app.member_role', '', true)`);
+}
+
+function checkMember(member: MemberScope): void {
+  if (!isUuid(member.memberId)) {
+    throw new Error(`withOrg needs a member UUID, got "${member.memberId}"`);
+  }
+  if (!(MEMBER_ROLES as readonly string[]).includes(member.role)) {
+    throw new Error(`withOrg needs a member role, got "${member.role}"`);
+  }
+}
+
+async function setMember(tx: Transaction, member: MemberScope): Promise<void> {
+  await tx.execute(sql`select set_config('app.member_id', ${member.memberId}, true)`);
+  await tx.execute(sql`select set_config('app.member_role', ${member.role}, true)`);
+}
+
+/**
+ * Whether the database refused a change because it was not the acting member's own
+ * (ADR-0035): another member's record, or anything at all for an auditor.
+ */
+export function isOwnRecordsRefusal(error: unknown): boolean {
+  for (let cur: unknown = error; cur instanceof Error; cur = cur.cause) {
+    const code = (cur as { code?: unknown }).code;
+    if (code === '42501' && cur.message.startsWith('own_records:')) return true;
+  }
+  return false;
 }
 
 /**

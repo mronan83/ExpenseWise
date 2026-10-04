@@ -18,6 +18,7 @@ import {
   dbExpenseStore,
   dbReceiptStore,
   dbHomeStore,
+  dbPeopleStore,
   dbReportStore,
   dbTripStore,
   dbWorkspaceStore,
@@ -226,6 +227,7 @@ const app = createHttpApp({
   expenses: dbExpenseStore(db),
   trips: dbTripStore(db),
   home: dbHomeStore(db),
+  people: dbPeopleStore(db),
   reports: dbReportStore(db),
   files: store,
   dispatch,
@@ -233,11 +235,12 @@ const app = createHttpApp({
   verifyProviderKey: () => Promise.resolve({ ok: true, authScheme: 'api_key' }),
 });
 
-async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+/** Calls the API as `user`, whom the bench signs in by name. */
+async function callAs<T>(user: string, method: string, path: string, body?: unknown): Promise<T> {
   const res = await app.request(`/api${path}`, {
     method,
     headers: {
-      authorization: `Bearer ${E2E_USER}`,
+      authorization: `Bearer ${user}`,
       ...(body ? { 'content-type': 'application/json' } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
@@ -246,6 +249,8 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   if (res.status >= 400) throw new Error(`${method} ${path} answered ${res.status}: ${text}`);
   return (text ? JSON.parse(text) : undefined) as T;
 }
+const call = <T>(method: string, path: string, body?: unknown) =>
+  callAs<T>(E2E_USER, method, path, body);
 
 // The organization, a key, trips, receipts in every state, and expenses changed by hand.
 const { organization } = await call<{ organization: { id: string } }>(
@@ -258,6 +263,26 @@ await call('PUT', '/v1/settings/ai-providers/anthropic', { apiKey: 'sk-ant-bench
 for (const key of ORG_FEATURE_KEYS) {
   await call('PUT', `/v1/settings/features/${key}`, { enabled: true });
 }
+
+// People (#29): Sam joined by a link, and a link for Jordan not used yet. Another
+// organization's owner sent Riley a link, which Riley's own work stops Riley joining, and
+// revoked a second one.
+type Made = { token: string; invite: { id: string } };
+const sam = await call<Made>('POST', '/v1/settings/people/invites', {
+  role: 'member',
+  label: 'Sam',
+});
+await callAs('sam', 'POST', '/v1/invites/accept', { token: sam.token });
+await call('POST', '/v1/settings/people/invites', { role: 'approver', label: 'Jordan' });
+await callAs('morgan', 'POST', '/v1/me/organization');
+await callAs('morgan', 'PUT', '/v1/settings/features/team.invites', { enabled: true });
+const join = await callAs<Made>('morgan', 'POST', '/v1/settings/people/invites', {
+  role: 'finance_admin',
+});
+const revoked = await callAs<Made>('morgan', 'POST', '/v1/settings/people/invites', {
+  role: 'member',
+});
+await callAs('morgan', 'DELETE', `/v1/settings/people/invites/${revoked.invite.id}`);
 
 const trip = (body: Record<string, string>) => call<{ id: string }>('POST', '/v1/trips', body);
 const trips = {
@@ -481,6 +506,7 @@ const seeded: Seeded = {
   receipts,
   expenses,
   reports: { open, closed },
+  invites: { join: join.token, revoked: revoked.token },
 };
 
 const server = createServer((req, res) => {

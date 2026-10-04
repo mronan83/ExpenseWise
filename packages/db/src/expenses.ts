@@ -115,6 +115,8 @@ export interface ExpenseFilter {
   readonly tripId?: string;
   /** true: on some trip. false: on none. */
   readonly onTrip?: boolean;
+  /** Only this member's (ADR-0035): a person's Expenses lists their own. */
+  readonly memberId?: string;
 }
 
 const matching = (filter: ExpenseFilter): SQL | undefined => {
@@ -132,6 +134,7 @@ const matching = (filter: ExpenseFilter): SQL | undefined => {
   if (filter.onTrip !== undefined) {
     where.push(filter.onTrip ? isNotNull(expenses.tripId) : isNull(expenses.tripId));
   }
+  if (filter.memberId) where.push(eq(expenses.memberId, filter.memberId));
   return and(...where);
 };
 

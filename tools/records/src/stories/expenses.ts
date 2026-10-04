@@ -181,7 +181,7 @@ export const EXPENSE_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Refusing to submit a report while a difference has no reason, and rejecting one at review, are FR-GOV-13 and FR-GOV-10, which come with approval (#24). Inside an organization any member can still open every member’s expenses (GAP-20, #50).',
+    note: 'Refusing to submit a report while a difference has no reason, and rejecting one at review, are FR-GOV-13 and FR-GOV-10, which come with approval (#24). Inside an organization a member opens only their own expenses (US-SEC-14).',
   },
   {
     id: 'US-EXP-03',
@@ -282,7 +282,7 @@ export const EXPENSE_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Editing again when a report comes back follows the expense lifecycle, where a returned expense is Ready again, but nothing returns a report until approval is built (#24). Inside an organization any member can still change another member’s expense (GAP-20, #50).',
+    note: 'Editing again when a report comes back follows the expense lifecycle, where a returned expense is Ready again, but nothing returns a report until approval is built (#24). Inside an organization a member changes only their own expenses (US-SEC-14).',
   },
   {
     id: 'US-EXP-04',
@@ -358,7 +358,7 @@ export const EXPENSE_STORIES: readonly Story[] = [
         checks: ['db/expenses.int › stays inside its organization'],
       },
     ],
-    note: 'Expenses has no trip field of its own: a trip’s page lists its expenses (US-TRIP-04), and Home’s figures open Expenses already narrowed. Inside an organization, search still finds every member’s expenses (GAP-20, #50).',
+    note: 'Expenses has no trip field of its own: a trip’s page lists its expenses (US-TRIP-04), and Home’s figures open Expenses already narrowed. Search finds only the person’s own expenses, whatever their role (US-SEC-15).',
   },
 
   // Trips
@@ -652,7 +652,7 @@ export const EXPENSE_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Inside an organization, Trips still lists every member’s trips (GAP-20, #50); a trip is marked done when its report closes (#23).',
+    note: 'Trips lists only the person’s own trips, whatever their role (US-SEC-15); a trip is marked done when its report closes (#23).',
   },
   {
     id: 'US-TRIP-05',

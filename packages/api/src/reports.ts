@@ -1,5 +1,4 @@
 import {
-  assertRowSecurityApplies,
   closeReport,
   getReport,
   justifyExpense,
@@ -7,7 +6,6 @@ import {
   listUnjustifiedExpenses,
   moveToReport,
   reopenReport,
-  withOrg,
   type CloseReportResult,
   type Database,
   type ExpenseRecord,
@@ -18,6 +16,7 @@ import {
   type ReportContents,
   type Transaction,
 } from '@expensewise/db';
+import { asCaller } from './caller.ts';
 
 /** What Needs you shows of reports: a member's open and closed ones, and unjustified expenses. */
 export interface ReportsNeedingYou {
@@ -60,18 +59,12 @@ export async function reportsNeedingYou(
   };
 }
 
-/** The report store on Postgres, as expensewise_app. It checks the role once. */
+/**
+ * The report store on Postgres, as expensewise_app, for the request's caller: they see and
+ * change only what their role allows (ADR-0035). It checks the role once.
+ */
 export function dbReportStore(db: Database): ReportStore {
-  let checked: Promise<void> | undefined;
-  const safe = () =>
-    (checked ??= assertRowSecurityApplies(db).catch((error: unknown) => {
-      checked = undefined;
-      throw error;
-    }));
-  const inOrg = async <T>(orgId: string, work: Parameters<typeof withOrg<T>>[2]) => {
-    await safe();
-    return withOrg(db, orgId, work);
-  };
+  const inOrg = asCaller(db);
   return {
     list: (orgId, memberId, limit) => inOrg(orgId, (tx) => listReports(tx, limit, { memberId })),
     get: (orgId, reportId) => inOrg(orgId, (tx) => getReport(tx, reportId)),

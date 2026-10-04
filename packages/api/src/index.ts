@@ -7,6 +7,8 @@ export * from './expenses.ts';
 export * from './features.ts';
 export * from './home.ts';
 export * from './inbound-routes.ts';
+export * from './people.ts';
+export * from './people-schemas.ts';
 export * from './webhooks.ts';
 export * from './provider-keys.ts';
 export * from './receipts.ts';

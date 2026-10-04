@@ -603,7 +603,7 @@ export const REPORT_STORIES: readonly Story[] = [
         untested: 66,
       },
     ],
-    note: 'You asked to be told in the app, on Home and in Needs you (FR-EXP-05). Which reports Needs you shows, and in what order, is Claude’s reading of that (ADR-0029). Within an organization, any member can still open, close or reopen another member’s report by its link, as with receipts, expenses and trips (GAP-20, #50); harmless while every organization has one person.',
+    note: 'You asked to be told in the app, on Home and in Needs you (FR-EXP-05). Which reports Needs you shows, and in what order, is Claude’s reading of that (ADR-0029). Within an organization, a member opens, closes and reopens only their own reports, as with receipts, expenses and trips (US-SEC-14).',
   },
   {
     id: 'US-RPT-07',
