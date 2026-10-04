@@ -1,6 +1,6 @@
 import { money } from '@expensewise/domain';
 import { describe, expect, it } from 'vitest';
-import { confirmReading } from './confirm.ts';
+import { confirmReading, correctionsOf, correctReading, expenseEditOf } from './confirm.ts';
 import { normalizeExtraction } from './normalize.ts';
 import type { ReceiptExtraction } from './schema.ts';
 
@@ -129,5 +129,80 @@ describe('confirmReading', () => {
       ok: false,
       error: { kind: 'invalid', field },
     });
+  });
+});
+
+describe('correctReading, for a receipt already Ready', () => {
+  it('changes one field with a tap, keeping what the model read beside it', () => {
+    const result = correctReading(n(), {}, { merchant: 'Blue Bottle Coffee — Oxbow' });
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        confirmed: { merchant: 'Blue Bottle Coffee — Oxbow', total: money(650, 'USD') },
+        corrections: [
+          {
+            field: 'merchant',
+            read: 'Blue Bottle Coffee',
+            corrected: 'Blue Bottle Coffee — Oxbow',
+          },
+        ],
+        changes: [
+          { field: 'merchant', from: 'Blue Bottle Coffee', to: 'Blue Bottle Coffee — Oxbow' },
+        ],
+      },
+    });
+  });
+
+  it('keeps earlier corrections, each against what the model read, and changes only the new', () => {
+    const result = correctReading(n(), { total: '7.25' }, { tip: '1.00', total: '7.50' });
+    expect(result.ok && result.value.corrections).toEqual([
+      { field: 'total', read: '6.50', corrected: '7.50' },
+      { field: 'tip', read: null, corrected: '1.00' },
+    ]);
+    expect(result.ok && result.value.changes).toEqual([
+      { field: 'total', from: '7.25', to: '7.50' },
+      { field: 'tip', from: '0.00', to: '1.00' },
+    ]);
+  });
+
+  it('changes nothing for a value it is filed with already, as typed or not', () => {
+    expect(correctReading(n(), {}, { total: '6.5' })).toEqual({
+      ok: false,
+      error: { kind: 'unchanged' },
+    });
+    expect(correctReading(n(), { merchant: 'Blue Bottle' }, { merchant: 'Blue Bottle' })).toEqual({
+      ok: false,
+      error: { kind: 'unchanged' },
+    });
+  });
+
+  it('refuses a value that is not valid, naming the field', () => {
+    expect(correctReading(n(), {}, { date: '2026-13-01' })).toMatchObject({
+      ok: false,
+      error: { kind: 'invalid', field: 'date' },
+    });
+  });
+
+  it('turns the change into an edit of its expense; tax and tip stay on the receipt', () => {
+    const result = correctReading(n(), {}, { currency: 'CAD', total: '7.00', tip: '1.00' });
+    if (!result.ok) throw new Error('expected a correction');
+    expect(expenseEditOf(result.value.confirmed, result.value.changes)).toEqual({
+      currency: 'CAD',
+      amount: '7.00',
+    });
+    expect(
+      expenseEditOf(result.value.confirmed, [{ field: 'merchant', from: 'a', to: 'b' }]),
+    ).toEqual({ merchant: 'Blue Bottle Coffee' });
+  });
+
+  it('reads the corrections a review kept back as values to correct again', () => {
+    expect(
+      correctionsOf([
+        { field: 'total', read: '6.50', corrected: '7.25' },
+        { field: 'nonsense', read: null, corrected: 'x' },
+        { field: 'tip' },
+      ]),
+    ).toEqual({ total: '7.25' });
+    expect(correctionsOf(null)).toEqual({});
   });
 });

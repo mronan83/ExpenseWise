@@ -166,6 +166,18 @@ export const RULES: readonly Rule[] = [
     code: { file: 'packages/api/src/home-routes.ts', constant: 'NEEDS_SHOWN', literal: '3' },
   },
   {
+    id: 'R-CAPTURE-READY',
+    name: 'How soon a receipt is read after it is captured',
+    value: 'under 30 seconds, for 95 of every 100',
+    decided: { by: 'blueprint', source: 'journeys §4.2' },
+    code: {
+      file: 'packages/domain/src/capture-time.ts',
+      constant: 'CAPTURE_TO_READY_SLO_MS',
+      literal: '30_000',
+    },
+    note: 'NFR-PERF-01. Measured from filing to the first settled reading, Ready or not; the 95th percentile is taken by nearest rank, so it is always one of the times measured (Claude’s).',
+  },
+  {
     id: 'R-IMAGE-LINK',
     name: 'How long a link to a receipt’s file works',
     value: '5 minutes',

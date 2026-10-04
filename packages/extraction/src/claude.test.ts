@@ -1,8 +1,21 @@
 import type Anthropic from '@anthropic-ai/sdk';
+import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { describe, expect, it, vi } from 'vitest';
 import { ClaudeExtractor } from './claude.ts';
-import { PROMPT_VERSION } from './prompt.ts';
-import type { ReceiptExtraction } from './schema.ts';
+import {
+  PROMPT_VERSION,
+  SOURCES_PROMPT_VERSION,
+  SOURCES_SYSTEM_PROMPT,
+  SYSTEM_PROMPT,
+} from './prompt.ts';
+import {
+  ReceiptExtractionSchema,
+  ReceiptExtractionWithSourcesSchema,
+  SCHEMA_VERSION,
+  SOURCES_SCHEMA_VERSION,
+  type FieldSources,
+  type ReceiptExtraction,
+} from './schema.ts';
 
 const parsed: ReceiptExtraction = {
   documentType: 'receipt',
@@ -78,5 +91,62 @@ describe('ClaudeExtractor', () => {
     const run = await new ClaudeExtractor(client, 'claude-sonnet-5-5').extract(jpeg);
     expect(run.outcome).toBe(outcome);
     expect(run.extraction).toBeNull();
+  });
+
+  it('asks for the line each field was read from only when told to, under its own versions', async () => {
+    const sources: FieldSources = {
+      merchant: 'BAYSIDE GRILL',
+      date: null,
+      time: null,
+      address: null,
+      currency: null,
+      total: 'TOTAL ........ 10.00',
+      subtotal: null,
+      taxes: null,
+      tip: null,
+      fees: null,
+      cardLastFour: null,
+    };
+    const answer = { ...parsed, sources };
+    const { client, parse } = stubClient({ stop_reason: 'end_turn', parsed_output: answer });
+    const run = await new ClaudeExtractor(client, 'claude-haiku-4-5', {
+      fieldSources: true,
+    }).extract(jpeg);
+    expect(run).toMatchObject({
+      outcome: 'extracted',
+      extraction: answer,
+      promptVersion: SOURCES_PROMPT_VERSION,
+      schemaVersion: SOURCES_SCHEMA_VERSION,
+    });
+    const request = parse.mock.calls[0]?.[0] as {
+      system: string;
+      tools?: unknown;
+      output_config: { format: { schema: unknown } };
+    };
+    expect(request.system).toBe(SOURCES_SYSTEM_PROMPT);
+    expect(request.system.startsWith(SYSTEM_PROMPT)).toBe(true);
+    expect(request.output_config.format.schema).toEqual(
+      zodOutputFormat(ReceiptExtractionWithSourcesSchema).schema,
+    );
+    // Still no tools: the receipt is data (ADR-0006).
+    expect(request).not.toHaveProperty('tools');
+  });
+
+  it('sends exactly the prompt and schema of receipt-v3 when source lines are not asked for', async () => {
+    const { client, parse } = stubClient({ stop_reason: 'end_turn', parsed_output: parsed });
+    const run = await new ClaudeExtractor(client, 'claude-sonnet-5-5').extract(jpeg);
+    expect(run).toMatchObject({ promptVersion: PROMPT_VERSION, schemaVersion: SCHEMA_VERSION });
+    expect([PROMPT_VERSION, SCHEMA_VERSION]).toEqual(['extract-v3', 'receipt-v3']);
+    const request = parse.mock.calls[0]?.[0] as {
+      system: string;
+      max_tokens: number;
+      output_config: { format: { schema: unknown } };
+    };
+    expect(request.system).toBe(SYSTEM_PROMPT);
+    expect(request.max_tokens).toBe(16000);
+    expect(JSON.stringify(request.output_config.format.schema)).toBe(
+      JSON.stringify(zodOutputFormat(ReceiptExtractionSchema).schema),
+    );
+    expect(JSON.stringify(request.output_config.format.schema)).not.toContain('sources');
   });
 });

@@ -176,6 +176,20 @@
       "when": 1791120411443,
       "tag": "0024_report_work_due_time_zone",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1791136532666,
+      "tag": "0025_receipt_settled_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1791136544321,
+      "tag": "0026_receipt_settled_at_backfill",
+      "breakpoints": true
     }
   ]
 }

@@ -126,6 +126,50 @@ export const ReceiptExtractionSchema = z.object({
 
 export type ReceiptExtraction = z.infer<typeof ReceiptExtractionSchema>;
 
+const SourceLine = z
+  .string()
+  .nullable()
+  .describe(
+    'The line or lines of the document this was read from, copied exactly as printed, lines ' +
+      'joined with " / ". Null when it was not read.',
+  );
+
+/**
+ * Where each field was read: the line of the document behind it, as printed (GAP-14). Text
+ * only: the models say what the line says, not where on the image it is.
+ */
+export const FieldSourcesSchema = z.object({
+  merchant: SourceLine,
+  date: SourceLine,
+  time: SourceLine,
+  address: SourceLine,
+  currency: SourceLine,
+  total: SourceLine,
+  subtotal: SourceLine,
+  taxes: SourceLine,
+  tip: SourceLine,
+  fees: SourceLine,
+  cardLastFour: SourceLine,
+});
+export type FieldSources = z.infer<typeof FieldSourcesSchema>;
+
+/**
+ * The schema for an organization that has switched on where each field was read: every field
+ * of receipt-v3, and the line each was read from. receipt-v3 stays what every other
+ * organization's readings are asked for, unchanged.
+ */
+export const ReceiptExtractionWithSourcesSchema = ReceiptExtractionSchema.extend({
+  sources: FieldSourcesSchema,
+});
+export const SOURCES_SCHEMA_VERSION = 'receipt-v4';
+
+/** The line each field of a stored reading was read from; null for a reading without them. */
+export function sourcesOf(output: unknown): FieldSources | null {
+  const sources = (output as { sources?: unknown } | null)?.sources;
+  const parsed = FieldSourcesSchema.safeParse(sources);
+  return parsed.success ? parsed.data : null;
+}
+
 /**
  * A stored reading, as the models' output is parsed back. Readings made before fees were read
  * (receipt-v1) have none, and those made before time and place were read (receipt-v2) have

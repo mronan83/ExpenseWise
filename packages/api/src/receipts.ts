@@ -1,6 +1,7 @@
 import {
   assertRowSecurityApplies,
   confirmReceipt,
+  correctReceipt,
   deleteDuplicateReceipt,
   fileReceipt,
   findReceiptBySha256,
@@ -15,6 +16,7 @@ import {
   withOrg,
   type CommittedEvent,
   type ConfirmReceiptResult,
+  type CorrectReceiptResult,
   type Database,
   type DuplicatePairRecord,
   type ExtractionRunRecord,
@@ -23,10 +25,11 @@ import {
   type NewReceiptReview,
   type ReceiptRecord,
   type ReceiptFilter,
+  type ReceiptFieldChange,
   type ReceiptReviewRecord,
   type ResolveDuplicateResult,
 } from '@expensewise/db';
-import type { ExpenseDetails, MergeField } from '@expensewise/domain';
+import type { ExpenseDetails, ExpenseEdit, MergeField } from '@expensewise/domain';
 
 /** A receipt with what its expense shows of it: its readings and any confirmations. */
 export interface ReceiptWithReadings {
@@ -83,6 +86,20 @@ export interface ReceiptStore {
     details?: ExpenseDetails,
   ): Promise<ConfirmReceiptResult>;
   /**
+   * Corrects fields of a Ready receipt (GAP-14): the review, the edit of its expense and the
+   * audit events commit together, or nothing does.
+   */
+  correct(
+    orgId: string,
+    receiptId: string,
+    correction: {
+      readonly review: NewReceiptReview;
+      readonly expense: ExpenseEdit;
+      readonly changes: readonly ReceiptFieldChange[];
+    },
+    actorUserId: string,
+  ): Promise<CorrectReceiptResult>;
+  /**
    * Settles an open pair as the person decided. The receipt kept is one of the two; any other
    * is deleted with its expense, and the caller removes its file once this returns.
    */
@@ -136,6 +153,8 @@ export function dbReceiptStore(db: Database): ReceiptStore {
       inOrg(orgId, (tx) => requestReceiptReading(tx, orgId, receiptId, actor)),
     confirm: (orgId, receiptId, review, actor, details) =>
       inOrg(orgId, (tx) => confirmReceipt(tx, orgId, receiptId, review, actor, details)),
+    correct: (orgId, receiptId, correction, actor) =>
+      inOrg(orgId, (tx) => correctReceipt(tx, orgId, receiptId, correction, actor)),
     resolveDuplicate: (orgId, receiptId, otherReceiptId, decision, actor) =>
       inOrg(orgId, (tx) => {
         if (decision.action === 'keep_both') {

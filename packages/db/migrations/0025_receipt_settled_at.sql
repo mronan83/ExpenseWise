@@ -1,0 +1,2 @@
+ALTER TABLE "receipts" ADD COLUMN "settled_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "receipts" ADD CONSTRAINT "receipts_settled_after_capture" CHECK ("receipts"."settled_at" IS NULL OR "receipts"."settled_at" >= "receipts"."created_at");

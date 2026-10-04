@@ -230,6 +230,31 @@ export const ReceiptSummarySchema = z
   })
   .openapi('ReceiptSummary');
 
+const SourceLineSchema = z.string().nullable();
+
+export const FieldSourcesSchema = z
+  .object({
+    merchant: SourceLineSchema,
+    date: SourceLineSchema,
+    time: SourceLineSchema,
+    address: SourceLineSchema,
+    currency: SourceLineSchema,
+    total: SourceLineSchema,
+    subtotal: SourceLineSchema,
+    taxTotal: SourceLineSchema,
+    tip: SourceLineSchema,
+    fees: SourceLineSchema,
+    cardLastFour: SourceLineSchema,
+  })
+  .nullable()
+  .openapi('FieldSources', {
+    description:
+      'Where each field was read (receipts.field-sources, GAP-14): the line or lines of the ' +
+      'receipt behind each field, as the model copied them, or null where it read none. Text ' +
+      'only: the models say what the line says, not where on the image it is. Null for a ' +
+      'reading made without them; left out altogether while the feature is off.',
+  });
+
 const ReadingRoleSchema = z.enum(['compared', 'fallback']).openapi({
   description:
     'compared: one of the models the tier decision weighs. fallback: read only because no ' +
@@ -270,6 +295,7 @@ export const ReceiptReadingSchema = z
       })
       .nullable(),
     problems: z.array(z.string()),
+    sources: FieldSourcesSchema.optional(),
     checks: z.array(z.enum(READING_CHECKS)).openapi({
       description:
         'Checks this reading fails (FR-INT-04). sums: the subtotal, taxes and tip don’t make ' +
@@ -408,6 +434,25 @@ export const ConfirmReceiptSchema = z
   })
   .openapi('ConfirmReceipt');
 
+export const CorrectReceiptSchema = z
+  .object({
+    corrections: z
+      .object({
+        merchant: correction('The merchant, as it should be filed.', 'Blue Bottle Coffee'),
+        date: correction('The transaction date, YYYY-MM-DD.', '2026-09-24'),
+        currency: correction('An ISO 4217 code. Amounts keep their printed value.', 'USD'),
+        total: correction('A plain decimal in the receipt’s currency.', '65.00'),
+        taxTotal: correction('A plain decimal in the receipt’s currency.', '5.20'),
+        tip: correction('A plain decimal in the receipt’s currency.', '0.00'),
+      })
+      .strict()
+      .refine((c) => Object.values(c).some((v) => v !== undefined), {
+        message: 'Correct at least one field.',
+      })
+      .openapi({ description: 'The fields the person corrected, usually one.' }),
+  })
+  .openapi('CorrectReceipt');
+
 export const NeedsYouReasonSchema = z
   .object({
     code: z.enum(['failed', 'duplicate', 'fallback', 'differ', 'checks', 'unsure']).openapi({
@@ -504,6 +549,31 @@ const ReceiptInboxItemSchema = z
   })
   .openapi('ReceiptInboxItem');
 
+const CaptureTimeSchema = z
+  .object({
+    receipts: z
+      .number()
+      .int()
+      .openapi({ description: 'How many of the receipts shown it is over: those read.' }),
+    p95Ms: z
+      .number()
+      .int()
+      .nullable()
+      .openapi({
+        description:
+          'The 95th-percentile time from filing to the first settled reading, in whole ' +
+          'milliseconds, by nearest rank: one of the times measured. Null with none read.',
+      }),
+    sloMs: z.number().int().openapi({ description: 'The goal: under 30 seconds (NFR-PERF-01).' }),
+    withinSlo: z.boolean().nullable(),
+  })
+  .openapi('CaptureTime', {
+    description:
+      'Capture to Ready over the receipts shown (receipts.capture-time, NFR-PERF-01). A ' +
+      'receipt counts once its first reading settles, Ready, needing a look or not read; the ' +
+      'time a person then takes to confirm it is not counted. Left out while the feature is off.',
+  });
+
 export const ReceiptListSchema = z
   .object({
     receipts: z.array(ReceiptSummarySchema),
@@ -527,6 +597,7 @@ export const ReceiptListSchema = z
     readingAvailable: z.boolean().openapi({
       description: 'Whether this server can hand receipts to the workflow runner for reading.',
     }),
+    captureToReady: CaptureTimeSchema.optional(),
   })
   .openapi('ReceiptList');
 

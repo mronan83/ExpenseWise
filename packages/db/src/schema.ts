@@ -380,10 +380,20 @@ export const receipts = pgTable(
      * checks once.
      */
     duplicatesCheckedAt: timestamp('duplicates_checked_at', { withTimezone: true }),
+    /**
+     * When its first reading settled, Ready, needing a look or not read: with `created_at`,
+     * the time from capture to read (NFR-PERF-01). Reading it again leaves it. Null while it is
+     * first read.
+     */
+    settledAt: timestamp('settled_at', { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => [
     unique('receipts_org_id_id_key').on(t.orgId, t.id),
+    check(
+      'receipts_settled_after_capture',
+      sql`${t.settledAt} IS NULL OR ${t.settledAt} >= ${t.createdAt}`,
+    ),
     // Exact-duplicate detection: the same file can't be filed twice in one organization.
     unique('receipts_org_sha256_key').on(t.orgId, t.sha256),
     foreignKey({

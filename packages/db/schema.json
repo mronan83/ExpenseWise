@@ -2415,6 +2415,12 @@
           "type": "timestamp with time zone",
           "nullable": true,
           "default": null
+        },
+        {
+          "name": "settled_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
         }
       ],
       "primaryKey": [
@@ -2476,6 +2482,10 @@
         {
           "name": "receipts_byte_size_positive",
           "definition": "CHECK ((byte_size > 0))"
+        },
+        {
+          "name": "receipts_settled_after_capture",
+          "definition": "CHECK (((settled_at IS NULL) OR (settled_at >= created_at)))"
         },
         {
           "name": "receipts_sha256_hex",

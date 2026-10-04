@@ -1,5 +1,6 @@
 export * from './email.ts';
 export * from './email-ports.ts';
+export * from './features.ts';
 export * from './functions.ts';
 export * from './relay.ts';
 export * from './reports.ts';

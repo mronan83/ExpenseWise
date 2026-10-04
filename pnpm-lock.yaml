@@ -255,6 +255,9 @@ importers:
       '@expensewise/extraction':
         specifier: workspace:*
         version: link:../extraction
+      '@expensewise/flags':
+        specifier: workspace:*
+        version: link:../flags
       '@expensewise/storage':
         specifier: workspace:*
         version: link:../storage

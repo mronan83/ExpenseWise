@@ -40,6 +40,12 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
   ['Home with everything in Needs you open', () => '/', [press('Show all')]],
   ['Receipts', () => '/receipts', []],
   ['a Ready receipt', (s) => `/receipts/${s.receipts.coffee}`, []],
+  [
+    'correcting a field of a Ready receipt',
+    (s) => `/receipts/${s.receipts.coffee}`,
+    [press('Correct the total')],
+  ],
+  ['a Ready receipt corrected with a tap', (s) => `/receipts/${s.receipts.parking}`, []],
   ['a receipt the models read differently', (s) => `/receipts/${s.receipts.folio}`, []],
   ['correcting a reading', (s) => `/receipts/${s.receipts.folio}`, [press('Edit a field')]],
   ['a reading confirmed with corrections', (s) => `/receipts/${s.receipts.steak}`, []],

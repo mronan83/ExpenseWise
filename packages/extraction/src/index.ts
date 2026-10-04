@@ -10,3 +10,4 @@ export * from './prompt.ts';
 export * from './proof.ts';
 export * from './review.ts';
 export * from './schema.ts';
+export * from './variant.ts';

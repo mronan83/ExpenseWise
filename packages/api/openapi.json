@@ -1038,6 +1038,9 @@
           "readingAvailable": {
             "type": "boolean",
             "description": "Whether this server can hand receipts to the workflow runner for reading."
+          },
+          "captureToReady": {
+            "$ref": "#/components/schemas/CaptureTime"
           }
         },
         "required": [
@@ -1045,6 +1048,39 @@
           "comparison",
           "readingAvailable"
         ]
+      },
+      "CaptureTime": {
+        "type": "object",
+        "properties": {
+          "receipts": {
+            "type": "integer",
+            "description": "How many of the receipts shown it is over: those read."
+          },
+          "p95Ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "The 95th-percentile time from filing to the first settled reading, in whole milliseconds, by nearest rank: one of the times measured. Null with none read."
+          },
+          "sloMs": {
+            "type": "integer",
+            "description": "The goal: under 30 seconds (NFR-PERF-01)."
+          },
+          "withinSlo": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "receipts",
+          "p95Ms",
+          "sloMs",
+          "withinSlo"
+        ],
+        "description": "Capture to Ready over the receipts shown (receipts.capture-time, NFR-PERF-01). A receipt counts once its first reading settles, Ready, needing a look or not read; the time a person then takes to confirm it is not counted. Left out while the feature is off."
       },
       "Inbox": {
         "type": "object",
@@ -1957,6 +1993,9 @@
               "type": "string"
             }
           },
+          "sources": {
+            "$ref": "#/components/schemas/FieldSources"
+          },
           "checks": {
             "type": "array",
             "items": {
@@ -1985,6 +2024,94 @@
           "problems",
           "checks"
         ]
+      },
+      "FieldSources": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "merchant": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "time": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "currency": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "total": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "subtotal": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "taxTotal": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tip": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fees": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cardLastFour": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "merchant",
+          "date",
+          "time",
+          "address",
+          "currency",
+          "total",
+          "subtotal",
+          "taxTotal",
+          "tip",
+          "fees",
+          "cardLastFour"
+        ],
+        "description": "Where each field was read (receipts.field-sources, GAP-14): the line or lines of the receipt behind each field, as the model copied them, or null where it read none. Text only: the models say what the line says, not where on the image it is. Null for a reading made without them; left out altogether while the feature is off."
       },
       "ReceiptConfirmation": {
         "type": [
@@ -2435,6 +2562,57 @@
         },
         "required": [
           "model"
+        ]
+      },
+      "CorrectReceipt": {
+        "type": "object",
+        "properties": {
+          "corrections": {
+            "type": "object",
+            "properties": {
+              "merchant": {
+                "type": "string",
+                "maxLength": 200,
+                "description": "The merchant, as it should be filed.",
+                "example": "Blue Bottle Coffee"
+              },
+              "date": {
+                "type": "string",
+                "maxLength": 200,
+                "description": "The transaction date, YYYY-MM-DD.",
+                "example": "2026-09-24"
+              },
+              "currency": {
+                "type": "string",
+                "maxLength": 200,
+                "description": "An ISO 4217 code. Amounts keep their printed value.",
+                "example": "USD"
+              },
+              "total": {
+                "type": "string",
+                "maxLength": 200,
+                "description": "A plain decimal in the receipt’s currency.",
+                "example": "65.00"
+              },
+              "taxTotal": {
+                "type": "string",
+                "maxLength": 200,
+                "description": "A plain decimal in the receipt’s currency.",
+                "example": "5.20"
+              },
+              "tip": {
+                "type": "string",
+                "maxLength": 200,
+                "description": "A plain decimal in the receipt’s currency.",
+                "example": "0.00"
+              }
+            },
+            "additionalProperties": false,
+            "description": "The fields the person corrected, usually one."
+          }
+        },
+        "required": [
+          "corrections"
         ]
       },
       "DuplicateResolution": {
@@ -5805,6 +5983,113 @@
           },
           "422": {
             "description": "No such reading, a value that is not valid, or a filing field still missing; field or fields name which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in, the database or file storage is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/receipts/{receiptId}/corrections": {
+      "post": {
+        "tags": [
+          "Receipts"
+        ],
+        "summary": "Correct a field of a Ready receipt",
+        "description": "One tap corrects a field of a receipt that is already Ready (GAP-14, FR-INT-11), with \"Where each field was read\" switched on (receipts.field-sources). Its expense changes as an edit would change it, before submission and recorded in the audit trail (ADR-0022); each correction is kept beside what the model read, as Edit a field keeps it (ADR-0021). A submitted or approved expense is locked: correcting an approved one is a reversal (FR-EXP-03), which is not built yet. A receipt that needs a look is confirmed instead.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "receiptId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorrectReceipt"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Corrected.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such receipt in this organization, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It is not Ready (not_ready), it was read again since (read_again), or its expense is submitted or further along (locked).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not valid, or it is filed so already (unchanged); field names which.",
             "content": {
               "application/problem+json": {
                 "schema": {
