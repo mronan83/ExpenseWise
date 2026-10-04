@@ -16,6 +16,7 @@ const PAGES: readonly { href: string; label: string; flag?: string | readonly st
   { href: '/settings/ai', label: 'AI providers' },
   { href: '/settings/ai-models', label: 'AI models', flag: 'receipts.model-settings' },
   { href: '/settings/sign-ins', label: 'Sign-ins' },
+  { href: '/settings/currency', label: 'Currency', flag: 'reports.currency-conversion' },
   { href: '/settings/features', label: 'Features' },
   { href: '/settings/audit', label: 'Audit trail', flag: 'governance.audit-trail' },
   { href: '/settings/categories', label: 'Categories', flag: 'expenses.categories' },

@@ -5,6 +5,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { api, ApiProblem } from '../../lib/api';
 import { formatMoney } from '../../lib/receipts';
 import {
+  asSpent,
+  leftOut,
   reportHolds,
   reportName,
   reportProgress,
@@ -24,7 +26,17 @@ const describeError = (error: unknown) =>
     ? [error.message, error.detail].filter(Boolean).join('. ')
     : 'Something went wrong. Try again.';
 
-const totals = (r: ReportSummary) => r.totals.map((t) => formatMoney(t)).join(' + ') || '–';
+/**
+ * Its total: in the reimbursement currency while conversion is on (FR-EXP-13), with the
+ * amounts as spent beside it when they differ; otherwise one total per currency, as spent.
+ */
+function totals(r: ReportSummary): { main: string; aside: string | null } {
+  if (!r.reimbursement) return { main: asSpent(r.totals), aside: null };
+  const spent = asSpent(r.totals);
+  const main = formatMoney(r.reimbursement.total);
+  const notes = [...(spent !== main ? [`spent ${spent}`] : []), leftOut(r.reimbursement)];
+  return { main, aside: notes.filter(Boolean).join(' · ') || null };
+}
 
 /**
  * Expense reports (FR-EXP-05): a trip joins the open one 24 hours after its return date, and
@@ -107,6 +119,7 @@ function ReportList({
       <ul className="flex flex-col divide-y divide-rule rounded-xl border border-rule bg-sheet">
         {reports.map((r) => {
           const progress = reportProgress(r);
+          const total = totals(r);
           return (
             <li key={r.id}>
               <Link
@@ -114,7 +127,12 @@ function ReportList({
                 className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 px-4 py-3"
               >
                 <span className="truncate text-sm font-semibold">{reportName(r)}</span>
-                <span className="text-right font-mono text-sm whitespace-nowrap">{totals(r)}</span>
+                <span className="text-right font-mono text-sm whitespace-nowrap">{total.main}</span>
+                {total.aside ? (
+                  <span className="col-span-2 text-right text-xs break-words text-ink-2">
+                    {total.aside}
+                  </span>
+                ) : null}
                 <span className="text-xs text-ink-2">
                   {reportHolds(r)} · <span className="whitespace-nowrap">{reportWhen(r)}</span>
                 </span>

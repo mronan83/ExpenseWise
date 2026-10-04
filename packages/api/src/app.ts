@@ -27,6 +27,8 @@ import type { MileageStore } from './mileage.ts';
 import { registerMileageRoutes } from './mileage-routes.ts';
 import { registerReceiptRoutes, type ReceiptRouteOptions } from './receipt-routes.ts';
 import { registerReportExportRoutes } from './report-export-routes.ts';
+import { registerReimbursementRoutes } from './reimbursement-routes.ts';
+import type { ReimbursementStore } from './reimbursement.ts';
 import { registerReportRoutes } from './report-routes.ts';
 import type { ReportStore } from './reports.ts';
 import { registerTripRoutes } from './trip-routes.ts';
@@ -66,6 +68,8 @@ export interface ApiOptions
   readonly categories?: CategoryStore;
   /** Which AI models read receipts (FR-INT-16). Without it, Settings › AI models answers 503. */
   readonly modelSettings?: ModelSettingsStore;
+  /** The currency each person is reimbursed in. Without it, those routes answer 503. */
+  readonly reimbursement?: ReimbursementStore;
   /** Encrypts AI provider keys at rest. Without it, saving or testing a key answers 503. */
   readonly secrets?: SecretBox;
   /** Checks AI provider keys with a free call to the provider. */
@@ -185,6 +189,7 @@ export function createApi(options: ApiOptions) {
   registerHomeRoutes(app, routes);
   registerReportRoutes(app, routes);
   registerReportExportRoutes(app, routes);
+  registerReimbursementRoutes(app, routes);
   registerInboundRoutes(app, routes);
   registerAuditRoutes(app, routes);
   registerCategoryRoutes(app, routes);

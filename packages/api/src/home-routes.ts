@@ -6,6 +6,7 @@ import type { HomeStore } from './home.ts';
 import type { ModelSettingsStore } from './model-settings.ts';
 import { homeView } from './home-views.ts';
 import { ProblemError } from './problem.ts';
+import { showConverted } from './reimbursement.ts';
 import { homeRoute } from './routes/home.ts';
 import type { WorkspaceStore } from './workspace.ts';
 
@@ -66,6 +67,10 @@ export function registerHomeRoutes(
     const settingsOn =
       options.modelSettings !== undefined &&
       (await features.isOn(who.orgId, 'receipts.model-settings'));
-    return c.json(homeView(data, day, NEEDS_SHOWN, options.now?.() ?? new Date(), settingsOn), 200);
+    const converting = await showConverted(features, who.orgId, data.reports.reports);
+    return c.json(
+      homeView(data, day, NEEDS_SHOWN, options.now?.() ?? new Date(), settingsOn, converting),
+      200,
+    );
   });
 }

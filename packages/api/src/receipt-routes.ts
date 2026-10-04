@@ -19,6 +19,7 @@ import {
 } from './model-settings.ts';
 import { needsYouItems, NO_REPORTS } from './needs-you-views.ts';
 import { ProblemError } from './problem.ts';
+import { showConverted } from './reimbursement.ts';
 import { inboxRoute } from './routes/inbox.ts';
 import { captureTimeOf, withSources } from './receipt-evidence.ts';
 import {
@@ -278,11 +279,13 @@ export function registerReceiptRoutes(
     const reports = options.reports
       ? await options.reports.needsYou(who.orgId, who.memberId, LIST_LIMIT)
       : NO_REPORTS;
+    const converting = await showConverted(features, who.orgId, reports.reports);
     const items = needsYouItems(
       receipts,
       reports,
       options.now?.() ?? new Date(),
       await settingsOn(who.orgId),
+      converting,
     );
     return c.json({ items }, 200);
   });

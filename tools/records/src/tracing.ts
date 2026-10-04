@@ -16,6 +16,16 @@ export const GAPS: readonly Gap[] = [
     backlog: 74,
   },
   {
+    id: 'GAP-27',
+    title: 'Renaming a category or type changes the name on old claims.',
+    affects: ['NFR-DAT-04', 'FR-EXP-11', 'F-43'],
+    severity: 'Low',
+    evidence:
+      'Found merging PR #58: an expense points at its category and type (ADR-0036) and copies neither name, so renaming one shows the new name on every claim that used it, submitted or exported ones included. One in use can be retired but never deleted, so nothing is lost, but an old claim no longer reads as it did.',
+    fix: 'Copy the category and type names onto an expense when its report is submitted, as the mileage and FX rates are copied, and show those on submitted claims and exports (#70).',
+    backlog: 70,
+  },
+  {
     id: 'GAP-29',
     title: 'An expense can go on without a category and type, and no rule hangs off a type.',
     affects: ['FR-EXP-11', 'F-43'],

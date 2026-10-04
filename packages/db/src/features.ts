@@ -2,7 +2,14 @@ import { parseOverrides, type FlagKey } from '@expensewise/flags';
 import { and, eq } from 'drizzle-orm';
 import { appendAuditEvent } from './audit.ts';
 import type { Transaction } from './client.ts';
+import { enqueueOutbox } from './outbox.ts';
 import { orgFeatures } from './schema.ts';
+
+/**
+ * Announces a switch, so work that waits on a feature can start once it is on (ADR-0017). The
+ * payload names the flag and whether it is now on.
+ */
+export const FEATURE_SWITCHED = 'feature.switched';
 
 /** A feature the organization's owner has switched, on or off. */
 export interface OrgFeature {
@@ -33,19 +40,31 @@ export async function orgFeatureOn(tx: Transaction, orgId: string, flag: string)
 }
 
 /**
- * Whether a feature is on for the organization, for work with no request to ask the API's gate,
- * such as a workflow or the release: FLAG_OVERRIDES wins, as the server's kill switch, then the
- * organization's switch, then off, the same order as the API's `featureGate`. Never relies on
- * row-level security, so it also works as the schema owner. Call inside withOrg().
+ * Whether a feature is on for the organization, for work no API request starts, such as a
+ * workflow or the report schedule: FLAG_OVERRIDES wins, as the server's kill switch, then the
+ * owner's switch, then off, the same order as the API's FeatureGate (ADR-0032). Call inside
+ * withOrg().
  */
-export async function featureOn(tx: Transaction, orgId: string, flag: FlagKey): Promise<boolean> {
-  const override = parseOverrides(process.env.FLAG_OVERRIDES)[flag];
-  if (override !== undefined) return override;
-  return orgFeatureOn(tx, orgId, flag);
+export async function featureOn(
+  tx: Transaction,
+  orgId: string,
+  flag: FlagKey,
+  overrides: string | undefined = process.env.FLAG_OVERRIDES,
+): Promise<boolean> {
+  return featureOverride(flag, overrides) ?? orgFeatureOn(tx, orgId, flag);
+}
+
+/** What FLAG_OVERRIDES forces a feature to for every organization, if anything. */
+export function featureOverride(
+  flag: FlagKey,
+  overrides: string | undefined = process.env.FLAG_OVERRIDES,
+): boolean | undefined {
+  return parseOverrides(overrides)[flag];
 }
 
 /**
- * Switches a feature on or off for the organization, with its audit event. Returns whether
+ * Switches a feature on or off for the organization, with its audit event and the event that
+ * announces it. Returns whether
  * anything changed. Who may switch it, and which flags exist, are the caller's to check.
  */
 export async function setOrgFeature(
@@ -79,5 +98,6 @@ export async function setOrgFeature(
     action: change.enabled ? 'feature.switched_on' : 'feature.switched_off',
     payload: { flag: change.flag, enabled: change.enabled },
   });
+  await enqueueOutbox(tx, orgId, FEATURE_SWITCHED, { flag: change.flag, enabled: change.enabled });
   return 'switched';
 }

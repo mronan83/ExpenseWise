@@ -715,6 +715,185 @@
       }
     },
     {
+      "name": "expense_conversions",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "expense_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "amount_minor",
+          "type": "bigint",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "currency",
+          "type": "character(3)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "purchase_date",
+          "type": "date",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "reimbursement_currency",
+          "type": "character(3)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "outcome",
+          "type": "conversion_outcome",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "converted_minor",
+          "type": "bigint",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "rate",
+          "type": "numeric",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "rate_date",
+          "type": "date",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "source",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "expense_conversions_expense_fk",
+          "columns": [
+            "org_id",
+            "expense_id"
+          ],
+          "table": "expenses",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "expense_conversions_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "expense_conversions_expense_key",
+          "columns": [
+            "org_id",
+            "expense_id"
+          ]
+        },
+        {
+          "name": "expense_conversions_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "expense_conversions_currency_iso",
+          "definition": "CHECK ((currency ~ '^[A-Z]{3}$'::text))"
+        },
+        {
+          "name": "expense_conversions_into_iso",
+          "definition": "CHECK ((reimbursement_currency ~ '^[A-Z]{3}$'::text))"
+        },
+        {
+          "name": "expense_conversions_rate_complete",
+          "definition": "CHECK ((((outcome = 'converted'::conversion_outcome) AND (converted_minor IS NOT NULL) AND (rate IS NOT NULL) AND (rate > (0)::numeric) AND (rate_date IS NOT NULL) AND (rate_date <= purchase_date)) OR ((outcome = 'unavailable'::conversion_outcome) AND (converted_minor IS NULL) AND (rate IS NULL) AND (rate_date IS NULL))))"
+        },
+        {
+          "name": "expense_conversions_source_named",
+          "definition": "CHECK ((length(TRIM(BOTH FROM source)) > 0))"
+        },
+        {
+          "name": "expense_conversions_two_currencies",
+          "definition": "CHECK ((currency <> reimbursement_currency))"
+        }
+      ],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [],
+      "grants": {
+        "expensewise_app": [
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
       "name": "expense_types",
       "rls": {
         "enabled": true,
@@ -1759,6 +1938,12 @@
           "type": "timestamp with time zone",
           "nullable": false,
           "default": "now()"
+        },
+        {
+          "name": "reimbursement_currency",
+          "type": "character(3)",
+          "nullable": true,
+          "default": null
         }
       ],
       "primaryKey": [
@@ -1804,7 +1989,12 @@
           ]
         }
       ],
-      "checks": [],
+      "checks": [
+        {
+          "name": "members_reimbursement_currency_iso",
+          "definition": "CHECK (((reimbursement_currency IS NULL) OR (reimbursement_currency ~ '^[A-Z]{3}$'::text)))"
+        }
+      ],
       "indexes": [],
       "policies": [
         {
@@ -3402,6 +3592,13 @@
       ]
     },
     {
+      "name": "conversion_outcome",
+      "values": [
+        "converted",
+        "unavailable"
+      ]
+    },
+    {
       "name": "distance_unit",
       "values": [
         "mi",
@@ -3540,6 +3737,16 @@
       "volatility": "volatile",
       "executableBy": [
         "expensewise_relay"
+      ]
+    },
+    {
+      "name": "conversion_work_due",
+      "arguments": "as_of timestamp with time zone, every_org boolean",
+      "returns": "SETOF uuid",
+      "security": "definer",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
       ]
     },
     {

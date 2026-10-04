@@ -24,8 +24,11 @@ import {
 } from 'drizzle-orm';
 import { appendAuditEvent, lockOrgWrites, type AuditEntry } from './audit.ts';
 import { withOrg, type Database, type Transaction } from './client.ts';
+import { featureOn } from './features.ts';
+import { CONVERSION_FLAG, getReimbursementCurrency, requestConversions } from './conversions.ts';
 import { listReportExpenses, type ReportExpenseRecord } from './expenses.ts';
 import { organizationTimeZone } from './organizations.ts';
+import type { ReportAmount } from './report-amounts.ts';
 import { reopenChangedReports, reportsOfExpenses } from './report-touch.ts';
 import { expenses, members, mileageLogs, organizations, reports, trips } from './schema.ts';
 import { tallyTrips, tripsWithOwner, type TripRecord, type TripTally } from './trips.ts';
@@ -38,7 +41,10 @@ export interface ReportRecord {
   readonly owner: string;
   readonly title: string;
   readonly status: ReportStatus;
-  /** The currency it is reimbursed in: the organization's home currency until #62. */
+  /**
+   * The currency it is reimbursed in: its member's reimbursement currency, which it follows
+   * until it is submitted while conversion is on (FR-EXP-13); otherwise the organization's.
+   */
   readonly currency: string;
   readonly closesAt: Date;
   readonly closedAt: Date | null;
@@ -81,6 +87,8 @@ export interface ReportContents {
   readonly tallies: readonly TripTally[];
   readonly counts: readonly TripCount[];
   readonly locals: readonly ReportExpenseRecord[];
+  /** Every amount on it with its conversion, where asked for (withReportAmounts()). */
+  readonly amounts?: readonly ReportAmount[];
 }
 
 /**
@@ -206,6 +214,10 @@ async function openReport(
     .where(eq(organizations.id, orgId));
   if (!org) throw new Error('The organization is not visible');
   const timeZone = await organizationTimeZone(tx, orgId);
+  // While conversion is on, it opens in its member's reimbursement currency (FR-EXP-13).
+  const currency = (await featureOn(tx, orgId, CONVERSION_FLAG))
+    ? ((await getReimbursementCurrency(tx, memberId))?.currency ?? org.currency)
+    : org.currency;
   const closesAt = reportClosesAt(now, timeZone);
   const [report] = await tx
     .insert(reports)
@@ -213,7 +225,7 @@ async function openReport(
       orgId,
       memberId,
       title: titleFor(now, timeZone),
-      currency: org.currency,
+      currency,
       closesAt,
       createdAt: now,
       updatedAt: now,
@@ -777,9 +789,14 @@ export function runReportSchedule(
   orgId: string,
   now: Date,
 ): Promise<ReportScheduleResult> {
-  return withOrg(db, orgId, async (tx) => ({
-    orgId,
-    joined: await joinDueItems(tx, orgId, now),
-    closed: await closeDueReports(tx, orgId, now),
-  }));
+  return withOrg(db, orgId, async (tx) => {
+    const result = {
+      orgId,
+      joined: await joinDueItems(tx, orgId, now),
+      closed: await closeDueReports(tx, orgId, now),
+    };
+    // What joined may be in another currency: have it converted (FR-EXP-13).
+    if (result.joined.trips + result.joined.expenses > 0) await requestConversions(tx, orgId, now);
+    return result;
+  });
 }

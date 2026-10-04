@@ -184,7 +184,7 @@ export const DOMAIN_STORIES: readonly Story[] = [
         checks: ['db/tenancy.int › refuses a converted amount without its rate provenance'],
       },
     ],
-    note: 'Nothing is converted yet: Home, trips and reports total each currency apart. Converting to your reimbursement currency at the purchase date’s reference rate is FR-EXP-13 (Q25, #62), and copying the rate onto the record so a later rate never changes it is NFR-DAT-04. The database refuses a rate stored without its date or source, but it can’t tell a converted amount stored with no rate at all from an amount that needed none, so #62 must store the rate with every conversion.',
+    note: 'Reports convert to your reimbursement currency at the purchase date’s reference rate (FR-EXP-13, F-49, ADR-0034, US-RPT-11), each conversion kept with its rate, the rate’s date and its source in its own record, whose check refuses a converted amount without all three; an amount that needed no rate has no conversion. The expense columns AC6 checks were built in Phase 0 for one home currency and stay unused. Trips still total each currency apart.',
   },
   {
     id: 'US-DOM-03',

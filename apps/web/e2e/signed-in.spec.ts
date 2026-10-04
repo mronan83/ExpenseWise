@@ -166,6 +166,7 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
   ['an expense with its category chosen', (s) => `/expenses/${s.expenses.folio}`, []],
   ['an expense with no category', (s) => `/expenses/${s.expenses.dinner}`, []],
   ['AI model settings', () => '/settings/ai-models', []],
+  ['reimbursement currency settings', () => '/settings/currency', []],
 ];
 
 const session = {

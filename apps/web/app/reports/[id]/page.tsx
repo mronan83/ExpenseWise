@@ -8,10 +8,15 @@ import { EXPENSE_STATUS } from '../../../lib/expenses';
 import { useFeatures } from '../../../lib/features';
 import { formatMoney } from '../../../lib/receipts';
 import {
+  asSpent,
+  leftOut,
+  rateSource,
   REPORT_STATUS,
   reportHolds,
   reportName,
   reportWhen,
+  type Reimbursed,
+  type ReimbursementTotal,
   type ReportDetail,
   type ReportSummary,
 } from '../../../lib/reports';
@@ -30,8 +35,22 @@ const describeError = (error: unknown) =>
     ? [error.message, error.detail].filter(Boolean).join('. ')
     : 'Something went wrong. Try again.';
 
-const totals = (amounts: { decimal: string; currency: string }[]) =>
-  amounts.map((t) => formatMoney(t)).join(' + ') || '–';
+const totals = asSpent;
+
+/** A trip's total in the reimbursement currency, and what it leaves out (FR-EXP-13). */
+function converted(r: ReimbursementTotal | undefined, spent: string) {
+  if (!r) return { main: spent, aside: null };
+  const main = formatMoney(r.total);
+  const notes = [...(spent !== main ? [`spent ${spent}`] : []), leftOut(r)];
+  return { main, aside: notes.filter(Boolean).join(' · ') || null };
+}
+
+/** A local expense's amount in the reimbursement currency, in a few words. */
+function reimbursedText(r: Reimbursed): string {
+  if (r.kind === 'converting') return 'Converting…';
+  if (r.kind === 'unconverted') return 'Not converted: no reference rate';
+  return r.amount ? formatMoney(r.amount) : '–';
+}
 
 const day = (iso: string) =>
   new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'long' }).format(new Date(iso));
@@ -193,16 +212,34 @@ export default function ReportPage() {
               <h2 id="totals-title" className="sr-only">
                 Totals
               </h2>
-              <div className="flex flex-col">
-                <span className="text-xs font-medium text-ink-2">Total</span>
-                <span className="font-mono text-base">{totals(report.totals)}</span>
-                <span className="text-xs text-ink-2">each currency apart</span>
-              </div>
+              {report.reimbursement ? (
+                <div className="flex flex-col">
+                  <span className="text-xs font-medium text-ink-2">To reimburse</span>
+                  <span className="font-mono text-base">
+                    {formatMoney(report.reimbursement.total)}
+                  </span>
+                  <span className="text-xs break-words text-ink-2">
+                    {leftOut(report.reimbursement) ?? `all in ${report.currency}`}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex flex-col">
+                  <span className="text-xs font-medium text-ink-2">Total</span>
+                  <span className="font-mono text-base">{totals(report.totals)}</span>
+                  <span className="text-xs text-ink-2">each currency apart</span>
+                </div>
+              )}
               <div className="flex flex-col">
                 <span className="text-xs font-medium text-ink-2">On it</span>
                 <span className="text-base">{reportHolds(report)}</span>
                 <span className="text-xs text-ink-2">{reportWhen(report)}</span>
               </div>
+              {report.reimbursement ? (
+                <p className="col-span-2 text-xs break-words text-ink-2">
+                  As spent: <span className="font-mono">{totals(report.totals)}</span>. Each amount
+                  is converted at its purchase date’s reference rate.
+                </p>
+              ) : null}
             </section>
 
             {report.tripItems.length > 0 ? (
@@ -214,40 +251,48 @@ export default function ReportPage() {
                   Trips
                 </h2>
                 <ul className="flex flex-col divide-y divide-rule rounded-xl border border-rule bg-sheet">
-                  {report.tripItems.map((t) => (
-                    <li key={t.id} className="flex flex-col gap-1 px-4 py-3">
-                      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3">
-                        <Link
-                          href={`/trips/${t.id}`}
-                          className="tap truncate text-sm font-semibold"
-                        >
-                          {t.name}
-                        </Link>
-                        <span className="text-right font-mono text-sm whitespace-nowrap">
-                          {totals(t.totals)}
-                        </span>
-                        <span className="text-xs text-ink-2">
-                          <span className="whitespace-nowrap">{tripDates(t)}</span> ·{' '}
-                          {t.expenseCount} {t.expenseCount === 1 ? 'expense' : 'expenses'}
-                        </span>
-                        <span
-                          className={`justify-self-end text-xs font-semibold whitespace-nowrap ${t.ready ? 'text-ok' : 'text-warn'}`}
-                        >
-                          {t.ready
-                            ? 'Ready'
-                            : `${t.unsettled} ${t.unsettled === 1 ? 'needs' : 'need'} a look`}
-                        </span>
-                      </div>
-                      {open ? (
-                        <MoveTo
-                          label={t.name}
-                          others={others}
-                          busy={busy}
-                          onMove={(target) => void move(`/v1/trips/${t.id}/report`, target)}
-                        />
-                      ) : null}
-                    </li>
-                  ))}
+                  {report.tripItems.map((t) => {
+                    const total = converted(t.reimbursement, totals(t.totals));
+                    return (
+                      <li key={t.id} className="flex flex-col gap-1 px-4 py-3">
+                        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3">
+                          <Link
+                            href={`/trips/${t.id}`}
+                            className="tap truncate text-sm font-semibold"
+                          >
+                            {t.name}
+                          </Link>
+                          <span className="text-right font-mono text-sm whitespace-nowrap">
+                            {total.main}
+                          </span>
+                          {total.aside ? (
+                            <span className="col-span-2 text-right text-xs break-words text-ink-2">
+                              {total.aside}
+                            </span>
+                          ) : null}
+                          <span className="text-xs text-ink-2">
+                            <span className="whitespace-nowrap">{tripDates(t)}</span> ·{' '}
+                            {t.expenseCount} {t.expenseCount === 1 ? 'expense' : 'expenses'}
+                          </span>
+                          <span
+                            className={`justify-self-end text-xs font-semibold whitespace-nowrap ${t.ready ? 'text-ok' : 'text-warn'}`}
+                          >
+                            {t.ready
+                              ? 'Ready'
+                              : `${t.unsettled} ${t.unsettled === 1 ? 'needs' : 'need'} a look`}
+                          </span>
+                        </div>
+                        {open ? (
+                          <MoveTo
+                            label={t.name}
+                            others={others}
+                            busy={busy}
+                            onMove={(target) => void move(`/v1/trips/${t.id}/report`, target)}
+                          />
+                        ) : null}
+                      </li>
+                    );
+                  })}
                 </ul>
               </section>
             ) : null}
@@ -273,8 +318,20 @@ export default function ReportPage() {
                             {name}
                           </Link>
                           <span className="text-right font-mono text-sm whitespace-nowrap">
-                            {e.amount ? formatMoney(e.amount) : '–'}
+                            {e.reimbursed && e.reimbursed.kind !== 'same'
+                              ? reimbursedText(e.reimbursed)
+                              : e.amount
+                                ? formatMoney(e.amount)
+                                : '–'}
                           </span>
+                          {e.reimbursed && e.reimbursed.kind !== 'same' && e.amount ? (
+                            <span className="col-span-2 text-right text-xs break-words text-ink-2">
+                              spent {formatMoney(e.amount)}
+                              {e.reimbursed.rate
+                                ? ` · at ${e.reimbursed.rate.rate}, ${rateSource(e.reimbursed.rate)}`
+                                : ''}
+                            </span>
+                          ) : null}
                           <span className="text-xs text-ink-2">
                             <span className="whitespace-nowrap">{e.date ?? 'No date'}</span>
                             {e.held ? ' · possible duplicate' : ''}
@@ -310,6 +367,32 @@ export default function ReportPage() {
                       </li>
                     );
                   })}
+                </ul>
+              </section>
+            ) : null}
+
+            {report.rates && report.rates.length > 0 ? (
+              <section aria-labelledby="rates-title" className="flex flex-col gap-2">
+                <h2
+                  id="rates-title"
+                  className="text-xs font-semibold tracking-wider text-ink-2 uppercase"
+                >
+                  Rates used
+                </h2>
+                <ul className="flex flex-col divide-y divide-rule rounded-xl border border-rule bg-sheet">
+                  {report.rates.map((r) => (
+                    <li
+                      key={`${r.from}-${r.to}-${r.date}-${r.rate}`}
+                      className="flex flex-col gap-0.5 px-4 py-3 text-sm"
+                    >
+                      <span className="font-mono break-words">
+                        1 {r.from} = {r.rate} {r.to}
+                      </span>
+                      <span className="text-xs text-ink-2">
+                        {rateSource(r)} · {r.expenses} {r.expenses === 1 ? 'amount' : 'amounts'}
+                      </span>
+                    </li>
+                  ))}
                 </ul>
               </section>
             ) : null}

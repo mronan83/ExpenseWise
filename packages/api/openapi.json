@@ -1336,7 +1336,7 @@
           },
           "currency": {
             "type": "string",
-            "description": "What it is reimbursed in: the organization’s home currency."
+            "description": "What it is reimbursed in: the person’s reimbursement currency while conversion is on, which it follows until it is submitted; otherwise the organization’s home currency."
           },
           "openedAt": {
             "type": "string",
@@ -1402,7 +1402,10 @@
                 "decimal"
               ]
             },
-            "description": "One total per currency, never converted; possible duplicates are left out (until #62)."
+            "description": "One total per currency, as spent, never converted; possible duplicates are left out."
+          },
+          "reimbursement": {
+            "$ref": "#/components/schemas/ReimbursementTotal"
           }
         },
         "required": [
@@ -1423,6 +1426,64 @@
           "overdue",
           "totals"
         ]
+      },
+      "ReimbursementTotal": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "object",
+            "properties": {
+              "amountMinor": {
+                "type": "integer"
+              },
+              "currency": {
+                "type": "string"
+              },
+              "decimal": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "amountMinor",
+              "currency",
+              "decimal"
+            ],
+            "description": "The amounts already in the reimbursement currency, and those converted to it. What is still converting, or has no rate, is not in it."
+          },
+          "converting": {
+            "type": "integer",
+            "description": "Amounts whose rate is being fetched: the total is complete once this is 0."
+          },
+          "unconverted": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "amountMinor": {
+                  "type": "integer"
+                },
+                "currency": {
+                  "type": "string"
+                },
+                "decimal": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "amountMinor",
+                "currency",
+                "decimal"
+              ]
+            },
+            "description": "Amounts the rate source publishes no rate for, as spent, one sum per currency. They stay unconverted."
+          }
+        },
+        "required": [
+          "total",
+          "converting",
+          "unconverted"
+        ],
+        "description": "Everything on it in `currency`, the person’s reimbursement currency, at each purchase date’s reference rate; possible duplicates are left out. Only while the feature `reports.currency-conversion` is on (FR-EXP-13)."
       },
       "ExpenseInboxItem": {
         "type": "object",
@@ -3988,6 +4049,16 @@
                         },
                         "ready": {
                           "type": "boolean"
+                        },
+                        "reimbursement": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ReimbursementTotal"
+                            },
+                            {
+                              "description": "Its expenses in the report’s currency, while conversion is on."
+                            }
+                          ]
                         }
                       },
                       "required": [
@@ -4076,6 +4147,56 @@
                     },
                     "ready": {
                       "type": "boolean"
+                    },
+                    "reimbursed": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "same",
+                            "converted",
+                            "converting",
+                            "unconverted"
+                          ],
+                          "description": "same: spent in the reimbursement currency, counted as it is. converted: at the rate given. converting: its rate is being fetched. unconverted: the source has no rate for it, so it stays as spent."
+                        },
+                        "amount": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "amountMinor": {
+                              "type": "integer"
+                            },
+                            "currency": {
+                              "type": "string"
+                            },
+                            "decimal": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "amountMinor",
+                            "currency",
+                            "decimal"
+                          ],
+                          "description": "In the reimbursement currency; null while converting or unconverted."
+                        },
+                        "rate": {
+                          "$ref": "#/components/schemas/AppliedRate"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "amount",
+                        "rate"
+                      ],
+                      "description": "Its amount in the report’s currency, while conversion is on; null with no amount yet."
                     }
                   },
                   "required": [
@@ -4090,6 +4211,39 @@
                     "ready"
                   ]
                 }
+              },
+              "rates": {
+                "type": "array",
+                "items": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/AppliedRate"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "from": {
+                          "type": "string",
+                          "example": "EUR"
+                        },
+                        "to": {
+                          "type": "string",
+                          "example": "USD"
+                        },
+                        "expenses": {
+                          "type": "integer",
+                          "description": "How many amounts it converted."
+                        }
+                      },
+                      "required": [
+                        "from",
+                        "to",
+                        "expenses"
+                      ]
+                    }
+                  ]
+                },
+                "description": "Each rate its amounts were converted at, oldest first, while conversion is on (NFR-DAT-02)."
               }
             },
             "required": [
@@ -4097,6 +4251,34 @@
               "localItems"
             ]
           }
+        ]
+      },
+      "AppliedRate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "rate": {
+            "type": "string",
+            "example": "1.1712",
+            "description": "What one unit of the currency spent is in the reimbursement currency."
+          },
+          "date": {
+            "type": "string",
+            "example": "2026-09-25",
+            "description": "The day the rate was published: the purchase date, or the last before it."
+          },
+          "source": {
+            "type": "string",
+            "example": "ECB",
+            "description": "Who published it."
+          }
+        },
+        "required": [
+          "rate",
+          "date",
+          "source"
         ]
       },
       "ReportMoveResult": {
@@ -4180,6 +4362,118 @@
         },
         "required": [
           "justification"
+        ],
+        "additionalProperties": false
+      },
+      "ReimbursementCurrency": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": "string",
+            "example": "USD",
+            "description": "What the caller’s reports are converted to: their choice, else `homeCurrency`."
+          },
+          "chosen": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "What the caller chose; null when they never chose, or chose to follow it."
+          },
+          "homeCurrency": {
+            "type": "string",
+            "example": "USD"
+          },
+          "currencies": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "example": "EUR"
+                },
+                "converts": {
+                  "type": "boolean",
+                  "description": "Whether the rate source (the ECB) publishes it. One it doesn’t stays unconverted."
+                }
+              },
+              "required": [
+                "code",
+                "converts"
+              ]
+            },
+            "description": "Every currency the app supports."
+          }
+        },
+        "required": [
+          "currency",
+          "chosen",
+          "homeCurrency",
+          "currencies"
+        ]
+      },
+      "SetReimbursementCurrency": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "AED",
+              "ARS",
+              "AUD",
+              "BHD",
+              "BRL",
+              "CAD",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CZK",
+              "DKK",
+              "EGP",
+              "EUR",
+              "GBP",
+              "HKD",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "ISK",
+              "JOD",
+              "JPY",
+              "KRW",
+              "KWD",
+              "MXN",
+              "MYR",
+              "NOK",
+              "NZD",
+              "OMR",
+              "PEN",
+              "PHP",
+              "PLN",
+              "QAR",
+              "SAR",
+              "SEK",
+              "SGD",
+              "THB",
+              "TND",
+              "TRY",
+              "TWD",
+              "USD",
+              "VND",
+              "ZAR",
+              null
+            ],
+            "example": "EUR",
+            "description": "The currency to be reimbursed in, or null to follow the organization’s."
+          }
+        },
+        "required": [
+          "currency"
         ],
         "additionalProperties": false
       },
@@ -8922,6 +9216,155 @@
           },
           "409": {
             "description": "The report is still open (not_closed): close it first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/reimbursement-currency": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "The currency the caller is reimbursed in",
+        "description": "Their reports convert every amount to it, at the purchase date’s reference rate (FR-EXP-13, Q23, Q25). Until they choose, it is the organization’s home currency.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Their reimbursement currency, and the currencies to choose from.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReimbursementCurrency"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Currency conversion is not switched on (`feature_off`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Choose the currency the caller is reimbursed in",
+        "description": "Their open and closed reports move to it and are converted again in the background; a submitted report keeps its currency. Null goes back to the organization’s home currency.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetReimbursementCurrency"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Their reimbursement currency now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReimbursementCurrency"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a currency the app supports.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Currency conversion is not switched on (`feature_off`).",
             "content": {
               "application/problem+json": {
                 "schema": {

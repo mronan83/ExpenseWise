@@ -63,9 +63,10 @@ export function homeView(
   now = new Date(),
   /** Whether the organization reads under its AI model settings (receipts.model-settings). */
   settingsOn = false,
+  converting = false,
 ) {
   const { home } = data;
-  const items = needsYouItems(data, data.reports, now, settingsOn);
+  const items = needsYouItems(data, data.reports, now, settingsOn, converting);
   const month = home.monthExpenses;
   const offTrip = month.filter((r) => !r.onTrip);
   return {
@@ -82,7 +83,7 @@ export function homeView(
     },
     reading: home.reading,
     // Reports to finish: the open and closed ones, newest first (FR-INS-01, Q15).
-    reports: data.reports.reports.map((r) => reportSummary(r, now)),
+    reports: data.reports.reports.map((r) => reportSummary(r, now, converting)),
     recentTrips: home.recentTrips.map((t) => tripSummary(t, home.tallies)),
   };
 }

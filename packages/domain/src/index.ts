@@ -17,6 +17,8 @@ export * from './mileage.ts';
 export * from './money.ts';
 export * from './organization.ts';
 export * from './report-export.ts';
+export * from './reference-rates.ts';
+export * from './reimbursement.ts';
 export * from './reports.ts';
 export * from './result.ts';
 export * from './time-zones.ts';

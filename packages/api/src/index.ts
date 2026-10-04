@@ -15,6 +15,7 @@ export * from './model-settings.ts';
 export * from './webhooks.ts';
 export * from './provider-keys.ts';
 export * from './receipts.ts';
+export * from './reimbursement.ts';
 export * from './reports.ts';
 export * from './secret-box.ts';
 export * from './trips.ts';

@@ -110,21 +110,21 @@ export const COMPONENTS: readonly Component[] = [
     name: 'API',
     technology: 'Hono with zod-openapi; jose for tokens; pdf-lib for report PDFs',
     responsibility:
-      'Verifies the sign-in token, finds the caller’s membership, and serves every operation, including Home, read in one transaction: the Needs you inbox, which says why each item needs the person, then their trip, month and recent trips. Takes Bird’s signed email webhook, checked against the exact bytes before anything parses them. Settles possible duplicates as the person decides, removing a deleted receipt’s file only after the deletion commits. Serves expense reports: closing, reopening, moving a trip or local expense, and justifying one; Needs you adds reports to act on and local expenses needing a reason. Serves the audit trail to owners, finance admins and auditors, a page at a time, and recomputes its hash chain when asked. Exports a closed report as CSV, and as a PDF summary laid out in the request with pdf-lib: a database read and a layout in memory, with no other service. Serves Settings › Organization: the details and the duplicate time window, which every member reads and only the owner changes. Logs, quotes and corrects drives, each only the caller’s own, behind the mileage flag. Serves the categories and types an organization keeps, which only owners and finance admins change, and shows each expense its own, or a suggestion worked out in the request by rules, with no model call. Generates the OpenAPI contract and answers errors as problem documents.',
+      'Verifies the sign-in token, finds the caller’s membership, and serves every operation, including Home, read in one transaction: the Needs you inbox, which says why each item needs the person, then their trip, month and recent trips. Takes Bird’s signed email webhook, checked against the exact bytes before anything parses them. Settles possible duplicates as the person decides, removing a deleted receipt’s file only after the deletion commits. Serves expense reports: closing, reopening, moving a trip or local expense, and justifying one; Needs you adds reports to act on and local expenses needing a reason. Serves the audit trail to owners, finance admins and auditors, a page at a time, and recomputes its hash chain when asked. Exports a closed report as CSV, and as a PDF summary laid out in the request with pdf-lib: a database read and a layout in memory, with no other service. Serves Settings › Organization: the details and the duplicate time window, which every member reads and only the owner changes. Logs, quotes and corrects drives, each only the caller’s own, behind the mileage flag. Serves the categories and types an organization keeps, which only owners and finance admins change, and shows each expense its own, or a suggestion worked out in the request by rules, with no model call. While currency conversion is on, serves each person’s reimbursement currency and shows reports, Home and Needs you in it, beside the amounts as spent. Generates the OpenAPI contract and answers errors as problem documents.',
     where: ['packages/api'],
   },
   {
     name: 'Domain',
     technology: 'TypeScript, no I/O',
     responsibility:
-      'The rules: money, dates, lifecycles, editing an expense and its time and place, filing to trips, when two receipts are the same purchase, exactly or possibly, and how two expenses merge, when something joins a report and what day 28 does, counted in an organization’s time zone or at UTC−12, what a report’s export holds and who may export it, an organization’s details and the duplicate window’s bounds, approvals, what a drive pays: the IRS business rate on its date, held as a table with the last day it is known for (ADR-0038), how categories and types nest and which pairs can be chosen, and the rules that suggest a type from a person’s past choices, the reading and the merchant’s name. Tested to 90% coverage or more.',
+      'The rules: money, dates, lifecycles, editing an expense and its time and place, filing to trips, when two receipts are the same purchase, exactly or possibly, and how two expenses merge, when something joins a report and what day 28 does, counted in an organization’s time zone or at UTC−12, what a report’s export holds and who may export it, an organization’s details and the duplicate window’s bounds, which reference rate a purchase date takes and what a report adds up to in the reimbursement currency, approvals, what a drive pays: the IRS business rate on its date, held as a table with the last day it is known for (ADR-0038), how categories and types nest and which pairs can be chosen, and the rules that suggest a type from a person’s past choices, the reading and the merchant’s name. Tested to 90% coverage or more.',
     where: ['packages/domain'],
   },
   {
     name: 'Data access',
     technology: 'Drizzle ORM on node-postgres',
     responsibility:
-      'The schema and migrations, `withOrg()` and every query and write, each with its audit event. Runs migrations and the data steps on release: one takes back anything Supabase’s Data API roles hold, another compares each receipt read before duplicates were looked for, once. Compares each receipt as its reading settles and holds a later copy, and keeps when its first reading settled; corrects a Ready receipt’s field with its expense in one transaction; deletes a receipt only through `delete_receipt()`. Joins trips and local expenses to reports and closes them on day 28, by the organization’s days when it keeps a time zone; any change to a closed report reopens it. Reads a report with every expense on it for its export. Keeps the organization’s details and duplicate window, each change audited. Writes a drive as an expense and its mileage log together, with the rate copied on. Seeds each new organization’s ready-made categories and types through `seed_starter_catalog()`, and keeps the lists and each expense’s choice. Holds the restore drill’s database checks.',
+      'The schema and migrations, `withOrg()` and every query and write, each with its audit event. Runs migrations and the data steps on release: one takes back anything Supabase’s Data API roles hold, another compares each receipt read before duplicates were looked for, once. Compares each receipt as its reading settles and holds a later copy, and keeps when its first reading settled; corrects a Ready receipt’s field with its expense in one transaction; deletes a receipt only through `delete_receipt()`. Joins trips and local expenses to reports and closes them on day 28, by the organization’s days when it keeps a time zone; any change to a closed report reopens it. Reads a report with every expense on it for its export. Keeps the organization’s details and duplicate window, each change audited. Writes a drive as an expense and its mileage log together, with the rate copied on. Seeds each new organization’s ready-made categories and types through `seed_starter_catalog()`, and keeps the lists and each expense’s choice. Converts a report’s amounts with the rates it is given, records each conversion with its rate, and asks for conversion in the transaction of any change that leaves something to convert. Holds the restore drill’s database checks.',
     where: ['packages/db'],
   },
   {
@@ -138,7 +138,7 @@ export const COMPONENTS: readonly Component[] = [
     name: 'Workflows',
     technology: 'Inngest',
     responsibility:
-      'Reads receipts, with the models each organization chose or side by side, reads emailed receipts, relays the outbox and keeps expense reports on time. Reads an organization’s feature switches inside its transaction where it has no request to ask, the server’s override first, as the API does (ADR-0032). An email is fetched as it arrived, its sender proved by a DKIM signature aligned with the From domain (mailauth), its parts read (postal-mime) and its attachments filed like uploads; with nothing attached, its HTML becomes text (html-to-text) laid out as a PDF (pdf-lib) and filed instead. Each step retries on its own; a failed run still settles its receipt.',
+      'Reads receipts, with the models each organization chose or side by side, reads emailed receipts, relays the outbox, keeps expense reports on time and converts their amounts with the ECB’s reference rates, fetched over HTTPS. Reads an organization’s feature switches inside its transaction where it has no request to ask, the server’s override first, as the API does (ADR-0032). An email is fetched as it arrived, its sender proved by a DKIM signature aligned with the From domain (mailauth), its parts read (postal-mime) and its attachments filed like uploads; with nothing attached, its HTML becomes text (html-to-text) laid out as a PDF (pdf-lib) and filed instead. Each step retries on its own; a failed run still settles its receipt.',
     where: ['packages/workflows'],
   },
   {
@@ -185,6 +185,10 @@ export const SERVICES: readonly { readonly name: string; readonly role: string }
     name: 'Bird',
     role: 'The agent mailbox emailed receipts arrive at, on inbox.ai, with an allowlist of senders; signs its webhooks and keeps each message as it arrived for 30 days (ADR-0026).',
   },
+  {
+    name: 'European Central Bank',
+    role: 'Its data API publishes the euro reference rates a report’s amounts are converted at; public, with no key or account (ADR-0034).',
+  },
   { name: 'Sentry', role: 'Error tracking and traces.' },
   { name: 'PostHog', role: 'Feature flags.' },
   {
@@ -216,6 +220,7 @@ export const CONTEXT_DIAGRAM = `flowchart LR
   I -->|"run steps"| W
   W -->|"read receipt"| AN["Anthropic"]
   W -.->|"fallback"| OA["OpenAI"]
+  W -->|"reference rates"| ECB["ECB data API"]
   E["Email from a member"] --> BI["Bird mailbox<br/>allowlist"]
   BI -->|"signed webhook"| W
   W -->|"fetch as it arrived"| BI
@@ -362,6 +367,29 @@ export const FLOWS: readonly Flow[] = [
   A->>DB: Refused while anything needs review or a reason; else closed, with its audit event
   Note over DB: Any later change to it reopens it, until it is submitted`,
     refs: ['FR-EXP-05', 'FR-EXP-12', 'FR-EXP-14', 'ADR-0029'],
+  },
+  {
+    id: 'conversion',
+    title: 'A report in the currency you are reimbursed in',
+    about:
+      'Fetching a rate is a call to another service, so it never happens in a request: the change that leaves something to convert asks for it through the outbox, and the workflow fetches, then converts as the app inside the organization. A rate once recorded is applied again, never fetched again, and an hourly sweep catches what a failed fetch left converting (ADR-0034).',
+    diagram: `sequenceDiagram
+  actor P as Person
+  participant A as API
+  participant DB as Postgres
+  participant I as Inngest
+  participant E as ECB data API
+  P->>A: PUT /v1/me/reimbursement-currency, or a trip joins a report, or an amount changes
+  A->>DB: Reports follow the person's currency; report.conversions_due in the outbox
+  DB-->>I: Relayed, or handed on at once
+  I->>A: amount-conversion (/api/inngest)
+  A->>DB: Convert what recorded rates allow; what still needs a rate
+  A->>E: EUR rates for those currencies, over each date's 10 days before
+  A->>DB: Convert, copying the rate, its date and source onto each expense
+  P->>A: GET /v1/reports/{id}
+  A-->>P: Each amount beside its conversion, the total, what is converting, the rates used
+  Note over I,DB: Hourly at 37 past, conversion_work_due() finds what is still converting`,
+    refs: ['FR-EXP-13', 'NFR-DAT-02', 'NFR-DAT-04', 'ADR-0034'],
   },
   {
     id: 'request',
@@ -622,6 +650,10 @@ export const BACKGROUND: Readonly<Record<string, string>> = {
     'Reads an email that arrived at the receipts address: fetches it from Bird as it was received, proves its sender by DKIM, finds the member who signs in with that address, then stores and files each PDF or photo as a receipt, or with none the email’s text as a PDF, and hands their reading on. Mail from anyone else is dropped with nothing kept. Logs one line per email with what came of it (ADR-0026, ADR-0027).',
   'outbox-relay':
     'Every five minutes and on demand, sends committed outbox events that the request didn’t manage to send. The event id is the outbox id, so a duplicate is dropped.',
+  'amount-conversion':
+    'When a report has something to convert, or the owner switches currency conversion on: points open and closed reports at their member’s reimbursement currency, converts what rates already recorded allow, fetches the rest from the ECB’s data API, then converts again, recording each rate with its date and source. Requests for one organization close together run once, one at a time (ADR-0034).',
+  'amount-conversion-sweep':
+    'Hourly, at 37 past: asks which organizations still have amounts converting (conversion_work_due(), ids only), then converts in each as amount-conversion does. One failing doesn’t hold up the rest; logs one line of counts (ADR-0034).',
   'report-schedule':
     'Hourly, at seven past: asks which organizations have report work due (report_work_due(), ids only), then in each, as the app and in one transaction, puts due trips and local expenses on the open report or a new one, closes reports on day 28 with what is ready, moves the rest on, and drops reports with nothing to claim. The days are the organization’s own when organization settings are on and it keeps a time zone, and UTC−12’s otherwise (ADR-0037). Safe to repeat; logs one line of counts (ADR-0029).',
 };

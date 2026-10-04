@@ -509,6 +509,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none' },
     source: 'Product owner Oct 4',
     affects: ['FR-EXP-13', 'F-49', 'NFR-DAT-02'],
+    done: { date: '2026-10-04', in: 'PR #58' },
   },
   {
     num: 63,
@@ -571,6 +572,19 @@ export const BACKLOG: readonly BacklogItem[] = [
   },
 
   // P3: this quarter
+  {
+    num: 70,
+    title: 'Keep a claim’s category and type names as they were',
+    type: 'Gap',
+    detail:
+      'GAP-27, found merging PR #58. Copy the category and type names onto an expense when its report is submitted, so renaming one later never changes a submitted claim or its export (NFR-DAT-04).',
+    priority: 'P3',
+    effort: 'S',
+    severity: 'Low',
+    blocker: { kind: 'items', items: [24] },
+    source: 'GAP-27',
+    affects: ['GAP-27', 'NFR-DAT-04'],
+  },
   {
     num: 21,
     title: 'Choose the model tier: Haiku or Sonnet',

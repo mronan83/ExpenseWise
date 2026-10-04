@@ -6,7 +6,7 @@ import { api, ApiProblem } from '../lib/api';
 import type { ExpenseAmount } from '../lib/expenses';
 import { monthEnd, monthName, tripProgress, tripWhen, type Home } from '../lib/home';
 import { formatMoney } from '../lib/receipts';
-import { reportHolds, reportName, reportProgress, reportWhen } from '../lib/reports';
+import { reportHolds, reportName, reportProgress, reportTotal, reportWhen } from '../lib/reports';
 import { supabase } from '../lib/supabase';
 import { localToday, tripDates } from '../lib/trips';
 import { NeedsYouList } from './needs-you';
@@ -150,7 +150,7 @@ function Dashboard({ home }: { home: Home }) {
                   >
                     <span className="truncate text-sm font-semibold">{reportName(r)}</span>
                     <span className="text-right font-mono text-sm whitespace-nowrap">
-                      {totals(r.totals)}
+                      {reportTotal(r)}
                     </span>
                     <span className="text-xs text-ink-2">
                       {reportHolds(r)} · <span className="whitespace-nowrap">{reportWhen(r)}</span>
