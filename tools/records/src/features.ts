@@ -101,6 +101,15 @@ export const FEATURES: readonly Feature[] = [
     status: 'Planned',
     backlog: 29,
   },
+  {
+    id: 'F-51',
+    title: 'Organization details in Settings',
+    group: 'Access and organizations',
+    kind: 'product',
+    phase: 'P1',
+    status: 'Planned',
+    backlog: 63,
+  },
 
   // Receipts
   {
@@ -440,6 +449,15 @@ export const FEATURES: readonly Feature[] = [
     phase: 'P1',
     status: 'Planned',
     backlog: 62,
+  },
+  {
+    id: 'F-50',
+    title: 'Local expenses, each with a justification',
+    group: 'Expenses, trips and reports',
+    kind: 'product',
+    phase: 'P1',
+    status: 'Planned',
+    backlog: 23,
   },
   {
     id: 'F-43',

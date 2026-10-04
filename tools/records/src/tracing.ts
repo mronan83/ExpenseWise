@@ -476,6 +476,10 @@ export const QUESTIONS: readonly Question[] = [
     recommendation:
       'A, then your rule once #53 reads time and place. A receipt that prints neither is still matched on vendor, date and total.',
     affects: ['FR-INT-18', 'GAP-23'],
+    answer: {
+      date: '2026-10-04',
+      text: 'A, with #53 coming soon: it is built now, before #61.',
+    },
   },
   {
     id: 'Q19',
@@ -484,6 +488,10 @@ export const QUESTIONS: readonly Question[] = [
     why: 'A deletion can’t be undone, by your answer of Oct 3. A forwarded email matches every time; two real purchases at the same place, minute and amount almost never do. The copy counts in no total while it waits.',
     recommendation: 'A for now; B once a month of use shows no exact match was a real purchase.',
     affects: ['FR-INT-18'],
+    answer: {
+      date: '2026-10-04',
+      text: 'A, for delete and for replace: an exact duplicate is deleted with one tap, and a possible one can replace the earlier receipt.',
+    },
   },
   {
     id: 'Q20',
@@ -492,6 +500,10 @@ export const QUESTIONS: readonly Question[] = [
     why: 'A trip that ends a few days before day 28 joins the open report and can hold up every other trip in it. B pays the finished trips on time, using your rule that trips can move between reports. The warning of delayed reimbursement shows before day 28 either way.',
     recommendation: 'B.',
     affects: ['FR-EXP-12', 'FR-EXP-05'],
+    answer: {
+      date: '2026-10-04',
+      text: 'B, and by hand too: a report not closing while expenses need review is as intended; a trip still needing review can be moved to another report, or moves to the next one on day 28.',
+    },
   },
   {
     id: 'Q21',
@@ -500,6 +512,10 @@ export const QUESTIONS: readonly Question[] = [
     why: 'Home shows them as Not on a trip (Q14). Under B they are never reimbursed.',
     recommendation: 'A.',
     affects: ['FR-EXP-05', 'FR-INS-01'],
+    answer: {
+      date: '2026-10-04',
+      text: 'A, as local expenses: an expense on no trip is local, needs a justification, and can go on a report as local. A receipt from when no trip is under way becomes a local expense needing a justification (FR-EXP-14).',
+    },
   },
   {
     id: 'Q22',
@@ -508,11 +524,29 @@ export const QUESTIONS: readonly Question[] = [
     why: 'The purchase date’s rate is the usual policy and doesn’t move while a report waits. The card’s own rate, fees included, is what you were really charged; card feeds (FR-CAP-06) could bring it in later. Each conversion keeps its rate, the rate’s date and its source (NFR-DAT-02).',
     recommendation: 'A.',
     affects: ['FR-EXP-13', 'NFR-DAT-02'],
+    answer: {
+      date: '2026-10-04',
+      text: 'Most cards convert at the time of purchase, so a rate may only be needed when no conversion was done. Q23 follows up.',
+    },
+  },
+  {
+    id: 'Q23',
+    title: 'What a receipt in another currency is reimbursed at',
+    ask: 'A receipt in euros paid with a US card: the card converted it, and your statement shows the dollars charged, any foreign transaction fee included. The receipt shows only euros, so the app doesn’t know the dollars. A: you enter the amount charged from your statement; until you do, an estimate from the purchase date’s reference rate shows, marked as an estimate. B: it stays in euros, and the report totals each currency apart for whoever reimburses you. C: card feeds (FR-CAP-06) bring in the amount charged; until then, as B.',
+    why: 'You’re right that the card’s conversion, fees and all, is what you paid, so it is what you should get back. But it reaches the app only from your statement or a card feed. Cash spent abroad, or a card charged in the local currency, has no conversion at all.',
+    recommendation: 'A.',
+    affects: ['FR-EXP-13', 'F-49'],
   },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-04',
+    change:
+      'More of your answers of Oct 4. Q18: keep matching on the total until #53, built now. Q19: an exact duplicate is deleted with one tap; a possible one can replace the earlier receipt. Q20: a trip still needing review moves to the next report on day 28, or by hand. Q21: an expense on no trip is local and needs a justification (FR-EXP-14, F-50). Q22: cards convert at purchase, so Q23 asks what a receipt in another currency is reimbursed at. Closing a report never submits it. Your reimbursement currency is set in Settings and starts as your organization’s; your organization’s details are editable there too (FR-PLT-11, F-51, #63). #23, #53 and #61 are under way.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-04',
     change:
