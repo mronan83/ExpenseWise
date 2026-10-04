@@ -23,7 +23,7 @@ Flags existed in two places, neither of which suits a person switching their own
 3. **Only the owner switches.** `PUT /v1/settings/features/{key}` refuses anyone else. Everyone can read `GET /v1/features`, because screens need it to hide what is off. Each switch appends `feature.switched_on` or `feature.switched_off` to the audit log in the same transaction; a switch to what it already is records nothing.
 4. **The order is: override, then the organization's switch, then off.** The override stays the server's kill switch. A switch the override would ignore is refused with 409, so the page never says a feature is on when it isn't.
 5. **A feature that is off looks absent.** Its routes answer 404 `feature_off` through one `FeatureGate`, and its screens, links and actions are hidden. Data written while it was on stays; switching it off hides it, it deletes nothing.
-6. **The server's own flags are not offered.** Flags named `shell.*` change the app for everyone and are set only by the override.
+6. **The server's own flags are not offered.** A flag marked server-only in the registry, such as the build version or an operator's switch for a model, changes the app for every organization and is set only by the override.
 
 ## Alternatives considered
 

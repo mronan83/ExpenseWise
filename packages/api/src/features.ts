@@ -1,13 +1,21 @@
 import type { OrgFeature } from '@expensewise/db';
-import { FLAG_KEYS, FLAGS, parseOverrides, type FlagKey } from '@expensewise/flags';
+import {
+  FLAG_KEYS,
+  FLAGS,
+  parseOverrides,
+  type FlagDefinition,
+  type FlagKey,
+} from '@expensewise/flags';
 import { ProblemError } from './problem.ts';
 import type { WorkspaceStore } from './workspace.ts';
 
 /**
- * The flags an organization's owner switches. `shell.*` flags are the server's own and are
- * set only by FLAG_OVERRIDES.
+ * The flags an organization's owner switches. A server-only flag, such as the build version
+ * or an operator's switch for a model, is set only by FLAG_OVERRIDES.
  */
-export const ORG_FEATURE_KEYS = FLAG_KEYS.filter((key) => !key.startsWith('shell.'));
+export const ORG_FEATURE_KEYS = FLAG_KEYS.filter(
+  (key) => !(FLAGS[key] as FlagDefinition).serverOnly,
+);
 
 export type OrgFeatureKey = (typeof ORG_FEATURE_KEYS)[number];
 

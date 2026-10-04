@@ -40,7 +40,7 @@ describe('featureGate', () => {
   });
 
   it('never offers the server’s own flags to an organization', () => {
-    expect(ORG_FEATURE_KEYS.some((k) => k.startsWith('shell.'))).toBe(false);
+    expect(ORG_FEATURE_KEYS).not.toContain('shell.build-version');
     expect(ORG_FEATURE_KEYS).toContain('expenses.mileage');
   });
 });

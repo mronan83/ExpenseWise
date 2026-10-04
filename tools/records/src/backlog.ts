@@ -512,11 +512,14 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Route-based mileage',
     type: 'Feature',
     detail:
-      'Start, stops and end, with a round trip and saved places; distance from the Google Routes API. The first item to cut if increment 2 runs long.',
+      'Start, stops and end, with a round trip and saved places. Researched Oct 4 at your request for a free, open-source option: OpenRouteService (HeiGIT, on OpenStreetMap) has a free key with no card that does both address lookup (1,000 a day) and driving distance through up to 50 ordered stops (2,000 a day), with commercial use allowed and attribution required; one call covers a whole trip. Google Routes needs billing enabled, so it is out. GraphHopper’s free plan allows only 5 points and no commercial use; Mapbox won’t let free lookups be stored, which saved places need; self-hosting a US map needs far more memory than any free host. Fallbacks: manual miles (#17), and for lookups the US Census geocoder or Nominatim on submit only. Each claim freezes its points, the distance in metres, the provider and when it was routed, and is never re-routed. OpenRouteService’s terms bar sending personal data, and a home address arguably is, so only addresses and coordinates would be sent.',
     priority: 'P2',
     effort: 'M',
     severity: 'Low',
-    blocker: { kind: 'items', items: [17], then: 'a Google Routes API key from you' },
+    blocker: {
+      kind: 'owner',
+      ask: 'Your decisions: build it on a free OpenRouteService account you sign up for, and whether sending trip addresses to it is acceptable',
+    },
     source: 'Roadmap increment 2',
     affects: ['FR-CAP-04', 'F-14'],
   },

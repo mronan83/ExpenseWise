@@ -3,6 +3,11 @@ export interface FlagDefinition {
   readonly name: string;
   /** What turning the flag on changes, for whoever flips it. */
   readonly description: string;
+  /**
+   * Set only on the server, by FLAG_OVERRIDES, for every organization: an operator's switch.
+   * Without it, each organization's owner switches the flag in Settings › Features (ADR-0032).
+   */
+  readonly serverOnly?: true;
 }
 
 /**
@@ -13,6 +18,7 @@ export interface FlagDefinition {
 export const FLAGS = {
   'shell.build-version': {
     name: 'Build version',
+    serverOnly: true,
     description:
       "Show the deployed build's commit next to the app name. Phase 0's trivial change, " +
       'shipped dark to prove the flag path through every gate.',
