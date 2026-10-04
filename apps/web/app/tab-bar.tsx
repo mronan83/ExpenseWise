@@ -26,7 +26,8 @@ const WITHOUT_TABS = ['/sign-in'];
  */
 export function TabBar() {
   const path = usePathname();
-  if (WITHOUT_TABS.includes(path)) return null;
+  // An invite link stands alone too: its person may not be in any organization yet.
+  if (WITHOUT_TABS.includes(path) || path.startsWith('/invite/')) return null;
   return (
     <div className="sticky bottom-0 mt-6 border-t border-rule bg-paper">
       <nav

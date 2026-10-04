@@ -1,5 +1,6 @@
 'use client';
 
+import { showDate } from '@expensewise/domain';
 import Link from 'next/link';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, ApiProblem } from '../../../lib/api';
@@ -146,9 +147,7 @@ export default function SignInsPage() {
                     <span className="flex min-w-0 flex-col">
                       <span className="truncate text-sm font-medium">{s.email}</span>
                       <span className="text-xs text-ink-2">
-                        {s.current
-                          ? 'The one you are using now'
-                          : `Linked ${new Date(s.linkedAt).toLocaleDateString()}`}
+                        {s.current ? 'The one you are using now' : `Linked ${showDate(s.linkedAt)}`}
                       </span>
                     </span>
                     {s.current ? null : (

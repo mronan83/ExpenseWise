@@ -2,6 +2,7 @@ import type {
   AiProvider,
   LinkResult,
   Membership,
+  OrgFeature,
   SignIn,
   StoredProviderKey,
 } from '@expensewise/db';
@@ -72,6 +73,7 @@ function fakeStore() {
     'u-member': { orgId: ORG, memberId: MEMBER, role: 'member' },
   };
   const keys = new Map<AiProvider, StoredProviderKey>();
+  const switched = new Map<string, OrgFeature>();
   const audit: string[] = [];
   const signIns: (SignIn & { memberId: string })[] = [
     {
@@ -147,11 +149,24 @@ function fakeStore() {
       audit.push(`unlinked:${gone!.email}`);
       return Promise.resolve('removed' as const);
     },
+    listFeatures: () => Promise.resolve([...switched.values()]),
+    featureOn: (_org, flag) => Promise.resolve(switched.get(flag)?.enabled ?? false),
+    switchFeature: (_member, { flag, enabled }) => {
+      if ((switched.get(flag)?.enabled ?? false) === enabled) {
+        return Promise.resolve('unchanged' as const);
+      }
+      switched.set(flag, { flag, enabled, updatedAt: NOW });
+      audit.push(`feature:${flag}:${enabled ? 'on' : 'off'}`);
+      return Promise.resolve('switched' as const);
+    },
   };
   return { store, keys, audit, signIns };
 }
 
-function setup(verdict: ProviderVerdict = { ok: true, authScheme: 'api_key' }) {
+function setup(
+  verdict: ProviderVerdict = { ok: true, authScheme: 'api_key' },
+  flagOverrides?: string,
+) {
   const fake = fakeStore();
   const checked: { provider: string; key: string; preferred?: string }[] = [];
   const verify: ProviderKeyVerifier = (provider, key, preferred) => {
@@ -168,6 +183,7 @@ function setup(verdict: ProviderVerdict = { ok: true, authScheme: 'api_key' }) {
     workspace: fake.store,
     secrets,
     verifyProviderKey: verify,
+    flagOverrides,
     now: () => NOW,
   });
   const call = (method: string, path: string, who?: string, body?: unknown) =>
@@ -526,5 +542,80 @@ describe('sign-ins', () => {
     expect((await call('DELETE', `/v1/me/sign-ins/${id}`, 'owner')).status).toBe(404);
     expect(audit).toEqual(['linked:o@work.example', 'unlinked:o@work.example']);
     expect((await call('GET', '/v1/me/sign-ins', 'work')).status).toBe(403);
+  });
+});
+
+describe('features', () => {
+  it('lists every feature switched off, and lets only the owner switch one', async () => {
+    const { call } = setup();
+    const res = await call('GET', '/v1/features', 'member');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      features: { key: string; enabled: boolean; source: string }[];
+      canSwitch: boolean;
+    };
+    expect(body.canSwitch).toBe(false);
+    expect(body.features.length).toBeGreaterThan(0);
+    expect(body.features.every((f) => !f.enabled && f.source === 'default')).toBe(true);
+    // The server's own flags are not the organization's to switch.
+    expect(body.features.map((f) => f.key)).not.toContain('shell.build-version');
+
+    const refused = await call('PUT', '/v1/settings/features/expenses.mileage', 'member', {
+      enabled: true,
+    });
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({ code: 'forbidden_role' });
+    const owner = (await (await call('GET', '/v1/features', 'owner')).json()) as {
+      canSwitch: boolean;
+    };
+    expect(owner.canSwitch).toBe(true);
+  });
+
+  it('switches a feature on and off for the organization, with an audit event each time', async () => {
+    const { call, audit } = setup();
+    const on = await call('PUT', '/v1/settings/features/expenses.mileage', 'owner', {
+      enabled: true,
+    });
+    expect(on.status).toBe(200);
+    expect(await on.json()).toMatchObject({
+      key: 'expenses.mileage',
+      enabled: true,
+      source: 'organization',
+      switchedAt: NOW.toISOString(),
+    });
+    const list = (await (await call('GET', '/v1/features', 'member')).json()) as {
+      features: { key: string; enabled: boolean }[];
+    };
+    expect(list.features.find((f) => f.key === 'expenses.mileage')?.enabled).toBe(true);
+
+    // Switching it to what it already is records nothing.
+    await call('PUT', '/v1/settings/features/expenses.mileage', 'owner', { enabled: true });
+    await call('PUT', '/v1/settings/features/expenses.mileage', 'owner', { enabled: false });
+    expect(audit).toEqual(['feature:expenses.mileage:on', 'feature:expenses.mileage:off']);
+  });
+
+  it('lets the server override beat the switch, and refuses a switch it would ignore', async () => {
+    const { call, audit } = setup(undefined, 'expenses.mileage=on,reports.export=off');
+    const list = (await (await call('GET', '/v1/features', 'owner')).json()) as {
+      features: { key: string; enabled: boolean; source: string }[];
+    };
+    expect(list.features.find((f) => f.key === 'expenses.mileage')).toMatchObject({
+      enabled: true,
+      source: 'override',
+    });
+    const res = await call('PUT', '/v1/settings/features/reports.export', 'owner', {
+      enabled: true,
+    });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: 'feature_overridden' });
+    expect(audit).toEqual([]);
+  });
+
+  it('refuses a feature that does not exist, or one that is the server’s own', async () => {
+    const { call } = setup();
+    for (const key of ['expenses.nope', 'shell.build-version']) {
+      const res = await call('PUT', `/v1/settings/features/${key}`, 'owner', { enabled: true });
+      expect(res.status).toBe(400);
+    }
   });
 });

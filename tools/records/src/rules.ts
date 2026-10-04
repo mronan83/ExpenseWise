@@ -31,9 +31,15 @@ export const RULES: readonly Rule[] = [
   {
     id: 'R-REPORT-JOIN',
     name: 'When a trip or local expense joins a report',
-    value: '24 hours after its day ends, counted as noon UTC two days after it',
+    value:
+      '24 hours after its day ends: where the organization is, when it keeps a time zone; otherwise at UTC−12, which is noon UTC two days after it',
     decided: { by: 'owner', source: 'owner 2026-10-04' },
-    note: 'Your 24 hours. Counting them from noon UTC on the second day, so no time zone sees a trip join early, is Claude’s (ADR-0029). In practice the wait is 24 to 50 hours after the day ends, about 31 hours in US Central time, plus up to an hour for the schedule; the organization’s time zone (#63) can bring it to 24 hours.',
+    code: {
+      file: 'packages/domain/src/time-zones.ts',
+      constant: 'LAST_TIME_ZONE',
+      literal: "'Etc/GMT+12'",
+    },
+    note: 'Your 24 hours. Counting them at UTC−12, where the day ends last, so no time zone sees a trip join early, is Claude’s (ADR-0029): a wait of 24 to 50 hours after the day ends, about 31 hours in US Central time, plus up to an hour for the schedule. With organization settings on and a time zone kept, they are counted there, so the wait is 24 hours (ADR-0037).',
   },
   {
     id: 'R-REPORT-SCHEDULE',
@@ -56,14 +62,26 @@ export const RULES: readonly Rule[] = [
   {
     id: 'R-DUPLICATE-WINDOW',
     name: 'How far apart two receipts at one place can be and still be one purchase',
-    value: '30 minutes; the same minute for an exact copy',
+    value: '30 minutes until the owner sets another; the same minute for an exact copy',
     decided: { by: 'claude', source: 'ADR-0031' },
     code: {
       file: 'packages/domain/src/duplicates.ts',
       constant: 'DUPLICATE_TIME_WINDOW_MINUTES',
       literal: '30',
     },
-    note: 'Claude’s reading of your “the same time”. It becomes a setting your organization’s owner changes, 0 to 120 minutes (FR-INT-19, #64).',
+    note: 'Claude’s reading of your “the same time”. Since #64 it is the default your organization’s owner can change in Settings, for everyone (FR-INT-19, Q24). An empty setting means this value, so the number lives once.',
+  },
+  {
+    id: 'R-DUPLICATE-WINDOW-MAX',
+    name: 'Widest duplicate time window the owner can set',
+    value: '120 minutes; the narrowest is 0, the same minute only',
+    decided: { by: 'claude' },
+    code: {
+      file: 'packages/domain/src/duplicates.ts',
+      constant: 'DUPLICATE_WINDOW_MAX_MINUTES',
+      literal: '120',
+    },
+    note: 'Claude’s proposal with your request of Oct 4 (FR-INT-19): wide enough for a bill and its tip slip, narrow enough that a morning and an afternoon at one café stay apart. The database holds the column to it too.',
   },
   {
     id: 'R-DUPLICATE-DAYS',
@@ -126,6 +144,13 @@ export const RULES: readonly Rule[] = [
     code: { file: 'packages/workflows/src/email-pdf.ts', constant: 'MAX_PDF_PAGES', literal: '5' },
   },
   {
+    id: 'R-PDF-CELL-LINES',
+    name: 'Most lines a cell of a report’s PDF shows',
+    value: '12, the last ending in “…”; the CSV keeps all of it',
+    decided: { by: 'claude' },
+    code: { file: 'packages/api/src/report-pdf.ts', constant: 'MAX_CELL_LINES', literal: '12' },
+  },
+  {
     id: 'R-TRIP-LENGTH',
     name: 'Longest trip',
     value: '366 days',
@@ -141,6 +166,18 @@ export const RULES: readonly Rule[] = [
     code: { file: 'packages/api/src/home-routes.ts', constant: 'NEEDS_SHOWN', literal: '3' },
   },
   {
+    id: 'R-CAPTURE-READY',
+    name: 'How soon a receipt is read after it is captured',
+    value: 'under 30 seconds, for 95 of every 100',
+    decided: { by: 'blueprint', source: 'journeys §4.2' },
+    code: {
+      file: 'packages/domain/src/capture-time.ts',
+      constant: 'CAPTURE_TO_READY_SLO_MS',
+      literal: '30_000',
+    },
+    note: 'NFR-PERF-01. Measured from filing to the first settled reading, Ready or not; the 95th percentile is taken by nearest rank, so it is always one of the times measured (Claude’s).',
+  },
+  {
     id: 'R-IMAGE-LINK',
     name: 'How long a link to a receipt’s file works',
     value: '5 minutes',
@@ -152,6 +189,27 @@ export const RULES: readonly Rule[] = [
     },
   },
   {
+    id: 'R-MODEL-DEFAULTS',
+    name: 'Which AI models read until an owner chooses',
+    value:
+      'Sonnet 5.5 primary, then Haiku 4.5, then GPT-5.6 Luna, each while its key is there; Opus 5.5 and Fable 5.1 off',
+    decided: { by: 'claude', source: 'ADR-0033' },
+    code: {
+      file: 'packages/extraction/src/model-settings.ts',
+      constant: 'DEFAULT_PRIMARY',
+      literal: "'claude-sonnet-5-5'",
+    },
+    note: 'The models that read receipts before, the more capable Claude tier first, as their expenses were filed with it. The two that cost more stay off until you switch them on. Never put to you.',
+  },
+  {
+    id: 'R-INVITE-DAYS',
+    name: 'How long an invite link works',
+    value: '7 days from when it is made, once',
+    decided: { by: 'claude', source: 'ADR-0035' },
+    code: { file: 'packages/domain/src/people.ts', constant: 'INVITE_DAYS', literal: '7' },
+    note: 'You chose invites by link on Oct 4; the 7 days are Claude’s.',
+  },
+  {
     id: 'R-SIGN-IN-LINK',
     name: 'How long a link to add a sign-in works',
     value: '10 minutes',
@@ -161,5 +219,68 @@ export const RULES: readonly Rule[] = [
       constant: 'LINK_TOKEN_MAX_AGE_MS',
       literal: '10 * 60 * 1000',
     },
+  },
+  {
+    id: 'R-AUDIT-PAGE',
+    name: 'Changes on one page of the audit trail',
+    value: '50, newest first; up to 100 when the API is asked for more',
+    decided: { by: 'claude' },
+    code: { file: 'packages/api/src/audit.ts', constant: 'AUDIT_PAGE_SIZE', literal: '50' },
+  },
+  {
+    id: 'R-MILEAGE-RATE',
+    name: 'The rate a drive is paid at',
+    value:
+      'the IRS standard mileage rate for business use on its date: 72.5 cents a mile in 2026, 70 cents in 2025; known from 1 Jan 2022 to 31 Dec 2026',
+    decided: { by: 'claude', source: 'ADR-0038' },
+    code: {
+      file: 'packages/domain/src/mileage.ts',
+      constant: 'IRS_BUSINESS_RATES_THROUGH',
+      literal: "'2026-12-31'",
+    },
+    note: 'Nothing in the app held a rate, so Claude chose the IRS rate; Q28 asks whether you want your own. Each year’s rate is added when the IRS announces it in December (#76 for 2027); until then a drive dated after the last day known is refused rather than paid at the old rate.',
+  },
+  {
+    id: 'R-MILEAGE-MAX',
+    name: 'Most miles one drive claims',
+    value: '1,000 miles; a longer drive is logged day by day',
+    decided: { by: 'claude', source: 'ADR-0038' },
+    code: {
+      file: 'packages/domain/src/mileage.ts',
+      constant: 'MILEAGE_MAX_MILES',
+      literal: '1000',
+    },
+    note: 'A guard against an odometer reading typed as the distance.',
+  },
+  {
+    id: 'R-MILEAGE-AHEAD',
+    name: 'How far after today a drive can be dated',
+    value: '1 day after today in UTC, for a person ahead of UTC',
+    decided: { by: 'claude', source: 'ADR-0038' },
+    code: { file: 'packages/domain/src/mileage.ts', constant: 'MILEAGE_DAYS_AHEAD', literal: '1' },
+  },
+  {
+    id: 'R-RATE-LOOKBACK',
+    name: 'How far back a purchase’s reference rate may have been published',
+    value: '10 days: on a weekend or holiday, the last rate before it',
+    decided: { by: 'claude', source: 'ADR-0034' },
+    code: {
+      file: 'packages/domain/src/reference-rates.ts',
+      constant: 'REFERENCE_RATE_LOOKBACK_DAYS',
+      literal: '10',
+    },
+    note: 'Your answer to Q25 chose the purchase date’s reference rate; the ECB publishes none on weekends or its holidays, the longest gap being Easter’s four days. Using the last rate before such a day is Claude’s, and so are the 10 days.',
+  },
+  {
+    id: 'R-CONVERSION-SWEEP',
+    name: 'How often what is still converting is tried again',
+    value: 'hourly, at 37 minutes past',
+    decided: { by: 'claude', source: 'ADR-0034' },
+    code: {
+      file: 'packages/workflows/src/conversions.ts',
+      constant: 'CONVERSION_SWEEP',
+      literal: "'37 * * * *'",
+    },
+    note: 'A request to convert normally comes as something changes, within minutes; the sweep catches a failed fetch or a missed request.',
   },
 ];

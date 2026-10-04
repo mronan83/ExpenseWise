@@ -1,6 +1,8 @@
 import {
   assertRowSecurityApplies,
+  getModelSettings,
   getReceipt,
+  listProviderKeys,
   recordExtractionRun,
   runsForRequest,
   settleReceipt,
@@ -16,6 +18,9 @@ import {
   type StoredAnthropicKey,
 } from '@expensewise/extraction';
 import type { ObjectStore } from '@expensewise/storage';
+import { featureSwitch } from './features.ts';
+import { featureOn } from './features.ts';
+import { readingPlanFor } from './reading-plan.ts';
 import type { KeyProblem, ReceiptReadingPorts } from './receipts.ts';
 
 /**
@@ -47,6 +52,11 @@ export interface ReceiptReadingDeps {
     orgId: string,
     provider: ModelProvider,
   ) => Promise<StoredAnthropicKey | KeyProblem>;
+  /**
+   * FLAG_OVERRIDES, read from the environment when not given: the kill switches and the
+   * operator's stops.
+   */
+  readonly flagOverrides?: string;
 }
 
 /**
@@ -56,8 +66,26 @@ export interface ReceiptReadingDeps {
  */
 export function receiptReadingPorts(deps: ReceiptReadingDeps): ReceiptReadingPorts {
   const { inOrg } = checkedDatabase(deps.db);
+  const switchOn = featureSwitch(inOrg, deps.flagOverrides ?? process.env.FLAG_OVERRIDES);
+  // Where the organization has switched it on, each field comes with the line it was read
+  // from (GAP-14); elsewhere the request is the one every reading has always sent.
+  const asked = async (orgId: string) => ({
+    fieldSources: await switchOn(orgId, 'receipts.field-sources'),
+  });
+
+  const overrides = () => deps.flagOverrides ?? process.env.FLAG_OVERRIDES;
 
   return {
+    // Read at the start of every reading, so a change in Settings applies to the next one,
+    // read again included (FR-INT-16).
+    readingPlan: (orgId) =>
+      inOrg(orgId, async (tx) => {
+        const settingsOn = await featureOn(tx, orgId, 'receipts.model-settings', overrides());
+        if (!settingsOn) return readingPlanFor({ settingsOn, overrides: overrides() });
+        const keyed = new Set((await listProviderKeys(tx)).map((k) => k.provider));
+        const saved = await getModelSettings(tx);
+        return readingPlanFor({ settingsOn, saved, keyed, overrides: overrides() });
+      }),
     loadReceipt: (orgId, receiptId) => inOrg(orgId, (tx) => getReceipt(tx, receiptId)),
     fetchFile: (storageKey) => deps.files.download(storageKey),
     async extractor(orgId, model) {
@@ -65,11 +93,11 @@ export function receiptReadingPorts(deps: ReceiptReadingDeps): ReceiptReadingPor
         const key = await deps.providerKey(orgId, 'anthropic');
         if (typeof key === 'string') return key;
         const client = anthropicClient(key, { timeoutMs: 50_000, maxRetries: 0 });
-        return new ClaudeExtractor(client, model);
+        return new ClaudeExtractor(client, model, await asked(orgId));
       }
       const key = await deps.providerKey(orgId, 'openai');
       if (typeof key === 'string') return key;
-      return new OpenAIExtractor(key.key, model, { timeoutMs: 50_000 });
+      return new OpenAIExtractor(key.key, model, { timeoutMs: 50_000, ...(await asked(orgId)) });
     },
     saveRun: (orgId, run) => inOrg(orgId, (tx) => recordExtractionRun(tx, orgId, run)),
     runs: (orgId, receiptId, requestId) =>

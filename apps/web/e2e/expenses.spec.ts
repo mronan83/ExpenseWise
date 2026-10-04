@@ -35,6 +35,28 @@ test.describe('expenses', () => {
       expect(res.headers()['content-type']).toContain('application/problem+json');
     }
   });
+
+  test('asks a signed-out visitor to sign in before adding mileage, and refuses its endpoints', async ({
+    page,
+    request,
+  }) => {
+    await page.goto('/mileage/new');
+    await expect(page.getByRole('heading', { level: 1, name: 'Add mileage' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible();
+    for (const [method, path] of [
+      ['GET', '/api/v1/mileage/quote?date=2026-09-22&miles=3'],
+      ['POST', '/api/v1/mileage'],
+      ['GET', `/api/v1/mileage/${SOME_EXPENSE.split('/').at(-1)}`],
+      ['PATCH', `/api/v1/mileage/${SOME_EXPENSE.split('/').at(-1)}`],
+    ] as const) {
+      const res = await request.fetch(path, {
+        method,
+        data: method === 'GET' ? undefined : { miles: '3' },
+      });
+      expect([401, 503]).toContain(res.status());
+      expect(res.headers()['content-type']).toContain('application/problem+json');
+    }
+  });
 });
 
 for (const colorScheme of ['light', 'dark'] as const) {

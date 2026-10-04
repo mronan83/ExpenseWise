@@ -1,5 +1,4 @@
 import {
-  assertRowSecurityApplies,
   closeReport,
   getReport,
   justifyExpense,
@@ -7,7 +6,7 @@ import {
   listUnjustifiedExpenses,
   moveToReport,
   reopenReport,
-  withOrg,
+  reportForExport,
   type CloseReportResult,
   type Database,
   type ExpenseRecord,
@@ -16,8 +15,11 @@ import {
   type ReopenReportResult,
   type ReportChoice,
   type ReportContents,
+  type ReportForExport,
   type Transaction,
+  withReportAmounts,
 } from '@expensewise/db';
+import { asCaller } from './caller.ts';
 
 /** What Needs you shows of reports: a member's open and closed ones, and unjustified expenses. */
 export interface ReportsNeedingYou {
@@ -46,6 +48,8 @@ export interface ReportStore {
     text: string,
     actorUserId: string,
   ): Promise<JustifyExpenseResult>;
+  /** A report with every expense on it, for its CSV and PDF (FR-SET-01). */
+  forExport(orgId: string, reportId: string): Promise<ReportForExport | undefined>;
 }
 
 /** A member's open and closed reports, and their unjustified local expenses. */
@@ -54,27 +58,29 @@ export async function reportsNeedingYou(
   memberId: string,
   limit: number,
 ): Promise<ReportsNeedingYou> {
+  const reports = await listReports(tx, limit, { memberId, statuses: ['open', 'closed'] });
   return {
-    reports: await listReports(tx, limit, { memberId, statuses: ['open', 'closed'] }),
+    // With each amount's conversion, shown while it is on (FR-EXP-13).
+    reports: await withReportAmounts(tx, reports),
     unjustified: await listUnjustifiedExpenses(tx, memberId, limit),
   };
 }
 
-/** The report store on Postgres, as expensewise_app. It checks the role once. */
+/**
+ * The report store on Postgres, as expensewise_app, for the request's caller: they see and
+ * change only what their role allows (ADR-0035). It checks the role once.
+ */
 export function dbReportStore(db: Database): ReportStore {
-  let checked: Promise<void> | undefined;
-  const safe = () =>
-    (checked ??= assertRowSecurityApplies(db).catch((error: unknown) => {
-      checked = undefined;
-      throw error;
-    }));
-  const inOrg = async <T>(orgId: string, work: Parameters<typeof withOrg<T>>[2]) => {
-    await safe();
-    return withOrg(db, orgId, work);
-  };
+  const inOrg = asCaller(db);
   return {
-    list: (orgId, memberId, limit) => inOrg(orgId, (tx) => listReports(tx, limit, { memberId })),
-    get: (orgId, reportId) => inOrg(orgId, (tx) => getReport(tx, reportId)),
+    // Reports and their pages carry each amount's conversion, shown while it is on (FR-EXP-13).
+    list: (orgId, memberId, limit) =>
+      inOrg(orgId, async (tx) => withReportAmounts(tx, await listReports(tx, limit, { memberId }))),
+    get: (orgId, reportId) =>
+      inOrg(orgId, async (tx) => {
+        const found = await getReport(tx, reportId);
+        return found && (await withReportAmounts(tx, [found]))[0];
+      }),
     needsYou: (orgId, memberId, limit) =>
       inOrg(orgId, (tx) => reportsNeedingYou(tx, memberId, limit)),
     close: (orgId, reportId, actor) =>
@@ -85,5 +91,6 @@ export function dbReportStore(db: Database): ReportStore {
       inOrg(orgId, (tx) => moveToReport(tx, orgId, item, choice, actor)),
     justify: (orgId, expenseId, text, actor) =>
       inOrg(orgId, (tx) => justifyExpense(tx, orgId, expenseId, text, actor)),
+    forExport: (orgId, reportId) => inOrg(orgId, (tx) => reportForExport(tx, reportId)),
   };
 }

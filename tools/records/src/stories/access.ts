@@ -3,6 +3,7 @@ import type { Story } from '../model.ts';
 const ADR13 = { by: 'blueprint', source: 'ADR-0013' } as const;
 const ADR15 = { by: 'blueprint', source: 'ADR-0015' } as const;
 const ADR16 = { by: 'blueprint', source: 'ADR-0016' } as const;
+const OWNER_OCT_4 = { by: 'owner', source: 'owner 2026-10-04' } as const;
 
 /** Sign-in, organizations, sign-ins and AI provider keys (FR-PLT-01 to FR-PLT-05, FR-GOV-01). */
 export const ACCESS_STORIES: readonly Story[] = [
@@ -571,7 +572,7 @@ export const ACCESS_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Today the only admin action is managing the AI keys. No one can yet be invited or given a role (#29), so every organization is one owner, and no test signs in as a finance admin. Inside an organization any member can see and change every member’s receipts, expenses and trips (GAP-20, #50); the auditor’s read-only access is not enforced yet.',
+    note: 'The admin actions are managing the AI keys, for owners and finance admins, and managing people, for owners only (US-TEAM-01). No test signs in as a finance admin to manage keys. Since PR #58 each member sees and changes only their own records, and an auditor reads everyone’s and changes nothing (US-SEC-14 to US-SEC-16).',
   },
   {
     id: 'US-ACC-08',
@@ -582,7 +583,7 @@ export const ACCESS_STORIES: readonly Story[] = [
       'the organization is described as it really is, not as the app guessed on my first sign-in',
     feature: 'F-51',
     requirements: ['FR-PLT-11'],
-    status: 'Planned',
+    status: 'Delivered',
     criteria: [
       {
         id: 'AC1',
@@ -590,7 +591,10 @@ export const ACCESS_STORIES: readonly Story[] = [
         when: 'I open Settings',
         then: 'I can change the organization’s details and demographics',
         decided: { by: 'owner', source: 'owner 2026-10-04' },
-        checks: [],
+        checks: [
+          'api/organization › shows every member the details and their own role, and lets only the owner change them',
+          'db/organizations.int › keeps each detail the owner sets, with one audit event listing every change',
+        ],
       },
       {
         id: 'AC2',
@@ -598,7 +602,10 @@ export const ACCESS_STORIES: readonly Story[] = [
         when: 'I change its details and demographics',
         then: 'the details are its name, home currency, country, locale, time zone and address, and the demographics its industry and size',
         decided: { by: 'claude' },
-        checks: [],
+        checks: [
+          'domain/organization › sets each detail and demographic, tidied, and says what changed',
+          'db/organizations.int › keeps each detail the owner sets, with one audit event listing every change',
+        ],
       },
       {
         id: 'AC3',
@@ -606,7 +613,9 @@ export const ACCESS_STORIES: readonly Story[] = [
         when: 'I open Settings',
         then: 'I can’t change the organization’s details',
         decided: { by: 'claude' },
-        checks: [],
+        checks: [
+          'api/organization › shows every member the details and their own role, and lets only the owner change them',
+        ],
       },
       {
         id: 'AC4',
@@ -614,7 +623,10 @@ export const ACCESS_STORIES: readonly Story[] = [
         when: 'background work, such as a report opening or closing, decides what day it is',
         then: 'it goes by the organization’s time zone',
         decided: { by: 'claude' },
-        checks: [],
+        checks: [
+          'db/organizations.int › with organization settings on, joins a trip 24 hours after its return day ends there',
+          'db/organizations.int › names a report by the day it opened where the organization is',
+        ],
       },
       {
         id: 'AC5',
@@ -622,9 +634,413 @@ export const ACCESS_STORIES: readonly Story[] = [
         when: 'anyone later looks at the audit trail',
         then: 'it records the change',
         decided: { by: 'claude' },
-        checks: [],
+        checks: [
+          'db/organizations.int › keeps each detail the owner sets, with one audit event listing every change',
+          'api/organization › shows every member the details and their own role, and lets only the owner change them',
+        ],
+      },
+      {
+        id: 'AC6',
+        given: 'I am the owner',
+        when: 'I save a value that isn’t one, such as a blank name, a three-letter country or a time zone nobody knows',
+        then: 'nothing is saved, and I am told which field and why; saving what is already there records nothing',
+        decided: { by: 'claude' },
+        checks: [
+          'domain/organization › refuses a value that isn’t one, naming the field',
+          'db/organizations.int › refuses a value that isn’t one, and changes nothing',
+          'api/organization › refuses a value that isn’t one, naming the field, and a request that changes nothing',
+        ],
+      },
+      {
+        id: 'AC7',
+        given: 'organization settings are switched off',
+        when: 'anyone opens Settings',
+        then: 'there is no Organization page to change, and its routes answer as if they weren’t there',
+        decided: { by: 'owner', source: 'Q5' },
+        checks: [
+          'api/organization › answers 404 feature_off while organization settings are off, so they look absent',
+        ],
       },
     ],
-    note: 'Your requirement of Oct 4. Today a new organization is named after its owner’s email address and starts in US dollars, and nothing can change either (US-ACC-02).',
+    note: 'Your requirement of Oct 4. A new organization is still named after its owner’s email address and starts in US dollars (US-ACC-02); now the owner can change both, and keep the rest, in Settings › Organization. The locale is kept, but nothing formats by it yet.',
+  },
+  {
+    id: 'US-ACC-09',
+    title: 'Reports keep my organization’s days',
+    as: 'Alex, who travels for work',
+    want: 'reports to open and close by the days where my organization is',
+    soThat: 'a trip is on its report a day after I get home, not a day and a half',
+    feature: 'F-51',
+    requirements: ['FR-PLT-11'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'organization settings are on and the organization keeps a time zone',
+        when: 'a trip’s return day, or a local expense’s day, ends there',
+        then: 'it joins a report 24 hours later, rather than at noon UTC two days on',
+        decided: { by: 'claude', source: 'ADR-0037' },
+        checks: [
+          'domain/reports › in the organization’s time zone, waits 24 hours after its day ends there (FR-PLT-11)',
+          'db/organizations.int › with organization settings on, joins a trip 24 hours after its return day ends there',
+        ],
+        rules: ['R-REPORT-JOIN'],
+      },
+      {
+        id: 'AC2',
+        given: 'organization settings are on and the organization keeps a time zone',
+        when: 'a report opens',
+        then: 'its day 28 is 28 days on the organization’s calendar at the time it opened, so a clock change doesn’t move it to the day before',
+        decided: { by: 'claude', source: 'ADR-0037' },
+        checks: [
+          'domain/reports › in the organization’s time zone, closes on its day 28 at the time it opened there',
+          'db/organizations.int › with organization settings on, joins a trip 24 hours after its return day ends there',
+        ],
+        rules: ['R-REPORT-WINDOW'],
+      },
+      {
+        id: 'AC3',
+        given: 'organization settings are on and the organization keeps a time zone',
+        when: 'a report opens',
+        then: 'it is named by the date it opened where the organization is',
+        decided: { by: 'claude', source: 'ADR-0037' },
+        checks: [
+          'db/organizations.int › names a report by the day it opened where the organization is',
+        ],
+      },
+      {
+        id: 'AC4',
+        given: 'organization settings are off, or the organization keeps no time zone',
+        when: 'the schedule decides what is due',
+        then: 'it counts at UTC−12 as before, whatever time zone is kept',
+        decided: { by: 'owner', source: 'Q5' },
+        checks: [
+          'db/organizations.int › with organization settings off, goes by UTC−12 as before, whatever time zone is kept',
+        ],
+        rules: ['R-REPORT-JOIN'],
+      },
+      {
+        id: 'AC5',
+        given: 'the server’s override says organization settings are on or off',
+        when: 'background work asks whether they are',
+        then: 'the override wins over the owner’s switch, as it does for screens',
+        decided: { by: 'blueprint', source: 'ADR-0032' },
+        checks: [
+          'db/organizations.int › is the server’s override first, then the organization’s switch, then off',
+        ],
+      },
+    ],
+    note: 'Claude’s reading of your requirement that the time zone tells background work what day it is (FR-PLT-11). In US Central time a trip used to join about 31 hours after its day ended; with the time zone kept it is 24, plus up to an hour for the schedule.',
+  },
+  {
+    id: 'US-ACC-10',
+    title: 'Change the home currency from now on',
+    as: 'the organization’s owner',
+    want: 'to change the organization’s home currency',
+    soThat:
+      'new reports are in the currency we work in, without rewriting what was already claimed',
+    feature: 'F-51',
+    requirements: ['FR-PLT-11'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'I change the home currency',
+        when: 'a report opens afterwards',
+        then: 'it is in the new currency',
+        decided: { by: 'claude', source: 'ADR-0037' },
+        checks: [
+          'db/organizations.int › opens reports from then on in a new home currency, and leaves those opened before as they were',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'reports already opened, and expenses already filed',
+        when: 'I change the home currency',
+        then: 'they keep the currency they had, and no amount is converted or rewritten',
+        decided: { by: 'claude', source: 'ADR-0037' },
+        checks: [
+          'db/organizations.int › opens reports from then on in a new home currency, and leaves those opened before as they were',
+        ],
+      },
+      {
+        id: 'AC3',
+        given: 'a currency ExpenseWise doesn’t support',
+        when: 'I choose it as the home currency',
+        then: 'it is refused, and the home currency stays as it was',
+        decided: { by: 'claude' },
+        checks: ['domain/organization › refuses a value that isn’t one, naming the field'],
+      },
+    ],
+    note: 'Claude’s choice, yours to overturn: a change applies only to what is worked out afterwards. Converting each amount to the currency a person is reimbursed in is #62’s, which starts from the organization’s currency.',
+  },
+  {
+    id: 'US-TEAM-01',
+    title: 'Invite someone by link, with a role',
+    as: 'the organization’s owner',
+    want: 'to make a link that lets one person join my organization with the role I choose',
+    soThat: 'my team can file their expenses in my organization without my setting up email',
+    feature: 'F-23',
+    requirements: ['FR-PLT-07', 'FR-GOV-01'],
+    status: 'Partial',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'I am the owner and Invite people is switched on',
+        when: 'I make an invite link with a role, and a note of who it is for',
+        then: 'I am shown the link once, to copy and send myself; no email is sent, and only a hash of its secret is kept',
+        decided: OWNER_OCT_4,
+        checks: [
+          'api/people › makes an invite link with a role, showing its secret only once',
+          'db/people.int › keeps only the hash of a link, lists it until used, and records who made it',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'an invite link',
+        when: '7 days have passed since it was made, or it was used once',
+        then: 'it no longer works',
+        decided: { by: 'claude', source: 'ADR-0035' },
+        rules: ['R-INVITE-DAYS'],
+        checks: [
+          'domain/people › work for 7 days from when they are made',
+          'db/people.int › refuses a link that has expired or been revoked, or that names no invite',
+          'db/people.int › joins a person with the link’s role, once',
+        ],
+      },
+      {
+        id: 'AC3',
+        given: 'a link not used yet',
+        when: 'I revoke it',
+        then: 'it no longer works, and it leaves the list of links not used yet',
+        decided: { by: 'claude', source: 'ADR-0035' },
+        checks: [
+          'api/people › makes an invite link with a role, showing its secret only once',
+          'db/people.int › refuses a link that has expired or been revoked, or that names no invite',
+        ],
+      },
+      {
+        id: 'AC4',
+        given: 'sign-ups are off',
+        when: 'I open People to invite someone',
+        then: 'it tells me to make their account in the Supabase dashboard first, then send them the link',
+        decided: { by: 'blueprint', source: 'D-15' },
+        checks: [],
+        untested: 66,
+      },
+      {
+        id: 'AC5',
+        given: 'anyone in the organization but an owner',
+        when: 'they try to see or manage people or invite links',
+        then: 'they are refused',
+        decided: { by: 'claude', source: 'ADR-0035' },
+        checks: ['api/people › lets only an owner manage people'],
+      },
+      {
+        id: 'AC6',
+        given: 'Invite people is switched off',
+        when: 'anyone opens Settings or an invite link',
+        then: 'People isn’t offered, and its operations and every link answer as if they didn’t exist',
+        decided: { by: 'owner', source: 'Q5' },
+        checks: ['api/people › answers 404 feature_off while inviting people is switched off'],
+      },
+    ],
+    note: 'Your choice of Oct 4: invite by link, not email (#27 isn’t needed). The screens are checked for layout and accessibility, not for their words.',
+  },
+  {
+    id: 'US-TEAM-02',
+    title: 'Join an organization by its link',
+    as: 'Sam, who has been invited to a team',
+    want: 'to open the link I was sent, see what it offers and join',
+    soThat: 'I file my expenses in my team’s organization, with the role the owner gave me',
+    feature: 'F-23',
+    requirements: ['FR-PLT-07'],
+    status: 'Partial',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'I am signed in and hold a link that still works',
+        when: 'I open it and join',
+        then: 'I see the organization and role it offers, and I join with that role',
+        decided: OWNER_OCT_4,
+        checks: [
+          'api/people › shows the organization and role it offers, and where the person stands',
+          'api/people › joins the signed-in person with its role',
+          'db/people.int › joins a person with the link’s role, once',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'my first sign-in made an empty organization of my own',
+        when: 'I join by a link',
+        then: 'the empty organization is left behind, and I am told so before I join',
+        decided: ADR16,
+        checks: [
+          'db/people.int › replaces the empty organization a first sign-in made',
+          'api/own-records.int › works for its owner as before, and joining another replaces it while it is empty',
+        ],
+      },
+      {
+        id: 'AC3',
+        given: 'my own organization has receipts, settings, links or other people in it',
+        when: 'I try to join by a link',
+        then: 'I am told I can’t with this account and why, and nothing changes',
+        decided: ADR16,
+        checks: [
+          'db/people.int › refuses someone whose own organization has work in it, and changes nothing',
+          'api/people › says why it can’t join: used, expired, revoked, already in, or work of their own',
+        ],
+      },
+      {
+        id: 'AC4',
+        given:
+          'a link that was used, has expired or was revoked, or that I am already in the organization of',
+        when: 'I open it',
+        then: 'it says so, and asks me to get a new link where one is needed',
+        decided: { by: 'claude', source: 'ADR-0035' },
+        checks: [
+          'api/people › says why it can’t join: used, expired, revoked, already in, or work of their own',
+          'db/people.int › refuses a link that has expired or been revoked, or that names no invite',
+        ],
+      },
+      {
+        id: 'AC5',
+        given: 'I am not signed in',
+        when: 'I open the link',
+        then: 'it says the owner made my account, asks me to sign in, and brings me back to the link',
+        decided: { by: 'claude', source: 'ADR-0035' },
+        checks: [],
+        untested: 66,
+      },
+      {
+        id: 'AC6',
+        given: 'a link',
+        when: 'the person holding it opens it',
+        then: 'they see that one invite and nothing else of the organization until they join',
+        decided: { by: 'claude', source: 'ADR-0035' },
+        checks: [
+          'db/people.int › shows the holder of a link that one invite and nothing else of the organization',
+        ],
+      },
+      {
+        id: 'AC7',
+        given: 'an account with no email address',
+        when: 'it tries to join',
+        then: 'it is refused',
+        decided: { by: 'claude' },
+        checks: ['api/people › needs an account with an email address to join'],
+      },
+    ],
+  },
+  {
+    id: 'US-TEAM-03',
+    title: 'Change someone’s role',
+    as: 'the organization’s owner',
+    want: 'to give someone in my organization another role',
+    soThat: 'what they can see and do follows what they do for the organization',
+    feature: 'F-23',
+    requirements: ['FR-PLT-07', 'FR-GOV-01'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'I am the owner',
+        when: 'I give someone another role in People',
+        then: 'it takes effect from their next request, and the audit trail records the change',
+        decided: { by: 'claude', source: 'ADR-0035' },
+        checks: [
+          'api/people › changes a role and removes a member, never leaving the organization without an owner',
+          'db/people.int › changes a role, and never leaves the organization without an owner',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'the organization’s only owner',
+        when: 'anyone would give them another role, or remove them',
+        then: 'it is refused: the organization always has an owner',
+        decided: { by: 'claude', source: 'ADR-0035' },
+        checks: [
+          'db/people.int › changes a role, and never leaves the organization without an owner',
+          'domain/people › never leaves an organization without an owner',
+          'api/people › changes a role and removes a member, never leaving the organization without an owner',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'US-TEAM-04',
+    title: 'Remove someone, keeping their records',
+    as: 'the organization’s owner',
+    want: 'to remove someone who has left',
+    soThat: 'they can no longer reach our data, while what they claimed stays on the record',
+    feature: 'F-23',
+    requirements: ['FR-PLT-07'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'a member',
+        when: 'I remove them',
+        then: 'they can no longer reach the organization, and their receipts, expenses, trips and history stay',
+        decided: { by: 'claude', source: 'ADR-0035' },
+        checks: [
+          'db/people.int › removes a member, keeping their records, and lets them back in as the same member',
+          'api/own-records.int › lets the owner remove a member, who then reaches nothing, with their records kept',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'I am an owner',
+        when: 'I try to remove myself',
+        then: 'it is refused; another owner can remove me',
+        decided: { by: 'claude', source: 'ADR-0035' },
+        checks: [
+          'api/people › changes a role and removes a member, never leaving the organization without an owner',
+        ],
+      },
+      {
+        id: 'AC3',
+        given: 'someone I removed',
+        when: 'I invite them again and they join',
+        then: 'they come back as the same member, with their records and the new role',
+        decided: { by: 'claude', source: 'ADR-0035' },
+        checks: [
+          'db/people.int › removes a member, keeping their records, and lets them back in as the same member',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'US-TEAM-05',
+    title: 'Keep a record of who let whom in',
+    as: 'an auditor, who checks who can reach the organization',
+    want: 'every invite, join, role change and removal in the audit trail',
+    soThat: 'I can tell who gave whom access, and when, without the links themselves being kept',
+    feature: 'F-23',
+    requirements: ['FR-PLT-07'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'an invite made, used or revoked, a role changed, or someone removed',
+        when: 'anyone later looks at the audit trail',
+        then: 'it records what was done, by whom and when, and never the link’s secret',
+        decided: { by: 'blueprint', source: 'arch AP4' },
+        checks: [
+          'db/people.int › keeps only the hash of a link, lists it until used, and records who made it',
+          'db/people.int › joins a person with the link’s role, once',
+          'db/people.int › removes a member, keeping their records, and lets them back in as the same member',
+          'db/people.int › changes a role, and never leaves the organization without an owner',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'someone leaves an empty organization of their own to join',
+        when: 'anyone looks at that organization’s audit trail',
+        then: 'it records that their sign-in moved out',
+        decided: ADR16,
+        checks: ['db/people.int › replaces the empty organization a first sign-in made'],
+      },
+    ],
   },
 ];

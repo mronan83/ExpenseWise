@@ -1,7 +1,12 @@
+import { isOwnRecordsRefusal } from '@expensewise/db';
 import { DomainError } from '@expensewise/domain';
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { Hono, type Context, type ErrorHandler, type NotFoundHandler } from 'hono';
 import type { ProviderKeyVerifier } from './ai-providers.ts';
+import type { AuditStore } from './audit.ts';
+import { registerAuditRoutes } from './audit-routes.ts';
+import { callerScope, notYours, recordingCaller } from './caller.ts';
+import { featureGate, type FeatureGate } from './features.ts';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
 import { problem, ProblemError } from './problem.ts';
 import { healthRoute } from './routes/health.ts';
@@ -9,12 +14,25 @@ import { meRoute } from './routes/me.ts';
 import { readyRoute } from './routes/ready.ts';
 import type { Readiness } from './schemas.ts';
 import type { SecretBox } from './secret-box.ts';
+import type { CategoryStore } from './categories.ts';
+import { registerCategoryRoutes } from './category-routes.ts';
 import { registerExpenseRoutes } from './expense-routes.ts';
 import type { HomeStore } from './home.ts';
 import { registerHomeRoutes } from './home-routes.ts';
 import { registerInboundRoutes, type InboundRouteOptions } from './inbound-routes.ts';
+import type { OrganizationStore } from './organization.ts';
+import { registerOrganizationRoutes } from './organization-routes.ts';
+import type { ModelSettingsStore } from './model-settings.ts';
+import { registerModelSettingsRoutes } from './model-settings-routes.ts';
 import type { ExpenseStore } from './expenses.ts';
+import type { MileageStore } from './mileage.ts';
+import { registerMileageRoutes } from './mileage-routes.ts';
+import type { PeopleStore } from './people.ts';
+import { registerPeopleRoutes } from './people-routes.ts';
 import { registerReceiptRoutes, type ReceiptRouteOptions } from './receipt-routes.ts';
+import { registerReportExportRoutes } from './report-export-routes.ts';
+import { registerReimbursementRoutes } from './reimbursement-routes.ts';
+import type { ReimbursementStore } from './reimbursement.ts';
 import { registerReportRoutes } from './report-routes.ts';
 import type { ReportStore } from './reports.ts';
 import { registerTripRoutes } from './trip-routes.ts';
@@ -36,18 +54,37 @@ export interface ApiOptions
   readonly reportError?: (error: unknown) => void;
   /** Organizations and AI provider keys. Without it, those routes answer 503. */
   readonly workspace?: WorkspaceStore;
+  /** The organization's details and duplicate window. Without it, those routes answer 503. */
+  readonly organization?: OrganizationStore;
   /** Expenses, each with its receipt as proof. Without it, those routes answer 503. */
   readonly expenses?: ExpenseStore;
   /** Trips and the expenses filed to them. Without it, those routes answer 503. */
   readonly trips?: TripStore;
+  /** Drives logged by hand (FR-CAP-03). Without it, those routes answer 503. */
+  readonly mileage?: MileageStore;
   /** What Home shows, read at once. Without it, Home answers 503. */
   readonly home?: HomeStore;
   /** Expense reports. Without it, those routes answer 503 and Needs you shows no reports. */
   readonly reports?: ReportStore;
+  /** The audit trail and its chain check. Without it, those routes answer 503. */
+  readonly audit?: AuditStore;
+  /** Categories and types (FR-EXP-11). Without it, those routes answer 503 and expenses show none. */
+  readonly categories?: CategoryStore;
+  /** Which AI models read receipts (FR-INT-16). Without it, Settings › AI models answers 503. */
+  readonly modelSettings?: ModelSettingsStore;
+  /** The currency each person is reimbursed in. Without it, those routes answer 503. */
+  readonly reimbursement?: ReimbursementStore;
+  /** People and invite links (#29). Without it, those routes answer 503. */
+  readonly people?: PeopleStore;
   /** Encrypts AI provider keys at rest. Without it, saving or testing a key answers 503. */
   readonly secrets?: SecretBox;
   /** Checks AI provider keys with a free call to the provider. */
   readonly verifyProviderKey?: ProviderKeyVerifier;
+  /**
+   * FLAG_OVERRIDES: features forced on or off for every organization, beating each owner's
+   * switch. The kill switch.
+   */
+  readonly flagOverrides?: string;
   readonly now?: () => Date;
 }
 
@@ -94,6 +131,11 @@ function errorHandler(reportError?: (error: unknown) => void): ErrorHandler {
         code: error.code,
       });
     }
+    // The database refused a change that isn't the caller's own (ADR-0035): expected, not a bug.
+    if (isOwnRecordsRefusal(error)) {
+      const refusal = notYours();
+      return problem(c, refusal.status, refusal.slug, refusal.title, refusal.extra);
+    }
     console.error(error);
     reportError?.(error);
     return problem(c, 500, 'internal', 'Something went wrong on our side', { code: 'internal' });
@@ -117,6 +159,9 @@ export function createApi(options: ApiOptions) {
       }
     },
   });
+
+  // First, before any route: each request gets a slot for who it acts for (ADR-0035).
+  app.use('*', callerScope);
 
   app.openAPIRegistry.registerComponent('securitySchemes', 'bearerAuth', {
     type: 'http',
@@ -146,13 +191,27 @@ export function createApi(options: ApiOptions) {
     return c.json({ userId, email, assuranceLevel, sessionId }, 200);
   });
 
-  registerWorkspaceRoutes(app, options);
-  registerReceiptRoutes(app, options);
-  registerExpenseRoutes(app, options);
-  registerTripRoutes(app, options);
-  registerHomeRoutes(app, options);
-  registerReportRoutes(app, options);
-  registerInboundRoutes(app, options);
+  // One gate for every route: a feature that is off answers 404 feature_off.
+  const features: FeatureGate = featureGate(options);
+  // Each route resolves its caller through the workspace store, which records them as who the
+  // request acts for, so members' records are read and changed as them (ADR-0035).
+  const workspace = options.workspace && recordingCaller(options.workspace);
+  const routes = { ...options, workspace, features };
+  registerWorkspaceRoutes(app, routes);
+  registerOrganizationRoutes(app, routes);
+  registerReceiptRoutes(app, routes);
+  registerExpenseRoutes(app, routes);
+  registerTripRoutes(app, routes);
+  registerMileageRoutes(app, routes);
+  registerHomeRoutes(app, routes);
+  registerReportRoutes(app, routes);
+  registerReportExportRoutes(app, routes);
+  registerReimbursementRoutes(app, routes);
+  registerInboundRoutes(app, routes);
+  registerAuditRoutes(app, routes);
+  registerCategoryRoutes(app, routes);
+  registerModelSettingsRoutes(app, routes);
+  registerPeopleRoutes(app, routes);
 
   app.doc31('/v1/openapi.json', OPENAPI_INFO);
 

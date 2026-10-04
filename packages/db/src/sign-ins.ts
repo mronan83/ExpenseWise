@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, sql } from 'drizzle-orm';
 import { appendAuditEvent } from './audit.ts';
 import { switchOrg, withOrg, type Database, type Transaction } from './client.ts';
 import { lockSignIn, type Membership } from './members.ts';
@@ -6,6 +6,8 @@ import {
   aiProviderKeys,
   categories,
   expenses,
+  expenseTypes,
+  memberInvites,
   memberSignIns,
   members,
   mileageLogs,
@@ -37,14 +39,32 @@ export function listSignIns(tx: Transaction, memberId: string): Promise<SignIn[]
     .orderBy(asc(memberSignIns.createdAt));
 }
 
-/** Tables whose rows mean an organization holds someone's work. */
-const WORK_TABLES = [receipts, expenses, trips, mileageLogs, reports, categories, aiProviderKeys];
+/**
+ * Tables whose rows mean an organization holds someone's work. An invite counts: someone may
+ * be about to join it.
+ */
+const WORK_TABLES = [
+  receipts,
+  expenses,
+  trips,
+  mileageLogs,
+  reports,
+  aiProviderKeys,
+  memberInvites,
+];
+
+/**
+ * Categories and types are someone's work once a person added or changed one; the ready-made
+ * set every organization starts with is no one's (ADR-0036).
+ */
+const CATALOG_TABLES = [categories, expenseTypes];
 
 /**
  * Whether the current organization can be left behind without losing anything: one member,
- * one sign-in, and none of the tables that hold work. Call inside withOrg().
+ * one sign-in, and none of the tables that hold work. Call inside withOrg(), or after
+ * switchOrg(), for the system: a member's own view would miss colleagues' work.
  */
-async function isEmptySoloOrganization(tx: Transaction): Promise<boolean> {
+export async function isEmptySoloOrganization(tx: Transaction): Promise<boolean> {
   const [people] = await tx.select({ n: sql<number>`count(*)::int` }).from(members);
   const [ways] = await tx.select({ n: sql<number>`count(*)::int` }).from(memberSignIns);
   if (people?.n !== 1 || ways?.n !== 1) return false;
@@ -58,6 +78,14 @@ async function isEmptySoloOrganization(tx: Transaction): Promise<boolean> {
       ).length > 0
     )
       return false;
+  }
+  for (const table of CATALOG_TABLES) {
+    const changed = await tx
+      .select({ one: sql`1` })
+      .from(table)
+      .where(isNotNull(table.updatedByMemberId))
+      .limit(1);
+    if (changed.length > 0) return false;
   }
   return true;
 }

@@ -101,5 +101,5 @@ The architecture sets the constraints. The API is the only path to data (AP1), P
 
 - [ADR-0003](0003-platform.md) (amended), [ADR-0005](0005-identity.md) (superseded), [ADR-0001](0001-target-segment-and-tenancy.md)
 - [Technology stack](../05-architecture.md#68-technology-stack), [security, privacy and compliance](../05-architecture.md#69-security-privacy-and-compliance), [how the iPhone app slots in](../05-architecture.md#610-how-the-iphone-app-slots-in)
-- [Environments](../06-delivery-lifecycle.md#73-environments), [roadmap](../07-roadmap.md)
+- [Environments](../06-delivery-lifecycle.md#72-environments), [roadmap](../07-roadmap.md)
 - [Risk register](../08-risk-register.md): R5, R9

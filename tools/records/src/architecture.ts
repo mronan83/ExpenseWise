@@ -50,7 +50,7 @@ export const PRINCIPLES: readonly Principle[] = [
     id: 'AP4',
     name: 'Append-only history',
     built:
-      'Every state change appends a hash-chained audit event in its own transaction. The database refuses to change or remove one. Confirmations of readings are append-only too.',
+      'Every state change appends a hash-chained audit event in its own transaction. The database refuses to change or remove one. Confirmations of readings are append-only too. Settings › Audit trail recomputes the chain from every stored event each time it opens (FR-GOV-06).',
     short:
       'Locking approved expenses is an application rule; the database doesn’t enforce it until approval exists (FR-EXP-03, #24).',
     refs: ['ADR-0008'],
@@ -67,10 +67,10 @@ export const PRINCIPLES: readonly Principle[] = [
     id: 'AP6',
     name: 'Isolation in the database',
     built:
-      'Every tenant table has `org_id`, a forced row-level security policy and composite foreign keys. The app connects as a role that can’t bypass it, and refuses to start if it could.',
+      'Every tenant table has `org_id`, a forced row-level security policy and composite foreign keys. The app connects as a role that can’t bypass it, and refuses to start if it could. Inside an organization, each request names its caller’s membership to the database, and policies and triggers keep a member to their own receipts, expenses, trips and reports; owners, finance admins and auditors see everyone’s, and an auditor changes nothing (ADR-0035). Background work names no member and acts for the system.',
     short:
-      'Inside one organization the API doesn’t yet keep members to their own records (GAP-20, #50).',
-    refs: ['ADR-0001', 'ADR-0013'],
+      'An approver sees only their own records until approval routes reports to them (#24). The audit trail and the outbox are kept to the organization, not to each member (GAP-31, #74).',
+    refs: ['ADR-0001', 'ADR-0013', 'ADR-0035', 'GAP-31', '#74', '#24'],
   },
   {
     id: 'AP7',
@@ -83,10 +83,10 @@ export const PRINCIPLES: readonly Principle[] = [
     id: 'AP8',
     name: 'Ship dark',
     built:
-      'Flags are read per request from PostHog, so turning one on needs no deploy. Merge is the release, so code reaches production the moment it is merged.',
+      'Every feature built since Oct 4 ships behind a flag, off by default (Q5). Flags are read per request: the server’s override first, then the organization’s own switch, which its owner sets in Settings › Features at once and audited (ADR-0032), then off. Merge is the release, so code reaches production dark the moment it is merged.',
     short:
-      'While the only organization is the product owner’s, new screens ship without a flag (Q5); flags apply again from the first invite (#29).',
-    refs: ['ADR-0019'],
+      'Screens released before Oct 4 have no flag. PostHog is wired as a source but its key is not set, so it decides nothing.',
+    refs: ['ADR-0019', 'ADR-0032'],
   },
 ];
 
@@ -108,37 +108,37 @@ export const COMPONENTS: readonly Component[] = [
   },
   {
     name: 'API',
-    technology: 'Hono with zod-openapi; jose for tokens',
+    technology: 'Hono with zod-openapi; jose for tokens; pdf-lib for report PDFs',
     responsibility:
-      'Verifies the sign-in token, finds the caller’s membership, and serves every operation, including Home, read in one transaction: the Needs you inbox, which says why each item needs the person, then their trip, month and recent trips. Takes Bird’s signed email webhook, checked against the exact bytes before anything parses them. Settles possible duplicates as the person decides, removing a deleted receipt’s file only after the deletion commits. Serves expense reports: closing, reopening, moving a trip or local expense, and justifying one; Needs you adds reports to act on and local expenses needing a reason. Generates the OpenAPI contract and answers errors as problem documents.',
+      'Verifies the sign-in token, finds the caller’s membership and runs each member-facing store’s transaction as that member, so the database shows them only what their role allows (ADR-0035); a change the database refuses answers 403 `not_yours`. Serves Settings › People: invite links, roles and removing someone, and accepting a link. Serves every operation, including Home, read in one transaction: the Needs you inbox, which says why each item needs the person, then their trip, month and recent trips. Takes Bird’s signed email webhook, checked against the exact bytes before anything parses them. Settles possible duplicates as the person decides, removing a deleted receipt’s file only after the deletion commits. Serves expense reports: closing, reopening, moving a trip or local expense, and justifying one; Needs you adds reports to act on and local expenses needing a reason. Serves the audit trail to owners, finance admins and auditors, a page at a time, and recomputes its hash chain when asked. Exports a closed report as CSV, and as a PDF summary laid out in the request with pdf-lib: a database read and a layout in memory, with no other service. Serves Settings › Organization: the details and the duplicate time window, which every member reads and only the owner changes. Logs, quotes and corrects drives, each only the caller’s own, behind the mileage flag. Serves the categories and types an organization keeps, which only owners and finance admins change, and shows each expense its own, or a suggestion worked out in the request by rules, with no model call. While currency conversion is on, serves each person’s reimbursement currency and shows reports, Home and Needs you in it, beside the amounts as spent. Generates the OpenAPI contract and answers errors as problem documents.',
     where: ['packages/api'],
   },
   {
     name: 'Domain',
     technology: 'TypeScript, no I/O',
     responsibility:
-      'The rules: money, dates, lifecycles, editing an expense and its time and place, filing to trips, when two receipts are the same purchase, exactly or possibly, and how two expenses merge, when something joins a report and what day 28 does, approvals. Tested to 90% coverage or more.',
+      'The rules: money, dates, lifecycles, editing an expense and its time and place, filing to trips, when two receipts are the same purchase, exactly or possibly, and how two expenses merge, when something joins a report and what day 28 does, counted in an organization’s time zone or at UTC−12, what a report’s export holds and who may export it, an organization’s details and the duplicate window’s bounds, which reference rate a purchase date takes and what a report adds up to in the reimbursement currency, approvals, what a drive pays: the IRS business rate on its date, held as a table with the last day it is known for (ADR-0038), how categories and types nest and which pairs can be chosen, and the rules that suggest a type from a person’s past choices, the reading and the merchant’s name. Tested to 90% coverage or more.',
     where: ['packages/domain'],
   },
   {
     name: 'Data access',
     technology: 'Drizzle ORM on node-postgres',
     responsibility:
-      'The schema and migrations, `withOrg()` and every query and write, each with its audit event. Runs migrations and the data steps on release: one takes back anything Supabase’s Data API roles hold, another compares each receipt read before duplicates were looked for, once. Compares each receipt as its reading settles and holds a later copy; deletes a receipt only through `delete_receipt()`. Joins trips and local expenses to reports and closes them on day 28; any change to a closed report reopens it. Holds the restore drill’s database checks.',
+      'The schema and migrations, `withOrg()`, which can name the member a transaction acts for (ADR-0035), and every query and write, each with its audit event. Makes, accepts and revokes invite links, keeping only each token’s hash, and changes roles and removes people, never the last owner. Runs migrations and the data steps on release: one takes back anything Supabase’s Data API roles hold, another compares each receipt read before duplicates were looked for, once. Compares each receipt as its reading settles and holds a later copy, and keeps when its first reading settled; corrects a Ready receipt’s field with its expense in one transaction; deletes a receipt only through `delete_receipt()`. Joins trips and local expenses to reports and closes them on day 28, by the organization’s days when it keeps a time zone; any change to a closed report reopens it. Reads a report with every expense on it for its export. Keeps the organization’s details and duplicate window, each change audited. Writes a drive as an expense and its mileage log together, with the rate copied on. Seeds each new organization’s ready-made categories and types through `seed_starter_catalog()`, and keeps the lists and each expense’s choice. Converts a report’s amounts with the rates it is given, records each conversion with its rate, and asks for conversion in the transaction of any change that leaves something to convert. Holds the restore drill’s database checks.',
     where: ['packages/db'],
   },
   {
     name: 'Receipt reading',
     technology: 'Anthropic SDK; OpenAI over HTTPS',
     responsibility:
-      'Turns an image or PDF into fields with a confidence each, through one prompt and one schema, the time of purchase and the merchant’s address among them. Works out a time zone from the city, region and country offline (city-timezones), so no address leaves ExpenseWise. Compares two Claude models and falls back to OpenAI; checks that a reading’s sums make its total, counting fees as well as tax and tip, that its date is plausible and that it isn’t a purchase summary before it can be Ready; checks a reading against the expense.',
+      'Turns an image or PDF into fields with a confidence each, through one prompt and one schema, the time of purchase and the merchant’s address among them; where an organization switched on Where each field was read, a variant of both also asks for the line of the receipt behind each field, under its own versions, and every other organization’s request is unchanged (GAP-14). Works out a time zone from the city, region and country offline (city-timezones), so no address leaves ExpenseWise. Compares two Claude models and falls back to OpenAI; checks that a reading’s sums make its total, counting fees as well as tax and tip, that its date is plausible and that it isn’t a purchase summary before it can be Ready; checks a reading against the expense.',
     where: ['packages/extraction'],
   },
   {
     name: 'Workflows',
     technology: 'Inngest',
     responsibility:
-      'Reads receipts, reads emailed receipts, relays the outbox and keeps expense reports on time. An email is fetched as it arrived, its sender proved by a DKIM signature aligned with the From domain (mailauth), its parts read (postal-mime) and its attachments filed like uploads; with nothing attached, its HTML becomes text (html-to-text) laid out as a PDF (pdf-lib) and filed instead. Each step retries on its own; a failed run still settles its receipt.',
+      'Reads receipts, with the models each organization chose or side by side, reads emailed receipts, relays the outbox, keeps expense reports on time and converts their amounts with the ECB’s reference rates, fetched over HTTPS. Reads an organization’s feature switches inside its transaction where it has no request to ask, the server’s override first, as the API does (ADR-0032). An email is fetched as it arrived, its sender proved by a DKIM signature aligned with the From domain (mailauth), its parts read (postal-mime) and its attachments filed like uploads; with nothing attached, its HTML becomes text (html-to-text) laid out as a PDF (pdf-lib) and filed instead. Each step retries on its own; a failed run still settles its receipt.',
     where: ['packages/workflows'],
   },
   {
@@ -150,9 +150,9 @@ export const COMPONENTS: readonly Component[] = [
   },
   {
     name: 'Feature flags',
-    technology: 'PostHog (posthog-node)',
+    technology: 'TypeScript, Postgres; PostHog (posthog-node) when configured',
     responsibility:
-      'A registry of flags, read per request, with local overrides for tests. Off by default.',
+      'A registry of flags, each off by default. One gate in the API (`features.ts`) answers whether a feature is on for an organization: the server’s override, then the owner’s switch in `org_features`, then off. A route behind an off feature answers 404 `feature_off`, and screens hide it. Work with no request, such as the report schedule or the duplicate check, asks `featureOn()` in the data access package, which reads the same override first.',
     where: ['packages/flags'],
   },
   {
@@ -185,6 +185,10 @@ export const SERVICES: readonly { readonly name: string; readonly role: string }
     name: 'Bird',
     role: 'The agent mailbox emailed receipts arrive at, on inbox.ai, with an allowlist of senders; signs its webhooks and keeps each message as it arrived for 30 days (ADR-0026).',
   },
+  {
+    name: 'European Central Bank',
+    role: 'Its data API publishes the euro reference rates a report’s amounts are converted at; public, with no key or account (ADR-0034).',
+  },
   { name: 'Sentry', role: 'Error tracking and traces.' },
   { name: 'PostHog', role: 'Feature flags.' },
   {
@@ -216,6 +220,7 @@ export const CONTEXT_DIAGRAM = `flowchart LR
   I -->|"run steps"| W
   W -->|"read receipt"| AN["Anthropic"]
   W -.->|"fallback"| OA["OpenAI"]
+  W -->|"reference rates"| ECB["ECB data API"]
   E["Email from a member"] --> BI["Bird mailbox<br/>allowlist"]
   BI -->|"signed webhook"| W
   W -->|"fetch as it arrived"| BI
@@ -257,20 +262,28 @@ export const FLOWS: readonly Flow[] = [
   A->>I: Sends the event after commit
   A-->>W: Filed
   I->>A: Read a receipt (/api/inngest)
+  A->>DB: Which models: the organization’s settings, its keys, the operator’s stops
   A->>S: Check the file
-  par Each compared model
-    A->>M: Image to fields
+  alt AI model settings on
+    loop The primary, then each back-up while none has read it
+      A->>M: Image to fields
+    end
+    Note over A: Ready needs one confident reading,<br/>sums that make the total and a plausible date
+  else Side by side
+    par Each compared model
+      A->>M: Image to fields
+    end
+    opt No Claude model could read it
+      A->>M: OpenAI fallback
+    end
+    Note over A: Ready needs confident readings that agree,<br/>sums that make the total and a plausible date
   end
-  opt No Claude model could read it
-    A->>M: OpenAI fallback
-  end
-  Note over A: Ready needs confident readings that agree,<br/>sums that make the total and a plausible date
   A->>DB: One transaction: receipt settles, expense follows, files to its trip by date,<br/>and a later copy of another receipt is held for a look
   Note over DB: Ready only when the receipt is Ready and the claim is complete
   P->>W: Opens Home
   W->>A: GET /v1/home, with the person’s own day
   A-->>W: What needs them, their trip, month and recent trips`,
-    refs: ['ADR-0017', 'ADR-0020', 'ADR-0022', 'ADR-0023', 'FR-INT-04'],
+    refs: ['ADR-0017', 'ADR-0020', 'ADR-0022', 'ADR-0023', 'ADR-0033', 'FR-INT-04', 'FR-INT-16'],
   },
   {
     id: 'email-in',
@@ -356,6 +369,29 @@ export const FLOWS: readonly Flow[] = [
     refs: ['FR-EXP-05', 'FR-EXP-12', 'FR-EXP-14', 'ADR-0029'],
   },
   {
+    id: 'conversion',
+    title: 'A report in the currency you are reimbursed in',
+    about:
+      'Fetching a rate is a call to another service, so it never happens in a request: the change that leaves something to convert asks for it through the outbox, and the workflow fetches, then converts as the app inside the organization. A rate once recorded is applied again, never fetched again, and an hourly sweep catches what a failed fetch left converting (ADR-0034).',
+    diagram: `sequenceDiagram
+  actor P as Person
+  participant A as API
+  participant DB as Postgres
+  participant I as Inngest
+  participant E as ECB data API
+  P->>A: PUT /v1/me/reimbursement-currency, or a trip joins a report, or an amount changes
+  A->>DB: Reports follow the person's currency; report.conversions_due in the outbox
+  DB-->>I: Relayed, or handed on at once
+  I->>A: amount-conversion (/api/inngest)
+  A->>DB: Convert what recorded rates allow; what still needs a rate
+  A->>E: EUR rates for those currencies, over each date's 10 days before
+  A->>DB: Convert, copying the rate, its date and source onto each expense
+  P->>A: GET /v1/reports/{id}
+  A-->>P: Each amount beside its conversion, the total, what is converting, the rates used
+  Note over I,DB: Hourly at 37 past, conversion_work_due() finds what is still converting`,
+    refs: ['FR-EXP-13', 'NFR-DAT-02', 'NFR-DAT-04', 'ADR-0034'],
+  },
+  {
     id: 'request',
     title: 'Every API request',
     about:
@@ -428,7 +464,12 @@ export interface Setting {
   /** The names it covers; every setting the code or a workflow reads is named once. */
   readonly names: readonly string[];
   readonly kind:
-    'Secret' | 'Public build variable' | 'Set by the platform' | 'Constant' | 'Tooling';
+    | 'Secret'
+    | 'Server variable'
+    | 'Public build variable'
+    | 'Set by the platform'
+    | 'Constant'
+    | 'Tooling';
   readonly where: string;
   readonly use: string;
 }
@@ -532,9 +573,9 @@ export const SETTINGS: readonly Setting[] = [
   },
   {
     names: ['FLAG_OVERRIDES'],
-    kind: 'Tooling',
-    where: 'Local and tests',
-    use: 'Forces flags on or off without PostHog.',
+    kind: 'Server variable',
+    where: 'Vercel production (shell.build-version=on since Oct 4), local and tests',
+    use: 'Forces flags on or off for every organization, beating each owner’s switch: the kill switch. Read by the API and by the workflows alike, for each organization’s switch and for the operator’s switch per AI model: `operator.<model id>=off` stops that model reading anyone’s receipts (FR-INT-16).',
   },
   {
     names: ['CI', 'E2E_BASE_URL', 'E2E_PORT', 'PLAYWRIGHT_CHROMIUM_EXECUTABLE'],
@@ -604,13 +645,17 @@ export const WORKFLOWS: Readonly<Record<string, string>> = {
 /** What each background function does, by id. */
 export const BACKGROUND: Readonly<Record<string, string>> = {
   'receipt-reading':
-    'Reads a receipt when it is uploaded or read again: checks the file, reads it with each compared model in parallel steps, falls back to OpenAI when none could, then settles the receipt, its expense and its trip.',
+    'Reads a receipt when it is uploaded or read again: chooses the models, checks the file, then reads it and settles the receipt, its expense and its trip. Side by side, each compared model reads in parallel steps and OpenAI reads when none could (ADR-0017, ADR-0020). Under the organization’s AI model settings, the primary reads it and each back-up only when the ones before it read nothing, one step at a time, and one confident reading makes it Ready; with every model off it is filed for a person to fill in (ADR-0033). A model the operator stopped reads nothing.',
   'email-reading':
     'Reads an email that arrived at the receipts address: fetches it from Bird as it was received, proves its sender by DKIM, finds the member who signs in with that address, then stores and files each PDF or photo as a receipt, or with none the email’s text as a PDF, and hands their reading on. Mail from anyone else is dropped with nothing kept. Logs one line per email with what came of it (ADR-0026, ADR-0027).',
   'outbox-relay':
     'Every five minutes and on demand, sends committed outbox events that the request didn’t manage to send. The event id is the outbox id, so a duplicate is dropped.',
+  'amount-conversion':
+    'When a report has something to convert, or the owner switches currency conversion on: points open and closed reports at their member’s reimbursement currency, converts what rates already recorded allow, fetches the rest from the ECB’s data API, then converts again, recording each rate with its date and source. Requests for one organization close together run once, one at a time (ADR-0034).',
+  'amount-conversion-sweep':
+    'Hourly, at 37 past: asks which organizations still have amounts converting (conversion_work_due(), ids only), then converts in each as amount-conversion does. One failing doesn’t hold up the rest; logs one line of counts (ADR-0034).',
   'report-schedule':
-    'Hourly, at seven past: asks which organizations have report work due (report_work_due(), ids only), then in each, as the app and in one transaction, puts due trips and local expenses on the open report or a new one, closes reports on day 28 with what is ready, moves the rest on, and drops reports with nothing to claim. Safe to repeat; logs one line of counts (ADR-0029).',
+    'Hourly, at seven past: asks which organizations have report work due (report_work_due(), ids only), then in each, as the app and in one transaction, puts due trips and local expenses on the open report or a new one, closes reports on day 28 with what is ready, moves the rest on, and drops reports with nothing to claim. The days are the organization’s own when organization settings are on and it keeps a time zone, and UTC−12’s otherwise (ADR-0037). Safe to repeat; logs one line of counts (ADR-0029).',
 };
 
 export interface Quality {
@@ -623,9 +668,10 @@ export interface Quality {
 export const QUALITY: readonly Quality[] = [
   {
     attribute: 'Security',
-    how: 'Forced row-level security, a runtime role that can’t bypass it, Supabase’s Data API roles stripped on every release, verified tokens, encrypted provider keys, a private bucket, invite-only sign-in, security headers, and production credentials in production builds only.',
-    short: 'Members aren’t yet kept to their own records (GAP-20); no second factor (#8).',
-    refs: ['NFR-SEC-01', 'NFR-SEC-13', 'GAP-20', '#8'],
+    how: 'Forced row-level security, members kept to their own records inside an organization, a runtime role that can’t bypass it, Supabase’s Data API roles stripped on every release, verified tokens, encrypted provider keys, a private bucket, invite-only sign-in, security headers, and production credentials in production builds only.',
+    short:
+      'No second factor (#8). The audit trail and the outbox are kept to the organization, not to each member (GAP-31).',
+    refs: ['NFR-SEC-01', 'NFR-SEC-13', 'FR-GOV-01', 'GAP-31', '#8'],
   },
   {
     attribute: 'Integrity',
@@ -655,9 +701,8 @@ export const QUALITY: readonly Quality[] = [
   {
     attribute: 'Changeability',
     how: 'A generated API contract, migrations checked against the schema, a schema snapshot checked against the migrations, and records the tests check against the code.',
-    short:
-      'Phase 0 tables nothing uses yet (categories, mileage, reports, approvals) may change shape before first use.',
-    refs: ['FR-EXP-11'],
+    short: 'Phase 0 tables nothing uses yet (approvals) may change shape before first use.',
+    refs: ['FR-GOV-02'],
   },
   {
     attribute: 'Accessibility and fit on a phone',

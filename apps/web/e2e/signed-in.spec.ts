@@ -40,6 +40,12 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
   ['Home with everything in Needs you open', () => '/', [press('Show all')]],
   ['Receipts', () => '/receipts', []],
   ['a Ready receipt', (s) => `/receipts/${s.receipts.coffee}`, []],
+  [
+    'correcting a field of a Ready receipt',
+    (s) => `/receipts/${s.receipts.coffee}`,
+    [press('Correct the total')],
+  ],
+  ['a Ready receipt corrected with a tap', (s) => `/receipts/${s.receipts.parking}`, []],
   ['a receipt the models read differently', (s) => `/receipts/${s.receipts.folio}`, []],
   ['correcting a reading', (s) => `/receipts/${s.receipts.folio}`, [press('Edit a field')]],
   ['a reading confirmed with corrections', (s) => `/receipts/${s.receipts.steak}`, []],
@@ -59,6 +65,9 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
   ['merging a possible duplicate', (s) => `/receipts/${s.receipts.dinnerSlip}`, [press('Merge')]],
   ['the earlier of a possible pair', (s) => `/receipts/${s.receipts.dinner}`, []],
   ['a receipt being read', (s) => `/receipts/${s.receipts.processing}`, []],
+  ['a receipt the primary model read', (s) => `/receipts/${s.receipts.primaryRead}`, []],
+  ['a receipt a back-up model read', (s) => `/receipts/${s.receipts.backupRead}`, []],
+  ['a receipt filed with every AI model off', (s) => `/receipts/${s.receipts.notRead}`, []],
   ['Expenses', () => '/expenses', []],
   [
     'expenses on no trip, opened from Home',
@@ -86,6 +95,18 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
   ['an expense with when and where it was bought', (s) => `/expenses/${s.expenses.uber}`, []],
   ['editing when and where it was bought', (s) => `/expenses/${s.expenses.uber}`, [press('Edit')]],
   ['an expense still being read', (s) => `/expenses/${s.expenses.processing}`, []],
+  [
+    'adding mileage',
+    () => '/mileage/new',
+    [
+      fill('Date', '2026-09-22'),
+      fill('Miles', '38.4'),
+      fill('Destination', 'IAH airport'),
+      fill('Business purpose', 'Drive to the airport for the Acme onsite'),
+    ],
+  ],
+  ['a drive logged as mileage', (s) => `/expenses/${s.expenses.mileage}`, []],
+  ['changing a drive', (s) => `/expenses/${s.expenses.mileage}`, [press('Change the drive')]],
   ['Trips', () => '/trips', []],
   [
     'searching trips',
@@ -122,8 +143,34 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
   ['a closed report', (s) => `/reports/${s.reports.closed}`, []],
   ['a local expense needing a reason', (s) => `/expenses/${s.expenses.fallback}`, []],
   ['a local expense with its reason', (s) => `/expenses/${s.expenses.lunch}`, []],
+  ['organization settings', () => '/settings/organization', []],
   ['AI provider settings', () => '/settings/ai', []],
   ['sign-in settings', () => '/settings/sign-ins', []],
+  ['feature settings', () => '/settings/features', []],
+  ['the audit trail, with its chain checked', () => '/settings/audit', []],
+  ['the audit trail, older changes shown', () => '/settings/audit', [press('Show older changes')]],
+  [
+    'one receipt’s history, opened from the receipt',
+    (s) => `/settings/audit?entityType=receipt&entityId=${s.receipts.coffee}`,
+    [],
+  ],
+  ['category settings', () => '/settings/categories', []],
+  ['editing a category', () => '/settings/categories', [press('Edit Travel')]],
+  ['adding a type', () => '/settings/categories', [press('Add a type')]],
+  ['an expense with a suggested category', (s) => `/expenses/${s.expenses.lufthansa}`, []],
+  [
+    'choosing a category and type',
+    (s) => `/expenses/${s.expenses.coffee}`,
+    [press('Choose another')],
+  ],
+  ['an expense with its category chosen', (s) => `/expenses/${s.expenses.folio}`, []],
+  ['an expense with no category', (s) => `/expenses/${s.expenses.dinner}`, []],
+  ['AI model settings', () => '/settings/ai-models', []],
+  ['reimbursement currency settings', () => '/settings/currency', []],
+  ['people settings, with a member and a link not used yet', () => '/settings/people', []],
+  ['removing someone', () => '/settings/people', [press('Remove sam')]],
+  ['an invite link this account can’t use', (s) => `/invite/${s.invites.join}`, []],
+  ['a revoked invite link', (s) => `/invite/${s.invites.revoked}`, []],
 ];
 
 const session = {
@@ -208,6 +255,26 @@ async function open(
   }
 }
 
+/**
+ * Text that shows a date as 2026-09-30 rather than Sep 30, 2026 (Q12, NFR-UX-06). Form fields
+ * keep the phone's own date picker, and a model's reading keeps each date as it was read.
+ */
+function rawDates(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const found: string[] = [];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const parent = node.parentElement;
+      if (!parent || parent.closest('input, textarea, select, script, style, [data-as-read]')) {
+        continue;
+      }
+      const match = /\b\d{4}-\d{2}-\d{2}\b/.exec(node.textContent ?? '');
+      if (match && parent.checkVisibility()) found.push(node.textContent!.trim().slice(0, 80));
+    }
+    return found;
+  });
+}
+
 for (const [title, path, steps, at] of SCREENS) {
   test(`${title}: fits the screen and passes WCAG 2.2 AA, in light and dark`, async ({
     page,
@@ -227,6 +294,8 @@ for (const [title, path, steps, at] of SCREENS) {
       await open(page, path(seeded), steps, settled);
       const where = `${colorScheme}, ${size.width}px`;
       expect(await layoutProblems(page), where).toEqual([]);
+      if (colorScheme === 'light')
+        expect(await rawDates(page), 'dates read Sep 30, 2026').toEqual([]);
       // The tab bar covers whatever is scrolled under it until the person scrolls on; that
       // is not a target too small to tap. Axe sees the page with the bar in its place at the
       // end instead, and focus never stops behind it (scroll-padding in globals.css).
@@ -253,3 +322,69 @@ for (const [title, path, steps, at] of SCREENS) {
     expect(errors, 'errors in the console').toEqual([]);
   });
 }
+
+test('a receipt opens its history in the audit trail, under the chain checked intact', async ({
+  page,
+}) => {
+  await page.goto(`/receipts/${seeded.receipts.coffee}`, { waitUntil: 'networkidle' });
+  await page.getByRole('link', { name: 'History of this receipt' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Audit trail' })).toBeVisible();
+  await expect(page.getByText(/^Chain intact: [\d,]+ events checked$/)).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: /^History of receipt / })).toBeVisible();
+  await expect(page.getByText('Receipt captured', { exact: true })).toHaveCount(1);
+});
+
+test('hides a record’s History link while the audit trail is off', async ({ page }) => {
+  // As if the owner had switched it off: the features list says so.
+  await page.route(
+    (url) => url.pathname === '/api/v1/features',
+    (route) => route.fulfill({ json: { features: [], canSwitch: true } }),
+  );
+  await page.goto(`/expenses/${seeded.expenses.coffee}`, { waitUntil: 'networkidle' });
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(page.getByRole('link', { name: /^History/ })).toHaveCount(0);
+});
+
+test('hides a record’s History link from a role that can’t read the trail', async ({ page }) => {
+  // As a member or approver: the trail answers 403 forbidden_role.
+  await page.route(
+    (url) => url.pathname === '/api/v1/audit/events',
+    (route) =>
+      route.fulfill({
+        status: 403,
+        contentType: 'application/problem+json',
+        body: JSON.stringify({ title: 'Forbidden', status: 403, code: 'forbidden_role' }),
+      }),
+  );
+  await page.goto(`/reports/${seeded.reports.open}`, { waitUntil: 'networkidle' });
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(page.getByRole('link', { name: /^History/ })).toHaveCount(0);
+});
+
+test('the audit trail holds no key or token in any event’s details', async ({ request }) => {
+  // The bench saved this Anthropic key through the API; only its last four characters may show.
+  const KEY = 'sk-ant-bench-0000-wxyz';
+  const SECRET_FIELD = /"(api_?key|secret|password|token|access_?token|ciphertext)":/i;
+  const headers = { authorization: `Bearer ${E2E_USER}` };
+  let cursor: string | null = null;
+  let seen = 0;
+  do {
+    const res = await request.get(
+      `${BENCH_URL}/api/v1/audit/events?limit=100${cursor ? `&cursor=${cursor}` : ''}`,
+      { headers },
+    );
+    expect(res.status()).toBe(200);
+    const page = (await res.json()) as {
+      events: { sequence: number; payload: unknown }[];
+      nextCursor: string | null;
+    };
+    for (const event of page.events) {
+      const details = JSON.stringify(event.payload);
+      expect(details, `event #${event.sequence}`).not.toContain(KEY.slice(0, 12));
+      expect(details, `event #${event.sequence}`).not.toMatch(SECRET_FIELD);
+    }
+    seen += page.events.length;
+    cursor = page.nextCursor;
+  } while (cursor);
+  expect(seen).toBeGreaterThan(50);
+});

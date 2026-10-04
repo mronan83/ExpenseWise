@@ -6,17 +6,21 @@ import {
   findMemberships,
   getProviderKey,
   linkSignIn,
+  listOrgFeatures,
   listProviderKeys,
   listSignIns,
   markProviderKeyVerified,
+  orgFeatureOn,
   organizations,
   saveProviderKey,
+  setOrgFeature,
   unlinkSignIn,
   withOrg,
   type AiProvider,
   type Database,
   type LinkResult,
   type Membership,
+  type OrgFeature,
   type SignIn,
   type ProviderKeyWrite,
   type StoredProviderKey,
@@ -54,6 +58,14 @@ export interface WorkspaceStore {
     signInId: string,
     actorUserId: string,
   ): Promise<'removed' | 'not_found' | 'last'>;
+  /** The features this organization has switched; the rest are off. */
+  listFeatures(orgId: string): Promise<OrgFeature[]>;
+  featureOn(orgId: string, flag: string): Promise<boolean>;
+  switchFeature(
+    member: Membership,
+    change: { flag: string; enabled: boolean },
+    actorUserId: string,
+  ): Promise<'switched' | 'unchanged'>;
 }
 
 const keyEntity = (provider: AiProvider) => ({ entityType: 'ai_provider_key', entityId: provider });
@@ -145,6 +157,20 @@ export function dbWorkspaceStore(db: Database): WorkspaceStore {
     async unlinkSignIn(member, signInId, actorUserId) {
       await safe();
       return unlinkSignIn(db, member, signInId, actorUserId);
+    },
+    async listFeatures(orgId) {
+      await safe();
+      return withOrg(db, orgId, (tx) => listOrgFeatures(tx, orgId));
+    },
+    async featureOn(orgId, flag) {
+      await safe();
+      return withOrg(db, orgId, (tx) => orgFeatureOn(tx, orgId, flag));
+    },
+    async switchFeature(member, change, actorUserId) {
+      await safe();
+      return withOrg(db, member.orgId, (tx) =>
+        setOrgFeature(tx, member.orgId, { ...change, memberId: member.memberId }, actorUserId),
+      );
     },
   };
 }

@@ -8,8 +8,9 @@ const CLAUDE = { by: 'claude' } as const;
 
 /**
  * Money, FX, dates, ids and the audit log (F-24, F-28; FR-GOV-05, NFR-DAT-01, NFR-DAT-02,
- * NFR-DAT-03, NFR-DAT-05). ADR-0008 was recommended with no objection, so the rules it
- * adds beyond the blueprint's are Claude's to confirm.
+ * NFR-DAT-03, NFR-DAT-05), and reading the audit trail (US-GOV, F-20, FR-GOV-06). ADR-0008
+ * was recommended with no objection, so the rules it adds beyond the blueprint's are Claude's
+ * to confirm.
  */
 export const DOMAIN_STORIES: readonly Story[] = [
   {
@@ -183,7 +184,7 @@ export const DOMAIN_STORIES: readonly Story[] = [
         checks: ['db/tenancy.int › refuses a converted amount without its rate provenance'],
       },
     ],
-    note: 'Nothing is converted yet: Home, trips and reports total each currency apart. Converting to your reimbursement currency at the purchase date’s reference rate is FR-EXP-13 (Q25, #62), and copying the rate onto the record so a later rate never changes it is NFR-DAT-04. The database refuses a rate stored without its date or source, but it can’t tell a converted amount stored with no rate at all from an amount that needed none, so #62 must store the rate with every conversion.',
+    note: 'Reports convert to your reimbursement currency at the purchase date’s reference rate (FR-EXP-13, F-49, ADR-0034, US-RPT-11), each conversion kept with its rate, the rate’s date and its source in its own record, whose check refuses a converted amount without all three; an amount that needed no rate has no conversion. The expense columns AC6 checks were built in Phase 0 for one home currency and stay unused. Trips still total each currency apart.',
   },
   {
     id: 'US-DOM-03',
@@ -351,7 +352,7 @@ export const DOMAIN_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'No screen shows the trail yet: finance admins and auditors reading it is FR-GOV-06 (#26). Each model’s reading of a receipt is stored as it arrives; the audit event comes when the reading settles the receipt.',
+    note: 'Owners, finance admins and auditors read the trail in Settings › Audit trail (FR-GOV-06, US-GOV-01). Each model’s reading of a receipt is stored as it arrives; the audit event comes when the reading settles the receipt.',
   },
   {
     id: 'US-DOM-06',
@@ -410,7 +411,7 @@ export const DOMAIN_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Nothing in the app checks the trail yet; the tests do, and #26 (FR-GOV-06) checks it on screen. The chain shows an edit to a stored event. An edit made with every later hash recomputed as well would take a copy kept elsewhere, such as a backup, to show.',
+    note: 'The tests check the trail, and so does the app: Settings › Audit trail recomputes it each time it opens (US-GOV-02). The chain shows an edit to a stored event. An edit made with every later hash recomputed as well, or the newest events removed, would take a copy kept elsewhere, such as a backup, to show (#69).',
   },
   {
     id: 'US-DOM-07',
@@ -439,7 +440,7 @@ export const DOMAIN_STORIES: readonly Story[] = [
         checks: ['db/audit.int › blocks even the table owner from rewriting history'],
       },
     ],
-    note: 'The account that owns the table could switch the guard off before an edit; the hash chain (US-DOM-06) would then show the edited event.',
+    note: 'The account that owns the table could switch the guard off before an edit; the hash chain (US-DOM-06) would then show the edited event, on screen as well (US-GOV-02).',
   },
   {
     id: 'US-DOM-08',
@@ -494,5 +495,179 @@ export const DOMAIN_STORIES: readonly Story[] = [
       },
     ],
     note: 'GAP-10 is still partly open: the app can delete reports, approval steps and mileage logs (#33). It does drop an open report with nothing on it, with an audit event. Your decision of Oct 3 to delete a duplicate outright is the one exception for receipts and expenses, and only before submission.',
+  },
+  {
+    id: 'US-GOV-01',
+    title: 'Read every change in the audit trail',
+    as: 'Sam, a finance admin',
+    want: 'every change to every record in my organization, newest first, saying when, who, what happened, to which record, and what changed',
+    soThat: 'I can see how any claim came to be what it is without asking anyone',
+    feature: 'F-20',
+    requirements: ['FR-GOV-06'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'the audit trail switched on, and an owner, finance admin or auditor',
+        when: 'they open Settings › Audit trail',
+        then: 'every change in their organization shows, newest first, each with when it happened, who made it (the member, or the app’s workflow by name), what happened, the record it happened to, and its details exactly as stored',
+        decided: { by: 'blueprint', source: 'design §5.2' },
+        checks: [
+          'api/audit › lists the trail newest first, a page at a time, with who made each change',
+          'db/audit.int › lists the trail newest first, a page at a time, by record and by who made it',
+          'e2e/signed-in › a receipt opens its history in the audit trail, under the chain checked intact',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'more changes than fit on one page',
+        when: 'the person asks for older changes',
+        then: 'the next page follows on from the last change shown, and a change made in the meantime moves nothing between pages',
+        decided: CLAUDE,
+        rules: ['R-AUDIT-PAGE'],
+        checks: [
+          'api/audit › lists the trail newest first, a page at a time, with who made each change',
+          'api/audit › shows 50 events a page unless asked, and never more than 100',
+          'db/audit.int › lists the trail newest first, a page at a time, by record and by who made it',
+        ],
+      },
+      {
+        id: 'AC3',
+        given: 'a member or an approver',
+        when: 'they ask for the trail or its check',
+        then: 'they are refused: only owners, finance admins and auditors read it',
+        decided: CLAUDE,
+        checks: [
+          'api/audit › lets only owners, finance admins and auditors read it',
+          'domain/audit › lets owners, finance admins and auditors read it, and no one else',
+        ],
+      },
+      {
+        id: 'AC4',
+        given: 'the audit trail switched off for the organization',
+        when: 'anyone asks for it',
+        then: 'the trail and its check answer as if they didn’t exist, and nothing is read',
+        decided: { by: 'owner', source: 'Q5' },
+        checks: ['api/audit › answers 404 feature_off while the audit trail is switched off'],
+      },
+      {
+        id: 'AC5',
+        given: 'a change that involved a secret, such as saving an AI provider key',
+        when: 'its details are shown',
+        then: 'they hold no key or token: a saved key shows only its last four characters',
+        decided: CLAUDE,
+        checks: [
+          'e2e/signed-in › the audit trail holds no key or token in any event’s details',
+          'domain/audit › finds a credential by its field name or its shape, at any depth',
+        ],
+      },
+    ],
+    note: 'FR-GOV-06 names finance admins and auditors; letting owners read it too is Claude’s, for you to confirm.',
+  },
+  {
+    id: 'US-GOV-02',
+    title: 'See on screen that the history hasn’t been rewritten',
+    as: 'an auditor',
+    want: 'the hash chain recomputed from every stored event each time I open the audit trail, saying how many events it checked and where it first breaks',
+    soThat: 'I can rely on the trail without asking anyone to run the tests',
+    feature: 'F-20',
+    requirements: ['FR-GOV-06', 'FR-GOV-05'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'an organization’s trail as it was written',
+        when: 'the audit trail opens',
+        then: 'the top says “Chain intact” and how many events were checked: every event the organization has',
+        decided: { by: 'blueprint', source: 'roadmap inc 3' },
+        checks: [
+          'api/audit › recomputes the chain on request, and says where it breaks',
+          'db/audit.int › recomputes the chain on request, and finds the first event an edit broke',
+          'e2e/signed-in › a receipt opens its history in the audit trail, under the chain checked intact',
+        ],
+      },
+      {
+        id: 'AC2',
+        given:
+          'an event edited after it was written, even by the account that owns the table with its guard switched off',
+        when: 'the audit trail opens',
+        then: 'the top says the chain is broken at that event, which record and change it was, how many events were checked up to it, and that those before it verify; another organization’s chain is unaffected',
+        decided: CLAUDE,
+        checks: [
+          'db/audit.int › recomputes the chain on request, and finds the first event an edit broke',
+          'api/audit › recomputes the chain on request, and says where it breaks',
+        ],
+      },
+    ],
+    note: 'The check reuses the functions that wrote the chain, and reads the whole chain each time. The newest events removed, or an edit with every later hash recomputed, would still need a copy kept outside the database to show (#69).',
+  },
+  {
+    id: 'US-GOV-03',
+    title: 'Open a record’s history from the record',
+    as: 'Sam, a finance admin',
+    want: 'a History link on a receipt, an expense and a report that opens the audit trail at that record alone',
+    soThat: 'I see how one claim changed without searching the whole trail',
+    feature: 'F-20',
+    requirements: ['FR-GOV-06'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'the audit trail switched on, and an owner, finance admin or auditor',
+        when: 'they open a receipt, an expense or a report and tap History',
+        then: 'the audit trail opens with only that record’s changes, newest first, under the chain check',
+        decided: { by: 'blueprint', source: 'design §5.2' },
+        checks: [
+          'e2e/signed-in › a receipt opens its history in the audit trail, under the chain checked intact',
+          'api/audit › narrows the trail to one record, or to who made the change',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'the audit trail switched off, or a member or an approver',
+        when: 'they open a receipt, an expense or a report',
+        then: 'no History link shows',
+        decided: CLAUDE,
+        checks: [
+          'e2e/signed-in › hides a record’s History link while the audit trail is off',
+          'e2e/signed-in › hides a record’s History link from a role that can’t read the trail',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'US-GOV-04',
+    title: 'Narrow the audit trail to one record',
+    as: 'an auditor',
+    want: 'to narrow the trail to a kind of record, or one record by its id, or to tap the record an event is about',
+    soThat: 'a single claim’s history is in one place, in order',
+    feature: 'F-20',
+    requirements: ['FR-GOV-06'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'the audit trail',
+        when: 'the person picks a kind of record and its id, or taps the record an event is about',
+        then: 'only that record’s changes show, newest first, and Show every change brings the rest back',
+        decided: CLAUDE,
+        checks: [
+          'api/audit › narrows the trail to one record, or to who made the change',
+          'db/audit.int › lists the trail newest first, a page at a time, by record and by who made it',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'the API',
+        when: 'it is asked for the changes one person’s sign-in or one of the app’s workflows made',
+        then: 'only theirs come back',
+        decided: CLAUDE,
+        checks: [
+          'api/audit › narrows the trail to one record, or to who made the change',
+          'db/audit.int › lists the trail newest first, a page at a time, by record and by who made it',
+        ],
+      },
+    ],
+    note: 'The screen narrows by record; narrowing by who made the change is in the API only.',
   },
 ];

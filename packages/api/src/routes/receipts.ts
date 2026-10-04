@@ -1,6 +1,7 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import {
   ConfirmReceiptSchema,
+  CorrectReceiptSchema,
   DuplicateResolutionSchema,
   FileReceiptSchema,
   ProblemSchema,
@@ -163,6 +164,38 @@ export const confirmReceiptRoute = createRoute({
       'No such reading, a value that is not valid, or a filing field still missing; field ' +
         'or fields name which.',
     ),
+  },
+});
+
+export const correctReceiptRoute = createRoute({
+  method: 'post',
+  path: '/v1/receipts/{receiptId}/corrections',
+  tags: ['Receipts'],
+  summary: 'Correct a field of a Ready receipt',
+  description:
+    'One tap corrects a field of a receipt that is already Ready (GAP-14, FR-INT-11), with ' +
+    '"Where each field was read" switched on (receipts.field-sources). Its expense changes as ' +
+    'an edit would change it, before submission and recorded in the audit trail (ADR-0022); ' +
+    'each correction is kept beside what the model read, as Edit a field keeps it (ADR-0021). ' +
+    'A submitted or approved expense is locked: correcting an approved one is a reversal ' +
+    '(FR-EXP-03), which is not built yet. A receipt that needs a look is confirmed instead.',
+  ...secured,
+  request: {
+    params: receiptParam,
+    body: { content: { 'application/json': { schema: CorrectReceiptSchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'Corrected.',
+      content: { 'application/json': { schema: ReceiptDetailSchema } },
+    },
+    ...common,
+    404: problem('No such receipt in this organization, or the feature is off (feature_off).'),
+    409: problem(
+      'It is not Ready (not_ready), it was read again since (read_again), or its expense is ' +
+        'submitted or further along (locked).',
+    ),
+    422: problem('A value is not valid, or it is filed so already (unchanged); field names which.'),
   },
 });
 

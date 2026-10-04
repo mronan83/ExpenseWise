@@ -49,9 +49,16 @@ export function similarMerchants(a: string, b: string): boolean {
 
 /**
  * How far apart two printings of one purchase may be: the itemized bill and the card slip with
- * the tip on it come minutes apart.
+ * the tip on it come minutes apart. The default; the organization's owner may set another
+ * (FR-INT-19).
  */
 export const DUPLICATE_TIME_WINDOW_MINUTES = 30;
+/** The widest window the owner can set. The narrowest is 0: the same minute only. */
+export const DUPLICATE_WINDOW_MAX_MINUTES = 120;
+
+/** Whether a number of minutes is a window the owner can set: a whole number, 0 to 120. */
+export const isDuplicateWindow = (minutes: number): boolean =>
+  Number.isInteger(minutes) && minutes >= 0 && minutes <= DUPLICATE_WINDOW_MAX_MINUTES;
 
 /** What a duplicate check knows of a purchase: what is claimed, and when and where it was. */
 export interface PurchaseFacts extends ExpenseValues {
@@ -107,15 +114,20 @@ const minutesOf = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.
  * Whether two receipts are one purchase filed twice (FR-INT-18, ADR-0031), and how sure:
  *
  * - With a time and a place on both, those decide, whatever the total: a similar merchant, the
- *   same place and day, and times at most half an hour apart. Exact when the time and the
- *   total are the same too; possible otherwise, as with a tip added or an amended receipt.
+ *   same place and day, and times at most `windowMinutes` apart (half an hour unless the
+ *   owner set another; 0 is the same minute only). Exact when the time and the total are the
+ *   same too; possible otherwise, as with a tip added or an amended receipt.
  * - With the time on both but the place on neither or one, the total must match too.
  * - With the time on one or neither, the earlier rule stands (Q18): a similar merchant, the
  *   same currency and total, dated a day apart at most. Possible, never exact.
  *
  * A merchant and a date must be known on both, since a guess about a missing one is no evidence.
  */
-export function duplicateKind(a: PurchaseFacts, b: PurchaseFacts): DuplicateKind | null {
+export function duplicateKind(
+  a: PurchaseFacts,
+  b: PurchaseFacts,
+  windowMinutes: number = DUPLICATE_TIME_WINDOW_MINUTES,
+): DuplicateKind | null {
   if (a.merchant === null || b.merchant === null) return null;
   if (a.transactionDate === null || b.transactionDate === null) return null;
   if (!similarMerchants(a.merchant, b.merchant)) return null;
@@ -130,7 +142,7 @@ export function duplicateKind(a: PurchaseFacts, b: PurchaseFacts): DuplicateKind
   if (a.time !== null && b.time !== null) {
     if (a.transactionDate !== b.transactionDate) return null;
     const apart = Math.abs(minutesOf(a.time) - minutesOf(b.time));
-    if (apart > DUPLICATE_TIME_WINDOW_MINUTES) return null;
+    if (apart > windowMinutes) return null;
     if (sameTotal) return apart === 0 ? 'exact' : 'possible';
     return place === true ? 'possible' : null;
   }

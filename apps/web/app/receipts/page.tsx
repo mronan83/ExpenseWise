@@ -1,9 +1,11 @@
 'use client';
 
+import { showDate } from '@expensewise/domain';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type ChangeEvent } from 'react';
 import { api, ApiProblem } from '../../lib/api';
+import { useFeatures } from '../../lib/features';
 import { ReceiptFileError } from '../../lib/receipt-file';
 import {
   captureReceipt,
@@ -11,6 +13,7 @@ import {
   formatMoney,
   formatSeconds,
   RECEIPT_STATUS,
+  type CaptureTime,
   type ReceiptList,
 } from '../../lib/receipts';
 import { supabase } from '../../lib/supabase';
@@ -33,6 +36,7 @@ const describeError = (error: unknown) =>
 /** Capture receipts and see how the two compared models read them (ADR-0017). */
 export default function ReceiptsPage() {
   const router = useRouter();
+  const isOn = useFeatures();
   const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [progress, setProgress] = useState<string | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
@@ -167,7 +171,12 @@ export default function ReceiptsPage() {
               ) : null}
             </section>
 
-            {list.comparison.receipts > 0 ? <Comparison list={list} /> : null}
+            {list.comparison.receipts > 0 ? (
+              <Comparison
+                list={list}
+                captureTime={isOn('receipts.capture-time') ? list.captureToReady : undefined}
+              />
+            ) : null}
 
             <section aria-labelledby="recent-title" className="flex flex-col gap-2">
               <h2 id="recent-title" className="font-semibold">
@@ -188,7 +197,7 @@ export default function ReceiptsPage() {
                             {r.merchant ?? (r.status === 'processing' ? 'Reading…' : 'Receipt')}
                           </span>
                           <span className="text-xs text-ink-2">
-                            {r.date ?? new Date(r.createdAt).toLocaleDateString()} ·{' '}
+                            {showDate(r.date ?? r.createdAt)} ·{' '}
                             <span className={RECEIPT_STATUS[r.status].tone}>
                               {RECEIPT_STATUS[r.status].label}
                             </span>
@@ -210,7 +219,7 @@ export default function ReceiptsPage() {
   );
 }
 
-function Comparison({ list }: { list: ReceiptList }) {
+function Comparison({ list, captureTime }: { list: ReceiptList; captureTime?: CaptureTime }) {
   const { comparison } = list;
   return (
     <section
@@ -263,6 +272,32 @@ function Comparison({ list }: { list: ReceiptList }) {
           ))}
         </tbody>
       </table>
+      {captureTime ? <CaptureToReady time={captureTime} /> : null}
     </section>
+  );
+}
+
+/**
+ * How long receipts take from capture to read, at the 95th percentile, against the goal of
+ * under 30 seconds (NFR-PERF-01, GAP-16).
+ */
+function CaptureToReady({ time }: { time: CaptureTime }) {
+  const goal = formatSeconds(time.sloMs);
+  return (
+    <p className="border-t border-rule pt-3 text-sm">
+      <span className="font-semibold">Capture to Ready: </span>
+      {time.p95Ms === null ? (
+        <>no receipt has been read yet. The goal is under {goal}.</>
+      ) : (
+        <>
+          95 in every 100 are read within{' '}
+          <span className="font-semibold tabular-nums">{formatSeconds(time.p95Ms)}</span>, over{' '}
+          {time.receipts} {time.receipts === 1 ? 'receipt' : 'receipts'}.{' '}
+          <span className={time.withinSlo ? 'text-ok' : 'text-warn'}>
+            {time.withinSlo ? `Under the goal of ${goal}.` : `Over the goal of ${goal}.`}
+          </span>
+        </>
+      )}
+    </p>
   );
 }

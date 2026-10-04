@@ -1,5 +1,4 @@
 import {
-  assertRowSecurityApplies,
   createTrip,
   deleteTrip,
   editTrip,
@@ -7,7 +6,6 @@ import {
   listTrips,
   listTripExpenses,
   tallyTrips,
-  withOrg,
   type Database,
   type DeleteTripResult,
   type SaveTripResult,
@@ -16,6 +14,7 @@ import {
   type TripTally,
 } from '@expensewise/db';
 import type { TripInput } from '@expensewise/domain';
+import { asCaller } from './caller.ts';
 import { withProofs, type ExpensesWithProof } from './expenses.ts';
 
 /** What the API needs from the database for trips. Tests use an in-memory fake. */
@@ -46,18 +45,12 @@ export interface TripStore {
   remove(orgId: string, tripId: string, actorUserId: string): Promise<DeleteTripResult>;
 }
 
-/** The trip store on Postgres, as expensewise_app. It checks the role once. */
+/**
+ * The trip store on Postgres, as expensewise_app, for the request's caller: they see and
+ * change only what their role allows (ADR-0035). It checks the role once.
+ */
 export function dbTripStore(db: Database): TripStore {
-  let checked: Promise<void> | undefined;
-  const safe = () =>
-    (checked ??= assertRowSecurityApplies(db).catch((error: unknown) => {
-      checked = undefined;
-      throw error;
-    }));
-  const inOrg = async <T>(orgId: string, work: Parameters<typeof withOrg<T>>[2]) => {
-    await safe();
-    return withOrg(db, orgId, work);
-  };
+  const inOrg = asCaller(db);
 
   return {
     list: (orgId, limit, filter) =>

@@ -1,10 +1,13 @@
 'use client';
 
+import { showDate } from '@expensewise/domain';
 import Link from 'next/link';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, ApiProblem } from '../../lib/api';
 import { EXPENSE_STATUS, type ExpenseSummary } from '../../lib/expenses';
+import { useFeatures } from '../../lib/features';
 import { formText } from '../../lib/form';
+import { MILEAGE_FLAG } from '../../lib/mileage';
 import { formatMoney } from '../../lib/receipts';
 import { supabase } from '../../lib/supabase';
 
@@ -43,6 +46,7 @@ const describeError = (error: unknown) =>
 export default function ExpensesPage() {
   const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [search, setSearch] = useState<Search>(NO_SEARCH);
+  const featureOn = useFeatures();
 
   const refresh = useCallback(async (terms: Search) => {
     const session = (await supabase()?.auth.getSession())?.data.session;
@@ -84,9 +88,16 @@ export default function ExpensesPage() {
         <Link href="/" className="tap font-mono text-xs tracking-widest text-ink-2 uppercase">
           ExpenseWise
         </Link>
-        <Link href="/receipts" className="tap text-xs font-semibold text-carbon">
-          Capture
-        </Link>
+        <span className="flex items-baseline gap-4">
+          {featureOn(MILEAGE_FLAG) ? (
+            <Link href="/mileage/new" className="tap text-xs font-semibold text-carbon">
+              Add mileage
+            </Link>
+          ) : null}
+          <Link href="/receipts" className="tap text-xs font-semibold text-carbon">
+            Capture
+          </Link>
+        </span>
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <h1 className="text-2xl font-bold">Expenses</h1>
@@ -135,10 +146,21 @@ export default function ExpensesPage() {
                       <span className={EXPENSE_STATUS[e.status].tone}>
                         {EXPENSE_STATUS[e.status].label}
                       </span>
-                      {e.date ? ` · ${e.date}` : ''}
+                      {e.date ? ` · ${showDate(e.date)}` : ''}
+                      {e.source === 'mileage' ? ' · Mileage' : ''}
                       {e.trip ? ` · ${e.trip.name}` : ''}
                       {e.matchesReceipt === false ? (
                         <span className="text-warn"> · differs from its receipt</span>
+                      ) : null}
+                      {/* Sent only while categories are switched on (FR-EXP-11). */}
+                      {e.category?.state === 'confirmed'
+                        ? ` · ${e.category.type?.name ?? ''}`
+                        : null}
+                      {e.category?.state === 'suggested' ? (
+                        <span className="text-warn"> · {e.category.type?.name}, suggested</span>
+                      ) : null}
+                      {e.category?.state === 'missing' ? (
+                        <span className="text-warn"> · no category</span>
                       ) : null}
                     </span>
                   </span>

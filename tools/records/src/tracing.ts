@@ -6,6 +6,57 @@ import type { ChangeLogEntry, Gap, Question } from './model.ts';
  */
 export const GAPS: readonly Gap[] = [
   {
+    id: 'GAP-27',
+    title: 'Renaming a category or type changes the name on old claims.',
+    affects: ['NFR-DAT-04', 'FR-EXP-11', 'F-43'],
+    severity: 'Low',
+    evidence:
+      'Found merging PR #58: an expense points at its category and type (ADR-0036) and copies neither name, so renaming one shows the new name on every claim that used it, submitted or exported ones included. One in use can be retired but never deleted, so nothing is lost, but an old claim no longer reads as it did.',
+    fix: 'Copy the category and type names onto an expense when its report is submitted, as the mileage and FX rates are copied, and show those on submitted claims and exports (#70).',
+    backlog: 70,
+  },
+  {
+    id: 'GAP-28',
+    title: 'An expense can go on without a category and type, and no rule hangs off a type.',
+    affects: ['FR-EXP-11', 'F-43'],
+    severity: 'Low',
+    evidence:
+      'Built in PR #58 behind `expenses.categories`: an expense without a category and type says so on its page and in the list, but nothing refuses one, since nothing that works today may be blocked by a feature switched on. Types carry no rules yet, because attendees, a mileage rate and a receipt needed above a limit are not built as rules.',
+    fix: 'Refuse to submit a report while an expense on it lacks them, once reports are submitted, and attach each rule to the type as it is built (#71).',
+    backlog: 71,
+  },
+  {
+    id: 'GAP-29',
+    title: 'Nothing asks to re-confirm the AI model after about 100 real receipts.',
+    affects: ['NFR-AI-04'],
+    severity: 'Low',
+    evidence:
+      'Found building AI model settings (#52). NFR-AI-04 asks for the model tier to be re-confirmed after about 100 real receipts. The primary is now your choice in Settings › AI models, with each model’s record beside it, but nothing counts the receipts read since the choice or asks you to look again.',
+    fix: 'Count the receipts read since the primary was last chosen, and at about 100 ask in Needs you to keep it or change it (#72).',
+    backlog: 72,
+  },
+  {
+    id: 'GAP-30',
+    title: 'Home doesn’t show business miles, though mileage exists.',
+    affects: ['FR-INS-01', 'F-22'],
+    severity: 'Low',
+    evidence:
+      'FR-INS-01 asks Home for business miles once mileage exists, and manual mileage was built in PR #58 (#17). Home’s request has no flag check of its own yet, so the figure was left out of that change rather than shown while mileage is switched off. A drive does count in Home’s spend for the month, as any expense does.',
+    fix: 'Sum the person’s drives dated this month and show the figure on Home behind the expenses.mileage flag (#73).',
+    backlog: 73,
+  },
+  {
+    id: 'GAP-31',
+    title:
+      'Inside an organization, the audit trail and the outbox are kept to the organization, not to each member.',
+    affects: ['FR-GOV-01'],
+    severity: 'Low',
+    evidence:
+      'Found building #50 (ADR-0035). Members see only their own receipts, expenses, trips and reports, but every member’s transaction can read the organization’s whole audit trail, which it reads to chain the next event, and its outbox. No screen or API operation shows either to a member, so nothing reaches one through the app; a screen that read them would show colleagues’ merchants and amounts.',
+    fix: 'Hold reading the trail to owners, finance admins and auditors, with the chain’s last link read by an owner-run function, and the outbox to the system (#74).',
+    backlog: 74,
+  },
+  {
     id: 'GAP-25',
     title: 'Photos emailed in are stored with their location.',
     affects: ['NFR-PRV-03'],
@@ -113,6 +164,10 @@ export const GAPS: readonly Gap[] = [
       'Row-level security keeps organizations apart, but inside one the API checks only that the caller is a member. Found while building trips (#16), which follow the same rule as expenses. Harmless while every organization has one person; the first invite (#29) would show a new member their colleagues’ spending.',
     fix: 'A member sees and changes their own; an approver sees what they approve; finance admins see everything, and auditors read it. Enforced in the API, with a test for each role, before anyone is invited (#50).',
     backlog: 50,
+    closed: {
+      date: '2026-10-04',
+      note: 'PR #58 (ADR-0035): enforced in the database, not only the API. Each request names its caller to Postgres; a member or approver sees only their own receipts, expenses, trips and reports and what hangs off them, owners, finance admins and auditors see everyone’s, everyone changes only their own, and an auditor nothing. Tested for each role by API and directly as the app’s database role. Approval isn’t built, so an approver sees only their own until #24.',
+    },
   },
   {
     id: 'GAP-19',
@@ -270,6 +325,10 @@ export const GAPS: readonly Gap[] = [
       'The receipt page shows each model’s values with their confidence and the original image; the schema asks for no source text. Since #47 a reading that needs a look can be corrected, but a Ready one can’t.',
     fix: 'Ask the model for each field’s source line and highlight it, and correct any field with a tap, as a reversal once it is an expense (#37).',
     backlog: 37,
+    closed: {
+      date: '2026-10-04',
+      note: 'PR #58, behind Where each field was read: each field shows the line of the receipt it was read from, as text (no highlight on the image: the models give no position), and a Ready receipt’s field is corrected with a tap through its expense, until the expense is submitted. Correcting an approved one is a reversal, which comes with approval (#24).',
+    },
   },
   {
     id: 'GAP-17',
@@ -304,6 +363,10 @@ export const GAPS: readonly Gap[] = [
       'Each reading stores its own latency; nothing records the time from filing to settlement.',
     fix: 'Record it at settlement and show the p95 beside the comparison (#32).',
     backlog: 32,
+    closed: {
+      date: '2026-10-04',
+      note: 'PR #58: each receipt keeps when its first reading settled, and the comparison shows the 95th percentile against 30 seconds, behind Capture-to-Ready time. Reading production’s figure is #75.',
+    },
   },
 ];
 
@@ -352,6 +415,10 @@ export const QUESTIONS: readonly Question[] = [
     why: 'Flags cost a little on every change; they matter once someone else would see an unfinished feature.',
     recommendation: 'Yes, and flag everything again from the first invite (#29).',
     affects: ['NFR-DEL-05'],
+    answer: {
+      date: '2026-10-04',
+      text: 'Flag every feature from now on, each off by default; you switch each one on after checking it on your iPhone in production. The screens already released stay as they are. Each organization’s owner switches its own features in Settings › Features, at once and without a release, and the server’s override still beats that switch (ADR-0032).',
+    },
   },
   {
     id: 'Q6',
@@ -615,10 +682,50 @@ export const QUESTIONS: readonly Question[] = [
       text: 'A, the user story format as laid out. Go back through the entire build and capture every user story and its acceptance criteria. Asked where they live: in these records (tools/records/src/stories), beside the requirements, and published as a fifth page, User stories & acceptance criteria, after each release; the traceability page links each requirement to its stories.',
     },
   },
+  {
+    id: 'Q27',
+    title: 'What an expense without a category and type holds up',
+    ask: 'Every expense has a category and a type (FR-EXP-11). With categories switched on, one without them says so on its page and in the expense list, and holds nothing up. Should it also: A, stay as it is; B, appear in Needs you as well; C, stop its report from being submitted, once reports are submitted (#24); D, both B and C?',
+    why: 'Switched on for the first time, every expense you already have lacks them, so B would fill Needs you at once; it is the list of what needs you now. Submission is where finance needs the coding, and where a missing one does harm. A suggestion is shown for most expenses, so confirming one is a tap.',
+    recommendation:
+      'C, with A until reports are submitted: the expense and the list say what is missing, and submitting needs it (#71).',
+    affects: ['FR-EXP-11', 'F-43', 'GAP-28'],
+  },
+  {
+    id: 'Q28',
+    title: 'Which rate mileage pays',
+    ask: 'Manual mileage (#17) pays each drive at a rate copied onto it from its date. Nothing in the app held a rate, so Claude chose the IRS standard mileage rate for business use: 72.5 cents a mile in 2026, 70 cents in 2025, back to 2022 (ADR-0038). A: keep the IRS business rate, added each December when the IRS announces the next year’s; until it is added, a drive dated in the new year is refused rather than paid at the old rate. B: your own rate a mile, set in Settings, with the IRS rate as its starting value. C: something else.',
+    why: 'The rate decides every mileage claim, and it is copied onto each drive, so a later change never alters one already logged (NFR-DAT-04). The IRS rate is what a solo professional can deduct without keeping vehicle costs; an employer may pay less, or more as taxable pay. An organization outside the US would need its own rate and currency, which only B gives.',
+    recommendation:
+      'A, while you are the only organization; B before a second organization, or anyone outside the US, joins.',
+    affects: ['FR-CAP-03', 'F-13', 'NFR-DAT-04'],
+  },
+  {
+    id: 'Q29',
+    title: 'Which reports can be exported once approval exists',
+    ask: 'FR-SET-01 says approved reports are exported. You asked for export (#25) before approval (#24), so today a report can be exported once it closes, and at every state after that. Once approval exists: A: keep it so, and a closed report can still be exported before it is submitted or approved. B: only an approved report can be exported.',
+    why: 'A copy of a closed report lets you check it, or send it to whoever reimburses you, before you submit; an approved report is what finance books, and the PDF says which it is. B would take away an export you have today. Posting to accounting (FR-SET-02) takes approved reports only either way.',
+    recommendation: 'A.',
+    affects: ['FR-SET-01', 'F-19', 'US-RPT-16', 'US-RPT-17'],
+  },
+  {
+    id: 'Q30',
+    title: 'What owners and finance admins may do with others’ records',
+    ask: 'Since #50, owners, finance admins and auditors can open everyone’s receipts, expenses and trips, but each person changes only their own, and Receipts, Expenses and Trips list only your own. A: as built: see everyone’s, change only your own; a claim that needs fixing goes back to its person, through approval (#24). B: owners and finance admins can also change anyone’s records, each change audited. C: as A, plus a list of everyone’s records for owners and finance admins.',
+    why: 'Who may change a colleague’s claim is a control: if a finance admin can edit an expense, what its claimant said they spent can change under them. A list of everyone’s is how an owner would actually look at the team’s spending; today they open a record only by its link.',
+    recommendation: 'A for now; decide on C when the first team starts approving reports.',
+    affects: ['FR-GOV-01', 'F-61', 'ADR-0035'],
+  },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-04',
+    change:
+      'PR #58, the backlog batch you asked for in one PR, each feature behind its own switch (your answer to Q5, ADR-0032). Every new feature is off until you switch it on in the new Settings › Features, for your organization, at once and audited; the server’s override setting still beats it. Built: organization details and its time zone deciding when report days end (#63, F-51); the duplicate time window and your role in Settings (#64, F-52); amounts converted to your reimbursement currency at the ECB reference rate for the purchase date (#62, F-49, ADR-0034); categories and types your organization defines, with rule-based suggestions and no model calls (#51, #18, F-43, F-15, ADR-0036); AI models switched on and off with one primary and ordered back-ups, Ready resting on one confident reading, which settles the tier as your choice (#52, #21, F-45, ADR-0033); the receipt line behind each field and a one-tap correction of a Ready receipt (#37, GAP-14 closed); capture-to-Ready time with its 95th percentile (#32, GAP-16 closed); manual mileage at the IRS rate on the day (#17, F-13, ADR-0038); CSV and PDF export of a closed report (#25, F-19); the audit trail with its hash chain checked on screen (#26, F-20); invites by link, roles and removal (#29, F-23); and, not switchable because it is security, each member sees and changes only their own records (#50, F-61, GAP-20 closed, ADR-0035). Dates read one way everywhere, Sep 30, 2026 (#55, NFR-UX-06). #4 withdrawn at your word; #22 done with the build version switched on in production; Phase 0 closed in the docs; route mileage researched (#20: OpenRouteService, free). Opened: GAP-27 (#70, a renamed category changes old claims), GAP-28 to GAP-31 with #71 to #74, #75 to read capture-to-Ready in production, #76 to add the 2027 IRS mileage rate before January, and Q27 to Q30 for your decision.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-04',
     change:

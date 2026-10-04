@@ -15,17 +15,31 @@ import { deflateSync } from 'node:zlib';
 import {
   createHttpApp,
   createSecretBox,
+  dbAuditStore,
+  dbCategoryStore,
   dbExpenseStore,
   dbReceiptStore,
   dbHomeStore,
+  dbOrganizationStore,
+  dbMileageStore,
+  dbModelSettingsStore,
+  dbReimbursementStore,
+  dbPeopleStore,
   dbReportStore,
   dbTripStore,
   dbWorkspaceStore,
+  ORG_FEATURE_KEYS,
 } from '@expensewise/api';
 import { createDatabase, runReportSchedule, setRolePasswords } from '@expensewise/db';
 import { runMigrations } from '@expensewise/db/migrate';
-import { COMPARISON_MODELS, FALLBACK_MODEL } from '@expensewise/extraction';
-import { readWith, receiptReadingPorts, settleReading } from '@expensewise/workflows';
+import { COMPARISON_MODELS, FALLBACK_MODEL, type ModelId } from '@expensewise/extraction';
+import {
+  conversionPorts,
+  convertOrganization,
+  readWith,
+  receiptReadingPorts,
+  settleReading,
+} from '@expensewise/workflows';
 import { BENCH_PORT, E2E_USER, type Seeded } from './config';
 
 const baseUrl = process.env.DATABASE_URL;
@@ -137,6 +151,11 @@ const store = {
 /** What each model answers for a receipt: a reading, or nothing usable. */
 type Script = Partial<Record<string, Record<string, unknown> | 'refuse'>>;
 const scripts = new Map<string, Script>();
+/**
+ * Receipts read under the organization's AI model settings (FR-INT-16), in this order: the
+ * primary, then each back-up only while the ones before it read nothing. Empty: every model off.
+ */
+const orders = new Map<string, ModelId[]>();
 
 const reading = (
   merchant: string,
@@ -199,6 +218,16 @@ async function dispatch(
         }),
     } as unknown as Parameters<typeof readWith>[0];
     const request = { orgId: event.orgId, receiptId, requestId: event.outboxId };
+    const order = orders.get(receiptId);
+    if (order) {
+      for (const [i, model] of order.entries()) {
+        const role = i === 0 ? 'primary' : 'backup';
+        const outcome = await readWith(ports, request, model, 'image/png', { role });
+        if (outcome === 'confident' || outcome === 'unsure') break;
+      }
+      await settleReading(ports, request, undefined, { mode: 'primary', order });
+      continue;
+    }
     const outcomes = [];
     for (const model of COMPARISON_MODELS) {
       outcomes.push(await readWith(ports, request, model, 'image/png'));
@@ -221,22 +250,30 @@ const app = createHttpApp({
       issuedAt: new Date(),
     }),
   workspace: dbWorkspaceStore(db),
+  organization: dbOrganizationStore(db),
   receipts: dbReceiptStore(db),
   expenses: dbExpenseStore(db),
   trips: dbTripStore(db),
+  mileage: dbMileageStore(db),
   home: dbHomeStore(db),
+  people: dbPeopleStore(db),
   reports: dbReportStore(db),
+  audit: dbAuditStore(db),
+  categories: dbCategoryStore(db),
+  modelSettings: dbModelSettingsStore(db),
+  reimbursement: dbReimbursementStore(db),
   files: store,
   dispatch,
   secrets: createSecretBox('bench-only-secret-0123456789'),
   verifyProviderKey: () => Promise.resolve({ ok: true, authScheme: 'api_key' }),
 });
 
-async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+/** Calls the API as `user`, whom the bench signs in by name. */
+async function callAs<T>(user: string, method: string, path: string, body?: unknown): Promise<T> {
   const res = await app.request(`/api${path}`, {
     method,
     headers: {
-      authorization: `Bearer ${E2E_USER}`,
+      authorization: `Bearer ${user}`,
       ...(body ? { 'content-type': 'application/json' } : {}),
     },
     body: body ? JSON.stringify(body) : undefined,
@@ -245,6 +282,8 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
   if (res.status >= 400) throw new Error(`${method} ${path} answered ${res.status}: ${text}`);
   return (text ? JSON.parse(text) : undefined) as T;
 }
+const call = <T>(method: string, path: string, body?: unknown) =>
+  callAs<T>(E2E_USER, method, path, body);
 
 // The organization, a key, trips, receipts in every state, and expenses changed by hand.
 const { organization } = await call<{ organization: { id: string } }>(
@@ -252,6 +291,32 @@ const { organization } = await call<{ organization: { id: string } }>(
   '/v1/me/organization',
 );
 await call('PUT', '/v1/settings/ai-providers/anthropic', { apiKey: 'sk-ant-bench-0000-wxyz' });
+// Every feature is switched on, as the owner would after checking it (ADR-0032), so each
+// flagged screen is checked here too.
+for (const key of ORG_FEATURE_KEYS) {
+  await call('PUT', `/v1/settings/features/${key}`, { enabled: true });
+}
+
+// People (#29): Sam joined by a link, and a link for Jordan not used yet. Another
+// organization's owner sent Riley a link, which Riley's own work stops Riley joining, and
+// revoked a second one.
+type Made = { token: string; invite: { id: string } };
+const sam = await call<Made>('POST', '/v1/settings/people/invites', {
+  role: 'member',
+  label: 'Sam',
+});
+await callAs('sam', 'POST', '/v1/invites/accept', { token: sam.token });
+await call('POST', '/v1/settings/people/invites', { role: 'approver', label: 'Jordan' });
+await callAs('morgan', 'POST', '/v1/me/organization');
+await callAs('morgan', 'PUT', '/v1/settings/features/team.invites', { enabled: true });
+const join = await callAs<Made>('morgan', 'POST', '/v1/settings/people/invites', {
+  role: 'finance_admin',
+});
+const revoked = await callAs<Made>('morgan', 'POST', '/v1/settings/people/invites', {
+  role: 'member',
+});
+await callAs('morgan', 'DELETE', `/v1/settings/people/invites/${revoked.invite.id}`);
+
 const trip = (body: Record<string, string>) => call<{ id: string }>('POST', '/v1/trips', body);
 const trips = {
   omaha: await trip({
@@ -287,7 +352,12 @@ const trips = {
 };
 
 const receipts: Record<string, string> = {};
-async function capture(name: string, source: 'camera' | 'upload', script?: Script) {
+async function capture(
+  name: string,
+  source: 'camera' | 'upload',
+  script?: Script,
+  order?: ModelId[],
+) {
   const bytes = receiptImage(name);
   const sha256 = createHash('sha256').update(bytes).digest('hex');
   const described = { contentType: 'image/png', byteSize: bytes.length, sha256 };
@@ -298,11 +368,46 @@ async function capture(name: string, source: 'camera' | 'upload', script?: Scrip
   );
   files.set(ticket.path, bytes);
   if (script) scripts.set(ticket.receiptId, script);
+  if (order) orders.set(ticket.receiptId, order);
   await call('POST', '/v1/receipts', { id: ticket.receiptId, source, ...described });
   receipts[name] = ticket.receiptId;
 }
 const [haiku, sonnet] = COMPARISON_MODELS;
-await capture('coffee', 'camera', both(reading('Blue Bottle Coffee', '2026-09-30', 'USD', '6.50')));
+/** The line of the receipt each field was read from, as a model asked for them answers (GAP-14). */
+const linesOf = (lines: Partial<Record<string, string>>) => ({
+  sources: {
+    merchant: null,
+    date: null,
+    time: null,
+    address: null,
+    currency: null,
+    total: null,
+    subtotal: null,
+    taxes: null,
+    tip: null,
+    fees: null,
+    cardLastFour: null,
+    ...lines,
+  },
+});
+await capture(
+  'coffee',
+  'camera',
+  both(
+    reading(
+      'Blue Bottle Coffee',
+      '2026-09-30',
+      'USD',
+      '6.50',
+      linesOf({
+        merchant: 'BLUE BOTTLE COFFEE',
+        date: '09/30/2026 08:12 AM',
+        currency: 'USD $',
+        total: 'TOTAL .................. $6.50',
+      }),
+    ),
+  ),
+);
 await capture('folio', 'upload', {
   [haiku]: reading('The Ritz-Carlton, Half Moon Bay', '2026-10-01', 'USD', '1284.37', {
     documentType: 'hotel_folio',
@@ -428,14 +533,55 @@ await capture(
   both(reading('Amazon.com', '2026-09-29', 'USD', '86.97', { documentType: 'purchase_summary' })),
 );
 await capture('processing', 'upload');
+// Read under the AI model settings (FR-INT-16): Ready on one confident reading by the primary;
+// a back-up's unsure reading when the primary couldn't; and nothing read, every model off.
+await capture(
+  'primaryRead',
+  'camera',
+  { [sonnet]: reading('Verve Coffee Roasters', '2026-09-30', 'USD', '9.75') },
+  [sonnet, haiku],
+);
+await capture(
+  'backupRead',
+  'camera',
+  {
+    [sonnet]: 'refuse',
+    [haiku]: reading('Upstream Brewing Company', '2026-09-30', 'USD', '41.20', {
+      total: { value: '41.20', confidence: 'low' },
+    }),
+  },
+  [sonnet, haiku],
+);
+await capture('notRead', 'upload', {}, []);
 // A ride in Chicago, and a lunch on no trip: a local expense, Ready, given a reason below.
 await capture('chicago', 'camera', both(reading('Lyft', '2026-09-02', 'USD', '24.60')));
+// A garage ticket read alike and Ready, its merchant then corrected with a tap (GAP-14).
+await capture(
+  'parking',
+  'camera',
+  both(
+    reading(
+      'SP+ Parking',
+      '2026-09-29',
+      'USD',
+      '18.00',
+      linesOf({
+        merchant: 'SP+ PARKING / GARAGE 114',
+        date: 'ENTRY 09/29/26 07:58 / EXIT 09/29/26 17:41',
+        total: 'AMOUNT PAID $18.00',
+      }),
+    ),
+  ),
+);
 await capture('lunch', 'camera', both(reading('Zuni Café', '2026-09-27', 'USD', '48.20')));
 
 // A confirmed correction, an expense edited away from its receipt, one put on a trip by hand.
 await call('POST', `/v1/receipts/${receipts.steak}/confirm`, {
   model: sonnet,
   corrections: { tip: '15.00', total: '108.10' },
+});
+await call('POST', `/v1/receipts/${receipts.parking}/corrections`, {
+  corrections: { merchant: 'SP+ Parking — Omaha Civic Center Garage' },
 });
 const expenseOf = async (name: string) =>
   (await call<{ expenseId: string }>('GET', `/v1/receipts/${receipts[name]}`)).expenseId;
@@ -444,9 +590,28 @@ await call('PATCH', `/v1/expenses/${await expenseOf('coffee')}`, {
   merchant: 'Blue Bottle Coffee — Oxbow Public Market',
 });
 await call('PUT', `/v1/expenses/${await expenseOf('lufthansa')}/trip`, { tripId: trips.omaha.id });
+// Categories and types (FR-EXP-11): the hotel folio's chosen by hand; the rest show a
+// suggestion, or that they have none, such as the dinner at Juniper & Rye.
+const catalog = await call<{
+  categories: { id: string; name: string }[];
+  types: { id: string; name: string }[];
+}>('GET', '/v1/categories');
+await call('PUT', `/v1/expenses/${await expenseOf('folio')}/category`, {
+  categoryId: catalog.categories.find((c) => c.name === 'Travel')!.id,
+  typeId: catalog.types.find((t) => t.name === 'Lodging')!.id,
+});
 
 const expenses: Record<string, string> = {};
 for (const name of Object.keys(receipts)) expenses[name] = await expenseOf(name);
+// A drive to the airport on the Omaha trip's first day (FR-CAP-03): it files to the trip.
+expenses.mileage = (
+  await call<{ id: string }>('POST', '/v1/mileage', {
+    date: '2026-09-29',
+    destination: 'Eppley Airfield, Omaha',
+    purpose: 'Drive to the airport for the Q4 architect meeting',
+    miles: '38.4',
+  })
+).id;
 
 // Reports (#23): the hourly schedule puts the trips that have ended, and the local expenses,
 // on one open report; Chicago then moves to a report of its own, which closes.
@@ -464,6 +629,31 @@ const open = (
   await call<{ trips: { id: string; reportId: string | null }[] }>('GET', '/v1/trips')
 ).trips.find((t) => t.id === trips.omaha.id)?.reportId;
 if (!open) throw new Error('The schedule put no trip on a report');
+// The organization's details and its duplicate window (#63, #64), set after the reports so
+// they open as they always have.
+await call('PATCH', '/v1/settings/organization', {
+  name: 'Acme Field Services',
+  country: 'US',
+  locale: 'en-US',
+  timeZone: 'America/Chicago',
+  address: '1520 Harney St, Suite 400\nOmaha, NE 68102',
+  industry: 'Professional services',
+  size: '2_10',
+});
+await call('PUT', '/v1/settings/duplicate-window', { minutes: 45 });
+
+// The open report's flight in euros is converted to dollars (#62), with the ECB's rates for
+// the days before it faked here: the bench never calls the real source.
+const ecb = (url: string) => {
+  const days = /startPeriod=(\d{4}-\d{2}-\d{2})&endPeriod=(\d{4}-\d{2}-\d{2})/.exec(url);
+  const rows = days ? [`EXR.D.USD.EUR.SP00.A,D,USD,EUR,SP00,A,${days[2]},1.1723,A`] : [];
+  const csv = [
+    'KEY,FREQ,CURRENCY,CURRENCY_DENOM,EXR_TYPE,EXR_SUFFIX,TIME_PERIOD,OBS_VALUE,OBS_STATUS',
+    ...rows,
+  ];
+  return Promise.resolve(new Response(csv.join('\n'), { status: 200 }));
+};
+await convertOrganization(conversionPorts({ db, fetch: ecb as typeof fetch }), organization.id);
 const seeded: Seeded = {
   trips: {
     omaha: trips.omaha.id,
@@ -474,6 +664,7 @@ const seeded: Seeded = {
   receipts,
   expenses,
   reports: { open, closed },
+  invites: { join: join.token, revoked: revoked.token },
 };
 
 const server = createServer((req, res) => {

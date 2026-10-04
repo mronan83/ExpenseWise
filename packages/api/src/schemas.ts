@@ -1,6 +1,8 @@
 import { isIsoDate, MERGE_FIELDS, SUPPORTED_CURRENCIES } from '@expensewise/domain';
 import { CORRECTABLE_FIELDS, READING_CHECKS } from '@expensewise/extraction';
 import { z } from '@hono/zod-openapi';
+import { ExpenseCategorySchema } from './category-schemas.ts';
+import { ORG_FEATURE_KEYS, type OrgFeatureKey } from './features.ts';
 
 /** RFC 9457 problem details. Every error response uses this shape. */
 export const ProblemSchema = z
@@ -152,6 +154,38 @@ export const LinkSignInSchema = z
   })
   .openapi('LinkSignIn');
 
+export const FeatureKeySchema = z
+  .enum(ORG_FEATURE_KEYS as [OrgFeatureKey, ...OrgFeatureKey[]])
+  .openapi('FeatureKey');
+
+export const FeatureSchema = z
+  .object({
+    key: FeatureKeySchema,
+    name: z.string().openapi({ example: 'Mileage' }),
+    description: z.string().openapi({ description: 'What switching it on changes.' }),
+    enabled: z.boolean(),
+    source: z.enum(['default', 'organization', 'override']).openapi({
+      description:
+        "Where `enabled` comes from: the default (off), the organization's switch, or the " +
+        "server's override, which beats the switch until it is removed.",
+    }),
+    switchedAt: z
+      .string()
+      .datetime()
+      .nullable()
+      .openapi({ description: 'When the organization last switched it, if it has.' }),
+  })
+  .openapi('Feature');
+
+export const FeatureListSchema = z
+  .object({
+    features: z.array(FeatureSchema),
+    canSwitch: z.boolean().openapi({ description: 'Whether the caller may switch features.' }),
+  })
+  .openapi('FeatureList');
+
+export const SwitchFeatureSchema = z.object({ enabled: z.boolean() }).openapi('SwitchFeature');
+
 const ConfidenceSchema = z.enum(['high', 'medium', 'low']);
 const TextFieldSchema = z.object({ value: z.string(), confidence: ConfidenceSchema }).nullable();
 const MoneyFieldSchema = z
@@ -179,7 +213,9 @@ export const ReceiptSummarySchema = z
         'processing while it is read; extracted (shown as Ready) when both compared models ' +
         'read it with confidence and agree, or when a member confirmed or corrected a reading ' +
         '(ADR-0021); needs_review otherwise, including when only the fallback model read it; ' +
-        'failed when no model could read it.',
+        'failed when no model could read it. Under the organization’s AI model settings, ' +
+        'extracted rests on one confident reading by the first model that could read it, and ' +
+        'needs_review with no reading means every model was off (ADR-0033).',
     }),
     source: z.enum(['camera', 'upload', 'email', 'card', 'manual', 'mileage']),
     contentType: z.string(),
@@ -197,10 +233,37 @@ export const ReceiptSummarySchema = z
   })
   .openapi('ReceiptSummary');
 
-const ReadingRoleSchema = z.enum(['compared', 'fallback']).openapi({
+const SourceLineSchema = z.string().nullable();
+
+export const FieldSourcesSchema = z
+  .object({
+    merchant: SourceLineSchema,
+    date: SourceLineSchema,
+    time: SourceLineSchema,
+    address: SourceLineSchema,
+    currency: SourceLineSchema,
+    total: SourceLineSchema,
+    subtotal: SourceLineSchema,
+    taxTotal: SourceLineSchema,
+    tip: SourceLineSchema,
+    fees: SourceLineSchema,
+    cardLastFour: SourceLineSchema,
+  })
+  .nullable()
+  .openapi('FieldSources', {
+    description:
+      'Where each field was read (receipts.field-sources, GAP-14): the line or lines of the ' +
+      'receipt behind each field, as the model copied them, or null where it read none. Text ' +
+      'only: the models say what the line says, not where on the image it is. Null for a ' +
+      'reading made without them; left out altogether while the feature is off.',
+  });
+
+const ReadingRoleSchema = z.enum(['compared', 'fallback', 'primary', 'backup']).openapi({
   description:
     'compared: one of the models the tier decision weighs. fallback: read only because no ' +
-    'compared model could (ADR-0020).',
+    'compared model could (ADR-0020). Under the organization’s AI model settings ' +
+    '(FR-INT-16): primary, the model chosen to read every receipt; backup, read only because ' +
+    'the models before it could not (ADR-0033).',
 });
 
 export const ReceiptReadingSchema = z
@@ -237,6 +300,7 @@ export const ReceiptReadingSchema = z
       })
       .nullable(),
     problems: z.array(z.string()),
+    sources: FieldSourcesSchema.optional(),
     checks: z.array(z.enum(READING_CHECKS)).openapi({
       description:
         'Checks this reading fails (FR-INT-04). sums: the subtotal, taxes and tip don’t make ' +
@@ -356,10 +420,16 @@ const correction = (description: string, example: string) =>
 
 export const ConfirmReceiptSchema = z
   .object({
-    model: z.string().openapi({
-      description: 'The reading to confirm, by model, from the receipt’s latest readings.',
-      example: 'gpt-5.6-luna',
-    }),
+    model: z
+      .string()
+      .optional()
+      .openapi({
+        description:
+          'The reading to confirm, by model, from the receipt’s latest readings. Omitted only ' +
+          'for a receipt nothing read, because every AI model was off: every field is then ' +
+          'entered in corrections.',
+        example: 'gpt-5.6-luna',
+      }),
     corrections: z
       .object({
         merchant: correction('The merchant, as it should be filed.', 'Blue Bottle Coffee'),
@@ -375,16 +445,38 @@ export const ConfirmReceiptSchema = z
   })
   .openapi('ConfirmReceipt');
 
+export const CorrectReceiptSchema = z
+  .object({
+    corrections: z
+      .object({
+        merchant: correction('The merchant, as it should be filed.', 'Blue Bottle Coffee'),
+        date: correction('The transaction date, YYYY-MM-DD.', '2026-09-24'),
+        currency: correction('An ISO 4217 code. Amounts keep their printed value.', 'USD'),
+        total: correction('A plain decimal in the receipt’s currency.', '65.00'),
+        taxTotal: correction('A plain decimal in the receipt’s currency.', '5.20'),
+        tip: correction('A plain decimal in the receipt’s currency.', '0.00'),
+      })
+      .strict()
+      .refine((c) => Object.values(c).some((v) => v !== undefined), {
+        message: 'Correct at least one field.',
+      })
+      .openapi({ description: 'The fields the person corrected, usually one.' }),
+  })
+  .openapi('CorrectReceipt');
+
 export const NeedsYouReasonSchema = z
   .object({
-    code: z.enum(['failed', 'duplicate', 'fallback', 'differ', 'checks', 'unsure']).openapi({
-      description:
-        'failed: no model could read it. duplicate: it looks like the same purchase as an ' +
-        'earlier receipt (FR-INT-18). fallback: only the fallback model read it. differ: ' +
-        'the compared models read the filing fields differently. checks: its sums or date ' +
-        'fail a check, or it is a purchase summary (FR-INT-04). unsure: a model was not ' +
-        'confident, or one could not read it.',
-    }),
+    code: z
+      .enum(['failed', 'duplicate', 'fallback', 'differ', 'checks', 'unsure', 'not_read'])
+      .openapi({
+        description:
+          'failed: no model could read it. duplicate: it looks like the same purchase as an ' +
+          'earlier receipt (FR-INT-18). fallback: only the fallback model read it. differ: ' +
+          'the compared models read the filing fields differently. checks: its sums or date ' +
+          'fail a check, or it is a purchase summary (FR-INT-04). unsure: a model was not ' +
+          'confident, or one could not read it. not_read: every AI model was off, so it was ' +
+          'filed for the person to fill in (FR-INT-16).',
+      }),
     fields: z
       .array(z.string())
       .openapi({ description: 'differ: the filing fields read differently.' }),
@@ -471,6 +563,31 @@ const ReceiptInboxItemSchema = z
   })
   .openapi('ReceiptInboxItem');
 
+const CaptureTimeSchema = z
+  .object({
+    receipts: z
+      .number()
+      .int()
+      .openapi({ description: 'How many of the receipts shown it is over: those read.' }),
+    p95Ms: z
+      .number()
+      .int()
+      .nullable()
+      .openapi({
+        description:
+          'The 95th-percentile time from filing to the first settled reading, in whole ' +
+          'milliseconds, by nearest rank: one of the times measured. Null with none read.',
+      }),
+    sloMs: z.number().int().openapi({ description: 'The goal: under 30 seconds (NFR-PERF-01).' }),
+    withinSlo: z.boolean().nullable(),
+  })
+  .openapi('CaptureTime', {
+    description:
+      'Capture to Ready over the receipts shown (receipts.capture-time, NFR-PERF-01). A ' +
+      'receipt counts once its first reading settles, Ready, needing a look or not read; the ' +
+      'time a person then takes to confirm it is not counted. Left out while the feature is off.',
+  });
+
 export const ReceiptListSchema = z
   .object({
     receipts: z.array(ReceiptSummarySchema),
@@ -494,6 +611,7 @@ export const ReceiptListSchema = z
     readingAvailable: z.boolean().openapi({
       description: 'Whether this server can hand receipts to the workflow runner for reading.',
     }),
+    captureToReady: CaptureTimeSchema.optional(),
   })
   .openapi('ReceiptList');
 
@@ -592,6 +710,8 @@ export const ExpenseSummarySchema = z
     reportId: z.string().uuid().nullable().openapi({
       description: 'The report it is on: its trip’s, or its own when local (FR-EXP-05).',
     }),
+    // Only while categories and types are switched on (FR-EXP-11, FR-INT-10).
+    category: ExpenseCategorySchema.optional(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
   })
@@ -727,6 +847,94 @@ export const SetExpenseTripSchema = z
   ])
   .openapi('SetExpenseTrip');
 
+// Mileage (FR-CAP-03, NFR-DAT-04, ADR-0038)
+
+export const MileageRateSchema = z
+  .object({
+    perUnit: z.string().openapi({
+      example: '0.725',
+      description: 'Currency units a mile, as a plain decimal: 72.5 cents is "0.725".',
+    }),
+    currency: z.string().openapi({ example: 'USD' }),
+    unit: z.enum(['mi', 'km']),
+    effectiveFrom: isoDate().openapi({ description: 'The day the rate took effect.' }),
+    source: z.string().openapi({
+      example: 'irs-business',
+      description: 'Where it came from: irs-business is the IRS standard rate for business use.',
+    }),
+  })
+  .openapi('MileageRate');
+
+export const MileageSchema = z
+  .object({
+    date: isoDate().openapi({ description: 'The day of the drive.' }),
+    destination: z.string().openapi({ example: 'IAH, George Bush Intercontinental' }),
+    purpose: z.string().openapi({
+      example: 'Drive to the airport for the Acme onsite',
+      description: 'Why the drive was for business; also the expense’s justification.',
+    }),
+    miles: z.string().openapi({ example: '38.4', description: 'A plain decimal.' }),
+    unit: z.enum(['mi', 'km']),
+    method: z.enum(['manual', 'route', 'gps']).openapi({ description: 'manual: typed in.' }),
+    rate: MileageRateSchema.openapi({
+      description:
+        'The rate in force on its date, copied on when it was logged and again when its date ' +
+        'or miles changed, so a later rate never alters it (NFR-DAT-04).',
+    }),
+  })
+  .openapi('Mileage');
+
+export const MileageEntrySchema = ExpenseDetailSchema.extend({
+  mileage: MileageSchema,
+}).openapi('MileageEntry');
+
+const mileageText = (description: string, example: string) =>
+  z.string().max(1000).openapi({ description, example });
+
+export const LogMileageSchema = z
+  .object({
+    date: z.string().max(40).openapi({
+      description: 'YYYY-MM-DD: today at the latest, and a day the rate is known for.',
+      example: '2026-09-22',
+    }),
+    destination: mileageText('Where you drove to. Up to 200 characters.', 'IAH'),
+    purpose: mileageText(
+      'Why the drive was for business. Up to 500 characters.',
+      'Drive to the airport for the Acme onsite',
+    ),
+    miles: z.string().max(40).openapi({
+      description: 'More than 0 and at most 1000, two decimal places at most.',
+      example: '38.4',
+    }),
+  })
+  .strict()
+  .openapi('LogMileage');
+
+export const EditMileageSchema = LogMileageSchema.partial()
+  .strict()
+  .refine((m) => Object.values(m).some((v) => v !== undefined), {
+    message: 'Change at least one field.',
+  })
+  .openapi('EditMileage');
+
+export const MileageQuoteQuerySchema = z.object({
+  date: z.string().max(40).openapi({ description: 'YYYY-MM-DD.', example: '2026-09-22' }),
+  miles: z.string().max(40).openapi({ description: 'A plain decimal.', example: '38.4' }),
+});
+
+export const MileageQuoteSchema = z
+  .object({
+    date: isoDate(),
+    miles: z.string().openapi({ example: '38.4' }),
+    rate: MileageRateSchema,
+    amount: z.object({
+      amountMinor: z.number().int().openapi({ example: 2784 }),
+      currency: z.string().openapi({ example: 'USD' }),
+      decimal: z.string().openapi({ example: '27.84' }),
+    }),
+  })
+  .openapi('MileageQuote');
+
 // Trips (FR-EXP-04, FR-INS-02, ADR-0023)
 
 const TripTotalSchema = z.object({
@@ -827,6 +1035,55 @@ const TotalSchema = z.object({
   decimal: z.string(),
 });
 
+/** What something adds up to in the reimbursement currency (FR-EXP-13). */
+const ReimbursementTotalSchema = z
+  .object({
+    total: TotalSchema.openapi({
+      description:
+        'The amounts already in the reimbursement currency, and those converted to it. What ' +
+        'is still converting, or has no rate, is not in it.',
+    }),
+    converting: z.number().int().openapi({
+      description: 'Amounts whose rate is being fetched: the total is complete once this is 0.',
+    }),
+    unconverted: z.array(TotalSchema).openapi({
+      description:
+        'Amounts the rate source publishes no rate for, as spent, one sum per currency. They ' +
+        'stay unconverted.',
+    }),
+  })
+  .openapi('ReimbursementTotal');
+
+/** The rate an amount was converted at, as copied onto it (NFR-DAT-02, NFR-DAT-04). */
+const AppliedRateSchema = z
+  .object({
+    rate: z.string().openapi({
+      example: '1.1712',
+      description: 'What one unit of the currency spent is in the reimbursement currency.',
+    }),
+    date: z.string().openapi({
+      example: '2026-09-25',
+      description: 'The day the rate was published: the purchase date, or the last before it.',
+    }),
+    source: z.string().openapi({ example: 'ECB', description: 'Who published it.' }),
+  })
+  .openapi('AppliedRate');
+
+const ReimbursedSchema = z
+  .object({
+    kind: z.enum(['same', 'converted', 'converting', 'unconverted']).openapi({
+      description:
+        'same: spent in the reimbursement currency, counted as it is. converted: at the rate ' +
+        'given. converting: its rate is being fetched. unconverted: the source has no rate ' +
+        'for it, so it stays as spent.',
+    }),
+    amount: TotalSchema.nullable().openapi({
+      description: 'In the reimbursement currency; null while converting or unconverted.',
+    }),
+    rate: AppliedRateSchema.nullable(),
+  })
+  .openapi('Reimbursed');
+
 export const ReportStatusSchema = z
   .enum(['open', 'closed', 'submitted', 'in_approval', 'approved', 'settled'])
   .openapi({
@@ -841,9 +1098,11 @@ export const ReportSummarySchema = z
     title: z.string(),
     status: ReportStatusSchema,
     owner: z.string(),
-    currency: z
-      .string()
-      .openapi({ description: 'What it is reimbursed in: the organization’s home currency.' }),
+    currency: z.string().openapi({
+      description:
+        'What it is reimbursed in: the person’s reimbursement currency while conversion is on, ' +
+        'which it follows until it is submitted; otherwise the organization’s home currency.',
+    }),
     openedAt: z.string().datetime(),
     closesAt: z
       .string()
@@ -870,7 +1129,13 @@ export const ReportSummarySchema = z
     }),
     totals: z.array(TotalSchema).openapi({
       description:
-        'One total per currency, never converted; possible duplicates are left out (until #62).',
+        'One total per currency, as spent, never converted; possible duplicates are left out.',
+    }),
+    reimbursement: ReimbursementTotalSchema.optional().openapi({
+      description:
+        'Everything on it in `currency`, the person’s reimbursement currency, at each purchase ' +
+        'date’s reference rate; possible duplicates are left out. Only while the feature ' +
+        '`reports.currency-conversion` is on (FR-EXP-13).',
     }),
   })
   .openapi('ReportSummary');
@@ -883,6 +1148,9 @@ export const ReportDetailSchema = ReportSummarySchema.extend({
         .int()
         .openapi({ description: 'Its expenses still being read or needing review.' }),
       ready: z.boolean(),
+      reimbursement: ReimbursementTotalSchema.optional().openapi({
+        description: 'Its expenses in the report’s currency, while conversion is on.',
+      }),
     }),
   ),
   localItems: z.array(
@@ -896,9 +1164,66 @@ export const ReportDetailSchema = ReportSummarySchema.extend({
       justification: z.string().nullable(),
       held: z.boolean().openapi({ description: 'Held as a possible duplicate (FR-INT-18).' }),
       ready: z.boolean(),
+      reimbursed: ReimbursedSchema.nullable().optional().openapi({
+        description:
+          'Its amount in the report’s currency, while conversion is on; null with no amount yet.',
+      }),
     }),
   ),
+  rates: z
+    .array(
+      AppliedRateSchema.extend({
+        from: z.string().openapi({ example: 'EUR' }),
+        to: z.string().openapi({ example: 'USD' }),
+        expenses: z.number().int().openapi({ description: 'How many amounts it converted.' }),
+      }),
+    )
+    .optional()
+    .openapi({
+      description:
+        'Each rate its amounts were converted at, oldest first, while conversion is on ' +
+        '(NFR-DAT-02).',
+    }),
 }).openapi('ReportDetail');
+
+// The reimbursement currency (FR-EXP-13, Q23)
+
+export const ReimbursementCurrencySchema = z
+  .object({
+    currency: z.string().openapi({
+      example: 'USD',
+      description: 'What the caller’s reports are converted to: their choice, else `homeCurrency`.',
+    }),
+    chosen: z.string().nullable().openapi({
+      description: 'What the caller chose; null when they never chose, or chose to follow it.',
+    }),
+    homeCurrency: z.string().openapi({ example: 'USD' }),
+    currencies: z
+      .array(
+        z.object({
+          code: z.string().openapi({ example: 'EUR' }),
+          converts: z.boolean().openapi({
+            description:
+              'Whether the rate source (the ECB) publishes it. One it doesn’t stays unconverted.',
+          }),
+        }),
+      )
+      .openapi({ description: 'Every currency the app supports.' }),
+  })
+  .openapi('ReimbursementCurrency');
+
+export const SetReimbursementCurrencySchema = z
+  .object({
+    currency: z
+      .enum(SUPPORTED_CURRENCIES as [string, ...string[]])
+      .nullable()
+      .openapi({
+        example: 'EUR',
+        description: 'The currency to be reimbursed in, or null to follow the organization’s.',
+      }),
+  })
+  .strict()
+  .openapi('SetReimbursementCurrency');
 
 export const ReportListSchema = z
   .object({ reports: z.array(ReportSummarySchema) })

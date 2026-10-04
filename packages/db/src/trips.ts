@@ -56,6 +56,8 @@ export interface TripFilter {
   readonly from?: string;
   /** Trips that start on or before this date. */
   readonly to?: string;
+  /** Only this member's (ADR-0035): a person's Trips lists their own. */
+  readonly memberId?: string;
 }
 
 /** The trips that match, latest first (FR-INS-02). Call inside withOrg(). */
@@ -88,6 +90,7 @@ export function listTrips(
   }
   if (filter.from) where.push(gte(trips.endDate, filter.from));
   if (filter.to) where.push(lte(trips.startDate, filter.to));
+  if (filter.memberId) where.push(eq(trips.memberId, filter.memberId));
   return tripsWithOwner(tx)
     .where(and(...where))
     .orderBy(desc(trips.startDate), desc(trips.createdAt), desc(trips.id))

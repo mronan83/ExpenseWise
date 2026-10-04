@@ -17,6 +17,7 @@ import {
   assumedZeros,
   COMPARISON_MODELS,
   FALLBACK_MODEL,
+  isModelId,
   MODELS,
   normalizeExtraction,
   READING_CHECKS,
@@ -79,12 +80,38 @@ export function latestRuns(receiptId: string, runs: readonly ExtractionRunRecord
 
 /**
  * compared: a model the tier decision weighs. fallback: it read the receipt only because no
- * compared model could (ADR-0020).
+ * compared model could (ADR-0020). Under the organization's AI model settings (FR-INT-16):
+ * primary, the model chosen to read every receipt; backup, it read only because the models
+ * before it could not (ADR-0033).
  */
-export type ReadingRole = 'compared' | 'fallback';
+export type ReadingRole = 'compared' | 'fallback' | 'primary' | 'backup';
 
 const roleOf = (model: ModelId): ReadingRole =>
   model === FALLBACK_MODEL ? 'fallback' : 'compared';
+
+/** The model of a confirmation entered by hand, for a receipt nothing read (FR-INT-16). */
+export const NO_READING = 'none';
+
+type RoledRun = ExtractionRunRecord & {
+  readonly model: ModelId;
+  readonly role: 'primary' | 'backup';
+};
+
+/**
+ * The readings made under the organization's AI model settings, primary first, then the
+ * back-ups in the order they read. Empty for readings made side by side.
+ */
+function roledRuns(latest: readonly ExtractionRunRecord[]): RoledRun[] {
+  return latest
+    .filter(
+      (r): r is RoledRun => (r.role === 'primary' || r.role === 'backup') && isModelId(r.model),
+    )
+    .sort(
+      (a, b) =>
+        Number(b.role === 'primary') - Number(a.role === 'primary') ||
+        a.createdAt.getTime() - b.createdAt.getTime(),
+    );
+}
 
 /** One model's reading of a receipt uploaded at `uploadedAt`, as the receipt shows it. */
 export function readingView(
@@ -142,11 +169,31 @@ export type ReadingView = ReturnType<typeof readingView>;
 
 /**
  * The readings to show for a receipt: every compared model, pending while it is read, then
- * the fallback model's, only when it was asked to read.
+ * the fallback model's, only when it was asked to read. Under the organization's AI model
+ * settings: the model that reads first, pending while it is read, given as `reading`; then
+ * each model that read, primary first; and none when nothing read, every model being off.
  */
-export function readingsOf(receipt: ReceiptRecord, runs: readonly ExtractionRunRecord[]) {
+export function readingsOf(
+  receipt: ReceiptRecord,
+  runs: readonly ExtractionRunRecord[],
+  reading?: readonly ModelId[],
+) {
   const latest = latestRuns(receipt.id, runs);
   const pending = receipt.status === 'processing';
+  if (pending && reading) {
+    return reading.slice(0, 1).map((model) => ({
+      ...readingView(model, undefined, true, receipt.createdAt),
+      role: 'primary' as const,
+    }));
+  }
+  const roled = pending ? [] : roledRuns(latest);
+  if (roled.length > 0) {
+    return roled.map((run) => ({
+      ...readingView(run.model, run, false, receipt.createdAt),
+      role: run.role,
+    }));
+  }
+  if (reading && latest.length === 0) return [];
   const fallback = latest.find((r) => r.model === FALLBACK_MODEL);
   return [
     ...COMPARISON_MODELS.map((model) =>
@@ -171,18 +218,31 @@ export function filedReading(
   runs: readonly ExtractionRunRecord[],
   reviews: readonly ReceiptReviewRecord[] = [],
 ): NormalizedExtraction | null {
-  if (receipt.status === 'processing') return null;
+  return normalized(filedRun(receipt, runs, reviews));
+}
+
+/**
+ * The stored reading a receipt's expense is filed with, as filedReading picks it: the one a
+ * member confirmed, else the most capable compared model's that read it, else the fallback's.
+ */
+export function filedRun(
+  receipt: ReceiptRecord,
+  runs: readonly ExtractionRunRecord[],
+  reviews: readonly ReceiptReviewRecord[] = [],
+): ExtractionRunRecord | undefined {
+  if (receipt.status === 'processing') return undefined;
   const latest = latestRuns(receipt.id, runs);
   const review = currentReview(receipt, runs, reviews);
-  if (review) return normalized(latest.find((r) => r.model === review.model));
+  if (review) return latest.find((r) => r.model === review.model);
+  // Under the organization's AI model settings, the first model that read it.
+  const roled = roledRuns(latest);
+  if (roled.length > 0) return roled.find((r) => normalized(r) !== null);
   const compared = [...COMPARISON_MODELS]
     .reverse()
-    .map((model) => normalized(latest.find((r) => r.model === model)));
-  return (
-    compared.find((n) => n !== null) ??
-    normalized(latest.find((r) => r.model === FALLBACK_MODEL)) ??
-    null
-  );
+    .map((model) => latest.find((r) => r.model === model))
+    .find((run) => normalized(run) !== null);
+  const fallback = latest.find((r) => r.model === FALLBACK_MODEL);
+  return compared ?? (normalized(fallback) !== null ? fallback : undefined);
 }
 
 function differencesOf(receipt: ReceiptRecord, runs: readonly ExtractionRunRecord[]): string[] {
@@ -216,7 +276,12 @@ function confirmationView(review: ReceiptReviewRecord) {
     by: review.reviewedBy,
     at: review.createdAt.toISOString(),
     model: review.model,
-    label: review.model in MODELS ? MODELS[review.model as ModelId].label : review.model,
+    label:
+      review.model === NO_READING
+        ? 'Filled in by hand'
+        : review.model in MODELS
+          ? MODELS[review.model as ModelId].label
+          : review.model,
     values: {
       merchant: review.merchant,
       date: review.transactionDate,
@@ -236,9 +301,9 @@ export function receiptSummary(
 ) {
   const review = currentReview(receipt, runs, reviews);
   // The headline is what a member confirmed; else the most capable compared model that read
-  // it; else the fallback.
+  // it, or under the organization's settings the one that read it; else the fallback.
   const readings = readingsOf(receipt, runs);
-  const compared = readings.filter((r) => r.role === 'compared').reverse();
+  const compared = readings.filter((r) => r.role !== 'fallback').reverse();
   const best =
     compared.find((r) => r.fields)?.fields ??
     readings.find((r) => r.role === 'fallback')?.fields ??
@@ -317,16 +382,20 @@ export function duplicatesOf(receiptId: string, pairs: readonly DuplicatePairRec
  * purchase as an earlier receipt, which it names (FR-INT-18). fallback: only the fallback
  * read it. differ: the compared models read the filing fields differently. checks: they
  * agree, and the sums or date fail a check (FR-INT-04). unsure: a model wasn't confident, or
- * one couldn't read it. Null when it doesn't need the person.
+ * one couldn't read it. not_read: under the organization's AI model settings, every model
+ * was off, so nothing read it (FR-INT-16). Null when it doesn't need the person.
  */
 export function needsYouReason(
   receipt: ReceiptRecord,
   runs: readonly ExtractionRunRecord[],
   pairs: readonly DuplicatePairRecord[] = [],
+  /** Whether the organization reads under its AI model settings (receipts.model-settings). */
+  settingsOn = false,
 ) {
   if (receipt.status !== 'needs_review' && receipt.status !== 'failed') return null;
   const readings = readingsOf(receipt, runs);
-  const compared = readings.filter((r) => r.role === 'compared');
+  // Side by side, the compared models; under the organization's settings, those that read.
+  const compared = readings.filter((r) => r.role !== 'fallback');
   const fallback = readings.find((r) => r.role === 'fallback' && r.fields);
   const none = {
     fields: [] as string[],
@@ -351,6 +420,13 @@ export function needsYouReason(
       },
     };
   }
+  if (
+    settingsOn &&
+    receipt.status === 'needs_review' &&
+    latestRuns(receipt.id, runs).length === 0
+  ) {
+    return { ...none, code: 'not_read' as const };
+  }
   if (receipt.status === 'failed') {
     return {
       ...none,
@@ -372,8 +448,9 @@ export function inboxItem(
   runs: readonly ExtractionRunRecord[],
   reviews: readonly ReceiptReviewRecord[],
   pairs: readonly DuplicatePairRecord[] = [],
+  settingsOn = false,
 ) {
-  const reason = needsYouReason(receipt, runs, pairs);
+  const reason = needsYouReason(receipt, runs, pairs, settingsOn);
   return reason
     ? { kind: 'receipt' as const, receipt: receiptSummary(receipt, runs, reviews), reason }
     : null;
@@ -385,12 +462,14 @@ export function receiptDetail(
   imageUrl: string | null,
   reviews: readonly ReceiptReviewRecord[] = [],
   pairs: readonly DuplicatePairRecord[] = [],
+  /** Under the organization's AI model settings, the models that read next, in order. */
+  reading?: readonly ModelId[],
 ) {
   const review = currentReview(receipt, runs, reviews);
   return {
     ...receiptSummary(receipt, runs, reviews),
     imageUrl,
-    readings: readingsOf(receipt, runs),
+    readings: readingsOf(receipt, runs, reading),
     differences: differencesOf(receipt, runs),
     confirmation: review ? confirmationView(review) : null,
     duplicates: duplicatesOf(receipt.id, pairs),

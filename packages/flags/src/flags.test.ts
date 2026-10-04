@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createFlags, parseOverrides, type FlagSource } from './flags.ts';
+import { createFlags, modelStopped, parseOverrides, type FlagSource } from './flags.ts';
 import { FLAG_KEYS, FLAGS, isFlagKey } from './registry.ts';
 
 const source = (values: Record<string, boolean>): FlagSource => ({
@@ -94,5 +94,23 @@ describe('createFlags', () => {
       distinctId: 'user_1',
     });
     expect(asked).toEqual([{ keys: FLAG_KEYS, context: { distinctId: 'user_1' } }]);
+  });
+});
+
+describe('modelStopped', () => {
+  it('stops a model only when its operator switch is set off', () => {
+    const off = parseOverrides('operator.claude-haiku-4-5=off,operator.gpt-5.6-luna=on');
+    expect(modelStopped('claude-haiku-4-5', off)).toBe(true);
+    expect(modelStopped('gpt-5.6-luna', off)).toBe(false);
+    expect(modelStopped('claude-sonnet-5-5', off)).toBe(false);
+    expect(modelStopped('claude-sonnet-5-5', {})).toBe(false);
+    // A model with no switch is never stopped.
+    expect(modelStopped('some-other-model', off)).toBe(false);
+  });
+
+  it('keeps every operator switch for the server alone', () => {
+    const operator = FLAG_KEYS.filter((k) => k.startsWith('operator.'));
+    expect(operator.length).toBeGreaterThan(0);
+    for (const key of operator) expect(FLAGS[key]).toMatchObject({ serverOnly: true });
   });
 });

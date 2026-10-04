@@ -33,6 +33,11 @@ export interface ReceiptRecord {
   readonly status: ReceiptStatus;
   /** The expense this receipt proves (FR-EXP-08); null only before it is filed. */
   readonly expenseId: string | null;
+  /**
+   * When its first reading settled; null while it is first read. With createdAt, the time
+   * from capture to read (NFR-PERF-01). Left out where nothing needs it.
+   */
+  readonly settledAt?: Date | null;
   readonly createdAt: Date;
 }
 
@@ -50,8 +55,16 @@ export interface ExtractionRunRecord {
   readonly inputTokens: number | null;
   readonly outputTokens: number | null;
   readonly costMicroUsd: number | null;
+  /**
+   * primary or backup when read under the organization's AI model settings (FR-INT-16);
+   * null or absent for readings made side by side (ADR-0017).
+   */
+  readonly role?: string | null;
   readonly createdAt: Date;
 }
+
+/** Why a model read a receipt under the organization's AI model settings (FR-INT-16). */
+export type ModelRole = 'primary' | 'backup';
 
 const receiptColumns = {
   id: receipts.id,
@@ -64,6 +77,7 @@ const receiptColumns = {
   sha256: receipts.sha256,
   status: receipts.status,
   expenseId: receipts.expenseId,
+  settledAt: receipts.settledAt,
   createdAt: receipts.createdAt,
 };
 
@@ -80,6 +94,7 @@ const runColumns = {
   inputTokens: extractionRuns.inputTokens,
   outputTokens: extractionRuns.outputTokens,
   costMicroUsd: extractionRuns.costMicroUsd,
+  role: extractionRuns.role,
   createdAt: extractionRuns.createdAt,
 };
 
@@ -177,8 +192,11 @@ export type FileReceiptResult =
   | { readonly status: 'filed'; readonly receipt: ReceiptRecord; readonly event: CommittedEvent }
   /** The same id was filed before: a retried request. Nothing changes. */
   | { readonly status: 'exists'; readonly receipt: ReceiptRecord }
-  /** Another receipt holds the same file. */
-  | { readonly status: 'duplicate'; readonly receiptId: string };
+  /**
+   * Another receipt holds the same file. Its id is null when it is another member's that the
+   * caller can't see (ADR-0035): one file is claimed once in an organization.
+   */
+  | { readonly status: 'duplicate'; readonly receiptId: string | null };
 
 /**
  * Files an uploaded receipt: the row, the event that has it read, and the audit event, in the
@@ -200,7 +218,14 @@ export async function fileReceipt(
   const same = await findReceiptBySha256(tx, input.sha256);
   if (same) return { status: 'duplicate', receiptId: same.id };
 
-  await tx.insert(receipts).values({ ...input, orgId, status: 'processing' });
+  // A member sees only their own receipts, so the same file filed by a colleague shows up
+  // only here, as a conflict on the organization's one-file-once key.
+  const inserted = await tx
+    .insert(receipts)
+    .values({ ...input, orgId, status: 'processing' })
+    .onConflictDoNothing()
+    .returning({ id: receipts.id });
+  if (inserted.length === 0) return { status: 'duplicate', receiptId: null };
   const payload = { receiptId: input.id };
   const outboxId = await enqueueOutbox(tx, orgId, RECEIPT_UPLOADED, payload);
   await appendAuditEvent(tx, orgId, {
@@ -260,6 +285,8 @@ export interface NewExtractionRun {
   readonly inputTokens: number | null;
   readonly outputTokens: number | null;
   readonly costMicroUsd: number | null;
+  /** Why it read, under the organization's AI model settings; absent side by side. */
+  readonly role?: ModelRole;
 }
 
 /**
@@ -325,7 +352,14 @@ export async function settleReceipt(
     )
     .limit(1);
   if (settled) return;
-  await tx.update(receipts).set({ status: outcome.status }).where(eq(receipts.id, receiptId));
+  // The first settlement is kept: capture to read is measured from it (NFR-PERF-01).
+  await tx
+    .update(receipts)
+    .set({
+      status: outcome.status,
+      settledAt: sql`coalesce(${receipts.settledAt}, greatest(now(), ${receipts.createdAt}))`,
+    })
+    .where(eq(receipts.id, receiptId));
   await appendAuditEvent(tx, orgId, {
     actor: { type: 'system', id: 'receipt-workflow' },
     entityType: 'receipt',

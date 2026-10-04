@@ -40,7 +40,7 @@ The model tier chosen in the Phase 0 spike is re-confirmed after about 100 real 
 
 Accepted by the product owner on 2026-10-01. Dates assume increment 0 starts that day and are re-planned at every two-week increment.
 
-**Phase 0 is not finished.** Its infrastructure is live and verified (`/api/v1/health/ready` passes in production), but two exit items remain: the extraction spike, and a trivial change taken to production behind a feature flag. Increment 0 closes them, because the receipt pipeline is designed from the spike's numbers.
+**Phase 0 is closed (Oct 4).** Its infrastructure is live and verified (`/api/v1/health/ready` passes in production). Of its two exit items, the trivial change behind a flag reached production with the release of the backlog batch: `FLAG_OVERRIDES` turns the build version on (#22). The extraction spike never ran ([ADR-0017](adr/0017-read-receipts-with-two-models.md)); a running comparison on real receipts replaced it, and the tier decision it fed became a setting: the owner chooses the primary model in Settings, with the comparison beside the choice (#52, [ADR-0033](adr/0033-ready-on-one-confident-reading.md)). The product owner withdrew the wait for Anthropic credits (#4) on Oct 4.
 
 **Real use starts in week 4 (D-14).** The exit test is one real month of the product owner's expenses. Run after the build, that month would fall on Thanksgiving to Christmas, the quietest travel weeks, and acceptance would slip to late December. Run alongside the build from Oct 15, it exposes problems while there is time to fix them. Real receipts are audit evidence from that day, so the nightly off-site backup and a first restore drill move into increment 1.
 

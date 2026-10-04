@@ -4,10 +4,21 @@ import { storyProblems } from './integrity-stories.ts';
 import type { Rule, Story } from './model.ts';
 import { aliasOf, capabilityMap } from './repo.ts';
 
+/**
+ * Reads every record, test file, doc and migration in the repository: about 1.5 s alone, and
+ * several times that while the other packages' tests run beside it. Vitest's 5 s default
+ * failed it under that load, so it has a budget of its own.
+ */
+const WHOLE_REPOSITORY_MS = 30_000;
+
 describe('the records', () => {
-  it('agree with themselves and with the repository', () => {
-    expect(problems()).toEqual([]);
-  });
+  it(
+    'agree with themselves and with the repository',
+    () => {
+      expect(problems()).toEqual([]);
+    },
+    WHOLE_REPOSITORY_MS,
+  );
 });
 
 describe('references', () => {

@@ -49,5 +49,5 @@ Moving money columns to decimals is acceptable per the decision register and wou
 ## Links
 
 - [Data conventions](../05-architecture.md#67-data-conventions), [domain model](../05-architecture.md#66-domain-model)
-- [Test strategy](../06-delivery-lifecycle.md#75-test-strategy), [release management](../06-delivery-lifecycle.md#77-release-management-and-operations)
+- [Test strategy](../06-delivery-lifecycle.md#75-test-strategy), [release management](../06-delivery-lifecycle.md#74-release-management-and-operations)
 - [Mileage](../03-journeys-and-workflows.md#43-mileage)

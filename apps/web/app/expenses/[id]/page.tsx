@@ -1,9 +1,16 @@
 'use client';
 
+import { showDate } from '@expensewise/domain';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { api, ApiProblem } from '../../../lib/api';
+import {
+  categoryText,
+  indented,
+  type Catalog,
+  type ExpenseCategory,
+} from '../../../lib/categories';
 import {
   DETAIL_LABELS,
   EXPENSE_FIELD_LABELS,
@@ -15,9 +22,13 @@ import {
   type ExpenseDetail,
   type ExpenseField,
 } from '../../../lib/expenses';
+import { useFeatures } from '../../../lib/features';
+import { describeRate, distanceOf, MILEAGE_FLAG, type MileageEntry } from '../../../lib/mileage';
 import { formatMoney, RECEIPT_STATUS } from '../../../lib/receipts';
 import { supabase } from '../../../lib/supabase';
 import { tripDates, type TripSummary } from '../../../lib/trips';
+import { HistoryLink } from '../../history-link';
+import { MileageForm } from '../../mileage/mileage-form';
 
 type Load =
   | { state: 'loading' }
@@ -55,6 +66,9 @@ export default function ExpensePage() {
   }, [refresh]);
 
   const expense = load.state === 'ready' ? load.expense : null;
+  const featureOn = useFeatures();
+  // A drive is changed as mileage, which shows its purpose too (ADR-0038).
+  const mileageShown = expense?.source === 'mileage' && featureOn(MILEAGE_FLAG);
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]">
@@ -62,6 +76,7 @@ export default function ExpensePage() {
         <Link href="/expenses" className="tap text-sm font-semibold text-carbon">
           ← Expenses
         </Link>
+        <HistoryLink entityType="expense" entityId={id} />
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <h1 className="text-2xl font-bold">{expense?.merchant ?? 'Expense'}</h1>
@@ -82,16 +97,33 @@ export default function ExpensePage() {
         {expense ? (
           <>
             <Verdict expense={expense} />
-            <Claim
-              key={expense.updatedAt}
-              expense={expense}
-              onSaved={(next) => setLoad({ state: 'ready', expense: next })}
-            />
+            {mileageShown ? (
+              <Drive
+                key={expense.updatedAt}
+                expense={expense}
+                onSaved={(next) => setLoad({ state: 'ready', expense: next })}
+              />
+            ) : (
+              <Claim
+                key={expense.updatedAt}
+                expense={expense}
+                onSaved={(next) => setLoad({ state: 'ready', expense: next })}
+              />
+            )}
+            {/* Sent only while categories are switched on for the organization. */}
+            {expense.category ? (
+              <CategoryChoice
+                key={`category-${expense.updatedAt}`}
+                expense={expense}
+                shown={expense.category}
+                onSaved={(next) => setLoad({ state: 'ready', expense: next })}
+              />
+            ) : null}
             <TripChoice
               expense={expense}
               onSaved={(next) => setLoad({ state: 'ready', expense: next })}
             />
-            {expense.local ? (
+            {expense.local && !mileageShown ? (
               <Justification
                 key={`${expense.id}-${expense.justification ?? ''}`}
                 expense={expense}
@@ -280,7 +312,11 @@ function Claim({
         <>
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
             <Row label="Merchant" value={expense.merchant} differs={differs.has('merchant')} />
-            <Row label="Date" value={expense.date} differs={differs.has('date')} />
+            <Row
+              label="Date"
+              value={expense.date && showDate(expense.date)}
+              differs={differs.has('date')}
+            />
             <Row
               label="Amount"
               value={expense.amount ? formatMoney(expense.amount) : null}
@@ -301,7 +337,7 @@ function Claim({
               }
             />
           </dl>
-          {expense.editable ? (
+          {expense.editable && expense.source !== 'mileage' ? (
             <div>
               <button
                 type="button"
@@ -314,6 +350,108 @@ function Claim({
           ) : null}
         </>
       )}
+      {error ? (
+        <p role="alert" className="text-sm text-warn">
+          {error}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+/**
+ * A drive logged by hand (FR-CAP-03): where, why, how far, and the rate copied onto it.
+ * Changeable before it is submitted; new miles or a new date price it again (ADR-0038).
+ */
+function Drive({
+  expense,
+  onSaved,
+}: {
+  expense: ExpenseDetail;
+  onSaved: (expense: ExpenseDetail) => void;
+}) {
+  const [entry, setEntry] = useState<MileageEntry | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    void api<MileageEntry>(`/v1/mileage/${expense.id}`).then(
+      (found) => {
+        if (live) setEntry(found);
+      },
+      (e: unknown) => {
+        if (live) setError(describeError(e));
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [expense.id]);
+
+  const drive = entry?.mileage;
+  return (
+    <section
+      aria-labelledby="drive-title"
+      className="flex flex-col gap-3 rounded-xl border border-rule bg-sheet p-4 text-sm"
+    >
+      <h2 id="drive-title" className="text-base font-semibold">
+        This drive
+      </h2>
+      {!drive && !error ? <p className="text-ink-2">Loading…</p> : null}
+      {drive && editing ? (
+        <MileageForm
+          initial={drive}
+          submitLabel="Save"
+          busyLabel="Saving…"
+          onCancel={() => setEditing(false)}
+          onSubmit={async (draft) => {
+            const changed = Object.fromEntries(
+              (Object.keys(draft) as (keyof typeof draft)[])
+                .filter((f) => draft[f] !== drive[f])
+                .map((f) => [f, draft[f]]),
+            );
+            if (Object.keys(changed).length === 0) {
+              setEditing(false);
+              return;
+            }
+            const saved = await api<MileageEntry>(`/v1/mileage/${expense.id}`, {
+              method: 'PATCH',
+              body: JSON.stringify(changed),
+            });
+            setEntry(saved);
+            setEditing(false);
+            onSaved(saved);
+          }}
+        />
+      ) : null}
+      {drive && !editing ? (
+        <>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+            <Row label="Date" value={showDate(drive.date)} differs={false} />
+            <Row label="Destination" value={drive.destination} differs={false} />
+            <Row label="Purpose" value={drive.purpose} differs={false} />
+            <Row label="Distance" value={distanceOf(drive)} differs={false} />
+            <Row label="Rate" value={describeRate(drive.rate)} differs={false} />
+            <Row
+              label="Amount"
+              value={expense.amount ? formatMoney(expense.amount) : null}
+              differs={false}
+            />
+          </dl>
+          {expense.editable ? (
+            <div>
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="rounded-lg border border-rule px-4 py-2 text-sm font-semibold"
+              >
+                Change the drive
+              </button>
+            </div>
+          ) : null}
+        </>
+      ) : null}
       {error ? (
         <p role="alert" className="text-sm text-warn">
           {error}
@@ -341,7 +479,9 @@ function Proof({ expense }: { expense: ExpenseDetail }) {
   if (!proof) {
     return (
       <p className="rounded-xl border border-rule bg-sheet px-4 py-3 text-sm text-ink-2">
-        Typed in by hand, with no receipt.
+        {expense.source === 'mileage'
+          ? 'A drive, logged by hand: it needs no receipt.'
+          : 'Typed in by hand, with no receipt.'}
       </p>
     );
   }
@@ -365,7 +505,7 @@ function Proof({ expense }: { expense: ExpenseDetail }) {
       </p>
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
         <Row label="Merchant" value={proof.merchant} differs={false} />
-        <Row label="Date" value={proof.date} differs={false} />
+        <Row label="Date" value={proof.date && showDate(proof.date)} differs={false} />
         <Row
           label="Amount"
           value={proof.amount ? formatMoney(proof.amount) : null}
@@ -387,6 +527,204 @@ function Proof({ expense }: { expense: ExpenseDetail }) {
       >
         Open the receipt
       </Link>
+    </section>
+  );
+}
+
+const SUGGESTED_FROM = {
+  history: 'what you chose last time for this merchant',
+  keywords: 'its merchant and what its receipt shows',
+} as const;
+
+/**
+ * Its category and type (FR-EXP-11): chosen, or suggested until the person confirms it
+ * (FR-INT-10), or missing, which it says. The type is chosen from those the category allows.
+ */
+function CategoryChoice({
+  expense,
+  shown,
+  onSaved,
+}: {
+  expense: ExpenseDetail;
+  shown: ExpenseCategory;
+  onSaved: (expense: ExpenseDetail) => void;
+}) {
+  const [catalog, setCatalog] = useState<Catalog | null>(null);
+  const [categoryId, setCategoryId] = useState('');
+  const [typeId, setTypeId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const changeable = expense.status === 'processing' || expense.editable;
+
+  async function save(choice: { categoryId: string; typeId: string }) {
+    setBusy(true);
+    setError(null);
+    try {
+      onSaved(
+        await api<ExpenseDetail>(`/v1/expenses/${expense.id}/category`, {
+          method: 'PUT',
+          body: JSON.stringify(choice),
+        }),
+      );
+    } catch (e) {
+      setError(describeError(e));
+      setBusy(false);
+    }
+  }
+
+  async function open() {
+    setBusy(true);
+    setError(null);
+    try {
+      const list = await api<Catalog>('/v1/categories');
+      setCatalog(list);
+      const current = list.categories.find((c) => c.id === shown.category?.id && c.active);
+      setCategoryId(current?.id ?? '');
+      setTypeId(
+        current && shown.type && current.typeIds.includes(shown.type.id) ? shown.type.id : '',
+      );
+    } catch (e) {
+      setError(describeError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const category = catalog?.categories.find((c) => c.id === categoryId);
+  const offered = catalog?.types.filter((t) => t.active && category?.typeIds.includes(t.id)) ?? [];
+  const pickCategory = (id: string) => {
+    setCategoryId(id);
+    const allowed = catalog?.categories.find((c) => c.id === id)?.typeIds ?? [];
+    const active = catalog?.types.filter((t) => t.active && allowed.includes(t.id)) ?? [];
+    setTypeId(
+      active.some((t) => t.id === typeId) ? typeId : active.length === 1 ? active[0]!.id : '',
+    );
+  };
+
+  let summary: ReactNode;
+  if (shown.state === 'confirmed') {
+    summary = <p>{categoryText(shown)}</p>;
+  } else if (shown.state === 'suggested' && shown.basis) {
+    summary = (
+      <p>
+        <span className="font-semibold">Suggested:</span> {categoryText(shown)}.{' '}
+        <span className="text-ink-2">
+          From {SUGGESTED_FROM[shown.basis]}, until you confirm it.
+        </span>
+      </p>
+    );
+  } else {
+    summary = <p>No category or type yet. Every expense needs one of each.</p>;
+  }
+
+  return (
+    <section
+      aria-labelledby="category-title"
+      className={`flex flex-col gap-3 rounded-xl border bg-sheet p-4 text-sm ${shown.state === 'confirmed' ? 'border-rule' : 'border-warn'}`}
+    >
+      <h2 id="category-title" className="text-base font-semibold">
+        Category and type
+      </h2>
+      {summary}
+      {catalog ? (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save({ categoryId, typeId });
+          }}
+          className="flex flex-col gap-3"
+        >
+          <label className="flex flex-col gap-1 text-xs font-medium text-ink-2">
+            Category
+            <select
+              name="categoryId"
+              value={categoryId}
+              onChange={(e) => pickCategory(e.target.value)}
+              required
+              className="rounded-lg border border-rule bg-paper px-3 py-2 text-base text-ink"
+            >
+              <option value="">Choose a category</option>
+              {catalog.categories
+                .filter((c) => c.active)
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {indented(c)}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-ink-2">
+            Type
+            <select
+              name="typeId"
+              value={typeId}
+              onChange={(e) => setTypeId(e.target.value)}
+              required
+              disabled={!category}
+              className="rounded-lg border border-rule bg-paper px-3 py-2 text-base text-ink disabled:opacity-60"
+            >
+              <option value="">{category ? 'Choose a type' : 'Choose a category first'}</option>
+              {offered.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {indented(t)}
+                </option>
+              ))}
+            </select>
+          </label>
+          {category && offered.length === 0 ? (
+            <p className="text-xs text-warn">This category allows no type in use yet.</p>
+          ) : null}
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="submit"
+              disabled={busy || !categoryId || !typeId}
+              className="rounded-lg bg-carbon px-4 py-2 text-sm font-semibold text-carbon-ink disabled:opacity-60"
+            >
+              {busy ? 'Saving…' : 'Save'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setCatalog(null);
+                setError(null);
+              }}
+              className="rounded-lg border border-rule px-4 py-2 text-sm font-semibold"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : changeable ? (
+        <div className="flex flex-wrap gap-3">
+          {shown.state === 'suggested' && shown.category && shown.type ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void save({ categoryId: shown.category!.id, typeId: shown.type!.id })}
+              className="rounded-lg bg-carbon px-4 py-2 text-sm font-semibold text-carbon-ink disabled:opacity-60"
+            >
+              Use this
+            </button>
+          ) : null}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void open()}
+            className="rounded-lg border border-rule px-4 py-2 text-sm font-semibold disabled:opacity-60"
+          >
+            {shown.state === 'confirmed'
+              ? 'Change'
+              : shown.state === 'suggested'
+                ? 'Choose another'
+                : 'Choose'}
+          </button>
+        </div>
+      ) : null}
+      {error ? (
+        <p role="alert" className="text-sm text-warn">
+          {error}
+        </p>
+      ) : null}
     </section>
   );
 }

@@ -260,6 +260,16 @@
       "indexes": [],
       "policies": [
         {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (approver_member_id = app_current_member()) OR (EXISTS ( SELECT 1\n   FROM reports r\n  WHERE ((r.org_id = approval_steps.org_id) AND (r.id = approval_steps.report_id)))))",
+          "check": null
+        },
+        {
           "name": "tenant_isolation",
           "command": "ALL",
           "permissive": true,
@@ -474,6 +484,30 @@
           "type": "timestamp with time zone",
           "nullable": false,
           "default": "now()"
+        },
+        {
+          "name": "parent_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "starter_key",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "updated_by_member_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
         }
       ],
       "primaryKey": [
@@ -487,6 +521,30 @@
           ],
           "table": "organizations",
           "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "categories_parent_fk",
+          "columns": [
+            "org_id",
+            "parent_id"
+          ],
+          "table": "categories",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "categories_updated_by_fk",
+          "columns": [
+            "org_id",
+            "updated_by_member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
             "id"
           ]
         }
@@ -505,9 +563,491 @@
             "org_id",
             "name"
           ]
+        },
+        {
+          "name": "categories_org_starter_key",
+          "columns": [
+            "org_id",
+            "starter_key"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "categories_not_own_parent",
+          "definition": "CHECK (((parent_id IS NULL) OR (parent_id <> id)))"
+        }
+      ],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "category_types",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "category_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "type_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "category_types_category_fk",
+          "columns": [
+            "org_id",
+            "category_id"
+          ],
+          "table": "categories",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "category_types_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "category_types_type_fk",
+          "columns": [
+            "org_id",
+            "type_id"
+          ],
+          "table": "expense_types",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "category_types_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "category_types_pair_key",
+          "columns": [
+            "org_id",
+            "category_id",
+            "type_id"
+          ]
         }
       ],
       "checks": [],
+      "indexes": [
+        {
+          "name": "category_types_type_idx",
+          "definition": "CREATE INDEX category_types_type_idx ON public.category_types USING btree (org_id, type_id)"
+        }
+      ],
+      "policies": [
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "expense_conversions",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "expense_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "amount_minor",
+          "type": "bigint",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "currency",
+          "type": "character(3)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "purchase_date",
+          "type": "date",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "reimbursement_currency",
+          "type": "character(3)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "outcome",
+          "type": "conversion_outcome",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "converted_minor",
+          "type": "bigint",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "rate",
+          "type": "numeric",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "rate_date",
+          "type": "date",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "source",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "expense_conversions_expense_fk",
+          "columns": [
+            "org_id",
+            "expense_id"
+          ],
+          "table": "expenses",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "expense_conversions_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "expense_conversions_expense_key",
+          "columns": [
+            "org_id",
+            "expense_id"
+          ]
+        },
+        {
+          "name": "expense_conversions_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "expense_conversions_currency_iso",
+          "definition": "CHECK ((currency ~ '^[A-Z]{3}$'::text))"
+        },
+        {
+          "name": "expense_conversions_into_iso",
+          "definition": "CHECK ((reimbursement_currency ~ '^[A-Z]{3}$'::text))"
+        },
+        {
+          "name": "expense_conversions_rate_complete",
+          "definition": "CHECK ((((outcome = 'converted'::conversion_outcome) AND (converted_minor IS NOT NULL) AND (rate IS NOT NULL) AND (rate > (0)::numeric) AND (rate_date IS NOT NULL) AND (rate_date <= purchase_date)) OR ((outcome = 'unavailable'::conversion_outcome) AND (converted_minor IS NULL) AND (rate IS NULL) AND (rate_date IS NULL))))"
+        },
+        {
+          "name": "expense_conversions_source_named",
+          "definition": "CHECK ((length(TRIM(BOTH FROM source)) > 0))"
+        },
+        {
+          "name": "expense_conversions_two_currencies",
+          "definition": "CHECK ((currency <> reimbursement_currency))"
+        }
+      ],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (EXISTS ( SELECT 1\n   FROM expenses e\n  WHERE ((e.org_id = expense_conversions.org_id) AND (e.id = expense_conversions.expense_id)))))",
+          "check": null
+        },
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.expense_conversions FOR EACH ROW EXECUTE FUNCTION enforce_own_records('expense')"
+        }
+      ],
+      "grants": {
+        "expensewise_app": [
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "expense_types",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "parent_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "active",
+          "type": "boolean",
+          "nullable": false,
+          "default": "true"
+        },
+        {
+          "name": "starter_key",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "updated_by_member_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "expense_types_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "expense_types_parent_fk",
+          "columns": [
+            "org_id",
+            "parent_id"
+          ],
+          "table": "expense_types",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "expense_types_updated_by_fk",
+          "columns": [
+            "org_id",
+            "updated_by_member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "expense_types_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "expense_types_org_name_key",
+          "columns": [
+            "org_id",
+            "name"
+          ]
+        },
+        {
+          "name": "expense_types_org_starter_key",
+          "columns": [
+            "org_id",
+            "starter_key"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "expense_types_not_own_parent",
+          "definition": "CHECK (((parent_id IS NULL) OR (parent_id <> id)))"
+        }
+      ],
       "indexes": [],
       "policies": [
         {
@@ -717,6 +1257,18 @@
           "type": "character(2)",
           "nullable": true,
           "default": null
+        },
+        {
+          "name": "type_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "classified_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
         }
       ],
       "primaryKey": [
@@ -794,6 +1346,18 @@
             "org_id",
             "id"
           ]
+        },
+        {
+          "name": "expenses_type_fk",
+          "columns": [
+            "org_id",
+            "type_id"
+          ],
+          "table": "expense_types",
+          "references": [
+            "org_id",
+            "id"
+          ]
         }
       ],
       "uniques": [
@@ -806,6 +1370,10 @@
         }
       ],
       "checks": [
+        {
+          "name": "expenses_classified_whole",
+          "definition": "CHECK ((((category_id IS NULL) AND (type_id IS NULL) AND (classified_at IS NULL)) OR ((category_id IS NOT NULL) AND (type_id IS NOT NULL) AND (classified_at IS NOT NULL))))"
+        },
         {
           "name": "expenses_complete_when_ready",
           "definition": "CHECK (((status = ANY (ARRAY['processing'::expense_status, 'needs_review'::expense_status])) OR ((amount_minor IS NOT NULL) AND (currency IS NOT NULL) AND (transaction_date IS NOT NULL))))"
@@ -833,6 +1401,10 @@
       ],
       "indexes": [
         {
+          "name": "expenses_member_classified_idx",
+          "definition": "CREATE INDEX expenses_member_classified_idx ON public.expenses USING btree (org_id, member_id, classified_at)"
+        },
+        {
           "name": "expenses_member_date_idx",
           "definition": "CREATE INDEX expenses_member_date_idx ON public.expenses USING btree (org_id, member_id, transaction_date)"
         },
@@ -851,6 +1423,16 @@
       ],
       "policies": [
         {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (member_id = app_current_member()))",
+          "check": null
+        },
+        {
           "name": "tenant_isolation",
           "command": "ALL",
           "permissive": true,
@@ -861,7 +1443,12 @@
           "check": "(org_id = app_current_org())"
         }
       ],
-      "triggers": [],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.expenses FOR EACH ROW EXECUTE FUNCTION enforce_own_records('member')"
+        }
+      ],
       "grants": {
         "expensewise_app": [
           "INSERT",
@@ -978,6 +1565,12 @@
           "type": "uuid",
           "nullable": true,
           "default": null
+        },
+        {
+          "name": "role",
+          "type": "text",
+          "nullable": true,
+          "default": null
         }
       ],
       "primaryKey": [
@@ -1018,7 +1611,12 @@
           ]
         }
       ],
-      "checks": [],
+      "checks": [
+        {
+          "name": "extraction_runs_role_known",
+          "definition": "CHECK ((role = ANY (ARRAY['primary'::text, 'backup'::text])))"
+        }
+      ],
       "indexes": [
         {
           "name": "extraction_runs_receipt_idx",
@@ -1026,6 +1624,16 @@
         }
       ],
       "policies": [
+        {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (EXISTS ( SELECT 1\n   FROM receipts r\n  WHERE ((r.org_id = extraction_runs.org_id) AND (r.id = extraction_runs.receipt_id)))))",
+          "check": null
+        },
         {
           "name": "tenant_isolation",
           "command": "ALL",
@@ -1037,7 +1645,12 @@
           "check": "(org_id = app_current_org())"
         }
       ],
-      "triggers": [],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.extraction_runs FOR EACH ROW EXECUTE FUNCTION enforce_own_records('receipt')"
+        }
+      ],
       "grants": {
         "expensewise_app": [
           "INSERT",
@@ -1184,6 +1797,207 @@
       ],
       "policies": [
         {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (member_id = app_current_member()))",
+          "check": null
+        },
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.inbound_emails FOR EACH ROW EXECUTE FUNCTION enforce_own_records('member')"
+        }
+      ],
+      "grants": {
+        "expensewise_app": [
+          "INSERT",
+          "SELECT"
+        ]
+      }
+    },
+    {
+      "name": "member_invites",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "role",
+          "type": "member_role",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "label",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "token_hash",
+          "type": "character(64)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_by_member_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "accepted_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "accepted_by_member_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "revoked_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "member_invites_accepted_by_fk",
+          "columns": [
+            "org_id",
+            "accepted_by_member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "member_invites_created_by_fk",
+          "columns": [
+            "org_id",
+            "created_by_member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "member_invites_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "member_invites_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "member_invites_token_hash_key",
+          "columns": [
+            "token_hash"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "member_invites_accepted_by_someone",
+          "definition": "CHECK (((accepted_at IS NULL) = (accepted_by_member_id IS NULL)))"
+        },
+        {
+          "name": "member_invites_accepted_or_revoked",
+          "definition": "CHECK (((accepted_at IS NULL) OR (revoked_at IS NULL)))"
+        },
+        {
+          "name": "member_invites_expires_after_made",
+          "definition": "CHECK ((expires_at > created_at))"
+        },
+        {
+          "name": "member_invites_label_short",
+          "definition": "CHECK (((label IS NULL) OR (length(label) <= 80)))"
+        },
+        {
+          "name": "member_invites_token_hash_hex",
+          "definition": "CHECK ((token_hash ~ '^[0-9a-f]{64}$'::text))"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "member_invites_org_created_idx",
+          "definition": "CREATE INDEX member_invites_org_created_idx ON public.member_invites USING btree (org_id, created_at)"
+        }
+      ],
+      "policies": [
+        {
+          "name": "invite_holder",
+          "command": "SELECT",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "((token_hash)::text = app_invite_hash())",
+          "check": null
+        },
+        {
           "name": "tenant_isolation",
           "command": "ALL",
           "permissive": true,
@@ -1198,7 +2012,8 @@
       "grants": {
         "expensewise_app": [
           "INSERT",
-          "SELECT"
+          "SELECT",
+          "UPDATE"
         ]
       }
     },
@@ -1380,6 +2195,18 @@
           "type": "timestamp with time zone",
           "nullable": false,
           "default": "now()"
+        },
+        {
+          "name": "reimbursement_currency",
+          "type": "character(3)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "deactivated_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
         }
       ],
       "primaryKey": [
@@ -1425,7 +2252,12 @@
           ]
         }
       ],
-      "checks": [],
+      "checks": [
+        {
+          "name": "members_reimbursement_currency_iso",
+          "definition": "CHECK (((reimbursement_currency IS NULL) OR (reimbursement_currency ~ '^[A-Z]{3}$'::text)))"
+        }
+      ],
       "indexes": [],
       "policies": [
         {
@@ -1612,6 +2444,16 @@
       "indexes": [],
       "policies": [
         {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (EXISTS ( SELECT 1\n   FROM expenses e\n  WHERE ((e.org_id = mileage_logs.org_id) AND (e.id = mileage_logs.expense_id)))))",
+          "check": null
+        },
+        {
           "name": "tenant_isolation",
           "command": "ALL",
           "permissive": true,
@@ -1622,7 +2464,12 @@
           "check": "(org_id = app_current_org())"
         }
       ],
-      "triggers": [],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.mileage_logs FOR EACH ROW EXECUTE FUNCTION enforce_own_records('expense')"
+        }
+      ],
       "grants": {
         "expensewise_app": [
           "DELETE",
@@ -1675,6 +2522,273 @@
       "grants": {}
     },
     {
+      "name": "org_ai_models",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "model",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "enabled",
+          "type": "boolean",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "is_primary",
+          "type": "boolean",
+          "nullable": false,
+          "default": "false"
+        },
+        {
+          "name": "position",
+          "type": "integer",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "updated_by_member_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "org_ai_models_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "org_ai_models_updated_by_fk",
+          "columns": [
+            "org_id",
+            "updated_by_member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "org_ai_models_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "org_ai_models_org_model_key",
+          "columns": [
+            "org_id",
+            "model"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "org_ai_models_model_format",
+          "definition": "CHECK ((model ~ '^[a-z0-9][a-z0-9.-]*$'::text))"
+        },
+        {
+          "name": "org_ai_models_position_not_negative",
+          "definition": "CHECK ((\"position\" >= 0))"
+        },
+        {
+          "name": "org_ai_models_primary_is_on",
+          "definition": "CHECK ((enabled OR (NOT is_primary)))"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "org_ai_models_one_primary",
+          "definition": "CREATE UNIQUE INDEX org_ai_models_one_primary ON public.org_ai_models USING btree (org_id) WHERE is_primary"
+        }
+      ],
+      "policies": [
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [],
+      "grants": {
+        "expensewise_app": [
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "org_features",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "flag",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "enabled",
+          "type": "boolean",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "updated_by_member_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "org_features_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "org_features_updated_by_fk",
+          "columns": [
+            "org_id",
+            "updated_by_member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "org_features_org_flag_key",
+          "columns": [
+            "org_id",
+            "flag"
+          ]
+        },
+        {
+          "name": "org_features_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "org_features_flag_format",
+          "definition": "CHECK ((flag ~ '^[a-z]+\\.[a-z-]+$'::text))"
+        }
+      ],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [],
+      "grants": {
+        "expensewise_app": [
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
       "name": "organizations",
       "rls": {
         "enabled": true,
@@ -1704,6 +2818,48 @@
           "type": "timestamp with time zone",
           "nullable": false,
           "default": "now()"
+        },
+        {
+          "name": "country",
+          "type": "character(2)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "locale",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "time_zone",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "address",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "industry",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "size",
+          "type": "organization_size",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "duplicate_window_minutes",
+          "type": "integer",
+          "nullable": true,
+          "default": null
         }
       ],
       "primaryKey": [
@@ -1712,6 +2868,14 @@
       "foreignKeys": [],
       "uniques": [],
       "checks": [
+        {
+          "name": "organizations_country_code",
+          "definition": "CHECK (((country IS NULL) OR (country ~ '^[A-Z]{2}$'::text)))"
+        },
+        {
+          "name": "organizations_duplicate_window_range",
+          "definition": "CHECK (((duplicate_window_minutes IS NULL) OR ((duplicate_window_minutes >= 0) AND (duplicate_window_minutes <= 120))))"
+        },
         {
           "name": "organizations_home_currency_iso",
           "definition": "CHECK ((home_currency ~ '^[A-Z]{3}$'::text))"
@@ -1965,6 +3129,16 @@
       ],
       "policies": [
         {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (EXISTS ( SELECT 1\n   FROM receipts r\n  WHERE ((r.org_id = receipt_duplicates.org_id) AND (r.id = receipt_duplicates.receipt_id)))))",
+          "check": null
+        },
+        {
           "name": "tenant_isolation",
           "command": "ALL",
           "permissive": true,
@@ -1975,7 +3149,12 @@
           "check": "(org_id = app_current_org())"
         }
       ],
-      "triggers": [],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.receipt_duplicates FOR EACH ROW EXECUTE FUNCTION enforce_own_records('receipt')"
+        }
+      ],
       "grants": {
         "expensewise_app": [
           "INSERT",
@@ -2142,6 +3321,16 @@
       ],
       "policies": [
         {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (EXISTS ( SELECT 1\n   FROM receipts r\n  WHERE ((r.org_id = receipt_reviews.org_id) AND (r.id = receipt_reviews.receipt_id)))))",
+          "check": null
+        },
+        {
           "name": "tenant_isolation",
           "command": "ALL",
           "permissive": true,
@@ -2152,7 +3341,12 @@
           "check": "(org_id = app_current_org())"
         }
       ],
-      "triggers": [],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.receipt_reviews FOR EACH ROW EXECUTE FUNCTION enforce_own_records('receipt')"
+        }
+      ],
       "grants": {
         "expensewise_app": [
           "INSERT",
@@ -2244,6 +3438,12 @@
           "type": "timestamp with time zone",
           "nullable": true,
           "default": null
+        },
+        {
+          "name": "settled_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
         }
       ],
       "primaryKey": [
@@ -2307,12 +3507,26 @@
           "definition": "CHECK ((byte_size > 0))"
         },
         {
+          "name": "receipts_settled_after_capture",
+          "definition": "CHECK (((settled_at IS NULL) OR (settled_at >= created_at)))"
+        },
+        {
           "name": "receipts_sha256_hex",
           "definition": "CHECK ((sha256 ~ '^[0-9a-f]{64}$'::text))"
         }
       ],
       "indexes": [],
       "policies": [
+        {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (member_id = app_current_member()))",
+          "check": null
+        },
         {
           "name": "tenant_isolation",
           "command": "ALL",
@@ -2324,7 +3538,12 @@
           "check": "(org_id = app_current_org())"
         }
       ],
-      "triggers": [],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.receipts FOR EACH ROW EXECUTE FUNCTION enforce_own_records('member')"
+        }
+      ],
       "grants": {
         "expensewise_app": [
           "INSERT",
@@ -2481,6 +3700,16 @@
       ],
       "policies": [
         {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (member_id = app_current_member()))",
+          "check": null
+        },
+        {
           "name": "tenant_isolation",
           "command": "ALL",
           "permissive": true,
@@ -2491,7 +3720,12 @@
           "check": "(org_id = app_current_org())"
         }
       ],
-      "triggers": [],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.reports FOR EACH ROW EXECUTE FUNCTION enforce_own_records('member')"
+        }
+      ],
       "grants": {
         "expensewise_app": [
           "DELETE",
@@ -2643,6 +3877,16 @@
       ],
       "policies": [
         {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (member_id = app_current_member()))",
+          "check": null
+        },
+        {
           "name": "tenant_isolation",
           "command": "ALL",
           "permissive": true,
@@ -2653,7 +3897,12 @@
           "check": "(org_id = app_current_org())"
         }
       ],
-      "triggers": [],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.trips FOR EACH ROW EXECUTE FUNCTION enforce_own_records('member')"
+        }
+      ],
       "grants": {
         "expensewise_app": [
           "DELETE",
@@ -2693,6 +3942,13 @@
         "pending",
         "approved",
         "returned"
+      ]
+    },
+    {
+      "name": "conversion_outcome",
+      "values": [
+        "converted",
+        "unavailable"
       ]
     },
     {
@@ -2766,6 +4022,17 @@
       ]
     },
     {
+      "name": "organization_size",
+      "values": [
+        "just_me",
+        "2_10",
+        "11_50",
+        "51_200",
+        "201_1000",
+        "over_1000"
+      ]
+    },
+    {
       "name": "receipt_status",
       "values": [
         "processing",
@@ -2796,6 +4063,36 @@
   ],
   "functions": [
     {
+      "name": "app_changes_member",
+      "arguments": "owner uuid",
+      "returns": "boolean",
+      "security": "invoker",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
+    },
+    {
+      "name": "app_current_member",
+      "arguments": "",
+      "returns": "uuid",
+      "security": "invoker",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
+    },
+    {
+      "name": "app_current_member_role",
+      "arguments": "",
+      "returns": "text",
+      "security": "invoker",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
+    },
+    {
       "name": "app_current_org",
       "arguments": "",
       "returns": "uuid",
@@ -2816,6 +4113,36 @@
       ]
     },
     {
+      "name": "app_invite_hash",
+      "arguments": "",
+      "returns": "text",
+      "security": "invoker",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
+    },
+    {
+      "name": "app_record_owner",
+      "arguments": "kind text, org uuid, rec jsonb",
+      "returns": "uuid",
+      "security": "invoker",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
+    },
+    {
+      "name": "app_sees_every_member",
+      "arguments": "",
+      "returns": "boolean",
+      "security": "invoker",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
+    },
+    {
       "name": "claim_outbox_batch",
       "arguments": "batch_size integer",
       "returns": "SETOF outbox_events",
@@ -2823,6 +4150,16 @@
       "volatility": "volatile",
       "executableBy": [
         "expensewise_relay"
+      ]
+    },
+    {
+      "name": "conversion_work_due",
+      "arguments": "as_of timestamp with time zone, every_org boolean",
+      "returns": "SETOF uuid",
+      "security": "definer",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
       ]
     },
     {
@@ -2834,6 +4171,14 @@
       "executableBy": [
         "expensewise_app"
       ]
+    },
+    {
+      "name": "enforce_own_records",
+      "arguments": "",
+      "returns": "trigger",
+      "security": "invoker",
+      "volatility": "volatile",
+      "executableBy": []
     },
     {
       "name": "mark_outbox_published",
@@ -2869,6 +4214,16 @@
       "returns": "SETOF uuid",
       "security": "definer",
       "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
+    },
+    {
+      "name": "seed_starter_catalog",
+      "arguments": "p_org_id uuid",
+      "returns": "void",
+      "security": "invoker",
+      "volatility": "volatile",
       "executableBy": [
         "expensewise_app"
       ]

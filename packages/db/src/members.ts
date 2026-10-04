@@ -1,6 +1,7 @@
 import { newId, type MemberRole } from '@expensewise/domain';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { appendAuditEvent } from './audit.ts';
+import { seedStarterCatalog } from './categories.ts';
 import { withOrg, withUser, type Database, type Transaction } from './client.ts';
 import { members, memberSignIns, organizations } from './schema.ts';
 
@@ -10,7 +11,10 @@ export interface Membership {
   readonly role: MemberRole;
 }
 
-/** The members a user signs in as, oldest sign-in first. Needs app.user_id set. */
+/**
+ * The members a user signs in as, oldest sign-in first. A member an owner removed is not one.
+ * Needs app.user_id set.
+ */
 export function membershipsOf(tx: Transaction, userId: string): Promise<Membership[]> {
   return tx
     .select({ orgId: members.orgId, memberId: members.id, role: members.role })
@@ -19,7 +23,7 @@ export function membershipsOf(tx: Transaction, userId: string): Promise<Membersh
       members,
       and(eq(members.orgId, memberSignIns.orgId), eq(members.id, memberSignIns.memberId)),
     )
-    .where(eq(memberSignIns.userId, userId))
+    .where(and(eq(memberSignIns.userId, userId), isNull(members.deactivatedAt)))
     .orderBy(asc(memberSignIns.createdAt));
 }
 
@@ -74,12 +78,14 @@ export async function ensureOwnerOrganization(
       await tx
         .insert(memberSignIns)
         .values({ orgId, memberId, userId: owner.userId, email: owner.email });
+      // It starts with the ready-made categories and types (FR-EXP-11, ADR-0036).
+      await seedStarterCatalog(tx, orgId);
       await appendAuditEvent(tx, orgId, {
         actor: { type: 'user', id: owner.userId },
         entityType: 'organization',
         entityId: orgId,
         action: 'organization.created',
-        payload: { via: 'first_sign_in', ownerMemberId: memberId },
+        payload: { via: 'first_sign_in', ownerMemberId: memberId, catalog: 'starter' },
       });
       return { membership: { orgId, memberId, role: 'owner' as const }, created: true };
     },

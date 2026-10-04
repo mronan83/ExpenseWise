@@ -1,3 +1,4 @@
+import { showDateRange, showDay } from '@expensewise/domain';
 import type { ExpenseAmount, ExpenseSummary } from './expenses';
 
 export interface TripSummary {
@@ -31,21 +32,12 @@ export function localToday(now = new Date()): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
-// Calendar dates are shown as written: built at noon UTC and formatted in UTC, so no time
-// zone can move them a day.
-const calendar = (date: string) => new Date(`${date}T12:00:00Z`);
-const fmt = (options: Intl.DateTimeFormatOptions) =>
-  new Intl.DateTimeFormat(undefined, { ...options, timeZone: 'UTC' });
-
 /** A trip's dates, e.g. "Sep 22 – 25, 2026". */
 export function tripDates(trip: Pick<TripSummary, 'startDate' | 'endDate'>): string {
-  return fmt({ month: 'short', day: 'numeric', year: 'numeric' }).formatRange(
-    calendar(trip.startDate),
-    calendar(trip.endDate),
-  );
+  return showDateRange(trip.startDate, trip.endDate);
 }
 
-/** A day on a trip's timeline, e.g. "Mon, Sep 22". */
+/** A day on a trip's timeline, e.g. "Tue, Sep 22, 2026". */
 export function dayLabel(date: string): string {
-  return fmt({ weekday: 'short', month: 'short', day: 'numeric' }).format(calendar(date));
+  return showDay(date);
 }

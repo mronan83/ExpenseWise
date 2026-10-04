@@ -8,6 +8,7 @@ import type {
   ReceiptRecord,
   ReceiptReviewRecord,
 } from '@expensewise/db';
+import type { ExpenseEdit } from '@expensewise/domain';
 import type { ReceiptExtraction } from '@expensewise/extraction';
 import { memoryObjectStore } from '@expensewise/storage';
 import { describe, expect, it } from 'vitest';
@@ -58,6 +59,8 @@ function fakeReceipts() {
   const facts = new Map<string, Partial<DuplicateSide>>();
   const decisions: { receiptId: string; otherReceiptId: string; decision: DuplicateDecision }[] =
     [];
+  /** What each correction of a Ready receipt changed on its expense. */
+  const edits: { receiptId: string; expense: ExpenseEdit; changes: readonly unknown[] }[] = [];
   let n = 0;
   const side = (id: string): DuplicateSide => ({
     receiptId: id,
@@ -168,6 +171,30 @@ function fakeReceipts() {
       });
       receipts[i] = { ...receipts[i]!, status: 'extracted' };
       return Promise.resolve('confirmed');
+    },
+    correct: (_org, id, correction) => {
+      const i = receipts.findIndex((r) => r.id === id);
+      if (i === -1) return Promise.resolve({ status: 'missing' as const });
+      if (receipts[i]!.status !== 'extracted') {
+        return Promise.resolve({ status: 'not_ready' as const });
+      }
+      const latest = runs
+        .filter((r) => r.receiptId === id)
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+      if ((latest?.requestId ?? null) !== correction.review.requestId) {
+        return Promise.resolve({ status: 'stale' as const });
+      }
+      if (locked.has(id)) return Promise.resolve({ status: 'locked' as const });
+      edits.push({ receiptId: id, expense: correction.expense, changes: correction.changes });
+      const { memberId: _member, ...values } = correction.review;
+      reviews.unshift({
+        ...values,
+        id: `review-${reviews.length}`,
+        receiptId: id,
+        reviewedBy: 'riley',
+        createdAt: NOW,
+      });
+      return Promise.resolve({ status: 'corrected' as const });
     },
     requestReading: (orgId, id) => {
       const i = receipts.findIndex((r) => r.id === id);
@@ -285,17 +312,20 @@ function fakeReceipts() {
     locked,
     facts,
     decisions,
+    edits,
     read,
     readByFallback,
   };
 }
 
-function setup(opts: { files?: boolean; dispatch?: 'ok' | 'fails' | 'none' } = {}) {
+function setup(opts: { files?: boolean; dispatch?: 'ok' | 'fails' | 'none'; flags?: string } = {}) {
   const memberships: Record<string, Membership> = {
     riley: { orgId: ORG, memberId: MEMBER, role: 'owner' },
   };
   const workspace = {
     findMembership: (userId: string) => Promise.resolve(memberships[userId]),
+    // No organization switches a feature on here: each is off unless the test overrides it.
+    featureOn: () => Promise.resolve(false),
   } as unknown as WorkspaceStore;
   const fake = fakeReceipts();
   const files = memoryObjectStore();
@@ -306,6 +336,7 @@ function setup(opts: { files?: boolean; dispatch?: 'ok' | 'fails' | 'none' } = {
     workspace,
     receipts: fake.store,
     files: opts.files === false ? undefined : files,
+    flagOverrides: opts.flags,
     dispatch:
       opts.dispatch === 'none'
         ? undefined
@@ -1026,5 +1057,199 @@ describe('possible duplicates (FR-INT-18)', () => {
     const path = `/v1/receipts/${s.first}/duplicates/${s.copy}`;
     expect((await s.call('POST', path, undefined, { action: 'keep_both' })).status).toBe(401);
     expect((await s.call('POST', path, 'mallory', { action: 'keep_both' })).status).toBe(403);
+  });
+});
+
+describe('where each field was read, and a Ready receipt corrected with a tap', () => {
+  const SOURCES = 'receipts.field-sources=on';
+  const correct = (s: ReturnType<typeof setup>, id: string, corrections: unknown) =>
+    s.call('POST', `/v1/receipts/${id}/corrections`, 'riley', { corrections });
+  /** The line each field was read from, as a model asked for them answers. */
+  const lines = {
+    merchant: 'BLUE BOTTLE COFFEE',
+    date: '09/24/2026 08:12',
+    time: null,
+    address: null,
+    currency: null,
+    total: 'TOTAL ........ $6.50',
+    subtotal: null,
+    taxes: null,
+    tip: null,
+    fees: null,
+    cardLastFour: null,
+  };
+
+  it('shows the line each field was read from beside it, with the feature on', async () => {
+    const s = setup({ flags: SOURCES });
+    const id = await filed(s);
+    const pending = await s.call('GET', `/v1/receipts/${id}`, 'riley');
+    expect((pending.body.readings as { sources: unknown }[]).map((r) => r.sources)).toEqual([
+      null,
+      null,
+    ]);
+    s.read(id, ['6.50', '6.50'], 'extracted');
+    // Sonnet was asked for the lines; Haiku's reading came before the feature was on.
+    const sonnet = s.runs.findIndex((r) => r.model === 'claude-sonnet-5-5');
+    s.runs[sonnet] = {
+      ...s.runs[sonnet]!,
+      promptVersion: 'extract-v4',
+      output: { ...reading('6.50'), sources: lines },
+    };
+    const { body } = await s.call('GET', `/v1/receipts/${id}`, 'riley');
+    const [haiku, withLines] = body.readings as { sources: Record<string, unknown> | null }[];
+    expect(haiku!.sources).toBeNull();
+    expect(withLines!.sources).toEqual({
+      merchant: 'BLUE BOTTLE COFFEE',
+      date: '09/24/2026 08:12',
+      time: null,
+      address: null,
+      currency: null,
+      total: 'TOTAL ........ $6.50',
+      subtotal: null,
+      taxTotal: null,
+      tip: null,
+      fees: null,
+      cardLastFour: null,
+    });
+  });
+
+  it('shows no source lines and takes no correction with the feature off, as before', async () => {
+    const s = setup();
+    const id = await filed(s);
+    s.read(id, ['6.50', '6.50'], 'extracted');
+    const at = s.runs.findIndex((r) => r.model === 'claude-sonnet-5-5');
+    s.runs[at] = { ...s.runs[at]!, output: { ...reading('6.50'), sources: lines } };
+    const { body } = await s.call('GET', `/v1/receipts/${id}`, 'riley');
+    for (const r of body.readings as object[]) expect(r).not.toHaveProperty('sources');
+    const res = await correct(s, id, { merchant: 'Blue Bottle' });
+    expect([res.status, res.body.code]).toEqual([404, 'feature_off']);
+    expect(s.reviews).toEqual([]);
+  });
+
+  it('corrects a field of a Ready receipt through its expense, keeping what the model read', async () => {
+    const s = setup({ flags: SOURCES });
+    const id = await filed(s);
+    s.read(id, ['6.50', '6.50'], 'extracted');
+    const res = await correct(s, id, { merchant: 'Blue Bottle Coffee — Oxbow' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      status: 'extracted',
+      merchant: 'Blue Bottle Coffee — Oxbow',
+      confirmation: {
+        by: 'riley',
+        model: 'claude-sonnet-5-5',
+        corrections: [
+          {
+            field: 'merchant',
+            read: 'Blue Bottle Coffee',
+            corrected: 'Blue Bottle Coffee — Oxbow',
+          },
+        ],
+      },
+    });
+    // The review keeps every value filed, against the reading the expense was filed with.
+    expect(s.reviews[0]).toMatchObject({
+      requestId: s.events.at(-1)!.outboxId,
+      model: 'claude-sonnet-5-5',
+      merchant: 'Blue Bottle Coffee — Oxbow',
+      totalMinor: 650,
+      taxMinor: 0,
+      tipMinor: 0,
+    });
+    expect(s.edits).toEqual([
+      {
+        receiptId: id,
+        expense: { merchant: 'Blue Bottle Coffee — Oxbow' },
+        changes: [
+          { field: 'merchant', from: 'Blue Bottle Coffee', to: 'Blue Bottle Coffee — Oxbow' },
+        ],
+      },
+    ]);
+  });
+
+  it('keeps an earlier correction when another field is corrected; tax and tip stay on the receipt', async () => {
+    const s = setup({ flags: SOURCES });
+    const id = await filed(s);
+    s.read(id, ['6.50', '6.50'], 'extracted');
+    expect((await correct(s, id, { total: '7.25' })).status).toBe(200);
+    const res = await correct(s, id, { tip: '1.00' });
+    expect(res.status).toBe(200);
+    expect((res.body.confirmation as { corrections: unknown[] }).corrections).toEqual([
+      { field: 'total', read: '6.50', corrected: '7.25' },
+      { field: 'tip', read: null, corrected: '1.00' },
+    ]);
+    expect(s.edits.map((e) => e.expense)).toEqual([{ amount: '7.25' }, {}]);
+    expect(s.reviews[0]).toMatchObject({ totalMinor: 725, tipMinor: 100 });
+  });
+
+  it('refuses a receipt not Ready, a locked expense, a value not valid, and one filed so already', async () => {
+    const s = setup({ flags: SOURCES });
+    const id = await filed(s);
+    s.read(id, ['65.00', '6.50'], 'needs_review');
+    const waiting = await correct(s, id, { total: '6.50' });
+    expect([waiting.status, waiting.body.code]).toEqual([409, 'not_ready']);
+
+    s.read(id, ['6.50', '6.50'], 'extracted');
+    const invalid = await correct(s, id, { date: '2026-02-30' });
+    expect([invalid.status, invalid.body.code, invalid.body.field]).toEqual([
+      422,
+      'invalid_value',
+      'date',
+    ]);
+    const same = await correct(s, id, { total: '6.5' });
+    expect([same.status, same.body.code]).toEqual([422, 'unchanged']);
+    const empty = await correct(s, id, {});
+    expect(empty.status).toBe(400);
+
+    s.locked.add(id);
+    const locked = await correct(s, id, { merchant: 'Blue Bottle' });
+    expect([locked.status, locked.body.code]).toEqual([409, 'locked']);
+    expect(locked.body.detail).toContain('reversal');
+    expect(s.reviews).toEqual([]);
+  });
+});
+
+describe('the time from capture to read', () => {
+  const CAPTURE = 'receipts.capture-time=on';
+  const fileAs = async (s: ReturnType<typeof setup>, sha256: string) => {
+    const file = { ...s.file, sha256 };
+    const { body: ticket } = await s.call('POST', '/v1/receipts/uploads', 'riley', file);
+    await s.call('POST', '/v1/receipts', 'riley', {
+      id: ticket.receiptId,
+      source: 'camera',
+      ...file,
+    });
+    return ticket.receiptId as string;
+  };
+  /** Settles a receipt this long after it was filed. */
+  const settleAfter = (s: ReturnType<typeof setup>, id: string, ms: number) => {
+    s.read(id, ['6.50', '6.50'], 'extracted');
+    const at = s.receipts.findIndex((r) => r.id === id);
+    s.receipts[at] = { ...s.receipts[at]!, settledAt: new Date(NOW.getTime() + ms) };
+  };
+
+  it('shows the 95th percentile beside the comparison, over the receipts read, with the feature on', async () => {
+    const s = setup({ flags: CAPTURE });
+    const times = [4_200, 9_800, 12_345, 31_000];
+    for (const [i, ms] of times.entries()) {
+      settleAfter(s, await fileAs(s, String(i + 1).repeat(64)), ms);
+    }
+    // One still being read for the first time: it has no time yet.
+    await fileAs(s, '9'.repeat(64));
+    const { body } = await s.call('GET', '/v1/receipts', 'riley');
+    expect(body.captureToReady).toEqual({
+      receipts: 4,
+      p95Ms: 31_000,
+      sloMs: 30_000,
+      withinSlo: false,
+    });
+  });
+
+  it('is left out with the feature off, so Receipts is as it was', async () => {
+    const s = setup();
+    settleAfter(s, await fileAs(s, '1'.repeat(64)), 4_200);
+    const { body } = await s.call('GET', '/v1/receipts', 'riley');
+    expect(body).not.toHaveProperty('captureToReady');
+    expect(Object.keys(body)).toEqual(['receipts', 'comparison', 'readingAvailable']);
   });
 });

@@ -115,6 +115,8 @@ export interface ExpenseFilter {
   readonly tripId?: string;
   /** true: on some trip. false: on none. */
   readonly onTrip?: boolean;
+  /** Only this member's (ADR-0035): a person's Expenses lists their own. */
+  readonly memberId?: string;
 }
 
 const matching = (filter: ExpenseFilter): SQL | undefined => {
@@ -132,6 +134,7 @@ const matching = (filter: ExpenseFilter): SQL | undefined => {
   if (filter.onTrip !== undefined) {
     where.push(filter.onTrip ? isNotNull(expenses.tripId) : isNull(expenses.tripId));
   }
+  if (filter.memberId) where.push(eq(expenses.memberId, filter.memberId));
   return and(...where);
 };
 
@@ -373,7 +376,9 @@ export type EditExpenseResult =
   | { readonly status: 'invalid'; readonly problem: ExpenseEditProblem | DetailsEditProblem }
   | { readonly status: 'missing' }
   /** Being read, or submitted or later: not open to edits (FR-EXP-09). */
-  | { readonly status: 'not_editable'; readonly current: ExpenseStatus };
+  | { readonly status: 'not_editable'; readonly current: ExpenseStatus }
+  /** A mileage expense: its amount is miles × its rate, so it is edited as mileage (ADR-0038). */
+  | { readonly status: 'mileage' };
 
 /**
  * Applies a person's edit (FR-EXP-09) with its audit event, and sets the status again: a
@@ -391,6 +396,7 @@ export async function editExpense(
   const [expense] = await tx
     .select({
       status: expenses.status,
+      source: expenses.source,
       merchant: expenses.merchant,
       transactionDate: expenses.transactionDate,
       currency: expenses.currency,
@@ -404,6 +410,7 @@ export async function editExpense(
   if (expense.status !== 'needs_review' && expense.status !== 'ready') {
     return { status: 'not_editable', current: expense.status };
   }
+  if (expense.source === 'mileage') return { status: 'mileage' };
   const { details: detailsEdit, ...valuesEdit } = edit;
   const result = applyExpenseEdit(valuesOf(expense), valuesEdit);
   if (!result.ok) return { status: 'invalid', problem: result.error };

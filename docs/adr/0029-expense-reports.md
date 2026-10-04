@@ -2,7 +2,7 @@
 
 A report is a member's claim for reimbursement. Trips join it 24 hours after their return date and local expenses 24 hours after their own date. An hourly schedule does the joining, and closes reports on day 28. The person can close a report early, move trips between reports, and reopen a closed report until it is submitted. Any change to a closed report reopens it.
 
-- **Status:** Accepted (lifecycle and rules decided by product owner, Oct 4; schedule, timing and mechanism recommended, no objection)
+- **Status:** Accepted (lifecycle and rules decided by product owner, Oct 4; schedule, timing and mechanism recommended, no objection); point 3 amended by [ADR-0037](0037-organization-settings.md), which counts the days in the organization's time zone
 - **Date:** 2026-10-04
 - **Deciders:** Product owner (what a report holds, when it opens and closes, local expenses); Claude (principal architect), for the design
 - **Decision register:** D-31. Amends the report lifecycle in journeys §4.5 and the 48-hour rule in §4.6. Builds on [ADR-0023](0023-expenses-file-to-trips-by-date.md).

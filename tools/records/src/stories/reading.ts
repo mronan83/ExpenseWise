@@ -10,6 +10,7 @@ const RUNS = { by: 'claude', source: 'ADR-0017' } as const;
 const FALLBACK_RULES = { by: 'claude', source: 'ADR-0020' } as const;
 const REVIEWS = { by: 'claude', source: 'ADR-0021' } as const;
 const TIME_PLACE = { by: 'claude', source: 'ADR-0030' } as const;
+const MODEL_SETTINGS = { by: 'claude', source: 'ADR-0033' } as const;
 
 /**
  * Reading receipts: the fields, the Ready rule and its checks, confirming and correcting, the
@@ -182,7 +183,7 @@ export const READING_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Until the model tier is chosen (#21). With #52 a receipt will be read once, by the primary model (Q11), so Ready will rest on that one reading; that replaces ADR-0017 and gets its own decision record. While the Anthropic account has no credit (#4), the fallback reads every receipt and each one Needs a look (US-READ-09).',
+    note: 'How a receipt is read while AI model settings are off. Once they are on, the primary reads each receipt once (Q11) and Ready rests on that one confident reading (US-READ-19, ADR-0033). While the Anthropic account has no credit, which you chose on Oct 4 not to buy (#4, withdrawn), the fallback reads every receipt and each one Needs a look (US-READ-09).',
   },
   {
     id: 'US-READ-03',
@@ -565,7 +566,7 @@ export const READING_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Not built: a field doesn’t show the receipt text it came from, and a Ready reading can’t be corrected (GAP-14, #37). Corrections wait in the database until the real-world eval layer is built (#39).',
+    note: 'Since PR #58, with Where each field was read switched on, each field shows the line of the receipt it was read from (US-READ-20), and a Ready receipt’s field is corrected with a tap (US-READ-21). Corrections wait in the database until the real-world eval layer is built (#39).',
   },
   {
     id: 'US-READ-08',
@@ -727,7 +728,7 @@ export const READING_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'The fallback model, GPT-5.6 Luna, and the rule that its reading alone is never Ready are Claude’s recommendations (ADR-0020); a person can make it Ready with Looks right (US-READ-05). Since Oct 3 it reads every receipt, while the Anthropic account has no credit (#4). FR-INT-16 replaces it once #52 is built.',
+    note: 'The fallback model, GPT-5.6 Luna, and the rule that its reading alone is never Ready are Claude’s recommendations (ADR-0020); a person can make it Ready with Looks right (US-READ-05). Since Oct 3 it reads every receipt, while the Anthropic account has no credit (#4, withdrawn Oct 4). Once AI model settings are on, FR-INT-16 replaces it: GPT-5.6 Luna is a model like the others, primary or back-up (US-READ-17, ADR-0033).',
   },
   {
     id: 'US-READ-10',
@@ -943,7 +944,7 @@ export const READING_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'It collects nothing while the Anthropic account has no credit (#4). The tier decision (#21) needs about 20 receipts read by both, then your decision, and takes effect by turning the other model off (#52); re-confirming it after about 100 real receipts waits on that.',
+    note: 'Claude collects nothing while the Anthropic account has no credit (#4, withdrawn Oct 4). The tier decision (#21) is now your choice of primary in Settings › AI models (#52), with each model’s record beside it (US-READ-17); nothing yet asks you to re-confirm it after about 100 real receipts (GAP-29).',
   },
   {
     id: 'US-READ-13',
@@ -1201,11 +1202,12 @@ export const READING_STORIES: readonly Story[] = [
         when: 'each one settles',
         then: 'the time from capture to Ready is under 30 seconds for 95 of every 100',
         decided: { by: 'blueprint', source: 'journeys §4.2' },
+        rules: ['R-CAPTURE-READY'],
         checks: [],
-        untested: 32,
+        untested: 75,
       },
     ],
-    note: 'Nothing yet measures capture to Ready end to end; each reading stores only its own time (GAP-16). #32 records it at settlement and shows the 95th percentile beside the comparison, which is what proves AC4.',
+    note: 'Since PR #58 capture to Ready is measured on every receipt, and its 95th percentile shows beside the comparison with Capture-to-Ready time switched on (US-READ-22). That measures AC4; whether production meets it is read on the page once the feature is on (#75).',
   },
   {
     id: 'US-READ-17',
@@ -1214,8 +1216,8 @@ export const READING_STORIES: readonly Story[] = [
     want: 'to turn each AI model on or off for my organization, and choose the one that reads our receipts first',
     soThat: 'we pay only for the models we choose, and receipts keep moving when one can’t read',
     feature: 'F-45',
-    requirements: ['FR-INT-16'],
-    status: 'Planned',
+    requirements: ['FR-INT-16', 'FR-INT-08'],
+    status: 'Delivered',
     criteria: [
       {
         id: 'AC1',
@@ -1223,7 +1225,11 @@ export const READING_STORIES: readonly Story[] = [
         when: 'I open Settings',
         then: 'I can turn each AI model on or off for my organization',
         decided: { by: 'owner', source: 'Q8' },
-        checks: [],
+        checks: [
+          'api/model-settings › saves any model as primary and the back-ups in order, for owners and finance admins',
+          'api/model-settings › lets anyone see the models, and only owners and finance admins change them',
+          'e2e/signed-in',
+        ],
       },
       {
         id: 'AC2',
@@ -1231,7 +1237,12 @@ export const READING_STORIES: readonly Story[] = [
         when: 'I choose the primary',
         then: 'exactly one is primary; any model that is on can be made primary at any time, OpenAI’s included, whatever the eval set says of it',
         decided: OCT3,
-        checks: [],
+        checks: [
+          'extraction/model-settings › needs exactly one primary, and it must be on',
+          'db/ai-models.int › allows one primary, only while it is on, and keeps organizations apart',
+          'api/model-settings › saves any model as primary and the back-ups in order, for owners and finance admins',
+          'workflows/receipts › reads with OpenAI’s model as primary, like any other',
+        ],
       },
       {
         id: 'AC3',
@@ -1239,7 +1250,11 @@ export const READING_STORIES: readonly Story[] = [
         when: 'a receipt is read',
         then: 'the primary reads it; a model that is on but not primary is a back-up, and reads only when the primary can’t, in the order I set',
         decided: { by: 'owner', source: 'Q11' },
-        checks: [],
+        checks: [
+          'workflows/receipts › files it as Ready on one confident reading by the primary, and asks no back-up',
+          'workflows/receipts › reads with the back-ups in the order set, only while the ones before could not',
+          'extraction/model-settings › reads with the primary first, then each back-up that is on, in the order set',
+        ],
       },
       {
         id: 'AC4',
@@ -1247,7 +1262,9 @@ export const READING_STORIES: readonly Story[] = [
         when: 'any of our receipts is read',
         then: 'that model doesn’t read it',
         decided: OCT3,
-        checks: [],
+        checks: [
+          'workflows/reading-plan › reads with the primary, then the back-ups that are on, once they are on',
+        ],
       },
       {
         id: 'AC5',
@@ -1255,7 +1272,10 @@ export const READING_STORIES: readonly Story[] = [
         when: 'a receipt is filed',
         then: 'it is filed but not read, for a person to fill in',
         decided: { by: 'owner', source: 'Q8' },
-        checks: [],
+        checks: [
+          'workflows/receipts › files it for a person to fill in when every model is off',
+          'api/model-settings › lets every model be off, so receipts are filed for a person to fill in',
+        ],
       },
       {
         id: 'AC6',
@@ -1263,10 +1283,80 @@ export const READING_STORIES: readonly Story[] = [
         when: 'it is saved',
         then: 'the change records who made it',
         decided: OCT3,
-        checks: [],
+        checks: [
+          'db/ai-models.int › keeps the primary and the order, records each change once, and nothing for a repeat',
+          'api/model-settings › saves any model as primary and the back-ups in order, for owners and finance admins',
+        ],
+      },
+      {
+        id: 'AC7',
+        given: 'a receipt filed while every model was off',
+        when: 'I open Needs you or the receipt',
+        then: 'it says nothing read it, and entering every field files it Ready, with who filled it in',
+        decided: { by: 'owner', source: 'Q8' },
+        checks: [
+          'api/model-settings › puts a receipt nothing read in Needs you, to be filled in by hand',
+          'e2e/signed-in',
+        ],
+      },
+      {
+        id: 'AC8',
+        given: 'a model whose provider has no key saved',
+        when: 'I switch it on, or a receipt is read',
+        then: 'it stays off: Settings won’t switch it on, and the reading passes over it',
+        decided: MODEL_SETTINGS,
+        checks: [
+          'api/model-settings › refuses a primary that is off, a model missing or unknown, and a model with no key',
+          'workflows/receipts › passes over a model with no key, storing nothing for it',
+          'workflows/reading-plan › leaves out a model whose provider has no key: it stays off',
+        ],
+      },
+      {
+        id: 'AC9',
+        given: 'I changed the models',
+        when: 'a receipt is read next, or read again',
+        then: 'it is read with the settings as they are then',
+        decided: MODEL_SETTINGS,
+        checks: [
+          'workflows/receipts › reads each request with the settings as they are then, read again included',
+        ],
+      },
+      {
+        id: 'AC10',
+        given: 'I open Settings › AI models',
+        when: 'I choose',
+        then: 'each model shows how it has read our latest receipts (readings, how many were sure, time and spend), what it does now and its list price, beside the choice',
+        decided: MODEL_SETTINGS,
+        checks: [
+          'api/model-settings › shows each model, the primary, what each does now and how each has read our receipts',
+          'e2e/signed-in',
+        ],
+      },
+      {
+        id: 'AC11',
+        given: 'nobody has saved a choice yet',
+        when: 'a receipt is read',
+        then: 'Sonnet 5.5 is primary, then Haiku 4.5 and GPT-5.6 Luna, each while its key is there; Opus 5.5 and Fable 5.1 are off',
+        decided: MODEL_SETTINGS,
+        rules: ['R-MODEL-DEFAULTS'],
+        checks: [
+          'extraction/model-settings › starts with Sonnet 5.5 primary, then Haiku 4.5 and GPT-5.6 Luna, the rest off',
+          'workflows/reading-plan › reads with the primary, then the back-ups that are on, once they are on',
+        ],
+      },
+      {
+        id: 'AC12',
+        given: 'AI model settings are not switched on for my organization',
+        when: 'a receipt is read, or I look for the settings',
+        then: 'two models read it side by side, as before, and the settings answer as absent',
+        decided: { by: 'owner', source: 'Q5' },
+        checks: [
+          'workflows/reading-plan › reads side by side, as before, while AI model settings are off',
+          'api/model-settings › answers 404 feature_off while AI model settings are off',
+        ],
       },
     ],
-    note: 'Your requirement of Oct 3, with your answers to Q8 and Q11 (#52). It is how the tier decision (#21) takes effect, and it replaces the fallback rule (FR-INT-09). A receipt will then be read once, by the primary, so Ready will rest on that one reading; that needs a decision record replacing ADR-0017.',
+    note: 'Your requirement of Oct 3, with your answers to Q8 and Q11 (#52), behind receipts.model-settings (ADR-0033). It is how the tier decision (#21) takes effect, and it replaces the fallback rule (FR-INT-09) once switched on. Every model in the price table can be chosen, Opus 5.5 and Fable 5.1 included; which models are offered, the defaults and that a model with no key stays off are Claude’s, for you to confirm.',
   },
   {
     id: 'US-READ-18',
@@ -1277,7 +1367,7 @@ export const READING_STORIES: readonly Story[] = [
       'I can stop a model during an outage or a bad release, whatever each organization has chosen',
     feature: 'F-45',
     requirements: ['FR-INT-16'],
-    status: 'Planned',
+    status: 'Partial',
     criteria: [
       {
         id: 'AC1',
@@ -1285,7 +1375,12 @@ export const READING_STORIES: readonly Story[] = [
         when: 'any organization’s receipt is read',
         then: 'that model doesn’t read it, whatever the organization’s own setting',
         decided: { by: 'owner', source: 'Q8' },
-        checks: [],
+        checks: [
+          'flags/flags › stops a model only when its operator switch is set off',
+          'workflows/reading-plan › leaves out a model the operator stopped, whatever the organization chose',
+          'workflows/receipts › stores a stopped compared model as failed, asks it nothing, and never asks a stopped fallback',
+          'api/model-settings › shows a model the operator stopped as reading nothing, whatever was chosen',
+        ],
       },
       {
         id: 'AC2',
@@ -1294,8 +1389,10 @@ export const READING_STORIES: readonly Story[] = [
         then: 'the change records who made it',
         decided: OCT3,
         checks: [],
+        untested: 66,
       },
     ],
+    note: 'Each switch is a server-only flag, `operator.<model id>`, set off in FLAG_OVERRIDES in Vercel; unset, each organization decides. Changing it is a Vercel setting and a redeploy (ADR-0032), so the app itself records nothing of who changed it: only Vercel’s own records do, which nothing here checks (AC2).',
   },
   {
     id: 'US-EVAL-01',
@@ -1442,5 +1539,333 @@ export const READING_STORIES: readonly Story[] = [
       },
     ],
     note: 'SROIE was planned for the public layer, but its usual mirrors carry code rather than receipts, so generated US restaurant card slips cover the merchant, date, tip and card instead: Claude’s substitution.',
+  },
+  {
+    id: 'US-READ-20',
+    title: 'See the line of the receipt each field was read from',
+    as: 'Alex, who travels for work',
+    want: 'each field of a reading to show the line of the receipt it was read from',
+    soThat: 'I can check a reading against the receipt without hunting for the number on it',
+    feature: 'F-40',
+    requirements: ['FR-INT-11'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'my organization has Where each field was read switched on',
+        when: 'a receipt is read',
+        then: 'each model is asked, beside each field, for the line or lines of the receipt it read it from, copied as printed, and still gets no tools',
+        decided: { by: 'blueprint', source: 'design DP3' },
+        checks: [
+          'extraction/claude › asks for the line each field was read from only when told to, under its own versions',
+          'extraction/openai › asks for source lines in strict mode only when told to, and keeps them',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'a reading asked for its lines',
+        when: 'it is stored',
+        then: 'the lines are kept with the reading, under their own prompt and schema versions, `extract-v4` and `receipt-v4`, so every stored reading says what it was asked',
+        decided: { by: 'claude', source: 'ADR-0006' },
+        checks: [
+          'workflows/receipts › stores the line each field was read from with the reading, under the version asked',
+          'extraction/schema › reads the line behind each field of a reading that has them, and none from one without',
+        ],
+      },
+      {
+        id: 'AC3',
+        given: 'the feature is off for my organization, or the server’s override turns it off',
+        when: 'a receipt is read',
+        then: 'the prompt, the structure asked for, and so the cost of the reading, are exactly as before: `extract-v3` and `receipt-v3`',
+        decided: { by: 'owner', source: 'Q5' },
+        checks: [
+          'extraction/claude › sends exactly the prompt and schema of receipt-v3 when source lines are not asked for',
+          'extraction/openai › sends the receipt-v3 prompt and schema unchanged when source lines are not asked for',
+          'workflows/features › follows the organization’s own switch when the server forces nothing',
+          'workflows/features › lets FLAG_OVERRIDES win, either way, without asking the organization',
+          'workflows/receipts › stores a reading asked for without them as receipt-v3, as before',
+        ],
+      },
+      {
+        id: 'AC4',
+        given: 'a reading with its lines, and the feature on',
+        when: 'I open the receipt',
+        then: 'each field shows the line it was read from beside its value; a reading made before the feature was on shows none',
+        decided: { by: 'blueprint', source: 'design DP3' },
+        checks: [
+          'api/receipts › shows the line each field was read from beside it, with the feature on',
+          'e2e/signed-in',
+        ],
+      },
+      {
+        id: 'AC5',
+        given: 'the line a field was read from',
+        when: 'it is shown',
+        then: 'it is text beside the value; nothing is marked on the receipt’s image, since the models say what the line says, not where on the image it is',
+        decided: { by: 'claude' },
+        checks: [
+          'api/receipts › shows the line each field was read from beside it, with the feature on',
+          'e2e/signed-in',
+        ],
+      },
+      {
+        id: 'AC6',
+        given: 'the feature is switched off',
+        when: 'I open a receipt that was read with its lines',
+        then: 'no line shows, and none is deleted: switching it on again shows them',
+        decided: { by: 'owner', source: 'Q5' },
+        checks: [
+          'api/receipts › shows no source lines and takes no correction with the feature off, as before',
+        ],
+      },
+    ],
+    note: 'Your design (DP3) shows the receipt’s text with the unsure line highlighted. The models give the line’s words, not its position on the image, so it shows as text beside each field instead: Claude’s decision, yours to overturn. Asking for the lines costs a few more output tokens per reading, only where the feature is on.',
+  },
+  {
+    id: 'US-READ-21',
+    title: 'Correct a field of a Ready receipt with one tap',
+    as: 'Alex, who travels for work',
+    want: 'to correct any field of a receipt that is already Ready with one tap',
+    soThat:
+      'a reading the models agreed on but got wrong is put right in seconds, and what they got wrong is kept',
+    feature: 'F-40',
+    requirements: ['FR-INT-11'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given:
+          'a Ready receipt whose expense isn’t submitted, with Where each field was read switched on',
+        when: 'I tap Correct beside its merchant, date, currency, total, tax or tip, change it and save',
+        then: 'the receipt is filed with my value, and its expense changes to match',
+        decided: { by: 'blueprint', source: 'design DP3' },
+        checks: [
+          'api/receipts › corrects a field of a Ready receipt through its expense, keeping what the model read',
+          'db/receipt-corrections.int › files the correction, edits its expense and records both, together',
+          'e2e/signed-in',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'a field I corrected',
+        when: 'it is saved',
+        then: 'what the model read is kept beside what I entered, in the same record Edit a field keeps, as a candidate for the eval set',
+        decided: { by: 'blueprint', source: 'delivery §7.5' },
+        checks: [
+          'extraction/confirm › changes one field with a tap, keeping what the model read beside it',
+          'db/receipt-corrections.int › files the correction, edits its expense and records both, together',
+        ],
+      },
+      {
+        id: 'AC3',
+        given: 'the change a correction makes to its expense',
+        when: 'it is saved',
+        then: 'it is an edit of the expense: the audit trail records who changed what on the receipt and on the expense, and a later reading of the receipt never overwrites it',
+        decided: { by: 'claude', source: 'ADR-0022' },
+        checks: [
+          'db/receipt-corrections.int › files the correction, edits its expense and records both, together',
+        ],
+      },
+      {
+        id: 'AC4',
+        given: 'a field I corrected before',
+        when: 'I correct another',
+        then: 'both corrections are kept, each against what the model read, and only the new field changes',
+        decided: { by: 'claude' },
+        checks: [
+          'extraction/confirm › keeps earlier corrections, each against what the model read, and changes only the new',
+          'api/receipts › keeps an earlier correction when another field is corrected; tax and tip stay on the receipt',
+        ],
+      },
+      {
+        id: 'AC5',
+        given: 'I correct the tax or the tip',
+        when: 'it is saved',
+        then: 'the receipt is filed with it, and its expense, which carries neither, is unchanged',
+        decided: { by: 'claude' },
+        checks: [
+          'extraction/confirm › turns the change into an edit of its expense; tax and tip stay on the receipt',
+          'api/receipts › keeps an earlier correction when another field is corrected; tax and tip stay on the receipt',
+        ],
+      },
+      {
+        id: 'AC6',
+        given: 'a receipt whose expense is submitted or approved',
+        when: 'I try to correct it',
+        then: 'it is refused and the page says why: an approved expense is locked, and its correction is a reversal plus a new version, which comes with approval (#24)',
+        decided: { by: 'blueprint', source: 'ADR-0008' },
+        checks: [
+          'db/receipt-corrections.int › refuses one not Ready, read again since, or locked, and leaves nothing behind',
+          'api/receipts › refuses a receipt not Ready, a locked expense, a value not valid, and one filed so already',
+        ],
+      },
+      {
+        id: 'AC7',
+        given: 'a value that isn’t valid, or the value it is filed with already',
+        when: 'I save',
+        then: 'nothing is filed, and the field is named or I am told it is filed so already',
+        decided: { by: 'claude', source: 'ADR-0021' },
+        checks: [
+          'extraction/confirm › refuses a value that is not valid, naming the field',
+          'extraction/confirm › changes nothing for a value it is filed with already, as typed or not',
+          'api/receipts › refuses a receipt not Ready, a locked expense, a value not valid, and one filed so already',
+        ],
+      },
+      {
+        id: 'AC8',
+        given: 'a receipt that needs a look, or is being read, or was read again since I opened it',
+        when: 'a correction is sent',
+        then: 'it is refused and nothing is kept; one that needs a look is confirmed with Edit a field instead',
+        decided: { by: 'claude', source: 'ADR-0021' },
+        checks: [
+          'db/receipt-corrections.int › refuses one not Ready, read again since, or locked, and leaves nothing behind',
+          'api/receipts › refuses a receipt not Ready, a locked expense, a value not valid, and one filed so already',
+        ],
+      },
+      {
+        id: 'AC9',
+        given: 'the feature is switched off',
+        when: 'I open a Ready receipt',
+        then: 'it offers no correction, and a correction sent anyway is refused as a feature that is off',
+        decided: { by: 'owner', source: 'Q5' },
+        checks: [
+          'api/receipts › shows no source lines and takes no correction with the feature off, as before',
+        ],
+      },
+    ],
+    note: 'A correction made on the receipt page is the person saying the model misread it, so it is kept as an eval candidate; an edit made on the expense page is not, since it may be a choice rather than a misreading: Claude’s decision. Correcting an approved expense (FR-EXP-03) waits on approval (#24); nothing can be submitted yet.',
+  },
+  {
+    id: 'US-READ-22',
+    title: 'See how long receipts take from capture to Ready',
+    as: 'the product owner',
+    want: 'the time from capturing a receipt to its being read, at the 95th percentile, beside the model comparison',
+    soThat: 'I know whether capture feels instant: 95 of every 100 read within 30 seconds',
+    feature: 'F-07',
+    requirements: ['NFR-PERF-01'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'any receipt, whether the feature is on or off',
+        when: 'its first reading settles, Ready, Needs a look or Not read',
+        then: 'the time it settled is kept on the receipt, never before it was filed; reading it again doesn’t change it, and the time a person then takes to confirm it isn’t counted',
+        decided: { by: 'claude' },
+        checks: [
+          'db/receipt-corrections.int › keeps when the first reading settled, never before filing, and not a later one',
+          'db/receipt-corrections.int › refuses a settled time before the receipt was filed',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'receipts read before the time was kept',
+        when: 'the release migrates',
+        then: 'each gets the time of its first settled reading from the audit trail, and one never read gets none',
+        decided: { by: 'claude' },
+        checks: [
+          'db/receipt-corrections.int › fills the time of receipts read before it was kept, from the audit trail, once',
+        ],
+      },
+      {
+        id: 'AC3',
+        given: 'Capture-to-Ready time switched on',
+        when: 'I open Receipts',
+        then: 'beside How the models compare it shows the 95th-percentile time from capture to read over the receipts shown, how many receipts that is over, and whether it is under the goal of 30 seconds; a receipt still being read for the first time doesn’t count',
+        decided: { by: 'blueprint', source: 'journeys §4.2' },
+        rules: ['R-CAPTURE-READY'],
+        checks: [
+          'api/receipts › shows the 95th percentile beside the comparison, over the receipts read, with the feature on',
+          'domain/capture-time › says how many receipts the 95th percentile is over, and whether it is under 30 seconds',
+          'e2e/signed-in',
+        ],
+      },
+      {
+        id: 'AC4',
+        given: 'the times measured',
+        when: 'the 95th percentile is taken',
+        then: 'it is by nearest rank: one of the times measured, in whole milliseconds, never interpolated',
+        decided: { by: 'claude' },
+        checks: [
+          'domain/capture-time › takes the 95th percentile by nearest rank, always one of the times measured',
+          'domain/capture-time › refuses a percentile or a time that is not whole',
+          'domain/capture-time › measures whole milliseconds from filing to settlement, never below zero',
+        ],
+      },
+      {
+        id: 'AC5',
+        given: 'the feature is switched off',
+        when: 'I open Receipts',
+        then: 'nothing about it shows, and the list is as it was',
+        decided: { by: 'owner', source: 'Q5' },
+        checks: ['api/receipts › is left out with the feature off, so Receipts is as it was'],
+      },
+    ],
+    note: 'What is measured is Claude’s reading of “capture to Ready”: from filing to the first settled reading, whatever it settled to, since a person’s look is not the pipeline’s time. A receipt that waited for Read again before its first reading counts its wait. The time is over the receipts Receipts shows, at most the latest 100.',
+  },
+  {
+    id: 'US-READ-19',
+    title: 'Ready on one confident reading',
+    as: 'Alex, who travels for work',
+    want: 'a receipt read by our chosen model to be Ready when that one reading is sure of it and its sums and date hold',
+    soThat:
+      'I don’t pay for two readings of every receipt, and still needn’t look at the ones that are clear',
+    feature: 'F-45',
+    requirements: ['FR-INT-02', 'FR-INT-16'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given:
+          'the first model that could read a receipt read its merchant, date, currency and total with high confidence, and its sums and date pass',
+        when: 'the receipt settles',
+        then: 'it is Ready on that one reading, and its expense is filed with it',
+        decided: MODEL_SETTINGS,
+        checks: [
+          'workflows/receipts › files it as Ready on one confident reading by the primary, and asks no back-up',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'that reading isn’t sure of a filing field, or its parts don’t make its total',
+        when: 'the receipt settles',
+        then: 'it Needs a look, no back-up is asked, and its expense starts from that reading',
+        decided: MODEL_SETTINGS,
+        checks: [
+          'workflows/receipts › asks for a look when the primary is unsure, and still asks no back-up',
+          'workflows/receipts › asks for a look when the one reading’s parts don’t make its total',
+        ],
+      },
+      {
+        id: 'AC3',
+        given: 'the primary couldn’t read it, and a back-up did with confidence',
+        when: 'the receipt settles',
+        then: 'it is Ready, like a reading by any other model that is on',
+        decided: MODEL_SETTINGS,
+        checks: [
+          'workflows/receipts › reads with the back-ups in the order set, only while the ones before could not',
+          'workflows/receipts › notes a primary that runs out of retries as unavailable, then reads with a back-up',
+        ],
+      },
+      {
+        id: 'AC4',
+        given: 'every model that is on failed to read it',
+        when: 'the receipt settles',
+        then: 'it is Not read',
+        decided: MODEL_SETTINGS,
+        checks: ['workflows/receipts › settles as not read when every model that is on fails'],
+      },
+      {
+        id: 'AC5',
+        given: 'a receipt read this way',
+        when: 'I open it',
+        then: 'it shows the model reading it while it is read, then each model that read, marked primary or back-up, and which one read it',
+        decided: MODEL_SETTINGS,
+        checks: [
+          'api/model-settings › shows the model reading it, then each model that read, as primary or back-up',
+          'e2e/signed-in',
+        ],
+      },
+    ],
+    note: 'One confident reading is weaker evidence than two that agree (ADR-0017); the sums and date checks still apply, and a back-up’s confident reading counts like any other because you made every model that is on a model like the others (Q8). Claude’s rule, for you to confirm (ADR-0033).',
   },
 ];

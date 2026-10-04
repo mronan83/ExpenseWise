@@ -78,11 +78,11 @@ export function registerTripRoutes(
 
   app.openapi(listTripsRoute, async (c) => {
     const who = await member(c.var.identity.userId);
-    const { trips, tallies } = await stores().trips.list(
-      who.orgId,
-      LIST_LIMIT,
-      c.req.valid('query'),
-    );
+    // A person's Trips are their own, whatever else their role lets them open (ADR-0035).
+    const { trips, tallies } = await stores().trips.list(who.orgId, LIST_LIMIT, {
+      ...c.req.valid('query'),
+      memberId: who.memberId,
+    });
     return c.json({ trips: trips.map((t) => tripSummary(t, tallies)) }, 200);
   });
 

@@ -3,6 +3,7 @@ import {
   EXPENSE_SOURCES,
   EXPENSE_STATUSES,
   MEMBER_ROLES,
+  ORGANIZATION_SIZES,
   REPORT_STATUSES,
   newId,
 } from '@expensewise/domain';
@@ -23,6 +24,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 
@@ -41,6 +43,7 @@ export const expenseStatus = pgEnum('expense_status', EXPENSE_STATUSES);
 export const expenseSource = pgEnum('expense_source', EXPENSE_SOURCES);
 export const reportStatus = pgEnum('report_status', REPORT_STATUSES);
 export const distanceUnit = pgEnum('distance_unit', DISTANCE_UNITS);
+export const organizationSize = pgEnum('organization_size', ORGANIZATION_SIZES);
 export const tripStatus = pgEnum('trip_status', ['planned', 'active', 'closed']);
 export const receiptStatus = pgEnum('receipt_status', [
   'processing',
@@ -65,10 +68,37 @@ export const organizations = pgTable(
   {
     id: id(),
     name: text('name').notNull(),
+    /** Reports opened from now on are in it; a change converts nothing already made (FR-PLT-11). */
     homeCurrency: char('home_currency', { length: 3 }).notNull(),
     createdAt: createdAt(),
+    /** ISO 3166-1 alpha-2. The details below are the owner's to keep, each optional (FR-PLT-11). */
+    country: char('country', { length: 2 }),
+    /** A BCP 47 language tag, such as en-US. */
+    locale: text('locale'),
+    /**
+     * An IANA time zone, checked against Postgres's own list when set. With organization
+     * settings on, it says when the organization's day ends: when trips and local expenses join
+     * a report, and which day is day 28 (ADR-0037).
+     */
+    timeZone: text('time_zone'),
+    /** The postal address, as the owner writes it. */
+    address: text('address'),
+    industry: text('industry'),
+    size: organizationSize('size'),
+    /**
+     * How many minutes apart two receipts at one place can be and still be one purchase, as
+     * the owner set it (FR-INT-19). Empty means the default of 30, which lives in the domain.
+     */
+    duplicateWindowMinutes: integer('duplicate_window_minutes'),
   },
-  (t) => [check('organizations_home_currency_iso', isoCurrency(t.homeCurrency))],
+  (t) => [
+    check('organizations_home_currency_iso', isoCurrency(t.homeCurrency)),
+    check('organizations_country_code', sql`${t.country} IS NULL OR ${t.country} ~ '^[A-Z]{2}$'`),
+    check(
+      'organizations_duplicate_window_range',
+      sql`${t.duplicateWindowMinutes} IS NULL OR ${t.duplicateWindowMinutes} BETWEEN 0 AND 120`,
+    ),
+  ],
 );
 
 const orgId = () =>
@@ -87,7 +117,17 @@ export const members = pgTable(
     displayName: text('display_name').notNull(),
     role: memberRole('role').notNull().default('member'),
     managerMemberId: uuid('manager_member_id'),
+    /**
+     * The currency the member is reimbursed in, chosen in Settings (FR-EXP-13, Q23). Null until
+     * they choose one: then it is the organization's home currency.
+     */
+    reimbursementCurrency: char('reimbursement_currency', { length: 3 }),
     createdAt: createdAt(),
+    /**
+     * When an owner removed them (FR-PLT-07): they no longer sign in here, and their records
+     * and history stay. Null while they are a member.
+     */
+    deactivatedAt: timestamp('deactivated_at', { withTimezone: true }),
   },
   (t) => [
     unique('members_org_id_id_key').on(t.orgId, t.id),
@@ -97,6 +137,10 @@ export const members = pgTable(
       columns: [t.orgId, t.managerMemberId],
       foreignColumns: [t.orgId, t.id],
     }),
+    check(
+      'members_reimbursement_currency_iso',
+      sql`${t.reimbursementCurrency} IS NULL OR ${isoCurrency(t.reimbursementCurrency)}`,
+    ),
   ],
 );
 
@@ -126,6 +170,58 @@ export const memberSignIns = pgTable(
       foreignColumns: [members.orgId, members.id],
     }),
     index('member_sign_ins_member_idx').on(t.orgId, t.memberId),
+  ],
+);
+
+/**
+ * A link that lets one person join the organization with a role (FR-PLT-07, ADR-0035). Only
+ * the SHA-256 of its token is kept: the link itself is shown once, to the owner who made it.
+ * It works once, until it expires or is revoked; an accepted or revoked invite stays as a
+ * record of who let whom in.
+ */
+export const memberInvites = pgTable(
+  'member_invites',
+  {
+    id: id(),
+    orgId: orgId(),
+    /** The role the person joins with. */
+    role: memberRole('role').notNull(),
+    /** The owner's note of who it is for, shown only to the organization's owners. */
+    label: text('label'),
+    /** SHA-256 of the token in the link, as hex. The token itself is never stored. */
+    tokenHash: char('token_hash', { length: 64 }).notNull(),
+    createdByMemberId: uuid('created_by_member_id').notNull(),
+    createdAt: createdAt(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    acceptedAt: timestamp('accepted_at', { withTimezone: true }),
+    acceptedByMemberId: uuid('accepted_by_member_id'),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+  },
+  (t) => [
+    unique('member_invites_org_id_id_key').on(t.orgId, t.id),
+    unique('member_invites_token_hash_key').on(t.tokenHash),
+    foreignKey({
+      name: 'member_invites_created_by_fk',
+      columns: [t.orgId, t.createdByMemberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    foreignKey({
+      name: 'member_invites_accepted_by_fk',
+      columns: [t.orgId, t.acceptedByMemberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    check('member_invites_token_hash_hex', sql`${t.tokenHash} ~ '^[0-9a-f]{64}$'`),
+    check(
+      'member_invites_accepted_by_someone',
+      sql`(${t.acceptedAt} IS NULL) = (${t.acceptedByMemberId} IS NULL)`,
+    ),
+    check(
+      'member_invites_accepted_or_revoked',
+      sql`${t.acceptedAt} IS NULL OR ${t.revokedAt} IS NULL`,
+    ),
+    check('member_invites_expires_after_made', sql`${t.expiresAt} > ${t.createdAt}`),
+    check('member_invites_label_short', sql`${t.label} IS NULL OR length(${t.label}) <= 80`),
+    index('member_invites_org_created_idx').on(t.orgId, t.createdAt),
   ],
 );
 
@@ -166,20 +262,119 @@ export const trips = pgTable(
   ],
 );
 
+/**
+ * The categories an organization codes its expenses to, with their general ledger and tax codes
+ * (FR-EXP-11, Q7, ADR-0036). They nest, and each allows a set of types (category_types). An
+ * organization starts with a ready-made set, seeded by seed_starter_catalog(), that owners and
+ * finance admins rename, add to or retire.
+ */
 export const categories = pgTable(
   'categories',
   {
     id: id(),
     orgId: orgId(),
+    /** The category it sits under; null at the top. */
+    parentId: uuid('parent_id'),
     name: text('name').notNull(),
     glCode: text('gl_code'),
     taxCode: text('tax_code'),
+    /** False once retired: no longer offered, but kept by every expense that has it. */
     active: boolean('active').notNull().default(true),
+    /** The ready-made category it started as, such as `travel`; null for one a person added. */
+    starterKey: text('starter_key'),
+    /**
+     * Who last added or changed it; null while it is as the ready-made set left it, so an
+     * untouched set is no one's work.
+     */
+    updatedByMemberId: uuid('updated_by_member_id'),
     createdAt: createdAt(),
+    updatedAt: updatedAt(),
   },
   (t) => [
     unique('categories_org_id_id_key').on(t.orgId, t.id),
     unique('categories_org_name_key').on(t.orgId, t.name),
+    unique('categories_org_starter_key').on(t.orgId, t.starterKey),
+    foreignKey({
+      name: 'categories_parent_fk',
+      columns: [t.orgId, t.parentId],
+      foreignColumns: [t.orgId, t.id],
+    }),
+    foreignKey({
+      name: 'categories_updated_by_fk',
+      columns: [t.orgId, t.updatedByMemberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    check('categories_not_own_parent', sql`${t.parentId} IS NULL OR ${t.parentId} <> ${t.id}`),
+  ],
+);
+
+/**
+ * The types an organization's expenses are, such as Airfare or Business meal: what was bought,
+ * where rules will attach (FR-EXP-11, Q7, ADR-0036). A list of its own that nests, beside the
+ * categories; a category allows some of them.
+ */
+export const expenseTypes = pgTable(
+  'expense_types',
+  {
+    id: id(),
+    orgId: orgId(),
+    /** The type it sits under; null at the top. */
+    parentId: uuid('parent_id'),
+    name: text('name').notNull(),
+    /** False once retired: no longer offered, but kept by every expense that has it. */
+    active: boolean('active').notNull().default(true),
+    /**
+     * The ready-made type it started as, such as `airfare`. Keyword suggestions find a type by
+     * it, so a renamed one keeps its suggestions.
+     */
+    starterKey: text('starter_key'),
+    /** Who last added or changed it; null while it is as the ready-made set left it. */
+    updatedByMemberId: uuid('updated_by_member_id'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('expense_types_org_id_id_key').on(t.orgId, t.id),
+    unique('expense_types_org_name_key').on(t.orgId, t.name),
+    unique('expense_types_org_starter_key').on(t.orgId, t.starterKey),
+    foreignKey({
+      name: 'expense_types_parent_fk',
+      columns: [t.orgId, t.parentId],
+      foreignColumns: [t.orgId, t.id],
+    }),
+    foreignKey({
+      name: 'expense_types_updated_by_fk',
+      columns: [t.orgId, t.updatedByMemberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    check('expense_types_not_own_parent', sql`${t.parentId} IS NULL OR ${t.parentId} <> ${t.id}`),
+  ],
+);
+
+/** Which types each category allows (Q7): choosing a category narrows the types to these. */
+export const categoryTypes = pgTable(
+  'category_types',
+  {
+    id: id(),
+    orgId: orgId(),
+    categoryId: uuid('category_id').notNull(),
+    typeId: uuid('type_id').notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('category_types_org_id_id_key').on(t.orgId, t.id),
+    unique('category_types_pair_key').on(t.orgId, t.categoryId, t.typeId),
+    foreignKey({
+      name: 'category_types_category_fk',
+      columns: [t.orgId, t.categoryId],
+      foreignColumns: [categories.orgId, categories.id],
+    }),
+    foreignKey({
+      name: 'category_types_type_fk',
+      columns: [t.orgId, t.typeId],
+      foreignColumns: [expenseTypes.orgId, expenseTypes.id],
+    }),
+    index('category_types_type_idx').on(t.orgId, t.typeId),
   ],
 );
 
@@ -196,6 +391,10 @@ export const reports = pgTable(
     memberId: uuid('member_id').notNull(),
     title: text('title').notNull(),
     status: reportStatus('status').notNull().default('open'),
+    /**
+     * The currency it is reimbursed in: its member's reimbursement currency, which it follows
+     * until it is submitted (FR-EXP-13). Every amount on it is converted to this.
+     */
     currency: char('currency', { length: 3 }).notNull(),
     /** When an open report closes itself: 28 days after opening, later if reopened. */
     closesAt: timestamp('closes_at', { withTimezone: true }).notNull(),
@@ -231,7 +430,14 @@ export const expenses = pgTable(
     tripId: uuid('trip_id'),
     /** The report a local expense is on (FR-EXP-14); null for one on a trip. */
     reportId: uuid('report_id'),
+    /**
+     * The category and type a person chose for it (FR-EXP-11), the type one the category
+     * allowed then. A suggestion is never stored here; it is worked out when shown (FR-INT-10).
+     */
     categoryId: uuid('category_id'),
+    typeId: uuid('type_id'),
+    /** When a person last chose its category and type; it orders their history for suggestions. */
+    classifiedAt: timestamp('classified_at', { withTimezone: true }),
     status: expenseStatus('status').notNull(),
     source: expenseSource('source').notNull(),
     merchant: text('merchant'),
@@ -309,6 +515,16 @@ export const expenses = pgTable(
       foreignColumns: [categories.orgId, categories.id],
     }),
     foreignKey({
+      name: 'expenses_type_fk',
+      columns: [t.orgId, t.typeId],
+      foreignColumns: [expenseTypes.orgId, expenseTypes.id],
+    }),
+    // A category and a type are chosen together, and when.
+    check(
+      'expenses_classified_whole',
+      sql`(${t.categoryId} IS NULL AND ${t.typeId} IS NULL AND ${t.classifiedAt} IS NULL) OR (${t.categoryId} IS NOT NULL AND ${t.typeId} IS NOT NULL AND ${t.classifiedAt} IS NOT NULL)`,
+    ),
+    foreignKey({
       name: 'expenses_reversal_fk',
       columns: [t.orgId, t.reversalOfId],
       foreignColumns: [t.orgId, t.id],
@@ -328,6 +544,63 @@ export const expenses = pgTable(
     index('expenses_trip_idx').on(t.orgId, t.tripId),
     index('expenses_report_idx').on(t.orgId, t.reportId),
     index('expenses_status_idx').on(t.orgId, t.status),
+    index('expenses_member_classified_idx').on(t.orgId, t.memberId, t.classifiedAt),
+  ],
+);
+
+export const conversionOutcome = pgEnum('conversion_outcome', ['converted', 'unavailable']);
+
+/**
+ * An expense's amount converted to the currency its report is reimbursed in (FR-EXP-13,
+ * ADR-0034): what was converted, and the reference rate it was converted at with that rate's
+ * date and source, copied on so a later rate never changes it (NFR-DAT-02, NFR-DAT-04); or that
+ * the source has no rate for it. One per expense: once its amount, currency, date or
+ * reimbursement currency changes, the next conversion replaces it, and each is in the audit
+ * trail. It goes with its expense when that is deleted.
+ */
+export const expenseConversions = pgTable(
+  'expense_conversions',
+  {
+    id: id(),
+    orgId: orgId(),
+    expenseId: uuid('expense_id').notNull(),
+    /** What was converted: the amount as spent, in its currency's minor units. */
+    amountMinor: bigint('amount_minor', { mode: 'number' }).notNull(),
+    currency: char('currency', { length: 3 }).notNull(),
+    /** The purchase date, whose reference rate applies (Q25). */
+    purchaseDate: date('purchase_date', { mode: 'string' }).notNull(),
+    /** The currency it was converted to: its report's. */
+    reimbursementCurrency: char('reimbursement_currency', { length: 3 }).notNull(),
+    /** converted, or unavailable: the source publishes no rate for it. */
+    outcome: conversionOutcome('outcome').notNull(),
+    /** The amount in the reimbursement currency's minor units: `amount_minor` times `rate`. */
+    convertedMinor: bigint('converted_minor', { mode: 'number' }),
+    /** What one unit of `currency` is in the reimbursement currency, exactly as applied. */
+    rate: numeric('rate'),
+    /** The day the rate was published: the purchase date, or the last day before it. */
+    rateDate: date('rate_date', { mode: 'string' }),
+    /** Who published the rate, or has none: `ECB`. */
+    source: text('source').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('expense_conversions_org_id_id_key').on(t.orgId, t.id),
+    unique('expense_conversions_expense_key').on(t.orgId, t.expenseId),
+    foreignKey({
+      name: 'expense_conversions_expense_fk',
+      columns: [t.orgId, t.expenseId],
+      foreignColumns: [expenses.orgId, expenses.id],
+    }).onDelete('cascade'),
+    check('expense_conversions_currency_iso', isoCurrency(t.currency)),
+    check('expense_conversions_into_iso', isoCurrency(t.reimbursementCurrency)),
+    check('expense_conversions_two_currencies', sql`${t.currency} <> ${t.reimbursementCurrency}`),
+    // A converted amount is only auditable with its rate, the rate's date and its source.
+    check(
+      'expense_conversions_rate_complete',
+      sql`(${t.outcome} = 'converted' AND ${t.convertedMinor} IS NOT NULL AND ${t.rate} IS NOT NULL AND ${t.rate} > 0 AND ${t.rateDate} IS NOT NULL AND ${t.rateDate} <= ${t.purchaseDate}) OR (${t.outcome} = 'unavailable' AND ${t.convertedMinor} IS NULL AND ${t.rate} IS NULL AND ${t.rateDate} IS NULL)`,
+    ),
+    check('expense_conversions_source_named', sql`length(trim(${t.source})) > 0`),
   ],
 );
 
@@ -351,10 +624,20 @@ export const receipts = pgTable(
      * checks once.
      */
     duplicatesCheckedAt: timestamp('duplicates_checked_at', { withTimezone: true }),
+    /**
+     * When its first reading settled, Ready, needing a look or not read: with `created_at`,
+     * the time from capture to read (NFR-PERF-01). Reading it again leaves it. Null while it is
+     * first read.
+     */
+    settledAt: timestamp('settled_at', { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => [
     unique('receipts_org_id_id_key').on(t.orgId, t.id),
+    check(
+      'receipts_settled_after_capture',
+      sql`${t.settledAt} IS NULL OR ${t.settledAt} >= ${t.createdAt}`,
+    ),
     // Exact-duplicate detection: the same file can't be filed twice in one organization.
     unique('receipts_org_sha256_key').on(t.orgId, t.sha256),
     foreignKey({
@@ -396,10 +679,17 @@ export const extractionRuns = pgTable(
      * a no-op instead of a second row; a new request (read again) gets a new id.
      */
     requestId: uuid('request_id'),
+    /**
+     * Why this model read, under the organization's AI model settings (FR-INT-16): primary,
+     * or backup when the models before it produced no reading. Null for readings made side
+     * by side (ADR-0017), where the model itself says whether it was compared or the fallback.
+     */
+    role: text('role'),
     createdAt: createdAt(),
   },
   (t) => [
     unique('extraction_runs_request_key').on(t.orgId, t.receiptId, t.model, t.requestId),
+    check('extraction_runs_role_known', sql`${t.role} IN ('primary', 'backup')`),
     foreignKey({
       name: 'extraction_runs_receipt_fk',
       columns: [t.orgId, t.receiptId],
@@ -687,5 +977,71 @@ export const aiProviderKeys = pgTable(
       foreignColumns: [members.orgId, members.id],
     }),
     check('ai_provider_keys_hint_short', sql`length(${t.keyHint}) <= 4`),
+  ],
+);
+
+/**
+ * A feature switched on or off for one organization by its owner (Q5, NFR-DEL-05). A feature
+ * with no row is off. FLAG_OVERRIDES in the environment still wins, as a kill switch.
+ */
+export const orgFeatures = pgTable(
+  'org_features',
+  {
+    id: id(),
+    orgId: orgId(),
+    /** A key from the flag registry in @expensewise/flags, such as `expenses.mileage`. */
+    flag: text('flag').notNull(),
+    enabled: boolean('enabled').notNull(),
+    updatedByMemberId: uuid('updated_by_member_id').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('org_features_org_id_id_key').on(t.orgId, t.id),
+    unique('org_features_org_flag_key').on(t.orgId, t.flag),
+    foreignKey({
+      name: 'org_features_updated_by_fk',
+      columns: [t.orgId, t.updatedByMemberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    check('org_features_flag_format', sql`${t.flag} ~ '^[a-z]+\\.[a-z-]+$'`),
+  ],
+);
+
+/**
+ * Which AI models read one organization's receipts, once its owner has switched on AI model
+ * settings (FR-INT-16, ADR-0033): one row per model, on or off, in the order back-ups are
+ * tried. Exactly one model that is on is the primary, or none when every model is off. An
+ * organization with no rows reads with the defaults in @expensewise/extraction.
+ */
+export const orgAiModels = pgTable(
+  'org_ai_models',
+  {
+    id: id(),
+    orgId: orgId(),
+    /** A model id from @expensewise/extraction, such as `claude-sonnet-5-5`. */
+    model: text('model').notNull(),
+    enabled: boolean('enabled').notNull(),
+    isPrimary: boolean('is_primary').notNull().default(false),
+    /** Its place in the order back-ups are tried, from 0. */
+    position: integer('position').notNull(),
+    updatedByMemberId: uuid('updated_by_member_id').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('org_ai_models_org_id_id_key').on(t.orgId, t.id),
+    unique('org_ai_models_org_model_key').on(t.orgId, t.model),
+    uniqueIndex('org_ai_models_one_primary')
+      .on(t.orgId)
+      .where(sql`is_primary`),
+    foreignKey({
+      name: 'org_ai_models_updated_by_fk',
+      columns: [t.orgId, t.updatedByMemberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    check('org_ai_models_model_format', sql`${t.model} ~ '^[a-z0-9][a-z0-9.-]*$'`),
+    check('org_ai_models_primary_is_on', sql`${t.enabled} OR NOT ${t.isPrimary}`),
+    check('org_ai_models_position_not_negative', sql`${t.position} >= 0`),
   ],
 );

@@ -36,10 +36,20 @@ test.describe('sign-in and AI provider settings', () => {
       ['POST', '/api/v1/me/organization'],
       ['GET', '/api/v1/me/sign-ins'],
       ['POST', '/api/v1/me/sign-ins'],
+      ['GET', '/api/v1/features'],
+      ['PUT', '/api/v1/settings/features/expenses.mileage'],
+      ['GET', '/api/v1/audit/events'],
+      ['GET', '/api/v1/audit/verification'],
+      ['GET', '/api/v1/settings/organization'],
+      ['PATCH', '/api/v1/settings/organization'],
+      ['GET', '/api/v1/settings/duplicate-window'],
+      ['PUT', '/api/v1/settings/duplicate-window'],
+      ['GET', '/api/v1/categories'],
+      ['GET', '/api/v1/me/reimbursement-currency'],
     ] as const) {
       const res = await request.fetch(path, {
         method,
-        data: method === 'GET' ? undefined : { apiKey: 'x', accessToken: 'x' },
+        data: method === 'GET' ? undefined : { apiKey: 'x', accessToken: 'x', enabled: true },
       });
       expect([401, 503]).toContain(res.status());
       expect(res.headers()['content-type']).toContain('application/problem+json');
@@ -51,7 +61,19 @@ for (const colorScheme of ['light', 'dark'] as const) {
   test.describe(`settings accessibility in ${colorScheme} mode`, () => {
     test.use({ colorScheme });
 
-    for (const path of ['/sign-in', '/settings/ai', '/settings/sign-ins']) {
+    for (const path of [
+      '/sign-in',
+      '/settings/ai',
+      '/settings/sign-ins',
+      '/settings/features',
+      '/settings/audit',
+      '/settings/organization',
+      '/settings/categories',
+      '/settings/ai-models',
+      '/settings/currency',
+      '/settings/people',
+      '/invite/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
+    ]) {
       test(`${path} has no WCAG 2.2 AA violations`, async ({ page }) => {
         await page.goto(path);
         await expect(page.getByRole('heading', { level: 1 })).toBeVisible();

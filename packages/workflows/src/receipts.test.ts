@@ -16,6 +16,7 @@ import {
   readWith,
   receiptReadingFunction,
   sniffMediaType,
+  toStoredRun,
   type KeyProblem,
   type ReceiptReadingPorts,
 } from './receipts.ts';
@@ -311,6 +312,155 @@ describe('the fallback reader', () => {
   });
 });
 
+/** The organization reads under its AI model settings, in this order (FR-INT-16). */
+function withSettings(w: ReturnType<typeof world>, order: ModelId[]) {
+  w.ports.readingPlan = () => Promise.resolve({ mode: 'primary', order });
+  return w;
+}
+
+const roles = (w: ReturnType<typeof world>) =>
+  w.runs.map((r) => [r.model, r.role ?? null, r.outcome, r.error]);
+
+describe('reading under the organization’s AI model settings (ADR-0033)', () => {
+  const SONNET_FIRST: ModelId[] = ['claude-sonnet-5-5', 'claude-haiku-4-5', 'gpt-5.6-luna'];
+
+  it('files it as Ready on one confident reading by the primary, and asks no back-up', async () => {
+    const w = withSettings(world({}), SONNET_FIRST);
+    const { result, error } = await run(w);
+    expect(error).toBeUndefined();
+    expect(result).toEqual({ status: 'extracted', differences: [] });
+    expect(called(w)).toEqual(['claude-sonnet-5-5']);
+    expect(roles(w)).toEqual([['claude-sonnet-5-5', 'primary', 'confident', null]]);
+    expect(w.settled[0]).toMatchObject({
+      status: 'extracted',
+      values: COFFEE,
+      detail: { readBy: 'claude-sonnet-5-5', readings: { 'claude-sonnet-5-5': 'confident' } },
+    });
+  });
+
+  it('asks for a look when the primary is unsure, and still asks no back-up', async () => {
+    const unsure = reading({ total: { value: '6.50', confidence: 'medium' } });
+    const w = withSettings(world({ 'claude-sonnet-5-5': unsure }), SONNET_FIRST);
+    const { result } = await run(w);
+    expect(result).toEqual({ status: 'needs_review', differences: [] });
+    expect(called(w)).toEqual(['claude-sonnet-5-5']);
+    // Its expense starts from that reading.
+    expect(w.settled[0]?.values).toEqual({ ...COFFEE, details: NO_DETAILS });
+  });
+
+  it('asks for a look when the one reading’s parts don’t make its total', async () => {
+    const short = reading({
+      subtotal: { value: '5.50', confidence: 'high' },
+      taxes: [{ label: 'Sales tax', value: '0.49', confidence: 'high' }],
+    });
+    const w = withSettings(world({ 'claude-sonnet-5-5': short }), SONNET_FIRST);
+    expect((await run(w)).result).toEqual({ status: 'needs_review', differences: [] });
+  });
+
+  it('reads with the back-ups in the order set, only while the ones before could not', async () => {
+    const w = withSettings(world({ 'claude-sonnet-5-5': noCredit(), 'gpt-5.6-luna': noCredit() }), [
+      'claude-sonnet-5-5',
+      'gpt-5.6-luna',
+      'claude-haiku-4-5',
+    ]);
+    const { result } = await run(w);
+    // A back-up's confident reading is Ready as well: every model that is on is trusted alike.
+    expect(result).toEqual({ status: 'extracted', differences: [] });
+    expect(roles(w)).toEqual([
+      [
+        'claude-sonnet-5-5',
+        'primary',
+        'failed',
+        'request_rejected: Your credit balance is too low',
+      ],
+      ['gpt-5.6-luna', 'backup', 'failed', 'request_rejected: Your credit balance is too low'],
+      ['claude-haiku-4-5', 'backup', 'confident', null],
+    ]);
+    expect(w.settled[0]?.detail).toMatchObject({ readBy: 'claude-haiku-4-5' });
+  });
+
+  it('reads with OpenAI’s model as primary, like any other', async () => {
+    const w = withSettings(world({}), ['gpt-5.6-luna', 'claude-haiku-4-5']);
+    const { result } = await run(w);
+    expect(result).toEqual({ status: 'extracted', differences: [] });
+    expect(called(w)).toEqual(['gpt-5.6-luna']);
+    expect(w.runs[0]).toMatchObject({ extractor: 'openai', role: 'primary' });
+  });
+
+  it('reads each request with the settings as they are then, read again included', async () => {
+    const w = withSettings(world({}), ['claude-sonnet-5-5']);
+    await run(w);
+    // The owner makes OpenAI's model primary; the receipt is read again.
+    withSettings(w, ['gpt-5.6-luna']);
+    await run(w);
+    expect(called(w)).toEqual(['claude-sonnet-5-5', 'gpt-5.6-luna']);
+  });
+
+  it('passes over a model with no key, storing nothing for it', async () => {
+    const w = withSettings(world({ 'claude-sonnet-5-5': 'no_key' }), SONNET_FIRST);
+    const { result } = await run(w);
+    expect(result).toEqual({ status: 'extracted', differences: [] });
+    expect(roles(w)).toEqual([['claude-haiku-4-5', 'backup', 'confident', null]]);
+  });
+
+  it('notes a primary that runs out of retries as unavailable, then reads with a back-up', async () => {
+    const w = withSettings(world({}), SONNET_FIRST);
+    const { result } = await run(w, ['read with Sonnet 5.5']);
+    expect(result).toEqual({ status: 'extracted', differences: [] });
+    expect(roles(w)).toEqual([
+      ['claude-sonnet-5-5', 'primary', 'failed', 'unavailable: Overloaded'],
+      ['claude-haiku-4-5', 'backup', 'confident', null],
+    ]);
+  });
+
+  it('settles as not read when every model that is on fails', async () => {
+    const w = withSettings(
+      world({ 'claude-sonnet-5-5': noCredit(), 'claude-haiku-4-5': noCredit() }),
+      ['claude-sonnet-5-5', 'claude-haiku-4-5'],
+    );
+    const { result } = await run(w);
+    expect(result).toEqual({ status: 'failed', differences: [] });
+    expect(w.settled[0]?.values).toBeNull();
+  });
+
+  it('files it for a person to fill in when every model is off', async () => {
+    const w = withSettings(world({}), []);
+    const { result, error } = await run(w);
+    expect(error).toBeUndefined();
+    expect(result).toEqual({ status: 'needs_review', differences: [] });
+    expect(w.calls).toEqual([]);
+    expect(w.runs).toEqual([]);
+    expect(w.settled[0]).toMatchObject({
+      status: 'needs_review',
+      values: null,
+      detail: { problem: 'no_model_on', order: [] },
+    });
+  });
+
+  it('settles a file that is not the one described as not read, whatever the settings', async () => {
+    const w = withSettings(
+      world({}, new Uint8Array([0xff, 0xd8, 0xff, 9, 9, 9, 9, 9])),
+      SONNET_FIRST,
+    );
+    const { result } = await run(w);
+    expect(result).toEqual({ status: 'failed', differences: [] });
+    expect(w.calls).toEqual([]);
+    expect(w.settled[0]?.detail).toMatchObject({ problem: 'file_changed' });
+  });
+});
+
+describe('the operator’s switch for a model, side by side', () => {
+  it('stores a stopped compared model as failed, asks it nothing, and never asks a stopped fallback', async () => {
+    const w = world({ 'claude-sonnet-5-5': noCredit() });
+    w.ports.readingPlan = () =>
+      Promise.resolve({ mode: 'compare', stopped: ['claude-haiku-4-5', 'gpt-5.6-luna'] });
+    const { result } = await run(w);
+    expect(result).toEqual({ status: 'failed', differences: [] });
+    expect(called(w)).toEqual(['claude-sonnet-5-5']);
+    expect(w.runs.find((r) => r.model === 'claude-haiku-4-5')?.error).toBe('stopped');
+  });
+});
+
 describe('permanentFailure', () => {
   it.each([
     [
@@ -343,6 +493,46 @@ describe('readWith', () => {
       'overloaded',
     );
     expect(w.runs).toEqual([]);
+  });
+});
+
+describe('toStoredRun', () => {
+  const run = (over: Partial<ExtractionRun>): ExtractionRun => ({
+    outcome: 'extracted',
+    extraction: reading(),
+    model: 'claude-haiku-4-5',
+    promptVersion: 'extract-v3',
+    latencyMs: 1800,
+    usage: { inputTokens: 1500, outputTokens: 300, cacheReadTokens: 0, cacheWriteTokens: 0 },
+    costNanoUsd: 4_500_400n,
+    ...over,
+  });
+  const uploaded = new Date('2026-09-24T18:00:00Z');
+
+  it('stores the line each field was read from with the reading, under the version asked', () => {
+    const sources = { merchant: 'BLUE BOTTLE COFFEE', total: 'TOTAL 6.50' };
+    const stored = toStoredRun(
+      RECEIPT,
+      REQUEST,
+      run({
+        extraction: { ...reading(), sources } as ReceiptExtraction,
+        promptVersion: 'extract-v4',
+        schemaVersion: 'receipt-v4',
+      }),
+      uploaded,
+    );
+    expect(stored).toMatchObject({
+      promptVersion: 'extract-v4',
+      schemaVersion: 'receipt-v4',
+      outcome: 'confident',
+      output: { sources },
+    });
+  });
+
+  it('stores a reading asked for without them as receipt-v3, as before', () => {
+    const stored = toStoredRun(RECEIPT, REQUEST, run({}), uploaded);
+    expect(stored).toMatchObject({ promptVersion: 'extract-v3', schemaVersion: 'receipt-v3' });
+    expect(stored.output).not.toHaveProperty('sources');
   });
 });
 

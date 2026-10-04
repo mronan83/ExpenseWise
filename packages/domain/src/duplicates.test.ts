@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DUPLICATE_TIME_WINDOW_MINUTES,
+  DUPLICATE_WINDOW_MAX_MINUTES,
   duplicateKind,
+  isDuplicateWindow,
   mergeExpenses,
   merchantWords,
   samePlace,
@@ -104,6 +107,31 @@ describe('the same purchase filed twice (FR-INT-18)', () => {
     expect(duplicateKind(ride, { ...ride, merchant: null })).toBeNull();
     expect(duplicateKind({ ...ride, transactionDate: null }, ride)).toBeNull();
     expect(duplicateKind({ ...bill, merchant: null }, bill)).toBeNull();
+  });
+});
+
+describe('the duplicate time window (FR-INT-19)', () => {
+  const later = (time: string): PurchaseFacts => ({ ...bill, time });
+
+  it('is 30 minutes unless the owner sets another, from 0 to 120 whole minutes', () => {
+    expect(DUPLICATE_TIME_WINDOW_MINUTES).toBe(30);
+    expect(duplicateKind(bill, later('20:28'))).toBe('possible');
+    expect(duplicateKind(bill, later('20:29'))).toBeNull();
+    expect([0, 1, 30, DUPLICATE_WINDOW_MAX_MINUTES].every(isDuplicateWindow)).toBe(true);
+    expect([-1, 121, 2.5, Number.NaN].some(isDuplicateWindow)).toBe(false);
+  });
+
+  it('judges a pair by the window it is given: wider catches more, narrower less', () => {
+    expect(duplicateKind(bill, later('20:58'), 60)).toBe('possible');
+    expect(duplicateKind(bill, later('20:59'), 60)).toBeNull();
+    expect(duplicateKind(bill, slip, 5)).toBe('possible');
+    expect(duplicateKind(bill, slip, 4)).toBeNull();
+  });
+
+  it('at 0 is the same minute only, exact or possible', () => {
+    expect(duplicateKind(bill, bill, 0)).toBe('exact');
+    expect(duplicateKind(bill, { ...bill, amountMinor: 10810 }, 0)).toBe('possible');
+    expect(duplicateKind(bill, later('19:59'), 0)).toBeNull();
   });
 });
 

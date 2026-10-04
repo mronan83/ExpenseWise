@@ -121,7 +121,7 @@ Jordan reviews one exception, not eight lines.
 - **One set of tokens.** Color, type, spacing and radius live in one package, exported to CSS for web and to Swift for iOS with Style Dictionary, so both apps share one brand.
 - **Components we own.** Tailwind CSS with shadcn/ui on Radix primitives gives us accessible components as source code instead of a library we have to fight.
 - **Every state designed.** Each screen has designed empty, loading, processing, offline and error states. "Processing" is a first-class state because extraction is asynchronous.
-- **Accessible by default.** WCAG 2.2 AA, fully keyboard-operable on web, Dynamic Type on iOS, and automated axe checks in CI (gate G5; see [quality gates](06-delivery-lifecycle.md#74-quality-gates)).
+- **Accessible by default.** WCAG 2.2 AA, fully keyboard-operable on web, Dynamic Type on iOS, and automated axe checks in CI (gate G5; see [quality gates](06-delivery-lifecycle.md#73-quality-gates)).
 
 ## Related
 

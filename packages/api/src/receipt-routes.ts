@@ -1,24 +1,43 @@
 import type { CommittedEvent, Membership } from '@expensewise/db';
-import { newId } from '@expensewise/domain';
-import { confirmReading } from '@expensewise/extraction';
+import { mayChangeRecord, newId } from '@expensewise/domain';
+import {
+  confirmReading,
+  correctionsOf,
+  correctReading,
+  expenseEditOf,
+} from '@expensewise/extraction';
 import { detailsOf } from '@expensewise/extraction/place';
 import { receiptPath, RECEIPT_BUCKET, type ObjectStore } from '@expensewise/storage';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
+import { featureGate, type FeatureGate } from './features.ts';
+import {
+  modelContext,
+  readsNext,
+  stoppedModels,
+  type ModelSettingsStore,
+} from './model-settings.ts';
+import { notYours } from './caller.ts';
 import { needsYouItems, NO_REPORTS } from './needs-you-views.ts';
 import { ProblemError } from './problem.ts';
+import { showConverted } from './reimbursement.ts';
 import { inboxRoute } from './routes/inbox.ts';
+import { captureTimeOf, withSources } from './receipt-evidence.ts';
 import {
   comparisonSummary,
+  currentReview,
+  filedRun,
   latestRuns,
+  NO_READING,
   normalized,
   receiptDetail,
   receiptSummary,
 } from './receipt-views.ts';
-import type { ReceiptStore } from './receipts.ts';
+import type { ReceiptInReview, ReceiptStore } from './receipts.ts';
 import type { ReportStore } from './reports.ts';
 import {
   confirmReceiptRoute,
+  correctReceiptRoute,
   fileReceiptRoute,
   getReceiptRoute,
   listReceiptsRoute,
@@ -40,6 +59,11 @@ export interface ReceiptRouteOptions {
   readonly dispatch?: (events: readonly CommittedEvent[]) => Promise<void>;
   /** Reports and local expenses that need the person join Needs you when it is given. */
   readonly reports?: ReportStore;
+  /** Which features are on. Built from `workspace` when not given. */
+  readonly features?: FeatureGate;
+  /** Which AI models read receipts, under receipts.model-settings (FR-INT-16). */
+  readonly modelSettings?: ModelSettingsStore;
+  readonly flagOverrides?: string;
   readonly now?: () => Date;
 }
 
@@ -51,6 +75,7 @@ export function registerReceiptRoutes(
   options: ReceiptRouteOptions,
 ) {
   const auth = requireIdentity(options.verifyToken);
+  const features = options.features ?? featureGate(options);
   const paths = new Set(
     [
       receiptUploadRoute,
@@ -59,6 +84,7 @@ export function registerReceiptRoutes(
       getReceiptRoute,
       readReceiptAgainRoute,
       confirmReceiptRoute,
+      correctReceiptRoute,
       resolveDuplicateRoute,
       inboxRoute,
     ].map((r) => r.getRoutingPath()),
@@ -94,11 +120,19 @@ export function registerReceiptRoutes(
     }
     return membership;
   };
-  const duplicate = (receiptId: string) =>
-    new ProblemError(409, 'duplicate-receipt', 'This file is already filed', {
-      code: 'duplicate_receipt',
-      receiptId,
-    });
+  const duplicate = (receiptId: string | null) =>
+    receiptId
+      ? new ProblemError(409, 'duplicate-receipt', 'This file is already filed', {
+          code: 'duplicate_receipt',
+          receiptId,
+        })
+      : // Another member's, which this caller may not open (ADR-0035).
+        new ProblemError(409, 'duplicate-receipt', 'Someone here already filed this file', {
+          code: 'duplicate_receipt',
+          detail:
+            'Someone else in your organization filed the same file, and a file is claimed ' +
+            'once. Nothing was filed.',
+        });
   const notFound = () =>
     new ProblemError(404, 'not-found', 'No such receipt', { code: 'not_found' });
   const notWaiting = (stale: boolean) =>
@@ -115,6 +149,30 @@ export function registerReceiptRoutes(
     });
   const unprocessable = (code: string, title: string, extra: Record<string, unknown> = {}) =>
     new ProblemError(422, code.replaceAll('_', '-'), title, { code, ...extra });
+
+  const notReady = () =>
+    new ProblemError(409, 'not-ready', 'This receipt is not Ready', {
+      code: 'not_ready',
+      detail: 'It is being read, or it needs a look: confirm it with Edit a field instead.',
+    });
+
+  /**
+   * The receipt's page, with the line each field was read from where the organization has
+   * switched that on (GAP-14); without it, as it always was.
+   */
+  const detailOf = async (orgId: string, found: ReceiptInReview, imageUrl: string | null) => {
+    const detail = receiptDetail(
+      found.receipt,
+      found.runs,
+      imageUrl,
+      found.reviews,
+      found.pairs,
+      await readingNext(orgId),
+    );
+    return (await features.isOn(orgId, 'receipts.field-sources'))
+      ? { ...detail, readings: withSources(found.receipt, found.runs, detail.readings) }
+      : detail;
+  };
 
   const imageOf = async (storageKey: string) => {
     try {
@@ -135,6 +193,28 @@ export function registerReceiptRoutes(
     }
   };
 
+  /**
+   * Under the organization's AI model settings, the models that read its next receipt, so a
+   * receipt being read shows the model reading it. Undefined while the settings are off.
+   */
+  const settingsOn = async (orgId: string) =>
+    options.modelSettings !== undefined && (await features.isOn(orgId, 'receipts.model-settings'));
+  const readingNext = async (orgId: string) => {
+    if (!options.modelSettings || !options.workspace) return undefined;
+    if (!(await settingsOn(orgId))) return undefined;
+    const [saved, keys] = await Promise.all([
+      options.modelSettings.get(orgId),
+      options.workspace.listKeys(orgId),
+    ]);
+    return readsNext(
+      modelContext(
+        saved,
+        new Set(keys.map((k) => k.provider)),
+        stoppedModels(options.flagOverrides),
+      ),
+    );
+  };
+
   const dispatch = async (event: CommittedEvent) => {
     if (!options.dispatch) return;
     try {
@@ -147,6 +227,8 @@ export function registerReceiptRoutes(
 
   app.openapi(receiptUploadRoute, async (c) => {
     const who = await member(c.var.identity.userId);
+    // An auditor files nothing; refused here, before a file is sent for nothing (ADR-0035).
+    if (!mayChangeRecord(who.role, true)) throw notYours();
     const store = files();
     const { sha256 } = c.req.valid('json');
     const existing = await stores().receipts.findBySha256(who.orgId, sha256);
@@ -174,7 +256,11 @@ export function registerReceiptRoutes(
       },
       caller.userId,
     );
-    if (result.status === 'duplicate') throw duplicate(result.receiptId);
+    if (result.status === 'duplicate') {
+      // The upload a colleague's copy made has nothing to prove: it goes.
+      if (result.receiptId === null) await removeFile(receiptPath(who.orgId, body.id));
+      throw duplicate(result.receiptId);
+    }
     if (result.status === 'exists') return c.json(receiptSummary(result.receipt, []), 200);
     await dispatch(result.event);
     return c.json(receiptSummary(result.receipt, []), 202);
@@ -182,12 +268,20 @@ export function registerReceiptRoutes(
 
   app.openapi(listReceiptsRoute, async (c) => {
     const who = await member(c.var.identity.userId);
-    const { receipts, runs, reviews } = await stores().receipts.list(who.orgId, LIST_LIMIT);
+    // A person's Receipts are their own, whatever else their role lets them open (ADR-0035).
+    const { receipts, runs, reviews } = await stores().receipts.list(who.orgId, LIST_LIMIT, {
+      memberId: who.memberId,
+    });
+    // Capture to Ready, beside the comparison, where the organization has switched it on.
+    const timed = (await features.isOn(who.orgId, 'receipts.capture-time'))
+      ? { captureToReady: captureTimeOf(receipts) }
+      : {};
     return c.json(
       {
         receipts: receipts.map((r) => receiptSummary(r, runs, reviews)),
         comparison: comparisonSummary(receipts, runs),
         readingAvailable: options.dispatch !== undefined,
+        ...timed,
       },
       200,
     );
@@ -203,7 +297,14 @@ export function registerReceiptRoutes(
     const reports = options.reports
       ? await options.reports.needsYou(who.orgId, who.memberId, LIST_LIMIT)
       : NO_REPORTS;
-    const items = needsYouItems(receipts, reports, options.now?.() ?? new Date());
+    const converting = await showConverted(features, who.orgId, reports.reports);
+    const items = needsYouItems(
+      receipts,
+      reports,
+      options.now?.() ?? new Date(),
+      await settingsOn(who.orgId),
+      converting,
+    );
     return c.json({ items }, 200);
   });
 
@@ -213,10 +314,7 @@ export function registerReceiptRoutes(
     const found = await stores().receipts.get(who.orgId, receiptId);
     if (!found) throw notFound();
     const imageUrl = await imageOf(found.receipt.storageKey);
-    return c.json(
-      receiptDetail(found.receipt, found.runs, imageUrl, found.reviews, found.pairs),
-      200,
-    );
+    return c.json(await detailOf(who.orgId, found, imageUrl), 200);
   });
 
   app.openapi(readReceiptAgainRoute, async (c) => {
@@ -244,13 +342,16 @@ export function registerReceiptRoutes(
       throw notWaiting(false);
     }
     if (found.pairs.some((p) => p.heldReceiptId === receiptId)) throw heldAsDuplicate();
-    const run = latestRuns(receiptId, found.runs).find((r) => r.model === body.model);
-    if (!run) {
+    const latest = latestRuns(receiptId, found.runs);
+    const run = latest.find((r) => r.model === body.model);
+    // With no model named, only a receipt nothing read is filled in by hand (FR-INT-16).
+    if (body.model === undefined ? latest.length > 0 : !run) {
       throw unprocessable('no_such_reading', 'This receipt has no such reading', {
-        detail: `Choose one of the readings shown: ${body.model} is not among them.`,
+        detail: `Choose one of the readings shown: ${body.model ?? 'none'} is not among them.`,
       });
     }
-    const result = confirmReading(normalized(run), body.corrections ?? {});
+    const reading = run ? normalized(run) : null;
+    const result = confirmReading(reading, body.corrections ?? {});
     if (!result.ok) {
       const { error } = result;
       throw error.kind === 'missing'
@@ -269,8 +370,8 @@ export function registerReceiptRoutes(
       receiptId,
       {
         memberId: who.memberId,
-        requestId: run.requestId,
-        model: run.model,
+        requestId: run?.requestId ?? null,
+        model: run?.model ?? NO_READING,
         merchant: confirmed.merchant,
         transactionDate: confirmed.date,
         currency: confirmed.currency,
@@ -280,7 +381,7 @@ export function registerReceiptRoutes(
         corrections,
       },
       caller.userId,
-      detailsOf(normalized(run)),
+      detailsOf(reading),
     );
     if (outcome === 'missing') throw notFound();
     if (outcome === 'duplicate') throw heldAsDuplicate();
@@ -288,10 +389,92 @@ export function registerReceiptRoutes(
     const after = await receipts.get(who.orgId, receiptId);
     if (!after) throw notFound();
     const imageUrl = await imageOf(after.receipt.storageKey);
-    return c.json(
-      receiptDetail(after.receipt, after.runs, imageUrl, after.reviews, after.pairs),
-      200,
+    return c.json(await detailOf(who.orgId, after, imageUrl), 200);
+  });
+
+  app.openapi(correctReceiptRoute, async (c) => {
+    const caller = c.var.identity;
+    const who = await member(caller.userId);
+    await features.require(who.orgId, 'receipts.field-sources');
+    const { receiptId } = c.req.valid('param');
+    const body = c.req.valid('json');
+    const { receipts } = stores();
+    const found = await receipts.get(who.orgId, receiptId);
+    if (!found) throw notFound();
+    if (found.receipt.status !== 'extracted') throw notReady();
+    // What it is filed with now: the reading, and any corrections made to it before.
+    const run = filedRun(found.receipt, found.runs, found.reviews);
+    const review = currentReview(found.receipt, found.runs, found.reviews);
+    const model = review?.model ?? run?.model;
+    if (!model) throw notReady();
+    const result = correctReading(
+      normalized(run),
+      correctionsOf(review?.corrections),
+      body.corrections,
     );
+    if (!result.ok) {
+      const { error } = result;
+      throw error.kind === 'unchanged'
+        ? unprocessable('unchanged', 'It is filed so already', {
+            detail: 'Nothing to correct: that is the value it is filed with.',
+          })
+        : error.kind === 'missing'
+          ? unprocessable('missing_fields', 'Some filing fields are still missing', {
+              fields: error.fields,
+            })
+          : unprocessable('invalid_value', 'A value is not valid', {
+              detail: error.message,
+              field: error.field,
+            });
+    }
+    const { confirmed, corrections, changes } = result.value;
+    const outcome = await receipts.correct(
+      who.orgId,
+      receiptId,
+      {
+        review: {
+          memberId: who.memberId,
+          requestId: review?.requestId ?? run?.requestId ?? null,
+          model,
+          merchant: confirmed.merchant,
+          transactionDate: confirmed.date,
+          currency: confirmed.currency,
+          totalMinor: confirmed.total.amountMinor,
+          taxMinor: confirmed.taxTotal?.amountMinor ?? null,
+          tipMinor: confirmed.tip?.amountMinor ?? null,
+          corrections,
+        },
+        expense: expenseEditOf(confirmed, changes),
+        changes,
+      },
+      caller.userId,
+    );
+    switch (outcome.status) {
+      case 'missing':
+        throw notFound();
+      case 'not_ready':
+        throw notReady();
+      case 'stale':
+        throw notWaiting(true);
+      case 'locked':
+        throw new ProblemError(409, 'locked', 'Its expense is submitted or further along', {
+          code: 'locked',
+          detail:
+            'A submitted or approved expense is locked. Correcting an approved one is a ' +
+            'reversal, which isn’t built yet.',
+        });
+      case 'invalid':
+        throw unprocessable('invalid_value', 'A value is not valid', {
+          detail: outcome.problem.message,
+          field: outcome.problem.field === 'amount' ? 'total' : outcome.problem.field,
+        });
+      case 'corrected':
+        break;
+    }
+    const after = await receipts.get(who.orgId, receiptId);
+    if (!after) throw notFound();
+    const imageUrl = await imageOf(after.receipt.storageKey);
+    return c.json(await detailOf(who.orgId, after, imageUrl), 200);
   });
 
   app.openapi(resolveDuplicateRoute, async (c) => {

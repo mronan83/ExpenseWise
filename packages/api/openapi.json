@@ -394,6 +394,349 @@
           "accessToken"
         ]
       },
+      "FeatureList": {
+        "type": "object",
+        "properties": {
+          "features": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Feature"
+            }
+          },
+          "canSwitch": {
+            "type": "boolean",
+            "description": "Whether the caller may switch features."
+          }
+        },
+        "required": [
+          "features",
+          "canSwitch"
+        ]
+      },
+      "Feature": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "$ref": "#/components/schemas/FeatureKey"
+          },
+          "name": {
+            "type": "string",
+            "example": "Mileage"
+          },
+          "description": {
+            "type": "string",
+            "description": "What switching it on changes."
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "default",
+              "organization",
+              "override"
+            ],
+            "description": "Where `enabled` comes from: the default (off), the organization's switch, or the server's override, which beats the switch until it is removed."
+          },
+          "switchedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When the organization last switched it, if it has."
+          }
+        },
+        "required": [
+          "key",
+          "name",
+          "description",
+          "enabled",
+          "source",
+          "switchedAt"
+        ]
+      },
+      "FeatureKey": {
+        "type": "string",
+        "enum": [
+          "settings.organization",
+          "settings.duplicate-window",
+          "reports.currency-conversion",
+          "expenses.categories",
+          "receipts.model-settings",
+          "receipts.field-sources",
+          "receipts.capture-time",
+          "expenses.mileage",
+          "reports.export",
+          "governance.audit-trail",
+          "team.invites"
+        ]
+      },
+      "SwitchFeature": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ]
+      },
+      "OrganizationSettings": {
+        "type": "object",
+        "properties": {
+          "organization": {
+            "$ref": "#/components/schemas/OrganizationDetails"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "member",
+              "approver",
+              "finance_admin",
+              "owner",
+              "auditor"
+            ],
+            "description": "The caller’s role."
+          },
+          "canEdit": {
+            "type": "boolean",
+            "description": "Only the owner changes the details."
+          }
+        },
+        "required": [
+          "organization",
+          "role",
+          "canEdit"
+        ]
+      },
+      "OrganizationDetails": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Acme Field Services"
+          },
+          "homeCurrency": {
+            "type": "string",
+            "enum": [
+              "AED",
+              "ARS",
+              "AUD",
+              "BHD",
+              "BRL",
+              "CAD",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CZK",
+              "DKK",
+              "EGP",
+              "EUR",
+              "GBP",
+              "HKD",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "ISK",
+              "JOD",
+              "JPY",
+              "KRW",
+              "KWD",
+              "MXN",
+              "MYR",
+              "NOK",
+              "NZD",
+              "OMR",
+              "PEN",
+              "PHP",
+              "PLN",
+              "QAR",
+              "SAR",
+              "SEK",
+              "SGD",
+              "THB",
+              "TND",
+              "TRY",
+              "TWD",
+              "USD",
+              "VND",
+              "ZAR"
+            ],
+            "example": "USD",
+            "description": "ISO 4217. Reports opened from now on are in it; reports already opened keep theirs, and no amount is converted."
+          },
+          "country": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "US",
+            "description": "ISO 3166-1 alpha-2."
+          },
+          "locale": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "en-US",
+            "description": "A BCP 47 tag."
+          },
+          "timeZone": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "America/Chicago",
+            "description": "An IANA time zone. With organization settings on, it says when the organization’s day ends: when trips and local expenses join a report, and which day is day 28."
+          },
+          "address": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "1520 Harney St\nOmaha, NE 68102"
+          },
+          "industry": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "Professional services"
+          },
+          "size": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "just_me",
+              "2_10",
+              "11_50",
+              "51_200",
+              "201_1000",
+              "over_1000",
+              null
+            ],
+            "description": "How many people it has, in bands."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "homeCurrency",
+          "country",
+          "locale",
+          "timeZone",
+          "address",
+          "industry",
+          "size"
+        ]
+      },
+      "EditOrganization": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "The organization’s name. It can’t be blank.",
+            "example": "Acme Field Services"
+          },
+          "homeCurrency": {
+            "type": "string",
+            "maxLength": 3,
+            "description": "An ISO 4217 code ExpenseWise supports. It can’t be blank.",
+            "example": "EUR"
+          },
+          "country": {
+            "type": "string",
+            "maxLength": 2,
+            "description": "ISO 3166-1 alpha-2; blank clears it.",
+            "example": "US"
+          },
+          "locale": {
+            "type": "string",
+            "maxLength": 35,
+            "description": "A BCP 47 language tag; blank clears it.",
+            "example": "en-US"
+          },
+          "timeZone": {
+            "type": "string",
+            "maxLength": 64,
+            "description": "An IANA time zone; blank clears it.",
+            "example": "America/Chicago"
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 300,
+            "description": "The postal address, lines and all; blank clears it.",
+            "example": "Omaha, NE"
+          },
+          "industry": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "What it does; blank clears it.",
+            "example": "Professional services"
+          },
+          "size": {
+            "type": "string",
+            "maxLength": 16,
+            "description": "One of just_me, 2_10, 11_50, 51_200, 201_1000, over_1000; blank clears it.",
+            "example": "2_10"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DuplicateWindow": {
+        "type": "object",
+        "properties": {
+          "minutes": {
+            "type": "integer",
+            "example": 30,
+            "description": "How many minutes apart two receipts at one place can be and still be one purchase. 0 is the same minute only."
+          },
+          "defaultMinutes": {
+            "type": "integer",
+            "example": 30
+          },
+          "maxMinutes": {
+            "type": "integer",
+            "example": 120
+          },
+          "canEdit": {
+            "type": "boolean",
+            "description": "Only the owner sets it, for everyone."
+          }
+        },
+        "required": [
+          "minutes",
+          "defaultMinutes",
+          "maxMinutes",
+          "canEdit"
+        ]
+      },
+      "SetDuplicateWindow": {
+        "type": "object",
+        "properties": {
+          "minutes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 120,
+            "example": 45
+          }
+        },
+        "required": [
+          "minutes"
+        ]
+      },
       "ReceiptUploadTicket": {
         "type": "object",
         "properties": {
@@ -465,7 +808,7 @@
               "needs_review",
               "failed"
             ],
-            "description": "processing while it is read; extracted (shown as Ready) when both compared models read it with confidence and agree, or when a member confirmed or corrected a reading (ADR-0021); needs_review otherwise, including when only the fallback model read it; failed when no model could read it."
+            "description": "processing while it is read; extracted (shown as Ready) when both compared models read it with confidence and agree, or when a member confirmed or corrected a reading (ADR-0021); needs_review otherwise, including when only the fallback model read it; failed when no model could read it. Under the organization’s AI model settings, extracted rests on one confident reading by the first model that could read it, and needs_review with no reading means every model was off (ADR-0033)."
           },
           "source": {
             "type": "string",
@@ -649,9 +992,11 @@
                       "type": "string",
                       "enum": [
                         "compared",
-                        "fallback"
+                        "fallback",
+                        "primary",
+                        "backup"
                       ],
-                      "description": "compared: one of the models the tier decision weighs. fallback: read only because no compared model could (ADR-0020)."
+                      "description": "compared: one of the models the tier decision weighs. fallback: read only because no compared model could (ADR-0020). Under the organization’s AI model settings (FR-INT-16): primary, the model chosen to read every receipt; backup, read only because the models before it could not (ADR-0033)."
                     },
                     "readings": {
                       "type": "integer"
@@ -695,6 +1040,9 @@
           "readingAvailable": {
             "type": "boolean",
             "description": "Whether this server can hand receipts to the workflow runner for reading."
+          },
+          "captureToReady": {
+            "$ref": "#/components/schemas/CaptureTime"
           }
         },
         "required": [
@@ -702,6 +1050,39 @@
           "comparison",
           "readingAvailable"
         ]
+      },
+      "CaptureTime": {
+        "type": "object",
+        "properties": {
+          "receipts": {
+            "type": "integer",
+            "description": "How many of the receipts shown it is over: those read."
+          },
+          "p95Ms": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "The 95th-percentile time from filing to the first settled reading, in whole milliseconds, by nearest rank: one of the times measured. Null with none read."
+          },
+          "sloMs": {
+            "type": "integer",
+            "description": "The goal: under 30 seconds (NFR-PERF-01)."
+          },
+          "withinSlo": {
+            "type": [
+              "boolean",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "receipts",
+          "p95Ms",
+          "sloMs",
+          "withinSlo"
+        ],
+        "description": "Capture to Ready over the receipts shown (receipts.capture-time, NFR-PERF-01). A receipt counts once its first reading settles, Ready, needing a look or not read; the time a person then takes to confirm it is not counted. Left out while the feature is off."
       },
       "Inbox": {
         "type": "object",
@@ -771,9 +1152,10 @@
               "fallback",
               "differ",
               "checks",
-              "unsure"
+              "unsure",
+              "not_read"
             ],
-            "description": "failed: no model could read it. duplicate: it looks like the same purchase as an earlier receipt (FR-INT-18). fallback: only the fallback model read it. differ: the compared models read the filing fields differently. checks: its sums or date fail a check, or it is a purchase summary (FR-INT-04). unsure: a model was not confident, or one could not read it."
+            "description": "failed: no model could read it. duplicate: it looks like the same purchase as an earlier receipt (FR-INT-18). fallback: only the fallback model read it. differ: the compared models read the filing fields differently. checks: its sums or date fail a check, or it is a purchase summary (FR-INT-04). unsure: a model was not confident, or one could not read it. not_read: every AI model was off, so it was filed for the person to fill in (FR-INT-16)."
           },
           "fields": {
             "type": "array",
@@ -954,7 +1336,7 @@
           },
           "currency": {
             "type": "string",
-            "description": "What it is reimbursed in: the organization’s home currency."
+            "description": "What it is reimbursed in: the person’s reimbursement currency while conversion is on, which it follows until it is submitted; otherwise the organization’s home currency."
           },
           "openedAt": {
             "type": "string",
@@ -1020,7 +1402,10 @@
                 "decimal"
               ]
             },
-            "description": "One total per currency, never converted; possible duplicates are left out (until #62)."
+            "description": "One total per currency, as spent, never converted; possible duplicates are left out."
+          },
+          "reimbursement": {
+            "$ref": "#/components/schemas/ReimbursementTotal"
           }
         },
         "required": [
@@ -1041,6 +1426,64 @@
           "overdue",
           "totals"
         ]
+      },
+      "ReimbursementTotal": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "object",
+            "properties": {
+              "amountMinor": {
+                "type": "integer"
+              },
+              "currency": {
+                "type": "string"
+              },
+              "decimal": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "amountMinor",
+              "currency",
+              "decimal"
+            ],
+            "description": "The amounts already in the reimbursement currency, and those converted to it. What is still converting, or has no rate, is not in it."
+          },
+          "converting": {
+            "type": "integer",
+            "description": "Amounts whose rate is being fetched: the total is complete once this is 0."
+          },
+          "unconverted": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "amountMinor": {
+                  "type": "integer"
+                },
+                "currency": {
+                  "type": "string"
+                },
+                "decimal": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "amountMinor",
+                "currency",
+                "decimal"
+              ]
+            },
+            "description": "Amounts the rate source publishes no rate for, as spent, one sum per currency. They stay unconverted."
+          }
+        },
+        "required": [
+          "total",
+          "converting",
+          "unconverted"
+        ],
+        "description": "Everything on it in `currency`, the person’s reimbursement currency, at each purchase date’s reference rate; possible duplicates are left out. Only while the feature `reports.currency-conversion` is on (FR-EXP-13)."
       },
       "ExpenseInboxItem": {
         "type": "object",
@@ -1198,9 +1641,11 @@
             "type": "string",
             "enum": [
               "compared",
-              "fallback"
+              "fallback",
+              "primary",
+              "backup"
             ],
-            "description": "compared: one of the models the tier decision weighs. fallback: read only because no compared model could (ADR-0020)."
+            "description": "compared: one of the models the tier decision weighs. fallback: read only because no compared model could (ADR-0020). Under the organization’s AI model settings (FR-INT-16): primary, the model chosen to read every receipt; backup, read only because the models before it could not (ADR-0033)."
           },
           "state": {
             "type": "string",
@@ -1614,6 +2059,9 @@
               "type": "string"
             }
           },
+          "sources": {
+            "$ref": "#/components/schemas/FieldSources"
+          },
           "checks": {
             "type": "array",
             "items": {
@@ -1642,6 +2090,94 @@
           "problems",
           "checks"
         ]
+      },
+      "FieldSources": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "merchant": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "time": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "currency": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "total": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "subtotal": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "taxTotal": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "tip": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "fees": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cardLastFour": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "merchant",
+          "date",
+          "time",
+          "address",
+          "currency",
+          "total",
+          "subtotal",
+          "taxTotal",
+          "tip",
+          "fees",
+          "cardLastFour"
+        ],
+        "description": "Where each field was read (receipts.field-sources, GAP-14): the line or lines of the receipt behind each field, as the model copied them, or null where it read none. Text only: the models say what the line says, not where on the image it is. Null for a reading made without them; left out altogether while the feature is off."
       },
       "ReceiptConfirmation": {
         "type": [
@@ -2043,7 +2579,7 @@
         "properties": {
           "model": {
             "type": "string",
-            "description": "The reading to confirm, by model, from the receipt’s latest readings.",
+            "description": "The reading to confirm, by model, from the receipt’s latest readings. Omitted only for a receipt nothing read, because every AI model was off: every field is then entered in corrections.",
             "example": "gpt-5.6-luna"
           },
           "corrections": {
@@ -2089,9 +2625,57 @@
             "additionalProperties": false,
             "description": "Only the fields the person changed. Omit to confirm as read."
           }
+        }
+      },
+      "CorrectReceipt": {
+        "type": "object",
+        "properties": {
+          "corrections": {
+            "type": "object",
+            "properties": {
+              "merchant": {
+                "type": "string",
+                "maxLength": 200,
+                "description": "The merchant, as it should be filed.",
+                "example": "Blue Bottle Coffee"
+              },
+              "date": {
+                "type": "string",
+                "maxLength": 200,
+                "description": "The transaction date, YYYY-MM-DD.",
+                "example": "2026-09-24"
+              },
+              "currency": {
+                "type": "string",
+                "maxLength": 200,
+                "description": "An ISO 4217 code. Amounts keep their printed value.",
+                "example": "USD"
+              },
+              "total": {
+                "type": "string",
+                "maxLength": 200,
+                "description": "A plain decimal in the receipt’s currency.",
+                "example": "65.00"
+              },
+              "taxTotal": {
+                "type": "string",
+                "maxLength": 200,
+                "description": "A plain decimal in the receipt’s currency.",
+                "example": "5.20"
+              },
+              "tip": {
+                "type": "string",
+                "maxLength": 200,
+                "description": "A plain decimal in the receipt’s currency.",
+                "example": "0.00"
+              }
+            },
+            "additionalProperties": false,
+            "description": "The fields the person corrected, usually one."
+          }
         },
         "required": [
-          "model"
+          "corrections"
         ]
       },
       "DuplicateResolution": {
@@ -2365,6 +2949,9 @@
             "format": "uuid",
             "description": "The report it is on: its trip’s, or its own when local (FR-EXP-05)."
           },
+          "category": {
+            "$ref": "#/components/schemas/ExpenseCategory"
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -2391,6 +2978,84 @@
           "reportId",
           "createdAt",
           "updatedAt"
+        ]
+      },
+      "ExpenseCategory": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "confirmed",
+              "suggested",
+              "missing"
+            ],
+            "description": "confirmed: a person chose them. suggested: worked out from what it shows, until a person confirms it. missing: neither, so the expense says it needs them."
+          },
+          "category": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "active": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "active"
+            ]
+          },
+          "type": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              },
+              "active": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "active"
+            ]
+          },
+          "basis": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "history",
+              "keywords",
+              null
+            ],
+            "description": "For a suggestion: history, what its owner last chose for the same merchant; keywords, what its merchant or reading names. Rules, never a model (ADR-0036)."
+          }
+        },
+        "required": [
+          "state",
+          "category",
+          "type",
+          "basis"
         ]
       },
       "ExpenseDetail": {
@@ -2937,6 +3602,234 @@
         },
         "additionalProperties": false
       },
+      "MileageQuote": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-09-22"
+          },
+          "miles": {
+            "type": "string",
+            "example": "38.4"
+          },
+          "rate": {
+            "$ref": "#/components/schemas/MileageRate"
+          },
+          "amount": {
+            "type": "object",
+            "properties": {
+              "amountMinor": {
+                "type": "integer",
+                "example": 2784
+              },
+              "currency": {
+                "type": "string",
+                "example": "USD"
+              },
+              "decimal": {
+                "type": "string",
+                "example": "27.84"
+              }
+            },
+            "required": [
+              "amountMinor",
+              "currency",
+              "decimal"
+            ]
+          }
+        },
+        "required": [
+          "date",
+          "miles",
+          "rate",
+          "amount"
+        ]
+      },
+      "MileageRate": {
+        "type": "object",
+        "properties": {
+          "perUnit": {
+            "type": "string",
+            "example": "0.725",
+            "description": "Currency units a mile, as a plain decimal: 72.5 cents is \"0.725\"."
+          },
+          "currency": {
+            "type": "string",
+            "example": "USD"
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "mi",
+              "km"
+            ]
+          },
+          "effectiveFrom": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-09-22",
+            "description": "The day the rate took effect."
+          },
+          "source": {
+            "type": "string",
+            "example": "irs-business",
+            "description": "Where it came from: irs-business is the IRS standard rate for business use."
+          }
+        },
+        "required": [
+          "perUnit",
+          "currency",
+          "unit",
+          "effectiveFrom",
+          "source"
+        ]
+      },
+      "MileageEntry": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ExpenseDetail"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "mileage": {
+                "$ref": "#/components/schemas/Mileage"
+              }
+            },
+            "required": [
+              "mileage"
+            ]
+          }
+        ]
+      },
+      "Mileage": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-09-22",
+            "description": "The day of the drive."
+          },
+          "destination": {
+            "type": "string",
+            "example": "IAH, George Bush Intercontinental"
+          },
+          "purpose": {
+            "type": "string",
+            "example": "Drive to the airport for the Acme onsite",
+            "description": "Why the drive was for business; also the expense’s justification."
+          },
+          "miles": {
+            "type": "string",
+            "example": "38.4",
+            "description": "A plain decimal."
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "mi",
+              "km"
+            ]
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "route",
+              "gps"
+            ],
+            "description": "manual: typed in."
+          },
+          "rate": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MileageRate"
+              },
+              {
+                "description": "The rate in force on its date, copied on when it was logged and again when its date or miles changed, so a later rate never alters it (NFR-DAT-04)."
+              }
+            ]
+          }
+        },
+        "required": [
+          "date",
+          "destination",
+          "purpose",
+          "miles",
+          "unit",
+          "method",
+          "rate"
+        ]
+      },
+      "LogMileage": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "YYYY-MM-DD: today at the latest, and a day the rate is known for.",
+            "example": "2026-09-22"
+          },
+          "destination": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Where you drove to. Up to 200 characters.",
+            "example": "IAH"
+          },
+          "purpose": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Why the drive was for business. Up to 500 characters.",
+            "example": "Drive to the airport for the Acme onsite"
+          },
+          "miles": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "More than 0 and at most 1000, two decimal places at most.",
+            "example": "38.4"
+          }
+        },
+        "required": [
+          "date",
+          "destination",
+          "purpose",
+          "miles"
+        ],
+        "additionalProperties": false
+      },
+      "EditMileage": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "YYYY-MM-DD: today at the latest, and a day the rate is known for.",
+            "example": "2026-09-22"
+          },
+          "destination": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Where you drove to. Up to 200 characters.",
+            "example": "IAH"
+          },
+          "purpose": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Why the drive was for business. Up to 500 characters.",
+            "example": "Drive to the airport for the Acme onsite"
+          },
+          "miles": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "More than 0 and at most 1000, two decimal places at most.",
+            "example": "38.4"
+          }
+        },
+        "additionalProperties": false
+      },
       "Home": {
         "type": "object",
         "properties": {
@@ -3156,6 +4049,16 @@
                         },
                         "ready": {
                           "type": "boolean"
+                        },
+                        "reimbursement": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ReimbursementTotal"
+                            },
+                            {
+                              "description": "Its expenses in the report’s currency, while conversion is on."
+                            }
+                          ]
                         }
                       },
                       "required": [
@@ -3244,6 +4147,56 @@
                     },
                     "ready": {
                       "type": "boolean"
+                    },
+                    "reimbursed": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "same",
+                            "converted",
+                            "converting",
+                            "unconverted"
+                          ],
+                          "description": "same: spent in the reimbursement currency, counted as it is. converted: at the rate given. converting: its rate is being fetched. unconverted: the source has no rate for it, so it stays as spent."
+                        },
+                        "amount": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "amountMinor": {
+                              "type": "integer"
+                            },
+                            "currency": {
+                              "type": "string"
+                            },
+                            "decimal": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "amountMinor",
+                            "currency",
+                            "decimal"
+                          ],
+                          "description": "In the reimbursement currency; null while converting or unconverted."
+                        },
+                        "rate": {
+                          "$ref": "#/components/schemas/AppliedRate"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "amount",
+                        "rate"
+                      ],
+                      "description": "Its amount in the report’s currency, while conversion is on; null with no amount yet."
                     }
                   },
                   "required": [
@@ -3258,6 +4211,39 @@
                     "ready"
                   ]
                 }
+              },
+              "rates": {
+                "type": "array",
+                "items": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/AppliedRate"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "from": {
+                          "type": "string",
+                          "example": "EUR"
+                        },
+                        "to": {
+                          "type": "string",
+                          "example": "USD"
+                        },
+                        "expenses": {
+                          "type": "integer",
+                          "description": "How many amounts it converted."
+                        }
+                      },
+                      "required": [
+                        "from",
+                        "to",
+                        "expenses"
+                      ]
+                    }
+                  ]
+                },
+                "description": "Each rate its amounts were converted at, oldest first, while conversion is on (NFR-DAT-02)."
               }
             },
             "required": [
@@ -3265,6 +4251,34 @@
               "localItems"
             ]
           }
+        ]
+      },
+      "AppliedRate": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "rate": {
+            "type": "string",
+            "example": "1.1712",
+            "description": "What one unit of the currency spent is in the reimbursement currency."
+          },
+          "date": {
+            "type": "string",
+            "example": "2026-09-25",
+            "description": "The day the rate was published: the purchase date, or the last before it."
+          },
+          "source": {
+            "type": "string",
+            "example": "ECB",
+            "description": "Who published it."
+          }
+        },
+        "required": [
+          "rate",
+          "date",
+          "source"
         ]
       },
       "ReportMoveResult": {
@@ -3351,6 +4365,118 @@
         ],
         "additionalProperties": false
       },
+      "ReimbursementCurrency": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": "string",
+            "example": "USD",
+            "description": "What the caller’s reports are converted to: their choice, else `homeCurrency`."
+          },
+          "chosen": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "What the caller chose; null when they never chose, or chose to follow it."
+          },
+          "homeCurrency": {
+            "type": "string",
+            "example": "USD"
+          },
+          "currencies": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "code": {
+                  "type": "string",
+                  "example": "EUR"
+                },
+                "converts": {
+                  "type": "boolean",
+                  "description": "Whether the rate source (the ECB) publishes it. One it doesn’t stays unconverted."
+                }
+              },
+              "required": [
+                "code",
+                "converts"
+              ]
+            },
+            "description": "Every currency the app supports."
+          }
+        },
+        "required": [
+          "currency",
+          "chosen",
+          "homeCurrency",
+          "currencies"
+        ]
+      },
+      "SetReimbursementCurrency": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "AED",
+              "ARS",
+              "AUD",
+              "BHD",
+              "BRL",
+              "CAD",
+              "CHF",
+              "CLP",
+              "CNY",
+              "COP",
+              "CZK",
+              "DKK",
+              "EGP",
+              "EUR",
+              "GBP",
+              "HKD",
+              "HUF",
+              "IDR",
+              "ILS",
+              "INR",
+              "ISK",
+              "JOD",
+              "JPY",
+              "KRW",
+              "KWD",
+              "MXN",
+              "MYR",
+              "NOK",
+              "NZD",
+              "OMR",
+              "PEN",
+              "PHP",
+              "PLN",
+              "QAR",
+              "SAR",
+              "SEK",
+              "SGD",
+              "THB",
+              "TND",
+              "TRY",
+              "TWD",
+              "USD",
+              "VND",
+              "ZAR",
+              null
+            ],
+            "example": "EUR",
+            "description": "The currency to be reimbursed in, or null to follow the organization’s."
+          }
+        },
+        "required": [
+          "currency"
+        ],
+        "additionalProperties": false
+      },
       "WebhookReceipt": {
         "type": "object",
         "properties": {
@@ -3387,6 +4513,957 @@
         "required": [
           "type",
           "data"
+        ]
+      },
+      "AuditPage": {
+        "type": "object",
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AuditEvent"
+            },
+            "description": "Newest first."
+          },
+          "nextCursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Pass as `cursor` for older events; null on the last page."
+          }
+        },
+        "required": [
+          "events",
+          "nextCursor"
+        ]
+      },
+      "AuditEvent": {
+        "type": "object",
+        "properties": {
+          "sequence": {
+            "type": "integer",
+            "description": "Its place in the organization’s chain, from 1, with no gaps."
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/AuditActor"
+          },
+          "entityType": {
+            "type": "string",
+            "example": "receipt"
+          },
+          "entityId": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string",
+            "example": "receipt.captured"
+          },
+          "payload": {
+            "type": "object",
+            "additionalProperties": {},
+            "description": "What changed, as stored and hashed. It never holds a key or a token."
+          },
+          "hash": {
+            "type": "string",
+            "description": "SHA-256 of this event and the hash before it."
+          },
+          "prevHash": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sequence",
+          "occurredAt",
+          "actor",
+          "entityType",
+          "entityId",
+          "action",
+          "payload",
+          "hash",
+          "prevHash"
+        ]
+      },
+      "AuditActor": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "user",
+              "system"
+            ],
+            "description": "user: a person, by the sign-in they used. system: one of the app’s workflows."
+          },
+          "id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The sign-in’s user id, or the workflow’s name, such as receipt-workflow."
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The member, when the sign-in is still theirs."
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The email of the sign-in they used."
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "name",
+          "email"
+        ]
+      },
+      "AuditVerification": {
+        "type": "object",
+        "properties": {
+          "intact": {
+            "type": "boolean",
+            "description": "Every event recomputes to its stored hash."
+          },
+          "checked": {
+            "type": "integer",
+            "description": "Events recomputed: all of them, or those up to the first that breaks."
+          },
+          "total": {
+            "type": "integer",
+            "description": "Events in the chain."
+          },
+          "brokenAt": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "sequence": {
+                "type": "integer"
+              },
+              "occurredAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "entityType": {
+                "type": "string"
+              },
+              "entityId": {
+                "type": "string"
+              },
+              "action": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sequence",
+              "occurredAt",
+              "entityType",
+              "entityId",
+              "action"
+            ],
+            "description": "The first event that doesn’t verify; null while intact."
+          },
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "intact",
+          "checked",
+          "total",
+          "brokenAt",
+          "checkedAt"
+        ]
+      },
+      "Catalog": {
+        "type": "object",
+        "properties": {
+          "categories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Category"
+            }
+          },
+          "types": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExpenseType"
+            }
+          },
+          "canManage": {
+            "type": "boolean",
+            "description": "Whether the caller may change them: owners and finance admins."
+          }
+        },
+        "required": [
+          "categories",
+          "types",
+          "canManage"
+        ]
+      },
+      "Category": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Travel"
+          },
+          "parentId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The one it sits under; null at the top. Either list nests."
+          },
+          "depth": {
+            "type": "integer",
+            "description": "How deep it sits: 0 at the top. The list comes in tree order."
+          },
+          "active": {
+            "type": "boolean",
+            "description": "False once retired: no longer offered, but kept by every expense that has it."
+          },
+          "inUse": {
+            "type": "boolean",
+            "description": "Some expense has it, so it can be retired but never deleted."
+          },
+          "glCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Its general ledger code."
+          },
+          "taxCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Its tax code."
+          },
+          "typeIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The types it allows: choosing it narrows the types to these."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "parentId",
+          "depth",
+          "active",
+          "inUse",
+          "glCode",
+          "taxCode",
+          "typeIds"
+        ]
+      },
+      "ExpenseType": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Airfare"
+          },
+          "parentId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The one it sits under; null at the top. Either list nests."
+          },
+          "depth": {
+            "type": "integer",
+            "description": "How deep it sits: 0 at the top. The list comes in tree order."
+          },
+          "active": {
+            "type": "boolean",
+            "description": "False once retired: no longer offered, but kept by every expense that has it."
+          },
+          "inUse": {
+            "type": "boolean",
+            "description": "Some expense has it, so it can be retired but never deleted."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "parentId",
+          "depth",
+          "active",
+          "inUse"
+        ]
+      },
+      "NewCategory": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Up to 80 characters once trimmed, unique in its list, case aside."
+          },
+          "parentId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "glCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 200,
+            "description": "Up to 40 characters; blank or null for none."
+          },
+          "taxCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 200,
+            "description": "Up to 40 characters; blank or null for none."
+          },
+          "typeIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "maxItems": 500,
+            "description": "Every type it allows; those left out stop being allowed."
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "CategoryChange": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Up to 80 characters once trimmed, unique in its list, case aside."
+          },
+          "parentId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "glCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 200,
+            "description": "Up to 40 characters; blank or null for none."
+          },
+          "taxCode": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 200,
+            "description": "Up to 40 characters; blank or null for none."
+          },
+          "typeIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "maxItems": 500,
+            "description": "Every type it allows; those left out stop being allowed."
+          },
+          "active": {
+            "type": "boolean",
+            "description": "false retires it; true restores it."
+          }
+        }
+      },
+      "NewExpenseType": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Up to 80 characters once trimmed, unique in its list, case aside."
+          },
+          "parentId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "ExpenseTypeChange": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Up to 80 characters once trimmed, unique in its list, case aside."
+          },
+          "parentId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "active": {
+            "type": "boolean",
+            "description": "false retires it; true restores it."
+          }
+        }
+      },
+      "ClassifyExpense": {
+        "type": "object",
+        "properties": {
+          "categoryId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "typeId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "categoryId",
+          "typeId"
+        ]
+      },
+      "AiModelSettings": {
+        "type": "object",
+        "properties": {
+          "primary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The model that reads every receipt; null when every model is off."
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AiModel"
+            },
+            "description": "Every model, in the order back-ups are tried."
+          },
+          "saved": {
+            "type": "boolean",
+            "description": "False while the defaults apply."
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "canChange": {
+            "type": "boolean",
+            "description": "Whether the caller may change them: owners and finance admins."
+          },
+          "comparison": {
+            "type": "object",
+            "properties": {
+              "receipts": {
+                "type": "integer"
+              },
+              "compared": {
+                "type": "integer",
+                "description": "Receipts two models read side by side."
+              },
+              "agreed": {
+                "type": "integer",
+                "description": "Of those, how many they read alike."
+              }
+            },
+            "required": [
+              "receipts",
+              "compared",
+              "agreed"
+            ],
+            "description": "Over the latest 100 receipts, as Receipts shows it."
+          }
+        },
+        "required": [
+          "primary",
+          "models",
+          "saved",
+          "updatedAt",
+          "canChange",
+          "comparison"
+        ]
+      },
+      "AiModel": {
+        "type": "object",
+        "properties": {
+          "model": {
+            "type": "string",
+            "example": "claude-sonnet-5-5"
+          },
+          "label": {
+            "type": "string",
+            "example": "Sonnet 5.5"
+          },
+          "provider": {
+            "type": "string",
+            "enum": [
+              "anthropic",
+              "openai"
+            ]
+          },
+          "tier": {
+            "type": "string",
+            "example": "mid"
+          },
+          "price": {
+            "type": "object",
+            "properties": {
+              "input": {
+                "type": "string",
+                "example": "2.00"
+              },
+              "output": {
+                "type": "string",
+                "example": "10.00"
+              }
+            },
+            "required": [
+              "input",
+              "output"
+            ],
+            "description": "List price in US dollars per million tokens."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Switched on for the organization. A model whose provider has no key is off."
+          },
+          "primary": {
+            "type": "boolean",
+            "description": "The one model chosen to read every receipt."
+          },
+          "reads": {
+            "type": "string",
+            "enum": [
+              "primary",
+              "backup",
+              "off"
+            ],
+            "description": "What it does with the next receipt: primary reads it first; backup reads only when the models before it could not, in the order listed; off reads nothing, being switched off or stopped by the operator."
+          },
+          "keyConfigured": {
+            "type": "boolean",
+            "description": "Whether the organization has a key for its provider."
+          },
+          "stopped": {
+            "type": "boolean",
+            "description": "Stopped for every organization by the operator; it reads nothing meanwhile."
+          },
+          "record": {
+            "$ref": "#/components/schemas/AiModelRecord"
+          }
+        },
+        "required": [
+          "model",
+          "label",
+          "provider",
+          "tier",
+          "price",
+          "enabled",
+          "primary",
+          "reads",
+          "keyConfigured",
+          "stopped",
+          "record"
+        ]
+      },
+      "AiModelRecord": {
+        "type": "object",
+        "properties": {
+          "readings": {
+            "type": "integer",
+            "description": "Its latest readings of these receipts."
+          },
+          "confident": {
+            "type": "integer",
+            "description": "Readings that would be Ready on their own, their sums and date included."
+          },
+          "unsure": {
+            "type": "integer"
+          },
+          "failed": {
+            "type": "integer"
+          },
+          "averageLatencyMs": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "costMicroUsd": {
+            "type": "integer",
+            "description": "Spend in whole micro-dollars."
+          }
+        },
+        "required": [
+          "readings",
+          "confident",
+          "unsure",
+          "failed",
+          "averageLatencyMs",
+          "costMicroUsd"
+        ],
+        "description": "How it has read the organization’s latest receipts: the running comparison."
+      },
+      "SaveAiModelSettings": {
+        "type": "object",
+        "properties": {
+          "primary": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "A model that is on, or null to switch every model off.",
+            "example": "claude-sonnet-5-5"
+          },
+          "models": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "model": {
+                  "type": "string"
+                },
+                "enabled": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "model",
+                "enabled"
+              ]
+            },
+            "maxItems": 20,
+            "description": "Every model once, in the order back-ups are tried."
+          }
+        },
+        "required": [
+          "primary",
+          "models"
+        ]
+      },
+      "People": {
+        "type": "object",
+        "properties": {
+          "people": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Person"
+            }
+          },
+          "invites": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Invite"
+            }
+          }
+        },
+        "required": [
+          "people",
+          "invites"
+        ]
+      },
+      "Person": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "sam"
+          },
+          "email": {
+            "type": "string",
+            "example": "sam@example.com"
+          },
+          "role": {
+            "$ref": "#/components/schemas/MemberRole"
+          },
+          "joinedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "removedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When an owner removed them; their records stay."
+          },
+          "you": {
+            "type": "boolean",
+            "description": "Whether this is the caller."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "role",
+          "joinedAt",
+          "removedAt",
+          "you"
+        ]
+      },
+      "MemberRole": {
+        "type": "string",
+        "enum": [
+          "member",
+          "approver",
+          "finance_admin",
+          "owner",
+          "auditor"
+        ],
+        "description": "member and approver see and change their own records; finance_admin and owner see everyone’s and change their own; auditor reads everyone’s and changes nothing. Owners and finance admins take admin actions; only owners manage people."
+      },
+      "Invite": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "role": {
+            "$ref": "#/components/schemas/MemberRole"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Who it is for, as the owner noted."
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expired": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "label",
+          "createdBy",
+          "createdAt",
+          "expiresAt",
+          "expired"
+        ]
+      },
+      "CreatedInvite": {
+        "type": "object",
+        "properties": {
+          "invite": {
+            "$ref": "#/components/schemas/Invite"
+          },
+          "token": {
+            "type": "string",
+            "description": "The link’s secret. Shown this once: only its hash is kept."
+          },
+          "path": {
+            "type": "string",
+            "example": "/invite/3q2-7wEXAMPLEexampleEXAMPLEexampleEXAMPLE01"
+          }
+        },
+        "required": [
+          "invite",
+          "token",
+          "path"
+        ]
+      },
+      "CreateInvite": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/MemberRole"
+          },
+          "label": {
+            "type": "string",
+            "maxLength": 80
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "ChangeRole": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "$ref": "#/components/schemas/MemberRole"
+          }
+        },
+        "required": [
+          "role"
+        ]
+      },
+      "InvitePreview": {
+        "type": "object",
+        "properties": {
+          "organization": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          },
+          "role": {
+            "$ref": "#/components/schemas/MemberRole"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "accepted",
+              "revoked",
+              "expired"
+            ]
+          },
+          "standing": {
+            "type": "string",
+            "enum": [
+              "none",
+              "empty",
+              "not_empty",
+              "this"
+            ],
+            "description": "Where the caller stands: in no organization; alone in an empty one of their own, which joining leaves behind; in one with work or other people, which stops them joining; or already in this one."
+          }
+        },
+        "required": [
+          "organization",
+          "role",
+          "expiresAt",
+          "state",
+          "standing"
+        ]
+      },
+      "InviteToken": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "description": "The secret from the invite link. Sent in the body, never a URL."
+          }
+        },
+        "required": [
+          "token"
+        ]
+      },
+      "InviteAccepted": {
+        "type": "object",
+        "properties": {
+          "organization": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          },
+          "member": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "role": {
+                "$ref": "#/components/schemas/MemberRole"
+              }
+            },
+            "required": [
+              "id",
+              "role"
+            ]
+          }
+        },
+        "required": [
+          "organization",
+          "member"
         ]
       }
     },
@@ -4089,6 +6166,468 @@
         }
       }
     },
+    "/v1/features": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "The organization's features",
+        "description": "Every feature that ships switched off, and whether it is on for the caller’s organization. Screens hide a feature that is off.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "One entry per feature.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeatureList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/settings/features/{key}": {
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Switch a feature on or off",
+        "description": "For the whole organization, at once and without a release. Only the owner can switch a feature. The change is recorded in the audit log.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "$ref": "#/components/schemas/FeatureKey"
+            },
+            "required": true,
+            "name": "key",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SwitchFeature"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The feature as it now is.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Feature"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only the owner can switch features.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The server overrides this feature, so a switch here would have no effect.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/settings/organization": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "The organization's details",
+        "description": "Its name, home currency, country, locale, time zone, address, industry and size, and the caller’s role. Every member can read them. Behind `settings.organization`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The details.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationSettings"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or is not its owner.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "This feature is not switched on for the organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Change the organization's details",
+        "description": "Only the owner. Each field given is checked and set; a blank clears one that may be empty. The change is recorded in the audit log, from and to. Behind `settings.organization`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditOrganization"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The details as they now are.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or is not its owner.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "This feature is not switched on for the organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not valid; `field` names it.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/settings/duplicate-window": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "The duplicate time window",
+        "description": "How far apart in time two receipts at one place can be and still be one purchase, for everyone in the organization. Every member can read it. Behind `settings.duplicate-window`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The window.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DuplicateWindow"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or is not its owner.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "This feature is not switched on for the organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Set the duplicate time window",
+        "description": "Only the owner, for everyone: 0 to 120 minutes. It judges receipts read from now on; pairs already flagged or kept stay as they are. Each change is recorded in the audit log. Behind `settings.duplicate-window`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetDuplicateWindow"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The window as it now is.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DuplicateWindow"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid: a whole number of minutes, 0 to 120.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or is not its owner.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "This feature is not switched on for the organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/receipts/uploads": {
       "post": {
         "tags": [
@@ -4620,6 +7159,113 @@
         }
       }
     },
+    "/v1/receipts/{receiptId}/corrections": {
+      "post": {
+        "tags": [
+          "Receipts"
+        ],
+        "summary": "Correct a field of a Ready receipt",
+        "description": "One tap corrects a field of a receipt that is already Ready (GAP-14, FR-INT-11), with \"Where each field was read\" switched on (receipts.field-sources). Its expense changes as an edit would change it, before submission and recorded in the audit trail (ADR-0022); each correction is kept beside what the model read, as Edit a field keeps it (ADR-0021). A submitted or approved expense is locked: correcting an approved one is a reversal (FR-EXP-03), which is not built yet. A receipt that needs a look is confirmed instead.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "receiptId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CorrectReceipt"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Corrected.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such receipt in this organization, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It is not Ready (not_ready), it was read again since (read_again), or its expense is submitted or further along (locked).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not valid, or it is filed so already (unchanged); field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in, the database or file storage is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/receipts/{receiptId}/duplicates/{otherReceiptId}": {
       "post": {
         "tags": [
@@ -5026,7 +7672,7 @@
             }
           },
           "409": {
-            "description": "It can’t be edited now: its receipt is being read, or it is submitted or later.",
+            "description": "It can’t be edited now: its receipt is being read, or it is submitted or later; or it is a drive, edited as mileage.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -5571,6 +8217,385 @@
           },
           "409": {
             "description": "A submitted expense rests on it.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/mileage/quote": {
+      "get": {
+        "tags": [
+          "Mileage"
+        ],
+        "summary": "What a drive would pay, before it is logged",
+        "description": "FR-CAP-03, ADR-0038. The rate in force on the date and miles × rate, rounded half-up to the cent. Nothing is saved.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "description": "YYYY-MM-DD.",
+              "example": "2026-09-22"
+            },
+            "required": true,
+            "description": "YYYY-MM-DD.",
+            "name": "date",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "description": "A plain decimal.",
+              "example": "38.4"
+            },
+            "required": true,
+            "description": "A plain decimal.",
+            "name": "miles",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The rate and the amount.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MileageQuote"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The date or miles are missing.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Mileage is switched off for this organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The date or miles are not valid, or no rate is known for the date; field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/mileage": {
+      "post": {
+        "tags": [
+          "Mileage"
+        ],
+        "summary": "Log a drive",
+        "description": "FR-CAP-03, NFR-DAT-04, ADR-0038. A Ready expense of the caller’s for miles × the rate in force on the date, with the rate copied onto it. It files to the caller’s trip its date falls in, and joins reports, as any expense does; its purpose is its justification.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LogMileage"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The drive, as an expense.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MileageEntry"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Mileage is switched off for this organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not valid, or no rate is known for the date; field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/mileage/{expenseId}": {
+      "get": {
+        "tags": [
+          "Mileage"
+        ],
+        "summary": "One of the caller’s drives",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The drive, as an expense.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MileageEntry"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such drive of the caller’s, or mileage is switched off for this organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Mileage"
+        ],
+        "summary": "Correct a drive before it is submitted",
+        "description": "ADR-0038. Changes the fields sent and records who changed what. A new date or new miles price it again at the rate in force on its date, copied on afresh; a new destination or purpose leaves the rate and amount as they are.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditMileage"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The drive as it is now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MileageEntry"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such drive of the caller’s, or mileage is switched off for this organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It is submitted or later. An approved drive is corrected by a reversal.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not valid; field names which.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -6289,6 +9314,352 @@
         }
       }
     },
+    "/v1/reports/{reportId}/export.csv": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "A report as CSV",
+        "description": "A row per expense on it: date, merchant, category, type, trip, purpose, note, and the amount and currency as spent; then a row per currency’s total, never converted. UTF-8 with a byte order mark, lines ending CRLF (FR-SET-01). Only a report that has closed, or gone further; until approval (#24) exists, a closed report. The member whose report it is exports it, as do the organization’s owner, finance admins and auditors. Behind the reports.export feature.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "reportId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The CSV.",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string",
+                  "description": "An attachment, named for the person and the day the report opened.",
+                  "example": "attachment; filename=\"expense-report-riley-2026-10-03.csv\""
+                },
+                "required": true,
+                "description": "An attachment, named for the person and the day the report opened."
+              }
+            },
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such report in this organization, or another member’s that the caller can’t export; or report export is switched off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The report is still open (not_closed): close it first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reports/{reportId}/export.pdf": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "A report as a PDF summary",
+        "description": "Who it is for, the organization, its dates and status, the same table as the CSV, and each currency’s total; no receipt images (FR-SET-01). Only a report that has closed, or gone further; until approval (#24) exists, a closed report. The member whose report it is exports it, as do the organization’s owner, finance admins and auditors. Behind the reports.export feature.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "reportId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The PDF.",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string",
+                  "description": "An attachment, named for the person and the day the report opened.",
+                  "example": "attachment; filename=\"expense-report-riley-2026-10-03.csv\""
+                },
+                "required": true,
+                "description": "An attachment, named for the person and the day the report opened."
+              }
+            },
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such report in this organization, or another member’s that the caller can’t export; or report export is switched off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The report is still open (not_closed): close it first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/reimbursement-currency": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "The currency the caller is reimbursed in",
+        "description": "Their reports convert every amount to it, at the purchase date’s reference rate (FR-EXP-13, Q23, Q25). Until they choose, it is the organization’s home currency.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Their reimbursement currency, and the currencies to choose from.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReimbursementCurrency"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Currency conversion is not switched on (`feature_off`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Choose the currency the caller is reimbursed in",
+        "description": "Their open and closed reports move to it and are converted again in the background; a submitted report keeps its currency. Null goes back to the organization’s home currency.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetReimbursementCurrency"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Their reimbursement currency now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReimbursementCurrency"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a currency the app supports.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Currency conversion is not switched on (`feature_off`).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/inbound/bird": {
       "post": {
         "tags": [
@@ -6381,6 +9752,1711 @@
           },
           "503": {
             "description": "Email-in is not configured here, or the hand-off failed; Bird tries again.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/audit/events": {
+      "get": {
+        "tags": [
+          "Audit"
+        ],
+        "summary": "The organization’s audit trail, newest first, a page at a time",
+        "description": "FR-GOV-06. Every change to any record, with who made it and what changed, as stored. Narrow it to one record, a type of record, or who made the change. Owners, finance admins and auditors only.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_]{0,63}$",
+              "description": "Only events about records of this type.",
+              "example": "receipt"
+            },
+            "required": false,
+            "description": "Only events about records of this type.",
+            "name": "entityType",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "Only events about this record."
+            },
+            "required": false,
+            "description": "Only events about this record.",
+            "name": "entityId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "Only changes made by this sign-in’s user id, or by this workflow."
+            },
+            "required": false,
+            "description": "Only changes made by this sign-in’s user id, or by this workflow.",
+            "name": "actorId",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9]\\d{0,14}$",
+              "description": "The `nextCursor` of the page before, for the page after it."
+            },
+            "required": false,
+            "description": "The `nextCursor` of the page before, for the page after it.",
+            "name": "cursor",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "pattern": "^\\d{1,3}$",
+              "description": "Events on the page: 50 unless asked, 100 at most.",
+              "example": "50"
+            },
+            "required": false,
+            "description": "Events on the page: 50 unless asked, 100 at most.",
+            "name": "limit",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A page of events.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "A filter, the cursor or the page size is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet (no_organization), or is not an owner, finance admin or auditor (forbidden_role).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The audit trail is switched off for this organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/audit/verification": {
+      "get": {
+        "tags": [
+          "Audit"
+        ],
+        "summary": "Recompute the organization’s hash chain, and say whether it holds",
+        "description": "FR-GOV-05, FR-GOV-06. Recomputes every event’s hash from its stored content and the hash before it, and says how many were checked and the first that breaks. Owners, finance admins and auditors only.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "What recomputing the chain found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditVerification"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet (no_organization), or is not an owner, finance admin or auditor (forbidden_role).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The audit trail is switched off for this organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/categories": {
+      "get": {
+        "tags": [
+          "Categories"
+        ],
+        "summary": "The organization’s categories and types",
+        "description": "FR-EXP-11. Both lists in tree order, retired ones included, with the types each category allows. Everyone in the organization reads them, to choose from.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The categories and types.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Catalog"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/settings/categories": {
+      "post": {
+        "tags": [
+          "Categories"
+        ],
+        "summary": "Add a category",
+        "description": "With its codes, where it sits and the types it allows. Recorded in the audit log.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewCategory"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new category.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Category"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only an owner or finance admin can change categories and types.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such one in this organization, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not valid: a blank or taken name, a parent that is missing or inside it, a type that is missing, or a code too long. field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/settings/categories/{categoryId}": {
+      "patch": {
+        "tags": [
+          "Categories"
+        ],
+        "summary": "Change a category: rename, move, code, allow types, retire or restore",
+        "description": "Changes the fields sent. A retired category is no longer offered, but every expense that has it keeps it. Recorded in the audit log.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "categoryId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoryChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The category as it is now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Category"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only an owner or finance admin can change categories and types.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such one in this organization, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not valid: a blank or taken name, a parent that is missing or inside it, a type that is missing, or a code too long. field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Categories"
+        ],
+        "summary": "Delete a category no expense has",
+        "description": "One in use is retired instead, so old claims keep it. Recorded in the audit log.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "categoryId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted."
+          },
+          "400": {
+            "description": "The request is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only an owner or finance admin can change categories and types.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such one in this organization, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "An expense has it (in_use), or another sits under it (has_children).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not valid: a blank or taken name, a parent that is missing or inside it, a type that is missing, or a code too long. field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/settings/expense-types": {
+      "post": {
+        "tags": [
+          "Categories"
+        ],
+        "summary": "Add a type",
+        "description": "A category offers it once it allows it (PATCH the category). Recorded in the audit log.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewExpenseType"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The new type.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenseType"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only an owner or finance admin can change categories and types.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such one in this organization, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not valid: a blank or taken name, a parent that is missing or inside it, a type that is missing, or a code too long. field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/settings/expense-types/{typeId}": {
+      "patch": {
+        "tags": [
+          "Categories"
+        ],
+        "summary": "Change a type: rename, move, retire or restore",
+        "description": "Changes the fields sent. A retired type is no longer offered, but every expense that has it keeps it. Recorded in the audit log.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "typeId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExpenseTypeChange"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The type as it is now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenseType"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only an owner or finance admin can change categories and types.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such one in this organization, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not valid: a blank or taken name, a parent that is missing or inside it, a type that is missing, or a code too long. field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Categories"
+        ],
+        "summary": "Delete a type no expense has",
+        "description": "Every category that allowed it stops. One in use is retired instead. Recorded in the audit log.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "typeId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted."
+          },
+          "400": {
+            "description": "The request is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only an owner or finance admin can change categories and types.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such one in this organization, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "An expense has it (in_use), or another sits under it (has_children).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not valid: a blank or taken name, a parent that is missing or inside it, a type that is missing, or a code too long. field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/expenses/{expenseId}/category": {
+      "put": {
+        "tags": [
+          "Expenses"
+        ],
+        "summary": "Choose an expense’s category and type, or confirm the ones suggested",
+        "description": "FR-EXP-11, FR-INT-10. The type must be one the category allows, and both in use. Until it is submitted. Recorded in the audit log; a closed report it is on opens again.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClassifyExpense"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The expense as it is now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenseDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such expense in this organization, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It is submitted or later, so it stays as it went in.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "No such category or type, one is retired, or the category doesn’t allow the type.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/settings/ai-models": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Which AI models read receipts",
+        "description": "Each model, on or off, the primary that reads every receipt and the back-ups that read only when it cannot, with how each has read the organization’s receipts (FR-INT-16).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The organization’s models.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiModelSettings"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "AI model settings are not switched on for this organization.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Choose which AI models read receipts",
+        "description": "Switches each model on or off and chooses the primary, for the whole organization, from the next reading on. Only owners and finance admins can. The change is recorded in the audit log.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveAiModelSettings"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The organization’s models as they now are.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiModelSettings"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only an owner or finance admin can choose the models.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "AI model settings are not switched on for this organization.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A model is unknown or listed twice, the primary is not on, or a model is switched on without a key for its provider.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/settings/people": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "The people in the organization, and its invite links",
+        "description": "Everyone in the organization with their role, people removed too (their records stay), and invite links not yet used or revoked. Owners only, behind team.invites.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "People and invites.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/People"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only an owner manages people, or the caller has no organization yet.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Inviting people is not switched on (feature_off), or no such person or invite.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/settings/people/invites": {
+      "post": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Make an invite link",
+        "description": "A link that lets one signed-in person join with the role given, for 7 days. No email is sent: the owner passes the link on. Its secret is returned this once; only its hash is kept. Sign-ups are off, so the person’s account is made in Supabase first.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInvite"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The invite and its link.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatedInvite"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only an owner manages people, or the caller has no organization yet.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Inviting people is not switched on (feature_off), or no such person or invite.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/settings/people/invites/{inviteId}": {
+      "delete": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Revoke an invite link",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "inviteId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The link no longer works."
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only an owner manages people, or the caller has no organization yet.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Inviting people is not switched on (feature_off), or no such person or invite.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The invite was already used.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/settings/people/{memberId}": {
+      "patch": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Give someone another role",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "memberId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeRole"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The person, with their new role.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Person"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only an owner manages people, or the caller has no organization yet.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Inviting people is not switched on (feature_off), or no such person or invite.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "They are the last owner: the organization always has one.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Remove someone from the organization",
+        "description": "They can no longer sign in here. Their receipts, expenses, trips, reports and history stay. Never the last owner, and never the caller.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "memberId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "They are removed."
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only an owner manages people, or the caller has no organization yet.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Inviting people is not switched on (feature_off), or no such person or invite.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "They are the last owner, or the caller.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/invites/look-up": {
+      "post": {
+        "tags": [
+          "Identity"
+        ],
+        "summary": "What an invite link offers the signed-in person",
+        "description": "The organization and role a link offers, whether it still works, and where the caller stands. Reads only.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteToken"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The invite.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvitePreview"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No invite has this link, or inviting people is switched off there.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/invites/accept": {
+      "post": {
+        "tags": [
+          "Identity"
+        ],
+        "summary": "Join an organization by its invite link",
+        "description": "The signed-in person joins with the link’s role, once. An empty one-person organization their first sign-in made is left behind; one with work or other people in it stops them joining, and nothing changes.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InviteToken"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "They are a member now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InviteAccepted"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No invite has this link, or inviting people is switched off there.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Already a member here, or their own organization has work in it.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "The link expired, was revoked or was already used.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The account has no email address.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
             "content": {
               "application/problem+json": {
                 "schema": {

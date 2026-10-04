@@ -1,5 +1,6 @@
 import {
   cleanJustification,
+  lastDayToJoin,
   localExpenseReady,
   planAutoClose,
   reopenedClosesAt,
@@ -16,16 +17,20 @@ import {
   inArray,
   isNotNull,
   isNull,
+  lte,
   ne,
   sql,
   type SQL,
-  type SQLWrapper,
 } from 'drizzle-orm';
 import { appendAuditEvent, lockOrgWrites, type AuditEntry } from './audit.ts';
 import { withOrg, type Database, type Transaction } from './client.ts';
+import { featureOn } from './features.ts';
+import { CONVERSION_FLAG, getReimbursementCurrency, requestConversions } from './conversions.ts';
 import { listReportExpenses, type ReportExpenseRecord } from './expenses.ts';
+import { organizationTimeZone } from './organizations.ts';
+import type { ReportAmount } from './report-amounts.ts';
 import { reopenChangedReports, reportsOfExpenses } from './report-touch.ts';
-import { expenses, members, organizations, reports, trips } from './schema.ts';
+import { expenses, members, mileageLogs, organizations, reports, trips } from './schema.ts';
 import { tallyTrips, tripsWithOwner, type TripRecord, type TripTally } from './trips.ts';
 
 const SCHEDULE: AuditEntry['actor'] = { type: 'system', id: 'report-schedule' };
@@ -36,7 +41,10 @@ export interface ReportRecord {
   readonly owner: string;
   readonly title: string;
   readonly status: ReportStatus;
-  /** The currency it is reimbursed in: the organization's home currency until #62. */
+  /**
+   * The currency it is reimbursed in: its member's reimbursement currency, which it follows
+   * until it is submitted while conversion is on (FR-EXP-13); otherwise the organization's.
+   */
   readonly currency: string;
   readonly closesAt: Date;
   readonly closedAt: Date | null;
@@ -79,6 +87,8 @@ export interface ReportContents {
   readonly tallies: readonly TripTally[];
   readonly counts: readonly TripCount[];
   readonly locals: readonly ReportExpenseRecord[];
+  /** Every amount on it with its conversion, where asked for (withReportAmounts()). */
+  readonly amounts?: readonly ReportAmount[];
 }
 
 /**
@@ -179,11 +189,17 @@ export async function getReport(
   return contents;
 }
 
-/** "Report from 3 Oct 2026": a name until a person gives it one. */
-const titleFor = (day: Date) =>
-  `Report from ${day.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}`;
+/**
+ * "Report from 3 Oct 2026": a name until a person gives it one. The date is the organization's
+ * own when it keeps a time zone (ADR-0037), and UTC's otherwise.
+ */
+const titleFor = (day: Date, timeZone: string | null) =>
+  `Report from ${day.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: timeZone ?? 'UTC' })}`;
 
-/** Opens a report for a member, closing itself in 28 days, with its audit event. */
+/**
+ * Opens a report for a member, closing itself in 28 days, with its audit event. Its currency is
+ * the organization's home currency as it is now, and stays so if that changes later.
+ */
 async function openReport(
   tx: Transaction,
   orgId: string,
@@ -197,14 +213,19 @@ async function openReport(
     .from(organizations)
     .where(eq(organizations.id, orgId));
   if (!org) throw new Error('The organization is not visible');
-  const closesAt = reportClosesAt(now);
+  const timeZone = await organizationTimeZone(tx, orgId);
+  // While conversion is on, it opens in its member's reimbursement currency (FR-EXP-13).
+  const currency = (await featureOn(tx, orgId, CONVERSION_FLAG))
+    ? ((await getReimbursementCurrency(tx, memberId))?.currency ?? org.currency)
+    : org.currency;
+  const closesAt = reportClosesAt(now, timeZone);
   const [report] = await tx
     .insert(reports)
     .values({
       orgId,
       memberId,
-      title: titleFor(now),
-      currency: org.currency,
+      title: titleFor(now, timeZone),
+      currency,
       closesAt,
       createdAt: now,
       updatedAt: now,
@@ -247,10 +268,6 @@ async function openReportOf(
   return { id: await openReport(tx, orgId, memberId, now, actor, reason), opened: true };
 }
 
-/** When something dated `column` joins a report: noon UTC two days on (joinsReportAt()). */
-const joinedBy = (column: SQLWrapper, now: Date) =>
-  sql`((${column} + 2)::timestamp + interval '12 hours') at time zone 'UTC' <= ${now.toISOString()}::timestamptz`;
-
 async function addTrip(
   tx: Transaction,
   orgId: string,
@@ -292,9 +309,10 @@ async function addLocalExpense(
 
 /**
  * Puts on a report each trip and local expense whose time has come (FR-EXP-05, FR-EXP-14): a
- * trip with expenses on it 24 hours after its return date, a local expense 24 hours after its
- * own date. Each goes to its member's newest open report, or one opens for it. Call inside
- * withOrg(). Returns how many joined.
+ * trip with expenses on it 24 hours after its return date ends, a local expense 24 hours after
+ * its own date ends, counted in the organization's time zone when it keeps one and at UTC−12
+ * otherwise (lastDayToJoin(), ADR-0037). Each goes to its member's newest open report, or one
+ * opens for it. Call inside withOrg(). Returns how many joined.
  */
 export async function joinDueItems(
   tx: Transaction,
@@ -303,13 +321,15 @@ export async function joinDueItems(
   actor: AuditEntry['actor'] = SCHEDULE,
 ): Promise<{ trips: number; expenses: number; opened: number }> {
   await lockOrgWrites(tx, orgId);
+  const timeZone = await organizationTimeZone(tx, orgId);
+  const lastDay = lastDayToJoin(now, timeZone ?? undefined);
   const dueTrips = await tx
     .select({ id: trips.id, memberId: trips.memberId })
     .from(trips)
     .where(
       and(
         isNull(trips.reportId),
-        joinedBy(trips.endDate, now),
+        lte(trips.endDate, lastDay),
         sql`exists (select 1 from ${expenses} e where e.org_id = ${trips.orgId} and e.trip_id = ${trips.id}
                      and e.status in ('processing', 'needs_review', 'ready'))`,
       ),
@@ -325,7 +345,7 @@ export async function joinDueItems(
         isNull(expenses.reportId),
         isNotNull(expenses.transactionDate),
         inArray(expenses.status, ['needs_review', 'ready']),
-        joinedBy(expenses.transactionDate, now),
+        lte(expenses.transactionDate, lastDay),
       ),
     )
     .orderBy(asc(expenses.transactionDate), asc(expenses.id))
@@ -697,6 +717,7 @@ export async function justifyExpense(
     .select({
       tripId: expenses.tripId,
       status: expenses.status,
+      source: expenses.source,
       justification: expenses.justification,
     })
     .from(expenses)
@@ -708,11 +729,22 @@ export async function justifyExpense(
     return { status: 'not_editable' };
   }
   if (cleaned.value === expense.justification) return { status: 'unchanged' };
+  // A drive's business purpose is its justification: they change together (ADR-0038).
+  const mileage = expense.source === 'mileage';
+  if (mileage && cleaned.value === null) {
+    return { status: 'invalid', message: 'A drive keeps its business purpose: change it instead.' };
+  }
   const actor = { type: 'user', id: actorUserId } as const;
   await tx
     .update(expenses)
     .set({ justification: cleaned.value, updatedAt: new Date() })
     .where(eq(expenses.id, expenseId));
+  if (mileage && cleaned.value !== null) {
+    await tx
+      .update(mileageLogs)
+      .set({ purpose: cleaned.value })
+      .where(eq(mileageLogs.expenseId, expenseId));
+  }
   await appendAuditEvent(tx, orgId, {
     actor,
     entityType: 'expense',
@@ -757,9 +789,14 @@ export function runReportSchedule(
   orgId: string,
   now: Date,
 ): Promise<ReportScheduleResult> {
-  return withOrg(db, orgId, async (tx) => ({
-    orgId,
-    joined: await joinDueItems(tx, orgId, now),
-    closed: await closeDueReports(tx, orgId, now),
-  }));
+  return withOrg(db, orgId, async (tx) => {
+    const result = {
+      orgId,
+      joined: await joinDueItems(tx, orgId, now),
+      closed: await closeDueReports(tx, orgId, now),
+    };
+    // What joined may be in another currency: have it converted (FR-EXP-13).
+    if (result.joined.trips + result.joined.expenses > 0) await requestConversions(tx, orgId, now);
+    return result;
+  });
 }

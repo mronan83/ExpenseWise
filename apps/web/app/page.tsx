@@ -15,9 +15,7 @@ export default async function HomePage() {
       <header className="flex items-baseline justify-between py-3">
         <span className="font-mono text-xs tracking-widest text-ink-2 uppercase">ExpenseWise</span>
         <span className="flex items-baseline gap-3">
-          <span className="font-mono text-xs text-ink-3">
-            Phase 0 preview{showBuild ? ` · ${build}` : ''}
-          </span>
+          {showBuild ? <span className="font-mono text-xs text-ink-3">build {build}</span> : null}
           <Link href="/settings/ai" className="tap text-xs font-semibold text-carbon">
             Settings
           </Link>

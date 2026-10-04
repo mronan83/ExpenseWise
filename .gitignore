@@ -36,3 +36,6 @@ evals/results/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Worktrees Claude Code makes for parallel agents
+.claude/worktrees/

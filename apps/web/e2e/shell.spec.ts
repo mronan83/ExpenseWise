@@ -60,7 +60,8 @@ test.describe('app shell', () => {
 
   test('ships the build-version change dark: its flag is off by default', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByText('Phase 0 preview', { exact: true })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Settings' })).toBeVisible();
+    await expect(page.getByText(/^build /)).toHaveCount(0);
   });
 
   test('sends security headers', async ({ request }) => {
