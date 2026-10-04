@@ -68,6 +68,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       '/settings/audit',
       '/settings/organization',
       '/settings/categories',
+      '/settings/ai-models',
     ]) {
       test(`${path} has no WCAG 2.2 AA violations`, async ({ page }) => {
         await page.goto(path);

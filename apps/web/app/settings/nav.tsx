@@ -14,6 +14,7 @@ const PAGES: readonly { href: string; label: string; flag?: string | readonly st
     flag: ['settings.organization', 'settings.duplicate-window'],
   },
   { href: '/settings/ai', label: 'AI providers' },
+  { href: '/settings/ai-models', label: 'AI models', flag: 'receipts.model-settings' },
   { href: '/settings/sign-ins', label: 'Sign-ins' },
   { href: '/settings/features', label: 'Features' },
   { href: '/settings/audit', label: 'Audit trail', flag: 'governance.audit-trail' },

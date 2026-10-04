@@ -580,9 +580,10 @@ export const BACKLOG: readonly BacklogItem[] = [
     priority: 'P3',
     effort: 'S',
     severity: 'Medium',
-    blocker: { kind: 'items', items: [52] },
+    blocker: { kind: 'none' },
     source: 'ADR-0017',
     affects: ['FR-INT-08', 'NFR-AI-04', 'F-07'],
+    done: { date: '2026-10-04', in: 'PR #58' },
   },
   {
     num: 23,
@@ -908,6 +909,20 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none' },
     source: 'Product owner, Oct 3',
     affects: ['FR-INT-16', 'F-45', 'FR-INT-08', 'FR-INT-09'],
+    done: { date: '2026-10-04', in: 'PR #58' },
+  },
+  {
+    num: 73,
+    title: 'Ask to re-confirm the AI model after about 100 receipts',
+    type: 'Gap',
+    detail:
+      'You now choose the primary model in Settings › AI models, with each model’s record beside it (#52), but nothing asks you to look again once it has read about 100 of your receipts, as NFR-AI-04 says. Count the receipts read since the primary was last chosen, and at about 100 put it in Needs you: keep it, or change it, with the record beside it.',
+    priority: 'P3',
+    effort: 'S',
+    severity: 'Low',
+    blocker: { kind: 'none' },
+    source: 'GAP-30',
+    affects: ['GAP-30', 'NFR-AI-04', 'F-45'],
   },
   {
     num: 53,

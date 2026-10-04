@@ -2,7 +2,7 @@
 
 Each receipt is read by Haiku 4.5 and Sonnet 5.5 side by side, on the organization's own key, so the model-tier decision rests on the product owner's real receipts. Events reach the workflow runner right after commit, and the outbox relay becomes the safety net.
 
-- **Status:** Accepted (decided by product owner); point 2 amended by [ADR-0020](0020-openai-fallback-reader.md); point 7 (shipping without flags) ended for new features by [ADR-0032](0032-features-switched-per-organization.md)
+- **Status:** Accepted (decided by product owner); point 2 amended by [ADR-0020](0020-openai-fallback-reader.md); point 7 (shipping without flags) ended for new features by [ADR-0032](0032-features-switched-per-organization.md); points 1 to 3 (two models, and Ready when they agree) amended, for each organization with AI model settings on, by [ADR-0033](0033-ready-on-one-confident-reading.md)
 - **Date:** 2026-10-02
 - **Deciders:** Product owner; Claude (principal architect)
 - **Decision register:** D-19

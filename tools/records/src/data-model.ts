@@ -18,8 +18,15 @@ export const DOMAINS: readonly Domain[] = [
   {
     name: 'Organizations and people',
     about:
-      'Who is in which organization and what its owner keeps about it, how they sign in, the AI keys an organization brings, and the features its owner has switched on.',
-    tables: ['organizations', 'members', 'member_sign_ins', 'ai_provider_keys', 'org_features'],
+      'Who is in which organization and what its owner keeps about it, how they sign in, the AI keys an organization brings, the AI models it reads receipts with, and the features its owner has switched on.',
+    tables: [
+      'organizations',
+      'members',
+      'member_sign_ins',
+      'ai_provider_keys',
+      'org_ai_models',
+      'org_features',
+    ],
   },
   {
     name: 'Receipts and reading',
@@ -75,6 +82,10 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
     about:
       'An organization’s own Anthropic or OpenAI key, stored only as ciphertext bound to the organization and provider; only the last four characters are ever shown (ADR-0015, NFR-SEC-04).',
   },
+  org_ai_models: {
+    about:
+      'Which AI models read the organization’s receipts, once AI model settings are on for it (FR-INT-16, ADR-0033): one row per model, on or off, in the order back-ups are tried, and which one is primary. Owners and finance admins choose; each change is in the audit trail with the choice before and after. No rows means the defaults: Sonnet 5.5 primary, then Haiku 4.5 and GPT-5.6 Luna. A model is never deleted, only switched off.',
+  },
   org_features: {
     about:
       'A feature the organization’s owner has switched on or off, with who switched it last. No row means off; the server’s override beats a row (ADR-0032, NFR-DEL-05). Each switch is in the audit trail.',
@@ -85,7 +96,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   extraction_runs: {
     about:
-      'One model’s reading of one receipt for one request, with its outcome, confidence, timing and cost. Its outcome is confident only when the reading would be Ready on its own, its sums and date included (FR-INT-04). Readings since `receipt-v2` also read fees and whether a document is a purchase summary; older ones read back as having no fees (ADR-0027). Since `receipt-v3` they read the time of purchase and the merchant’s address too; older ones read back without them (ADR-0030). An organization with Where each field was read switched on is asked `receipt-v4`, which also keeps in the output the line of the receipt behind each field (GAP-14); every other organization is still asked `receipt-v3`. Each request is read once per model, so a retry adds nothing (ADR-0017, NFR-DAT-06).',
+      'One model’s reading of one receipt for one request, with its outcome, confidence, timing and cost. Its outcome is confident only when the reading would be Ready on its own, its sums and date included (FR-INT-04). Readings since `receipt-v2` also read fees and whether a document is a purchase summary; older ones read back as having no fees (ADR-0027). Since `receipt-v3` they read the time of purchase and the merchant’s address too; older ones read back without them (ADR-0030). An organization with Where each field was read switched on is asked `receipt-v4`, which also keeps in the output the line of the receipt behind each field (GAP-14); every other organization is still asked `receipt-v3`. Each request is read once per model, so a retry adds nothing (ADR-0017, NFR-DAT-06). A reading made under the organization’s AI model settings records why the model read: primary, or backup when the models before it read nothing; one made side by side has none (ADR-0033).',
   },
   receipt_reviews: {
     about:
@@ -293,6 +304,25 @@ export const RULES: readonly Rule[] = [
     mechanism: 'Unique per organization and provider; the hint is at most four characters.',
     objects: ['ai_provider_keys_org_provider_key', 'ai_provider_keys_hint_short'],
     refs: ['NFR-SEC-04', 'ADR-0015'],
+  },
+  {
+    rule: 'An organization has one setting per AI model, and at most one primary, which is on.',
+    mechanism:
+      'Unique per organization and model; a unique index over the organization where the row is primary; a primary must be enabled. Who may choose, which models exist and that a model has its provider’s key are the API’s to check.',
+    objects: [
+      'org_ai_models_org_model_key',
+      'org_ai_models_one_primary',
+      'org_ai_models_primary_is_on',
+      'org_ai_models_model_format',
+      'org_ai_models_updated_by_fk',
+    ],
+    refs: ['FR-INT-16', 'ADR-0033'],
+  },
+  {
+    rule: 'A reading says why its model read, or nothing.',
+    mechanism: 'Its role is primary, backup, or empty for a reading made side by side.',
+    objects: ['extraction_runs_role_known'],
+    refs: ['ADR-0033'],
   },
   {
     rule: 'An organization switches each feature once, and only to a flag-shaped name.',

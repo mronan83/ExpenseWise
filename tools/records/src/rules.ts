@@ -189,6 +189,19 @@ export const RULES: readonly Rule[] = [
     },
   },
   {
+    id: 'R-MODEL-DEFAULTS',
+    name: 'Which AI models read until an owner chooses',
+    value:
+      'Sonnet 5.5 primary, then Haiku 4.5, then GPT-5.6 Luna, each while its key is there; Opus 5.5 and Fable 5.1 off',
+    decided: { by: 'claude', source: 'ADR-0033' },
+    code: {
+      file: 'packages/extraction/src/model-settings.ts',
+      constant: 'DEFAULT_PRIMARY',
+      literal: "'claude-sonnet-5-5'",
+    },
+    note: 'The models that read receipts before, the more capable Claude tier first, as their expenses were filed with it. The two that cost more stay off until you switch them on. Never put to you.',
+  },
+  {
     id: 'R-SIGN-IN-LINK',
     name: 'How long a link to add a sign-in works',
     value: '10 minutes',

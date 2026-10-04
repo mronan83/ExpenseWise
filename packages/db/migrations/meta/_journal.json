@@ -204,6 +204,20 @@
       "when": 1791136691375,
       "tag": "0028_expense_types_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1791137062184,
+      "tag": "0029_ai_model_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1791137070218,
+      "tag": "0030_ai_model_settings_rls",
+      "breakpoints": true
     }
   ]
 }

@@ -26,6 +26,16 @@ export const GAPS: readonly Gap[] = [
     backlog: 72,
   },
   {
+    id: 'GAP-30',
+    title: 'Nothing asks to re-confirm the AI model after about 100 real receipts.',
+    affects: ['NFR-AI-04'],
+    severity: 'Low',
+    evidence:
+      'Found building AI model settings (#52). NFR-AI-04 asks for the model tier to be re-confirmed after about 100 real receipts. The primary is now your choice in Settings › AI models, with each model’s record beside it, but nothing counts the receipts read since the choice or asks you to look again.',
+    fix: 'Count the receipts read since the primary was last chosen, and at about 100 ask in Needs you to keep it or change it (#73).',
+    backlog: 73,
+  },
+  {
     id: 'GAP-25',
     title: 'Photos emailed in are stored with their location.',
     affects: ['NFR-PRV-03'],

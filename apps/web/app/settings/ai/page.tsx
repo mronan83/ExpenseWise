@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, ApiProblem } from '../../../lib/api';
+import { useFeatures } from '../../../lib/features';
 import { formText } from '../../../lib/form';
 import { supabase } from '../../../lib/supabase';
 import { SettingsNav } from '../nav';
@@ -18,18 +19,23 @@ interface KeyStatus {
   updatedAt: string | null;
 }
 
-const PROVIDERS: Record<Provider, { name: string; where: string; url: string; use: string }> = {
+const PROVIDERS: Record<
+  Provider,
+  { name: string; where: string; url: string; use: string; useWithModels: string }
+> = {
   anthropic: {
     name: 'Anthropic',
     where: 'Claude Console → API keys',
     url: 'https://console.anthropic.com/settings/keys',
     use: 'Reads every receipt with Haiku 4.5 and Sonnet 5.5, side by side.',
+    useWithModels: 'Reads receipts with the Claude models you switch on in AI models.',
   },
   openai: {
     name: 'OpenAI',
     where: 'OpenAI Platform → API keys',
     url: 'https://platform.openai.com/api-keys',
     use: "Reads a receipt with GPT-5.6 Luna only when Claude can't: no credit, a rejected key or an outage.",
+    useWithModels: 'Reads receipts with GPT-5.6 Luna when you switch it on in AI models.',
   },
 };
 
@@ -133,6 +139,8 @@ function ProviderCard({
   onChange: (next: KeyStatus) => void;
 }) {
   const info = PROVIDERS[status.provider];
+  // With AI model settings on, which models read is chosen there (FR-INT-16).
+  const withModels = useFeatures()('receipts.model-settings');
   const [message, setMessage] = useState<{ tone: 'ok' | 'warn'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const inputId = `key-${status.provider}`;
@@ -218,7 +226,7 @@ function ProviderCard({
           {status.configured ? `Key ending ${status.keyHint}` : 'No key'}
         </span>
       </div>
-      <p className="text-sm text-ink-2">{info.use}</p>
+      <p className="text-sm text-ink-2">{withModels ? info.useWithModels : info.use}</p>
       {status.verifiedAt ? (
         <p className="text-sm text-ink-2">
           Last checked {new Date(status.verifiedAt).toLocaleString()}

@@ -20,9 +20,15 @@ export interface ReceiptsNeedingYou {
  * its last week with something left, then receipts that need a look, newest first, then local
  * expenses that need a justification, oldest first, then reports ready to close.
  */
-export function needsYouItems(receipts: ReceiptsNeedingYou, reports: ReportsNeedingYou, now: Date) {
+export function needsYouItems(
+  receipts: ReceiptsNeedingYou,
+  reports: ReportsNeedingYou,
+  now: Date,
+  /** Whether the organization reads under its AI model settings (receipts.model-settings). */
+  settingsOn = false,
+) {
   const receiptItems = receipts.receipts
-    .map((r) => inboxItem(r, receipts.runs, receipts.reviews, receipts.pairs))
+    .map((r) => inboxItem(r, receipts.runs, receipts.reviews, receipts.pairs, settingsOn))
     .filter((item) => item !== null);
   const reportItems = reports.reports
     .map((r) => reportItem(r, now))

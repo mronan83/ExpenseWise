@@ -55,8 +55,16 @@ export interface ExtractionRunRecord {
   readonly inputTokens: number | null;
   readonly outputTokens: number | null;
   readonly costMicroUsd: number | null;
+  /**
+   * primary or backup when read under the organization's AI model settings (FR-INT-16);
+   * null or absent for readings made side by side (ADR-0017).
+   */
+  readonly role?: string | null;
   readonly createdAt: Date;
 }
+
+/** Why a model read a receipt under the organization's AI model settings (FR-INT-16). */
+export type ModelRole = 'primary' | 'backup';
 
 const receiptColumns = {
   id: receipts.id,
@@ -86,6 +94,7 @@ const runColumns = {
   inputTokens: extractionRuns.inputTokens,
   outputTokens: extractionRuns.outputTokens,
   costMicroUsd: extractionRuns.costMicroUsd,
+  role: extractionRuns.role,
   createdAt: extractionRuns.createdAt,
 };
 
@@ -266,6 +275,8 @@ export interface NewExtractionRun {
   readonly inputTokens: number | null;
   readonly outputTokens: number | null;
   readonly costMicroUsd: number | null;
+  /** Why it read, under the organization's AI model settings; absent side by side. */
+  readonly role?: ModelRole;
 }
 
 /**

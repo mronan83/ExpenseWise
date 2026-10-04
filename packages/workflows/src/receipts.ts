@@ -4,6 +4,7 @@ import {
   RECEIPT_READ_REQUESTED,
   RECEIPT_UPLOADED,
   type ExtractionRunRecord,
+  type ModelRole,
   type NewExtractionRun,
   type ReceiptStatus,
 } from '@expensewise/db';
@@ -27,6 +28,7 @@ import {
 } from '@expensewise/extraction';
 import { detailsOf } from '@expensewise/extraction/place';
 import { NonRetriableError, type Inngest } from 'inngest';
+import { SIDE_BY_SIDE, type ReadingPlan } from './reading-plan.ts';
 
 /** What the workflow knows about the file it is asked to read. */
 export interface ReceiptFile {
@@ -43,6 +45,8 @@ export type KeyProblem = 'no_key' | 'unreadable_key';
 
 /** What reading a receipt needs from the database, storage and the provider. */
 export interface ReceiptReadingPorts {
+  /** Which models read this organization's receipts now. Without it, side by side. */
+  readingPlan?(orgId: string): Promise<ReadingPlan>;
   loadReceipt(orgId: string, receiptId: string): Promise<ReceiptFile | undefined>;
   fetchFile(storageKey: string): Promise<Uint8Array | null>;
   extractor(orgId: string, model: ModelId): Promise<Extractor | KeyProblem>;
@@ -193,22 +197,29 @@ export interface ReadingRequest {
   readonly requestId: string;
 }
 
+export interface ReadOptions {
+  /** Skipped, with nothing stored, when the organization has no key for the model. */
+  readonly optional?: boolean;
+  /** Why it reads, under the organization's AI model settings; kept with the reading. */
+  readonly role?: ModelRole;
+}
+
 /**
  * Reads the receipt with one model and stores the result. Problems retrying can't fix are
  * stored as a failed reading; anything else is thrown so the step is retried. An optional
- * reader (the fallback) is skipped, and nothing stored, when the organization has no key for
- * it.
+ * reader (the fallback, or any model under the organization's settings) is skipped, and
+ * nothing stored, when the organization has no key for it.
  */
 export async function readWith(
   ports: ReceiptReadingPorts,
   request: ReadingRequest,
   model: ModelId,
   mediaType: DocumentMediaType,
-  options: { optional?: boolean } = {},
+  options: ReadOptions = {},
 ): Promise<NewExtractionRun['outcome'] | 'skipped'> {
   const { orgId, receiptId, requestId } = request;
   const save = async (run: NewExtractionRun) => {
-    await ports.saveRun(orgId, run);
+    await ports.saveRun(orgId, options.role ? { ...run, role: options.role } : run);
     return run.outcome;
   };
   const extractor = await ports.extractor(orgId, model);
@@ -236,11 +247,32 @@ export async function noteUnavailable(
   request: ReadingRequest,
   model: ModelId,
   reason: string,
+  role?: ModelRole,
 ): Promise<'failed'> {
   const { orgId, receiptId, requestId } = request;
   const error = `unavailable: ${reason}`.slice(0, 300);
-  await ports.saveRun(orgId, failedRun(receiptId, requestId, model, error));
+  const run = failedRun(receiptId, requestId, model, error);
+  await ports.saveRun(orgId, role ? { ...run, role } : run);
   return 'failed';
+}
+
+/**
+ * Stores a failed reading for a compared model the operator has stopped for every
+ * organization (FR-INT-16), so the receipt says why it read nothing.
+ */
+export async function noteStopped(
+  ports: ReceiptReadingPorts,
+  request: ReadingRequest,
+  model: ModelId,
+): Promise<'failed'> {
+  const { orgId, receiptId, requestId } = request;
+  await ports.saveRun(orgId, failedRun(receiptId, requestId, model, 'stopped'));
+  return 'failed';
+}
+
+/** Which models read this organization's receipts now: its settings, or side by side. */
+export async function readingPlan(ports: ReceiptReadingPorts, orgId: string): Promise<ReadingPlan> {
+  return ports.readingPlan ? ports.readingPlan(orgId) : SIDE_BY_SIDE;
 }
 
 function readingOf(run: ExtractionRunRecord | undefined): NormalizedExtraction | null {
@@ -262,7 +294,9 @@ export async function settleReading(
   ports: ReceiptReadingPorts,
   request: ReadingRequest,
   problem?: string,
+  plan?: ReadingPlan,
 ): Promise<{ status: ReceiptStatus; differences: string[] }> {
+  if (plan?.mode === 'primary') return settleOneReading(ports, request, plan.order, problem);
   const { orgId, receiptId, requestId } = request;
   const runs = await ports.runs(orgId, receiptId, requestId);
   const uploadedAt = (await ports.loadReceipt(orgId, receiptId))?.createdAt ?? new Date();
@@ -303,6 +337,53 @@ export async function settleReading(
   return { status, differences };
 }
 
+/**
+ * Decides the receipt's status under the organization's AI model settings (ADR-0033): the
+ * first model in the order that produced a reading decides, alone. Ready when that reading
+ * has merchant, date, currency and total with high confidence and its sums and date pass
+ * (FR-INT-04); Needs a look when it doesn't, and its expense starts from it. Not read when
+ * every model tried failed. With no model on to try, the receipt is filed for a person to
+ * fill in: Needs a look, with nothing read (Q8).
+ */
+async function settleOneReading(
+  ports: ReceiptReadingPorts,
+  request: ReadingRequest,
+  order: readonly ModelId[],
+  problem?: string,
+): Promise<{ status: ReceiptStatus; differences: string[] }> {
+  const { orgId, receiptId, requestId } = request;
+  const runs = await ports.runs(orgId, receiptId, requestId);
+  const uploadedAt = (await ports.loadReceipt(orgId, receiptId))?.createdAt ?? new Date();
+  const place = (model: string) => {
+    const i = order.indexOf(model as ModelId);
+    return i < 0 ? order.length : i;
+  };
+  const tried = [...runs].sort((a, b) => place(a.model) - place(b.model));
+  const reader = tried.find((run) => readingOf(run) !== null);
+  const reading = readingOf(reader);
+  const notRead = runs.length === 0 && !problem;
+  const status: ReceiptStatus = reading
+    ? isAutoReady(reading, uploadedAt)
+      ? 'extracted'
+      : 'needs_review'
+    : notRead
+      ? 'needs_review'
+      : 'failed';
+  await ports.settle(orgId, receiptId, {
+    status,
+    requestId,
+    values: reading ? { ...valuesOfReading(reading), details: detailsOf(reading) } : null,
+    detail: {
+      differences: [],
+      readings: Object.fromEntries(tried.map((run) => [run.model, run.outcome])),
+      order,
+      ...(reader && reading ? { readBy: reader.model } : {}),
+      ...(notRead ? { problem: 'no_model_on' } : problem ? { problem } : {}),
+    },
+  });
+  return { status, differences: [] };
+}
+
 function readingRequest(data: unknown): ReadingRequest {
   const { orgId, receiptId, outboxId } = (data ?? {}) as Record<string, unknown>;
   if (typeof orgId !== 'string' || typeof receiptId !== 'string' || typeof outboxId !== 'string') {
@@ -315,12 +396,16 @@ const stepFailure = (error: unknown) =>
   error instanceof Error ? error.message : 'the step failed after its retries';
 
 /**
- * Reads a receipt after it is uploaded or when someone asks again: check the file, read it
- * with each compared model in parallel steps, then settle its status. If neither Claude model
- * could read it (no credit, a rejected key, an outage), the fallback model reads it, when the
- * organization has a key for it (ADR-0020). Steps retry on their own; a model whose step runs
- * out of retries is stored as unavailable. If the run itself fails, the receipt is settled
- * from whatever readings were stored, so it never stays "processing".
+ * Reads a receipt after it is uploaded or when someone asks again: choose the models, check
+ * the file, read it, then settle its status. Side by side, each compared model reads in
+ * parallel steps, and if neither Claude model could read it (no credit, a rejected key, an
+ * outage), the fallback model reads it, when the organization has a key for it (ADR-0020).
+ * Under the organization's AI model settings, the primary reads it, and each back-up that is
+ * on only when the models before it produced no reading, in the order set (ADR-0033); a
+ * model with no key is passed over. A model the operator stopped reads nothing either way.
+ * Steps retry on their own; a model whose step runs out of retries is stored as unavailable.
+ * If the run itself fails, the receipt is settled from whatever readings were stored, so it
+ * never stays "processing".
  */
 export function receiptReadingFunction(client: Inngest, ports: () => ReceiptReadingPorts) {
   return client.createFunction(
@@ -331,34 +416,58 @@ export function receiptReadingFunction(client: Inngest, ports: () => ReceiptRead
       retries: 3,
       onFailure: async ({ event, step }) => {
         const request = readingRequest(event.data.event.data);
-        await step.run('settle after failure', () =>
-          settleReading(ports(), request, 'reading_failed'),
+        await step.run('settle after failure', async () =>
+          settleReading(
+            ports(),
+            request,
+            'reading_failed',
+            await readingPlan(ports(), request.orgId),
+          ),
         );
       },
     },
     async ({ event, step }) => {
       const request = readingRequest(event.data);
+      const plan = await step.run('choose the models', () => readingPlan(ports(), request.orgId));
       const file = await step.run('check the file', () =>
         checkFile(ports(), request.orgId, request.receiptId),
       );
       if (!file.ok) {
-        return step.run('settle', () => settleReading(ports(), request, file.problem));
+        return step.run('settle', () => settleReading(ports(), request, file.problem, plan));
       }
-      const readWithStep = (model: ModelId, optional = false) => {
+      const read = (outcome: string) => outcome === 'confident' || outcome === 'unsure';
+      const readWithStep = (model: ModelId, options: ReadOptions = {}) => {
         const { label } = MODELS[model];
         return step
           .run(`read with ${label}`, () =>
-            readWith(ports(), request, model, file.mediaType, { optional }),
+            readWith(ports(), request, model, file.mediaType, options),
           )
           .catch((error: unknown) =>
             step.run(`note ${label} unavailable`, () =>
-              noteUnavailable(ports(), request, model, stepFailure(error)),
+              noteUnavailable(ports(), request, model, stepFailure(error), options.role),
             ),
           );
       };
-      const outcomes = await Promise.all(COMPARISON_MODELS.map((model) => readWithStep(model)));
-      if (!outcomes.some((outcome) => outcome === 'confident' || outcome === 'unsure')) {
-        await readWithStep(FALLBACK_MODEL, true);
+      if (plan.mode === 'primary') {
+        // One model at a time: a back-up reads only when the ones before it couldn't.
+        for (const [i, model] of plan.order.entries()) {
+          const role = i === 0 ? 'primary' : 'backup';
+          if (read(await readWithStep(model, { optional: true, role }))) break;
+        }
+        return step.run('settle', () => settleReading(ports(), request, undefined, plan));
+      }
+      const stopped = (model: ModelId) => plan.stopped.includes(model);
+      const outcomes = await Promise.all(
+        COMPARISON_MODELS.map((model) =>
+          stopped(model)
+            ? step.run(`note ${MODELS[model].label} stopped`, () =>
+                noteStopped(ports(), request, model),
+              )
+            : readWithStep(model),
+        ),
+      );
+      if (!outcomes.some(read) && !stopped(FALLBACK_MODEL)) {
+        await readWithStep(FALLBACK_MODEL, { optional: true });
       }
       return step.run('settle', () => settleReading(ports(), request));
     },

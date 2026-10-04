@@ -11,6 +11,13 @@ import { receiptPath, RECEIPT_BUCKET, type ObjectStore } from '@expensewise/stor
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
 import { featureGate, type FeatureGate } from './features.ts';
+import { featureGate, type FeatureGate } from './features.ts';
+import {
+  modelContext,
+  readsNext,
+  stoppedModels,
+  type ModelSettingsStore,
+} from './model-settings.ts';
 import { needsYouItems, NO_REPORTS } from './needs-you-views.ts';
 import { ProblemError } from './problem.ts';
 import { inboxRoute } from './routes/inbox.ts';
@@ -20,6 +27,7 @@ import {
   currentReview,
   filedRun,
   latestRuns,
+  NO_READING,
   normalized,
   receiptDetail,
   receiptSummary,
@@ -52,6 +60,11 @@ export interface ReceiptRouteOptions {
   readonly reports?: ReportStore;
   /** Which features are on. Built from `workspace` when not given. */
   readonly features?: FeatureGate;
+  /** Which AI models read receipts, under receipts.model-settings (FR-INT-16). */
+  readonly modelSettings?: ModelSettingsStore;
+  readonly flagOverrides?: string;
+  /** Which features are on. Built from `workspace` when not given. */
+  readonly features?: FeatureGate;
   readonly now?: () => Date;
 }
 
@@ -63,6 +76,7 @@ export function registerReceiptRoutes(
   options: ReceiptRouteOptions,
 ) {
   const auth = requireIdentity(options.verifyToken);
+  const features = options.features ?? featureGate(options);
   const paths = new Set(
     [
       receiptUploadRoute,
@@ -141,7 +155,14 @@ export function registerReceiptRoutes(
    * switched that on (GAP-14); without it, as it always was.
    */
   const detailOf = async (orgId: string, found: ReceiptInReview, imageUrl: string | null) => {
-    const detail = receiptDetail(found.receipt, found.runs, imageUrl, found.reviews, found.pairs);
+    const detail = receiptDetail(
+      found.receipt,
+      found.runs,
+      imageUrl,
+      found.reviews,
+      found.pairs,
+      await readingNext(orgId),
+    );
     return (await features.isOn(orgId, 'receipts.field-sources'))
       ? { ...detail, readings: withSources(found.receipt, found.runs, detail.readings) }
       : detail;
@@ -164,6 +185,28 @@ export function registerReceiptRoutes(
     } catch (error) {
       console.warn('Removing a deleted receipt’s file failed', { storageKey, error });
     }
+  };
+
+  /**
+   * Under the organization's AI model settings, the models that read its next receipt, so a
+   * receipt being read shows the model reading it. Undefined while the settings are off.
+   */
+  const settingsOn = async (orgId: string) =>
+    options.modelSettings !== undefined && (await features.isOn(orgId, 'receipts.model-settings'));
+  const readingNext = async (orgId: string) => {
+    if (!options.modelSettings || !options.workspace) return undefined;
+    if (!(await settingsOn(orgId))) return undefined;
+    const [saved, keys] = await Promise.all([
+      options.modelSettings.get(orgId),
+      options.workspace.listKeys(orgId),
+    ]);
+    return readsNext(
+      modelContext(
+        saved,
+        new Set(keys.map((k) => k.provider)),
+        stoppedModels(options.flagOverrides),
+      ),
+    );
   };
 
   const dispatch = async (event: CommittedEvent) => {
@@ -239,7 +282,12 @@ export function registerReceiptRoutes(
     const reports = options.reports
       ? await options.reports.needsYou(who.orgId, who.memberId, LIST_LIMIT)
       : NO_REPORTS;
-    const items = needsYouItems(receipts, reports, options.now?.() ?? new Date());
+    const items = needsYouItems(
+      receipts,
+      reports,
+      options.now?.() ?? new Date(),
+      await settingsOn(who.orgId),
+    );
     return c.json({ items }, 200);
   });
 
@@ -277,13 +325,16 @@ export function registerReceiptRoutes(
       throw notWaiting(false);
     }
     if (found.pairs.some((p) => p.heldReceiptId === receiptId)) throw heldAsDuplicate();
-    const run = latestRuns(receiptId, found.runs).find((r) => r.model === body.model);
-    if (!run) {
+    const latest = latestRuns(receiptId, found.runs);
+    const run = latest.find((r) => r.model === body.model);
+    // With no model named, only a receipt nothing read is filled in by hand (FR-INT-16).
+    if (body.model === undefined ? latest.length > 0 : !run) {
       throw unprocessable('no_such_reading', 'This receipt has no such reading', {
-        detail: `Choose one of the readings shown: ${body.model} is not among them.`,
+        detail: `Choose one of the readings shown: ${body.model ?? 'none'} is not among them.`,
       });
     }
-    const result = confirmReading(normalized(run), body.corrections ?? {});
+    const reading = run ? normalized(run) : null;
+    const result = confirmReading(reading, body.corrections ?? {});
     if (!result.ok) {
       const { error } = result;
       throw error.kind === 'missing'
@@ -302,8 +353,8 @@ export function registerReceiptRoutes(
       receiptId,
       {
         memberId: who.memberId,
-        requestId: run.requestId,
-        model: run.model,
+        requestId: run?.requestId ?? null,
+        model: run?.model ?? NO_READING,
         merchant: confirmed.merchant,
         transactionDate: confirmed.date,
         currency: confirmed.currency,
@@ -313,7 +364,7 @@ export function registerReceiptRoutes(
         corrections,
       },
       caller.userId,
-      detailsOf(normalized(run)),
+      detailsOf(reading),
     );
     if (outcome === 'missing') throw notFound();
     if (outcome === 'duplicate') throw heldAsDuplicate();

@@ -213,7 +213,9 @@ export const ReceiptSummarySchema = z
         'processing while it is read; extracted (shown as Ready) when both compared models ' +
         'read it with confidence and agree, or when a member confirmed or corrected a reading ' +
         '(ADR-0021); needs_review otherwise, including when only the fallback model read it; ' +
-        'failed when no model could read it.',
+        'failed when no model could read it. Under the organization’s AI model settings, ' +
+        'extracted rests on one confident reading by the first model that could read it, and ' +
+        'needs_review with no reading means every model was off (ADR-0033).',
     }),
     source: z.enum(['camera', 'upload', 'email', 'card', 'manual', 'mileage']),
     contentType: z.string(),
@@ -256,10 +258,12 @@ export const FieldSourcesSchema = z
       'reading made without them; left out altogether while the feature is off.',
   });
 
-const ReadingRoleSchema = z.enum(['compared', 'fallback']).openapi({
+const ReadingRoleSchema = z.enum(['compared', 'fallback', 'primary', 'backup']).openapi({
   description:
     'compared: one of the models the tier decision weighs. fallback: read only because no ' +
-    'compared model could (ADR-0020).',
+    'compared model could (ADR-0020). Under the organization’s AI model settings ' +
+    '(FR-INT-16): primary, the model chosen to read every receipt; backup, read only because ' +
+    'the models before it could not (ADR-0033).',
 });
 
 export const ReceiptReadingSchema = z
@@ -416,10 +420,16 @@ const correction = (description: string, example: string) =>
 
 export const ConfirmReceiptSchema = z
   .object({
-    model: z.string().openapi({
-      description: 'The reading to confirm, by model, from the receipt’s latest readings.',
-      example: 'gpt-5.6-luna',
-    }),
+    model: z
+      .string()
+      .optional()
+      .openapi({
+        description:
+          'The reading to confirm, by model, from the receipt’s latest readings. Omitted only ' +
+          'for a receipt nothing read, because every AI model was off: every field is then ' +
+          'entered in corrections.',
+        example: 'gpt-5.6-luna',
+      }),
     corrections: z
       .object({
         merchant: correction('The merchant, as it should be filed.', 'Blue Bottle Coffee'),
@@ -456,14 +466,17 @@ export const CorrectReceiptSchema = z
 
 export const NeedsYouReasonSchema = z
   .object({
-    code: z.enum(['failed', 'duplicate', 'fallback', 'differ', 'checks', 'unsure']).openapi({
-      description:
-        'failed: no model could read it. duplicate: it looks like the same purchase as an ' +
-        'earlier receipt (FR-INT-18). fallback: only the fallback model read it. differ: ' +
-        'the compared models read the filing fields differently. checks: its sums or date ' +
-        'fail a check, or it is a purchase summary (FR-INT-04). unsure: a model was not ' +
-        'confident, or one could not read it.',
-    }),
+    code: z
+      .enum(['failed', 'duplicate', 'fallback', 'differ', 'checks', 'unsure', 'not_read'])
+      .openapi({
+        description:
+          'failed: no model could read it. duplicate: it looks like the same purchase as an ' +
+          'earlier receipt (FR-INT-18). fallback: only the fallback model read it. differ: ' +
+          'the compared models read the filing fields differently. checks: its sums or date ' +
+          'fail a check, or it is a purchase summary (FR-INT-04). unsure: a model was not ' +
+          'confident, or one could not read it. not_read: every AI model was off, so it was ' +
+          'filed for the person to fill in (FR-INT-16).',
+      }),
     fields: z
       .array(z.string())
       .openapi({ description: 'differ: the filing fields read differently.' }),
