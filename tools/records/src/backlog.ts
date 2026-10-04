@@ -525,11 +525,11 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Was Phase 0’s flagged change switched on in production?',
     type: 'Verify',
     detail:
-      'Phase 0 exits when a trivial change reaches production behind a flag. The build-version flag shipped dark; turning it on needs `FLAG_OVERRIDES=shell.build-version=on` in Vercel and a redeploy. It isn’t set now, which is right either way. Tell me whether you did it.',
+      'Phase 0 exits when a trivial change reaches production behind a flag. The build-version flag shipped dark. With your approval of Oct 4, `FLAG_OVERRIDES=shell.build-version=on` is set in Vercel production; it takes effect with the next production build. Done when Home shows the build in production.',
     priority: 'P2',
     effort: 'S',
     severity: 'Low',
-    blocker: { kind: 'owner', ask: 'Your answer: done, or ten minutes in Vercel' },
+    blocker: { kind: 'none' },
     source: 'Roadmap Phase 0 exit',
     affects: ['NFR-DEL-05'],
   },
@@ -552,27 +552,15 @@ export const BACKLOG: readonly BacklogItem[] = [
 
   // P3: this quarter
   {
-    num: 4,
-    title: 'Claude can’t read receipts: the Anthropic account has no credit',
-    type: 'Ops',
-    detail:
-      'Every reading fails with “Your credit balance is too low”. Buy credits in the Claude Console under Settings → Billing; $5 covers about 250 receipts with both models. Then press Read again on each receipt that failed. Lowered on Oct 3 at your direction: GPT-5.6 Luna reads every receipt meanwhile, and each one waits in Needs a look until you confirm it (#47). The model-tier decision (#21) waits on this.',
-    priority: 'P3',
-    effort: 'S',
-    severity: 'Medium',
-    blocker: { kind: 'owner', ask: 'Your action: buy Anthropic credits' },
-    affects: ['FR-INT-08', 'NFR-AI-04', 'F-07'],
-  },
-  {
     num: 21,
     title: 'Choose the model tier: Haiku or Sonnet',
     type: 'Decision',
     detail:
-      'Proposed rule: Haiku if it agrees with Sonnet on at least 95% of receipts and is never confidently wrong where Sonnet was right; otherwise Sonnet. Needs about 20 of your receipts read by both, so it waits on #4. The decision takes effect by turning the other model off (#52).',
+      'The tier is no longer a one-off decision from a spike: with #52 you choose the primary model in Settings, with how each model has read your receipts beside the choice, and can change it at any time. Without Anthropic credits (#4, withdrawn Oct 4) the comparison has only the readings it has. Done when #52 is.',
     priority: 'P3',
     effort: 'S',
     severity: 'Medium',
-    blocker: { kind: 'items', items: [4], then: 'about 20 receipts, then your decision' },
+    blocker: { kind: 'items', items: [52] },
     source: 'ADR-0017',
     affects: ['FR-INT-08', 'NFR-AI-04', 'F-07'],
   },
@@ -907,6 +895,22 @@ export const BACKLOG: readonly BacklogItem[] = [
     affects: ['NFR-UX-06'],
   },
   // Done
+  {
+    num: 4,
+    title: 'Claude can’t read receipts: the Anthropic account has no credit',
+    type: 'Ops',
+    detail:
+      'Claude readings failed with “Your credit balance is too low”, so GPT-5.6 Luna reads every receipt and each one waits in Needs a look until you confirm it (#47). Withdrawn on Oct 4: you won’t buy credits and asked not to be reminded. Which model reads first becomes your choice in Settings (#52).',
+    priority: 'P3',
+    effort: 'S',
+    severity: 'Medium',
+    blocker: { kind: 'none' },
+    affects: ['FR-INT-08', 'NFR-AI-04', 'F-07'],
+    done: {
+      date: '2026-10-04',
+      in: 'Withdrawn at your word: no credits will be bought, and no reminder',
+    },
+  },
   {
     num: 40,
     title: 'Two sign-ins couldn’t reach the same receipts',

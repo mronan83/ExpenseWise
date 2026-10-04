@@ -47,6 +47,8 @@ const handler = handle(
     birdWebhookSecret: process.env.BIRD_WEBHOOK_SECRET || undefined,
     receiveEmail: handOffEmail,
     verifyProviderKey: providerKeyVerifier(),
+    // Features forced on or off for everyone, beating each owner's switch (the kill switch).
+    flagOverrides: process.env.FLAG_OVERRIDES,
     // Unexpected errors go to error tracking (a no-op until NEXT_PUBLIC_SENTRY_DSN is set).
     reportError: (error) => Sentry.captureException(error),
   }),

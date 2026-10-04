@@ -1,6 +1,6 @@
 # ExpenseWise: notes for Claude sessions
 
-Expense, receipt, mileage and trip app. A pnpm + Turborepo TypeScript monorepo, currently in Phase 0. Start with `docs/README.md`; decisions are in `docs/adr/`.
+Expense, receipt, mileage and trip app. A pnpm + Turborepo TypeScript monorepo, in Phase 1. Start with `docs/README.md`; decisions are in `docs/adr/`.
 
 ## Commands
 

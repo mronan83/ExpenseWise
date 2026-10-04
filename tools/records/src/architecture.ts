@@ -83,10 +83,10 @@ export const PRINCIPLES: readonly Principle[] = [
     id: 'AP8',
     name: 'Ship dark',
     built:
-      'Flags are read per request from PostHog, so turning one on needs no deploy. Merge is the release, so code reaches production the moment it is merged.',
+      'Every feature built since Oct 4 ships behind a flag, off by default (Q5). Flags are read per request: the server’s override first, then the organization’s own switch, which its owner sets in Settings › Features at once and audited (ADR-0032), then off. Merge is the release, so code reaches production dark the moment it is merged.',
     short:
-      'While the only organization is the product owner’s, new screens ship without a flag (Q5); flags apply again from the first invite (#29).',
-    refs: ['ADR-0019'],
+      'Screens released before Oct 4 have no flag. PostHog is wired as a source but its key is not set, so it decides nothing.',
+    refs: ['ADR-0019', 'ADR-0032'],
   },
 ];
 
@@ -150,9 +150,9 @@ export const COMPONENTS: readonly Component[] = [
   },
   {
     name: 'Feature flags',
-    technology: 'PostHog (posthog-node)',
+    technology: 'TypeScript, Postgres; PostHog (posthog-node) when configured',
     responsibility:
-      'A registry of flags, read per request, with local overrides for tests. Off by default.',
+      'A registry of flags, each off by default. One gate in the API (`features.ts`) answers whether a feature is on for an organization: the server’s override, then the owner’s switch in `org_features`, then off. A route behind an off feature answers 404 `feature_off`, and screens hide it.',
     where: ['packages/flags'],
   },
   {
@@ -428,7 +428,12 @@ export interface Setting {
   /** The names it covers; every setting the code or a workflow reads is named once. */
   readonly names: readonly string[];
   readonly kind:
-    'Secret' | 'Public build variable' | 'Set by the platform' | 'Constant' | 'Tooling';
+    | 'Secret'
+    | 'Server variable'
+    | 'Public build variable'
+    | 'Set by the platform'
+    | 'Constant'
+    | 'Tooling';
   readonly where: string;
   readonly use: string;
 }
@@ -532,9 +537,9 @@ export const SETTINGS: readonly Setting[] = [
   },
   {
     names: ['FLAG_OVERRIDES'],
-    kind: 'Tooling',
-    where: 'Local and tests',
-    use: 'Forces flags on or off without PostHog.',
+    kind: 'Server variable',
+    where: 'Vercel production (shell.build-version=on since Oct 4), local and tests',
+    use: 'Forces flags on or off for every organization, beating each owner’s switch: the kill switch.',
   },
   {
     names: ['CI', 'E2E_BASE_URL', 'E2E_PORT', 'PLAYWRIGHT_CHROMIUM_EXECUTABLE'],

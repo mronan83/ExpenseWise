@@ -100,6 +100,7 @@ export const FEATURES: readonly Feature[] = [
     phase: 'P1',
     status: 'Planned',
     backlog: 29,
+    flags: ['team.invites'],
   },
   {
     id: 'F-51',
@@ -109,6 +110,7 @@ export const FEATURES: readonly Feature[] = [
     phase: 'P1',
     status: 'Planned',
     backlog: 63,
+    flags: ['settings.organization'],
   },
 
   // Receipts
@@ -183,8 +185,9 @@ export const FEATURES: readonly Feature[] = [
     decisions: ['ADR-0006', 'ADR-0017'],
     code: ['packages/api/src/receipt-views.ts', 'packages/extraction/src/models.ts'],
     checks: ['api/receipts › keeps a running comparison of the two models', 'extraction/models'],
-    shortfalls: ['#4', '#21'],
-    note: 'Collecting nothing while the Anthropic account has no credit.',
+    shortfalls: ['#21'],
+    note: 'Claude reads nothing while the Anthropic account has no credit, which you chose on Oct 4 not to buy (#4, withdrawn); the comparison shows the readings there are.',
+    flags: ['receipts.capture-time'],
   },
   {
     id: 'F-08',
@@ -239,6 +242,7 @@ export const FEATURES: readonly Feature[] = [
       'api/receipts › lets a receipt no model could read be filled in by hand',
     ],
     note: 'Looks right and Edit a field on the receipt page. Since #6 a receipt no model could read can be filled in by hand too, so its expense is never stuck (ADR-0022). The confirmed values are stored apart from the readings, in typed columns; each correction keeps what the model read, as an eval candidate (ADR-0012). The page itself was checked by hand: the end-to-end tests run signed out.',
+    flags: ['receipts.field-sources'],
   },
   {
     id: 'F-16',
@@ -363,6 +367,7 @@ export const FEATURES: readonly Feature[] = [
     phase: 'P1',
     status: 'Planned',
     backlog: 17,
+    flags: ['expenses.mileage'],
   },
   {
     id: 'F-14',
@@ -381,6 +386,7 @@ export const FEATURES: readonly Feature[] = [
     phase: 'P1',
     status: 'Planned',
     backlog: 52,
+    flags: ['receipts.model-settings'],
   },
   {
     id: 'F-47',
@@ -434,6 +440,7 @@ export const FEATURES: readonly Feature[] = [
     phase: 'P1',
     status: 'Planned',
     backlog: 64,
+    flags: ['settings.duplicate-window'],
   },
   {
     id: 'F-48',
@@ -475,6 +482,7 @@ export const FEATURES: readonly Feature[] = [
     phase: 'P1',
     status: 'Planned',
     backlog: 62,
+    flags: ['reports.currency-conversion'],
   },
   {
     id: 'F-50',
@@ -503,6 +511,7 @@ export const FEATURES: readonly Feature[] = [
     phase: 'P1',
     status: 'Planned',
     backlog: 51,
+    flags: ['expenses.categories'],
   },
   {
     id: 'F-15',
@@ -570,6 +579,7 @@ export const FEATURES: readonly Feature[] = [
     phase: 'P1',
     status: 'Planned',
     backlog: 25,
+    flags: ['reports.export'],
   },
   {
     id: 'F-20',
@@ -579,6 +589,7 @@ export const FEATURES: readonly Feature[] = [
     phase: 'P1',
     status: 'Planned',
     backlog: 26,
+    flags: ['governance.audit-trail'],
   },
   {
     id: 'F-22',
@@ -725,17 +736,31 @@ export const FEATURES: readonly Feature[] = [
   },
   {
     id: 'F-31',
-    title: 'Feature flags, off by default',
+    title: 'Feature flags, off by default, switched per organization',
     group: 'Platform and operations',
     kind: 'operations',
     phase: 'P0',
     status: 'Verified',
-    delivered: 'PR #11',
-    code: ['packages/flags/src'],
+    delivered: 'PR #11; switches per organization in PR #58',
+    decisions: ['ADR-0032'],
+    code: [
+      'packages/flags/src',
+      'packages/db/src/features.ts',
+      'packages/api/src/features.ts',
+      'apps/web/lib/features.ts',
+      'apps/web/app/settings/features/page.tsx',
+    ],
+    api: ['GET /v1/features', 'PUT /v1/settings/features/{key}'],
+    screens: ['/settings/features'],
     flags: ['shell.build-version'],
     checks: [
       'flags/flags',
       'flags/posthog',
+      'api/features',
+      'api/workspace › lists every feature switched off, and lets only the owner switch one',
+      'api/workspace › switches a feature on and off for the organization, with an audit event each time',
+      'api/workspace › lets the server override beat the switch, and refuses a switch it would ignore',
+      'db/features.int',
       'e2e/shell › ships the build-version change dark: its flag is off by default',
     ],
   },

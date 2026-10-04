@@ -4,6 +4,7 @@ const OCT3 = { by: 'owner', source: 'owner 2026-10-03' } as const;
 const Q12 = { by: 'owner', source: 'Q12' } as const;
 const Q13 = { by: 'owner', source: 'Q13' } as const;
 const Q26 = { by: 'owner', source: 'Q26' } as const;
+const Q5 = { by: 'owner', source: 'Q5' } as const;
 const CLAUDE = { by: 'claude' } as const;
 const ADR13 = { by: 'blueprint', source: 'ADR-0013' } as const;
 const ADR14 = { by: 'claude', source: 'ADR-0014' } as const;
@@ -768,7 +769,85 @@ export const OPERATIONS_STORIES: readonly Story[] = [
         untested: 66,
       },
     ],
-    note: 'Only one change has shipped behind a flag, the build version on Home. The receipt screens shipped without one while you are the only user (ADR-0017), and every screen since has too; Q5, whether to keep that exception until a second member joins, is unanswered. Whether the build-version flag was ever turned on in production is #22. A rollback has never been rehearsed.',
+    note: 'The receipt screens shipped without a flag while you were the only user (ADR-0017), and every screen until Oct 4 did too. Your answer to Q5 ends that: every feature since ships behind a flag, switched per organization (US-REL-05). The build version on Home is turned on in production by the override setting (#22). A rollback has never been rehearsed.',
+  },
+  {
+    id: 'US-REL-05',
+    title: 'Switch each new feature on for my organization',
+    as: 'the owner of an organization',
+    want: 'each new feature to arrive switched off, and to switch it on, or off again, myself',
+    soThat:
+      'I check a feature on my phone before anyone relies on it, and hide one that misbehaves without waiting for a release',
+    feature: 'F-31',
+    requirements: ['NFR-DEL-05'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'a feature that has just been released',
+        when: 'anyone in the organization opens the app',
+        then: 'it is off: its screens and actions are hidden, and its API answers 404 feature_off',
+        decided: Q5,
+        checks: [
+          'api/workspace › lists every feature switched off, and lets only the owner switch one',
+          'api/features › answers 404 feature_off for a feature that is off, so it looks absent',
+          'db/features.int › is off until switched on, records each switch, and ignores a switch to what it is',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'I am the owner',
+        when: 'I switch a feature on or off in Settings › Features',
+        then: 'it changes for everyone in my organization at once, without a release, and the audit trail records who switched it and when',
+        decided: Q5,
+        checks: [
+          'api/workspace › switches a feature on and off for the organization, with an audit event each time',
+          'db/features.int › is off until switched on, records each switch, and ignores a switch to what it is',
+        ],
+      },
+      {
+        id: 'AC3',
+        given: 'I am not the owner',
+        when: 'I open Settings › Features',
+        then: 'I see which features are on, and can switch none',
+        decided: CLAUDE,
+        checks: [
+          'api/workspace › lists every feature switched off, and lets only the owner switch one',
+        ],
+      },
+      {
+        id: 'AC4',
+        given: 'the server’s override setting turns a feature on or off',
+        when: 'the owner’s switch says otherwise',
+        then: 'the override wins, the page says it is set on the server, and a switch that would have no effect is refused',
+        decided: RELEASES,
+        checks: [
+          'api/workspace › lets the server override beat the switch, and refuses a switch it would ignore',
+          'api/features › is off by default, on when the organization switches it, and the override beats both',
+        ],
+      },
+      {
+        id: 'AC5',
+        given: 'one organization switches a feature on',
+        when: 'another organization uses the app',
+        then: 'it stays off there',
+        decided: CLAUDE,
+        checks: [
+          'db/features.int › keeps one organization’s switches from another, and refuses a malformed flag',
+        ],
+      },
+      {
+        id: 'AC6',
+        given: 'a flag that belongs to the server, such as the build version',
+        when: 'the owner looks for it',
+        then: 'it is not offered: only the override setting turns it on',
+        decided: CLAUDE,
+        checks: [
+          'api/features › never offers the server’s own flags to an organization',
+          'api/workspace › refuses a feature that does not exist, or one that is the server’s own',
+        ],
+      },
+    ],
   },
   {
     id: 'US-REL-04',

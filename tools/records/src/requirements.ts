@@ -233,7 +233,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
     status: 'Partial',
     features: ['F-06', 'F-07'],
     checks: ['api/receipts › keeps a running comparison of the two models'],
-    shortfalls: ['#4', '#21'],
+    shortfalls: ['#21'],
     note: 'Ends with #52: one model reads each receipt (your answer to Q11). The tier decision (#21) then rests on the eval set.',
   },
   {
@@ -1581,7 +1581,7 @@ export const NON_FUNCTIONAL: readonly Requirement[] = [
     status: 'Partial',
     features: ['F-07'],
     checks: ['api/receipts › keeps a running comparison of the two models'],
-    shortfalls: ['#4', '#21'],
+    shortfalls: ['#21'],
   },
 
   // Architecture and portability
@@ -1690,9 +1690,13 @@ export const NON_FUNCTIONAL: readonly Requirement[] = [
     phase: 'P0',
     status: 'Partial',
     features: ['F-31'],
-    checks: ['e2e/shell › ships the build-version change dark: its flag is off by default'],
+    checks: [
+      'e2e/shell › ships the build-version change dark: its flag is off by default',
+      'api/features',
+      'db/features.int',
+    ],
     shortfalls: ['#22'],
-    note: 'The receipt and settings screens ship without flags by decision (ADR-0017 §7; Q5).',
+    note: 'Your answer to Q5 (Oct 4): every feature from then on ships behind a flag, and each organization’s owner switches it on in Settings › Features after checking it (ADR-0032). The screens released before then stay unflagged.',
   },
   {
     id: 'NFR-DEL-06',

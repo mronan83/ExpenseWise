@@ -689,3 +689,31 @@ export const aiProviderKeys = pgTable(
     check('ai_provider_keys_hint_short', sql`length(${t.keyHint}) <= 4`),
   ],
 );
+
+/**
+ * A feature switched on or off for one organization by its owner (Q5, NFR-DEL-05). A feature
+ * with no row is off. FLAG_OVERRIDES in the environment still wins, as a kill switch.
+ */
+export const orgFeatures = pgTable(
+  'org_features',
+  {
+    id: id(),
+    orgId: orgId(),
+    /** A key from the flag registry in @expensewise/flags, such as `expenses.mileage`. */
+    flag: text('flag').notNull(),
+    enabled: boolean('enabled').notNull(),
+    updatedByMemberId: uuid('updated_by_member_id').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('org_features_org_id_id_key').on(t.orgId, t.id),
+    unique('org_features_org_flag_key').on(t.orgId, t.flag),
+    foreignKey({
+      name: 'org_features_updated_by_fk',
+      columns: [t.orgId, t.updatedByMemberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    check('org_features_flag_format', sql`${t.flag} ~ '^[a-z]+\\.[a-z-]+$'`),
+  ],
+);

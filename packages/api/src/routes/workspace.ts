@@ -4,8 +4,12 @@ import {
   AiProviderKeyStatusSchema,
   AiProviderKeyTestSchema,
   AiProviderSchema,
+  FeatureKeySchema,
+  FeatureListSchema,
+  FeatureSchema,
   ProblemSchema,
   SetAiProviderKeySchema,
+  SwitchFeatureSchema,
   WorkspaceSchema,
 } from '../schemas.ts';
 
@@ -128,6 +132,54 @@ export const deleteAiKeyRoute = createRoute({
     401: problem('Sign in required.'),
     ...managerOnly,
     404: problem('No key is stored for this provider.'),
+    503: problem('Sign-in or the database is not configured on this server.'),
+  },
+});
+
+export const listFeaturesRoute = createRoute({
+  method: 'get',
+  path: '/v1/features',
+  tags: ['Settings'],
+  summary: "The organization's features",
+  description:
+    'Every feature that ships switched off, and whether it is on for the caller’s ' +
+    'organization. Screens hide a feature that is off.',
+  ...secured,
+  responses: {
+    200: {
+      description: 'One entry per feature.',
+      content: { 'application/json': { schema: FeatureListSchema } },
+    },
+    401: problem('Sign in required.'),
+    403: problem('The caller has no organization yet: call POST /v1/me/organization first.'),
+    503: problem('Sign-in or the database is not configured on this server.'),
+  },
+});
+
+export const switchFeatureRoute = createRoute({
+  method: 'put',
+  path: '/v1/settings/features/{key}',
+  tags: ['Settings'],
+  summary: 'Switch a feature on or off',
+  description:
+    'For the whole organization, at once and without a release. Only the owner can switch a ' +
+    'feature. The change is recorded in the audit log.',
+  ...secured,
+  request: {
+    params: z.object({
+      key: FeatureKeySchema.openapi({ param: { name: 'key', in: 'path' } }),
+    }),
+    body: { content: { 'application/json': { schema: SwitchFeatureSchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The feature as it now is.',
+      content: { 'application/json': { schema: FeatureSchema } },
+    },
+    400: problem('The request is not valid.'),
+    401: problem('Sign in required.'),
+    403: problem('Only the owner can switch features.'),
+    409: problem('The server overrides this feature, so a switch here would have no effect.'),
     503: problem('Sign-in or the database is not configured on this server.'),
   },
 });

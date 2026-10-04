@@ -2,6 +2,7 @@ import { DomainError } from '@expensewise/domain';
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { Hono, type Context, type ErrorHandler, type NotFoundHandler } from 'hono';
 import type { ProviderKeyVerifier } from './ai-providers.ts';
+import { featureGate, type FeatureGate } from './features.ts';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
 import { problem, ProblemError } from './problem.ts';
 import { healthRoute } from './routes/health.ts';
@@ -48,6 +49,11 @@ export interface ApiOptions
   readonly secrets?: SecretBox;
   /** Checks AI provider keys with a free call to the provider. */
   readonly verifyProviderKey?: ProviderKeyVerifier;
+  /**
+   * FLAG_OVERRIDES: features forced on or off for every organization, beating each owner's
+   * switch. The kill switch.
+   */
+  readonly flagOverrides?: string;
   readonly now?: () => Date;
 }
 
@@ -146,13 +152,16 @@ export function createApi(options: ApiOptions) {
     return c.json({ userId, email, assuranceLevel, sessionId }, 200);
   });
 
-  registerWorkspaceRoutes(app, options);
-  registerReceiptRoutes(app, options);
-  registerExpenseRoutes(app, options);
-  registerTripRoutes(app, options);
-  registerHomeRoutes(app, options);
-  registerReportRoutes(app, options);
-  registerInboundRoutes(app, options);
+  // One gate for every route: a feature that is off answers 404 feature_off.
+  const features: FeatureGate = featureGate(options);
+  const routes = { ...options, features };
+  registerWorkspaceRoutes(app, routes);
+  registerReceiptRoutes(app, routes);
+  registerExpenseRoutes(app, routes);
+  registerTripRoutes(app, routes);
+  registerHomeRoutes(app, routes);
+  registerReportRoutes(app, routes);
+  registerInboundRoutes(app, routes);
 
   app.doc31('/v1/openapi.json', OPENAPI_INFO);
 

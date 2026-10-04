@@ -124,6 +124,7 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
   ['a local expense with its reason', (s) => `/expenses/${s.expenses.lunch}`, []],
   ['AI provider settings', () => '/settings/ai', []],
   ['sign-in settings', () => '/settings/sign-ins', []],
+  ['feature settings', () => '/settings/features', []],
 ];
 
 const session = {

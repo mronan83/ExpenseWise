@@ -1,6 +1,7 @@
 import { isIsoDate, MERGE_FIELDS, SUPPORTED_CURRENCIES } from '@expensewise/domain';
 import { CORRECTABLE_FIELDS, READING_CHECKS } from '@expensewise/extraction';
 import { z } from '@hono/zod-openapi';
+import { ORG_FEATURE_KEYS, type OrgFeatureKey } from './features.ts';
 
 /** RFC 9457 problem details. Every error response uses this shape. */
 export const ProblemSchema = z
@@ -151,6 +152,38 @@ export const LinkSignInSchema = z
       }),
   })
   .openapi('LinkSignIn');
+
+export const FeatureKeySchema = z
+  .enum(ORG_FEATURE_KEYS as [OrgFeatureKey, ...OrgFeatureKey[]])
+  .openapi('FeatureKey');
+
+export const FeatureSchema = z
+  .object({
+    key: FeatureKeySchema,
+    name: z.string().openapi({ example: 'Mileage' }),
+    description: z.string().openapi({ description: 'What switching it on changes.' }),
+    enabled: z.boolean(),
+    source: z.enum(['default', 'organization', 'override']).openapi({
+      description:
+        "Where `enabled` comes from: the default (off), the organization's switch, or the " +
+        "server's override, which beats the switch until it is removed.",
+    }),
+    switchedAt: z
+      .string()
+      .datetime()
+      .nullable()
+      .openapi({ description: 'When the organization last switched it, if it has.' }),
+  })
+  .openapi('Feature');
+
+export const FeatureListSchema = z
+  .object({
+    features: z.array(FeatureSchema),
+    canSwitch: z.boolean().openapi({ description: 'Whether the caller may switch features.' }),
+  })
+  .openapi('FeatureList');
+
+export const SwitchFeatureSchema = z.object({ enabled: z.boolean() }).openapi('SwitchFeature');
 
 const ConfidenceSchema = z.enum(['high', 'medium', 'low']);
 const TextFieldSchema = z.object({ value: z.string(), confidence: ConfidenceSchema }).nullable();

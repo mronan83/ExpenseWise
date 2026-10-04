@@ -182,7 +182,7 @@ export const READING_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Until the model tier is chosen (#21). With #52 a receipt will be read once, by the primary model (Q11), so Ready will rest on that one reading; that replaces ADR-0017 and gets its own decision record. While the Anthropic account has no credit (#4), the fallback reads every receipt and each one Needs a look (US-READ-09).',
+    note: 'Until the model tier is chosen (#21). With #52 a receipt will be read once, by the primary model (Q11), so Ready will rest on that one reading; that replaces ADR-0017 and gets its own decision record. While the Anthropic account has no credit, which you chose on Oct 4 not to buy (#4, withdrawn), the fallback reads every receipt and each one Needs a look (US-READ-09).',
   },
   {
     id: 'US-READ-03',
@@ -727,7 +727,7 @@ export const READING_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'The fallback model, GPT-5.6 Luna, and the rule that its reading alone is never Ready are Claude’s recommendations (ADR-0020); a person can make it Ready with Looks right (US-READ-05). Since Oct 3 it reads every receipt, while the Anthropic account has no credit (#4). FR-INT-16 replaces it once #52 is built.',
+    note: 'The fallback model, GPT-5.6 Luna, and the rule that its reading alone is never Ready are Claude’s recommendations (ADR-0020); a person can make it Ready with Looks right (US-READ-05). Since Oct 3 it reads every receipt, while the Anthropic account has no credit (#4, withdrawn Oct 4). FR-INT-16 replaces it once #52 is built.',
   },
   {
     id: 'US-READ-10',
@@ -943,7 +943,7 @@ export const READING_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'It collects nothing while the Anthropic account has no credit (#4). The tier decision (#21) needs about 20 receipts read by both, then your decision, and takes effect by turning the other model off (#52); re-confirming it after about 100 real receipts waits on that.',
+    note: 'Claude collects nothing while the Anthropic account has no credit (#4, withdrawn Oct 4). The tier decision (#21) becomes your choice of primary model in Settings (#52), with this comparison beside it; re-confirming it after about 100 real receipts waits on that.',
   },
   {
     id: 'US-READ-13',

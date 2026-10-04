@@ -4,7 +4,7 @@ Receipts, mileage and trips, filed for you. ExpenseWise drafts every expense, as
 
 It is a web app first (a mobile-first progressive web app) and a native iPhone app later, both on one versioned API.
 
-**Status:** Phase 0 (foundations). See the [roadmap](docs/07-roadmap.md).
+**Status:** Phase 1 (building toward real use and the Phase 1 exit). See the [roadmap](docs/07-roadmap.md).
 
 ## Documentation
 

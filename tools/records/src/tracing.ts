@@ -352,6 +352,10 @@ export const QUESTIONS: readonly Question[] = [
     why: 'Flags cost a little on every change; they matter once someone else would see an unfinished feature.',
     recommendation: 'Yes, and flag everything again from the first invite (#29).',
     affects: ['NFR-DEL-05'],
+    answer: {
+      date: '2026-10-04',
+      text: 'Flag every feature from now on, each off by default; you switch each one on after checking it on your iPhone in production. The screens already released stay as they are. Each organization’s owner switches its own features in Settings › Features, at once and without a release, and the server’s override still beats that switch (ADR-0032).',
+    },
   },
   {
     id: 'Q6',

@@ -20,13 +20,16 @@ import {
   type Identity,
   type TokenVerifier,
 } from './auth.ts';
+import { featureGate, featureState, type FeatureGate } from './features.ts';
 import { ProblemError } from './problem.ts';
 import { sealContext } from './provider-keys.ts';
 import {
   deleteAiKeyRoute,
   ensureWorkspaceRoute,
   listAiKeysRoute,
+  listFeaturesRoute,
   setAiKeyRoute,
+  switchFeatureRoute,
   testAiKeyRoute,
 } from './routes/workspace.ts';
 import { linkSignInRoute, listSignInsRoute, unlinkSignInRoute } from './routes/sign-ins.ts';
@@ -38,6 +41,8 @@ export interface WorkspaceRouteOptions {
   readonly workspace?: WorkspaceStore;
   readonly secrets?: SecretBox;
   readonly verifyProviderKey?: ProviderKeyVerifier;
+  /** Which features are on. Built from `workspace` when not given. */
+  readonly features?: FeatureGate;
   readonly now?: () => Date;
 }
 
@@ -103,6 +108,7 @@ export function registerWorkspaceRoutes(
   options: WorkspaceRouteOptions,
 ) {
   const now = options.now ?? (() => new Date());
+  const features = options.features ?? featureGate({ workspace: options.workspace });
   const auth = requireIdentity(options.verifyToken);
   const paths = new Set(
     [
@@ -114,6 +120,8 @@ export function registerWorkspaceRoutes(
       listSignInsRoute,
       linkSignInRoute,
       unlinkSignInRoute,
+      listFeaturesRoute,
+      switchFeatureRoute,
     ].map((r) => r.getRoutingPath()),
   );
   for (const path of paths) app.use(path, auth);
@@ -407,5 +415,34 @@ export function registerWorkspaceRoutes(
     if (outcome === 'not_found') throw notFound();
     // 'last' cannot happen here: the caller's own sign-in remains.
     return c.body(null, 204);
+  });
+
+  app.openapi(listFeaturesRoute, async (c) => {
+    const who = await member(c.var.identity.userId);
+    const list = await features.list(who.orgId);
+    return c.json({ features: list, canSwitch: who.role === 'owner' }, 200);
+  });
+
+  app.openapi(switchFeatureRoute, async (c) => {
+    const caller = c.var.identity;
+    const who = await member(caller.userId);
+    if (who.role !== 'owner') {
+      throw new ProblemError(403, 'forbidden', 'Only the owner can switch features', {
+        code: 'forbidden_role',
+      });
+    }
+    const { key } = c.req.valid('param');
+    const { enabled } = c.req.valid('json');
+    if (features.overridden(key)) {
+      throw new ProblemError(409, 'feature-overridden', 'This feature is set on the server', {
+        code: 'feature_overridden',
+        detail:
+          'FLAG_OVERRIDES on the server decides it, so a switch here would have no effect. ' +
+          'Remove it from FLAG_OVERRIDES first.',
+      });
+    }
+    await store().switchFeature(who, { flag: key, enabled }, caller.userId);
+    const switched = (await store().listFeatures(who.orgId)).find((f) => f.flag === key);
+    return c.json(featureState(key, undefined, switched), 200);
   });
 }

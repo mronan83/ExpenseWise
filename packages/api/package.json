@@ -18,6 +18,7 @@
     "@expensewise/db": "workspace:*",
     "@expensewise/domain": "workspace:*",
     "@expensewise/extraction": "workspace:*",
+    "@expensewise/flags": "workspace:*",
     "@expensewise/storage": "workspace:*",
     "@hono/zod-openapi": "^1.6.3",
     "hono": "^4.13.12",

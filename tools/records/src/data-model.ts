@@ -18,8 +18,8 @@ export const DOMAINS: readonly Domain[] = [
   {
     name: 'Organizations and people',
     about:
-      'Who is in which organization, how they sign in, and the AI keys an organization brings.',
-    tables: ['organizations', 'members', 'member_sign_ins', 'ai_provider_keys'],
+      'Who is in which organization, how they sign in, the AI keys an organization brings, and the features its owner has switched on.',
+    tables: ['organizations', 'members', 'member_sign_ins', 'ai_provider_keys', 'org_features'],
   },
   {
     name: 'Receipts and reading',
@@ -73,6 +73,10 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   ai_provider_keys: {
     about:
       'An organization’s own Anthropic or OpenAI key, stored only as ciphertext bound to the organization and provider; only the last four characters are ever shown (ADR-0015, NFR-SEC-04).',
+  },
+  org_features: {
+    about:
+      'A feature the organization’s owner has switched on or off, with who switched it last. No row means off; the server’s override beats a row (ADR-0032, NFR-DEL-05). Each switch is in the audit trail.',
   },
   receipts: {
     about:
@@ -266,6 +270,17 @@ export const RULES: readonly Rule[] = [
     mechanism: 'Unique per organization and provider; the hint is at most four characters.',
     objects: ['ai_provider_keys_org_provider_key', 'ai_provider_keys_hint_short'],
     refs: ['NFR-SEC-04', 'ADR-0015'],
+  },
+  {
+    rule: 'An organization switches each feature once, and only to a flag-shaped name.',
+    mechanism:
+      'Unique per organization and flag; the flag must look like `area.name`. Which flags exist, and that only the owner switches, is the API’s to check.',
+    objects: [
+      'org_features_org_flag_key',
+      'org_features_flag_format',
+      'org_features_updated_by_fk',
+    ],
+    refs: ['ADR-0032'],
   },
   {
     rule: 'A sign-in reaches one member.',
