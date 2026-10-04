@@ -87,6 +87,11 @@ export const members = pgTable(
     displayName: text('display_name').notNull(),
     role: memberRole('role').notNull().default('member'),
     managerMemberId: uuid('manager_member_id'),
+    /**
+     * The currency the member is reimbursed in, chosen in Settings (FR-EXP-13, Q23). Null until
+     * they choose one: then it is the organization's home currency.
+     */
+    reimbursementCurrency: char('reimbursement_currency', { length: 3 }),
     createdAt: createdAt(),
   },
   (t) => [
@@ -97,6 +102,10 @@ export const members = pgTable(
       columns: [t.orgId, t.managerMemberId],
       foreignColumns: [t.orgId, t.id],
     }),
+    check(
+      'members_reimbursement_currency_iso',
+      sql`${t.reimbursementCurrency} IS NULL OR ${isoCurrency(t.reimbursementCurrency)}`,
+    ),
   ],
 );
 
@@ -196,6 +205,10 @@ export const reports = pgTable(
     memberId: uuid('member_id').notNull(),
     title: text('title').notNull(),
     status: reportStatus('status').notNull().default('open'),
+    /**
+     * The currency it is reimbursed in: its member's reimbursement currency, which it follows
+     * until it is submitted (FR-EXP-13). Every amount on it is converted to this.
+     */
     currency: char('currency', { length: 3 }).notNull(),
     /** When an open report closes itself: 28 days after opening, later if reopened. */
     closesAt: timestamp('closes_at', { withTimezone: true }).notNull(),
@@ -328,6 +341,62 @@ export const expenses = pgTable(
     index('expenses_trip_idx').on(t.orgId, t.tripId),
     index('expenses_report_idx').on(t.orgId, t.reportId),
     index('expenses_status_idx').on(t.orgId, t.status),
+  ],
+);
+
+export const conversionOutcome = pgEnum('conversion_outcome', ['converted', 'unavailable']);
+
+/**
+ * An expense's amount converted to the currency its report is reimbursed in (FR-EXP-13,
+ * ADR-0034): what was converted, and the reference rate it was converted at with that rate's
+ * date and source, copied on so a later rate never changes it (NFR-DAT-02, NFR-DAT-04); or that
+ * the source has no rate for it. One per expense: once its amount, currency, date or
+ * reimbursement currency changes, the next conversion replaces it, and each is in the audit
+ * trail. It goes with its expense when that is deleted.
+ */
+export const expenseConversions = pgTable(
+  'expense_conversions',
+  {
+    id: id(),
+    orgId: orgId(),
+    expenseId: uuid('expense_id').notNull(),
+    /** What was converted: the amount as spent, in its currency's minor units. */
+    amountMinor: bigint('amount_minor', { mode: 'number' }).notNull(),
+    currency: char('currency', { length: 3 }).notNull(),
+    /** The purchase date, whose reference rate applies (Q25). */
+    purchaseDate: date('purchase_date', { mode: 'string' }).notNull(),
+    /** The currency it was converted to: its report's. */
+    reimbursementCurrency: char('reimbursement_currency', { length: 3 }).notNull(),
+    /** converted, or unavailable: the source publishes no rate for it. */
+    outcome: conversionOutcome('outcome').notNull(),
+    /** The amount in the reimbursement currency's minor units: `amount_minor` times `rate`. */
+    convertedMinor: bigint('converted_minor', { mode: 'number' }),
+    /** What one unit of `currency` is in the reimbursement currency, exactly as applied. */
+    rate: numeric('rate'),
+    /** The day the rate was published: the purchase date, or the last day before it. */
+    rateDate: date('rate_date', { mode: 'string' }),
+    /** Who published the rate, or has none: `ECB`. */
+    source: text('source').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('expense_conversions_org_id_id_key').on(t.orgId, t.id),
+    unique('expense_conversions_expense_key').on(t.orgId, t.expenseId),
+    foreignKey({
+      name: 'expense_conversions_expense_fk',
+      columns: [t.orgId, t.expenseId],
+      foreignColumns: [expenses.orgId, expenses.id],
+    }).onDelete('cascade'),
+    check('expense_conversions_currency_iso', isoCurrency(t.currency)),
+    check('expense_conversions_into_iso', isoCurrency(t.reimbursementCurrency)),
+    check('expense_conversions_two_currencies', sql`${t.currency} <> ${t.reimbursementCurrency}`),
+    // A converted amount is only auditable with its rate, the rate's date and its source.
+    check(
+      'expense_conversions_rate_complete',
+      sql`(${t.outcome} = 'converted' AND ${t.convertedMinor} IS NOT NULL AND ${t.rate} IS NOT NULL AND ${t.rate} > 0 AND ${t.rateDate} IS NOT NULL AND ${t.rateDate} <= ${t.purchaseDate}) OR (${t.outcome} = 'unavailable' AND ${t.convertedMinor} IS NULL AND ${t.rate} IS NULL AND ${t.rateDate} IS NULL)`,
+    ),
+    check('expense_conversions_source_named', sql`length(trim(${t.source})) > 0`),
   ],
 );
 

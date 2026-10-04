@@ -18,6 +18,7 @@ import {
   dbExpenseStore,
   dbReceiptStore,
   dbHomeStore,
+  dbReimbursementStore,
   dbReportStore,
   dbTripStore,
   dbWorkspaceStore,
@@ -26,7 +27,13 @@ import {
 import { createDatabase, runReportSchedule, setRolePasswords } from '@expensewise/db';
 import { runMigrations } from '@expensewise/db/migrate';
 import { COMPARISON_MODELS, FALLBACK_MODEL } from '@expensewise/extraction';
-import { readWith, receiptReadingPorts, settleReading } from '@expensewise/workflows';
+import {
+  conversionPorts,
+  convertOrganization,
+  readWith,
+  receiptReadingPorts,
+  settleReading,
+} from '@expensewise/workflows';
 import { BENCH_PORT, E2E_USER, type Seeded } from './config';
 
 const baseUrl = process.env.DATABASE_URL;
@@ -227,6 +234,7 @@ const app = createHttpApp({
   trips: dbTripStore(db),
   home: dbHomeStore(db),
   reports: dbReportStore(db),
+  reimbursement: dbReimbursementStore(db),
   files: store,
   dispatch,
   secrets: createSecretBox('bench-only-secret-0123456789'),
@@ -471,6 +479,19 @@ const open = (
   await call<{ trips: { id: string; reportId: string | null }[] }>('GET', '/v1/trips')
 ).trips.find((t) => t.id === trips.omaha.id)?.reportId;
 if (!open) throw new Error('The schedule put no trip on a report');
+
+// The open report's flight in euros is converted to dollars (#62), with the ECB's rates for
+// the days before it faked here: the bench never calls the real source.
+const ecb = (url: string) => {
+  const days = /startPeriod=(\d{4}-\d{2}-\d{2})&endPeriod=(\d{4}-\d{2}-\d{2})/.exec(url);
+  const rows = days ? [`EXR.D.USD.EUR.SP00.A,D,USD,EUR,SP00,A,${days[2]},1.1723,A`] : [];
+  const csv = [
+    'KEY,FREQ,CURRENCY,CURRENCY_DENOM,EXR_TYPE,EXR_SUFFIX,TIME_PERIOD,OBS_VALUE,OBS_STATUS',
+    ...rows,
+  ];
+  return Promise.resolve(new Response(csv.join('\n'), { status: 200 }));
+};
+await convertOrganization(conversionPorts({ db, fetch: ecb as typeof fetch }), organization.id);
 const seeded: Seeded = {
   trips: {
     omaha: trips.omaha.id,

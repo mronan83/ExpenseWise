@@ -860,6 +860,55 @@ const TotalSchema = z.object({
   decimal: z.string(),
 });
 
+/** What something adds up to in the reimbursement currency (FR-EXP-13). */
+const ReimbursementTotalSchema = z
+  .object({
+    total: TotalSchema.openapi({
+      description:
+        'The amounts already in the reimbursement currency, and those converted to it. What ' +
+        'is still converting, or has no rate, is not in it.',
+    }),
+    converting: z.number().int().openapi({
+      description: 'Amounts whose rate is being fetched: the total is complete once this is 0.',
+    }),
+    unconverted: z.array(TotalSchema).openapi({
+      description:
+        'Amounts the rate source publishes no rate for, as spent, one sum per currency. They ' +
+        'stay unconverted.',
+    }),
+  })
+  .openapi('ReimbursementTotal');
+
+/** The rate an amount was converted at, as copied onto it (NFR-DAT-02, NFR-DAT-04). */
+const AppliedRateSchema = z
+  .object({
+    rate: z.string().openapi({
+      example: '1.1712',
+      description: 'What one unit of the currency spent is in the reimbursement currency.',
+    }),
+    date: z.string().openapi({
+      example: '2026-09-25',
+      description: 'The day the rate was published: the purchase date, or the last before it.',
+    }),
+    source: z.string().openapi({ example: 'ECB', description: 'Who published it.' }),
+  })
+  .openapi('AppliedRate');
+
+const ReimbursedSchema = z
+  .object({
+    kind: z.enum(['same', 'converted', 'converting', 'unconverted']).openapi({
+      description:
+        'same: spent in the reimbursement currency, counted as it is. converted: at the rate ' +
+        'given. converting: its rate is being fetched. unconverted: the source has no rate ' +
+        'for it, so it stays as spent.',
+    }),
+    amount: TotalSchema.nullable().openapi({
+      description: 'In the reimbursement currency; null while converting or unconverted.',
+    }),
+    rate: AppliedRateSchema.nullable(),
+  })
+  .openapi('Reimbursed');
+
 export const ReportStatusSchema = z
   .enum(['open', 'closed', 'submitted', 'in_approval', 'approved', 'settled'])
   .openapi({
@@ -874,9 +923,11 @@ export const ReportSummarySchema = z
     title: z.string(),
     status: ReportStatusSchema,
     owner: z.string(),
-    currency: z
-      .string()
-      .openapi({ description: 'What it is reimbursed in: the organization’s home currency.' }),
+    currency: z.string().openapi({
+      description:
+        'What it is reimbursed in: the person’s reimbursement currency while conversion is on, ' +
+        'which it follows until it is submitted; otherwise the organization’s home currency.',
+    }),
     openedAt: z.string().datetime(),
     closesAt: z
       .string()
@@ -903,7 +954,13 @@ export const ReportSummarySchema = z
     }),
     totals: z.array(TotalSchema).openapi({
       description:
-        'One total per currency, never converted; possible duplicates are left out (until #62).',
+        'One total per currency, as spent, never converted; possible duplicates are left out.',
+    }),
+    reimbursement: ReimbursementTotalSchema.optional().openapi({
+      description:
+        'Everything on it in `currency`, the person’s reimbursement currency, at each purchase ' +
+        'date’s reference rate; possible duplicates are left out. Only while the feature ' +
+        '`reports.currency-conversion` is on (FR-EXP-13).',
     }),
   })
   .openapi('ReportSummary');
@@ -916,6 +973,9 @@ export const ReportDetailSchema = ReportSummarySchema.extend({
         .int()
         .openapi({ description: 'Its expenses still being read or needing review.' }),
       ready: z.boolean(),
+      reimbursement: ReimbursementTotalSchema.optional().openapi({
+        description: 'Its expenses in the report’s currency, while conversion is on.',
+      }),
     }),
   ),
   localItems: z.array(
@@ -929,9 +989,66 @@ export const ReportDetailSchema = ReportSummarySchema.extend({
       justification: z.string().nullable(),
       held: z.boolean().openapi({ description: 'Held as a possible duplicate (FR-INT-18).' }),
       ready: z.boolean(),
+      reimbursed: ReimbursedSchema.nullable().optional().openapi({
+        description:
+          'Its amount in the report’s currency, while conversion is on; null with no amount yet.',
+      }),
     }),
   ),
+  rates: z
+    .array(
+      AppliedRateSchema.extend({
+        from: z.string().openapi({ example: 'EUR' }),
+        to: z.string().openapi({ example: 'USD' }),
+        expenses: z.number().int().openapi({ description: 'How many amounts it converted.' }),
+      }),
+    )
+    .optional()
+    .openapi({
+      description:
+        'Each rate its amounts were converted at, oldest first, while conversion is on ' +
+        '(NFR-DAT-02).',
+    }),
 }).openapi('ReportDetail');
+
+// The reimbursement currency (FR-EXP-13, Q23)
+
+export const ReimbursementCurrencySchema = z
+  .object({
+    currency: z.string().openapi({
+      example: 'USD',
+      description: 'What the caller’s reports are converted to: their choice, else `homeCurrency`.',
+    }),
+    chosen: z.string().nullable().openapi({
+      description: 'What the caller chose; null when they never chose, or chose to follow it.',
+    }),
+    homeCurrency: z.string().openapi({ example: 'USD' }),
+    currencies: z
+      .array(
+        z.object({
+          code: z.string().openapi({ example: 'EUR' }),
+          converts: z.boolean().openapi({
+            description:
+              'Whether the rate source (the ECB) publishes it. One it doesn’t stays unconverted.',
+          }),
+        }),
+      )
+      .openapi({ description: 'Every currency the app supports.' }),
+  })
+  .openapi('ReimbursementCurrency');
+
+export const SetReimbursementCurrencySchema = z
+  .object({
+    currency: z
+      .enum(SUPPORTED_CURRENCIES as [string, ...string[]])
+      .nullable()
+      .openapi({
+        example: 'EUR',
+        description: 'The currency to be reimbursed in, or null to follow the organization’s.',
+      }),
+  })
+  .strict()
+  .openapi('SetReimbursementCurrency');
 
 export const ReportListSchema = z
   .object({ reports: z.array(ReportSummarySchema) })

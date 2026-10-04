@@ -7,6 +7,7 @@ import { useFeatures } from '../../lib/features';
 const PAGES: readonly { href: string; label: string; flag?: string }[] = [
   { href: '/settings/ai', label: 'AI providers' },
   { href: '/settings/sign-ins', label: 'Sign-ins' },
+  { href: '/settings/currency', label: 'Currency', flag: 'reports.currency-conversion' },
   { href: '/settings/features', label: 'Features' },
 ];
 

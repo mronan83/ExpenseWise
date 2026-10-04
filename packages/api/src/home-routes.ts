@@ -1,9 +1,11 @@
 import type { Membership } from '@expensewise/db';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
+import { featureGate, type FeatureGate } from './features.ts';
 import type { HomeStore } from './home.ts';
 import { homeView } from './home-views.ts';
 import { ProblemError } from './problem.ts';
+import { showConverted } from './reimbursement.ts';
 import { homeRoute } from './routes/home.ts';
 import type { WorkspaceStore } from './workspace.ts';
 
@@ -11,6 +13,8 @@ export interface HomeRouteOptions {
   readonly verifyToken?: TokenVerifier;
   readonly workspace?: WorkspaceStore;
   readonly home?: HomeStore;
+  /** Which features are on. Built from `workspace` when not given. */
+  readonly features?: FeatureGate;
   readonly now?: () => Date;
 }
 
@@ -23,6 +27,7 @@ export function registerHomeRoutes(
   options: HomeRouteOptions,
 ) {
   app.use(homeRoute.getRoutingPath(), requireIdentity(options.verifyToken));
+  const features = options.features ?? featureGate(options);
 
   const stores = () => {
     if (!options.workspace || !options.home) {
@@ -56,6 +61,7 @@ export function registerHomeRoutes(
     const day =
       c.req.valid('query').day ?? (options.now?.() ?? new Date()).toISOString().slice(0, 10);
     const data = await stores().home.snapshot(who.orgId, who.memberId, day, NEEDS_LIMIT);
-    return c.json(homeView(data, day, NEEDS_SHOWN, options.now?.() ?? new Date()), 200);
+    const converting = await showConverted(features, who.orgId, data.reports.reports);
+    return c.json(homeView(data, day, NEEDS_SHOWN, options.now?.() ?? new Date(), converting), 200);
   });
 }

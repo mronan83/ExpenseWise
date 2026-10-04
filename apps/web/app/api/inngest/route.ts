@@ -1,5 +1,8 @@
 import { createDatabase } from '@expensewise/db';
 import {
+  amountConversionFunction,
+  conversionPorts,
+  conversionSweepFunction,
   emailReadingFunction,
   emailReadingPorts,
   outboxRelayFunction,
@@ -8,6 +11,7 @@ import {
   relayPorts,
   reportScheduleFunction,
   reportSchedulePorts,
+  type ConversionPorts,
   type EmailReadingPorts,
   type ReceiptReadingPorts,
   type RelayPorts,
@@ -79,6 +83,16 @@ function schedulePorts(): ReportSchedulePorts {
   return schedule;
 }
 
+let converting: ConversionPorts | undefined;
+function convertingPorts(): ConversionPorts {
+  if (converting) return converting;
+  const db = appDatabase();
+  if (!db) throw new Error('Converting amounts needs DATABASE_URL');
+  // Rates come from the ECB's public data API, which needs no key (ADR-0034).
+  converting = conversionPorts({ db, overrides: process.env.FLAG_OVERRIDES });
+  return converting;
+}
+
 const handler = workflowsServed
   ? serve({
       client: workflowClient,
@@ -87,6 +101,8 @@ const handler = workflowsServed
         receiptReadingFunction(workflowClient, readingPorts),
         emailReadingFunction(workflowClient, emailPorts),
         reportScheduleFunction(workflowClient, schedulePorts),
+        amountConversionFunction(workflowClient, convertingPorts),
+        conversionSweepFunction(workflowClient, convertingPorts),
       ],
     })
   : undefined;

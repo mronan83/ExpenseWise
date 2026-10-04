@@ -5,8 +5,10 @@ import { detailsOf } from '@expensewise/extraction/place';
 import { receiptPath, RECEIPT_BUCKET, type ObjectStore } from '@expensewise/storage';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
+import { featureGate, type FeatureGate } from './features.ts';
 import { needsYouItems, NO_REPORTS } from './needs-you-views.ts';
 import { ProblemError } from './problem.ts';
+import { showConverted } from './reimbursement.ts';
 import { inboxRoute } from './routes/inbox.ts';
 import {
   comparisonSummary,
@@ -40,6 +42,8 @@ export interface ReceiptRouteOptions {
   readonly dispatch?: (events: readonly CommittedEvent[]) => Promise<void>;
   /** Reports and local expenses that need the person join Needs you when it is given. */
   readonly reports?: ReportStore;
+  /** Which features are on. Built from `workspace` when not given. */
+  readonly features?: FeatureGate;
   readonly now?: () => Date;
 }
 
@@ -51,6 +55,7 @@ export function registerReceiptRoutes(
   options: ReceiptRouteOptions,
 ) {
   const auth = requireIdentity(options.verifyToken);
+  const features = options.features ?? featureGate(options);
   const paths = new Set(
     [
       receiptUploadRoute,
@@ -203,7 +208,8 @@ export function registerReceiptRoutes(
     const reports = options.reports
       ? await options.reports.needsYou(who.orgId, who.memberId, LIST_LIMIT)
       : NO_REPORTS;
-    const items = needsYouItems(receipts, reports, options.now?.() ?? new Date());
+    const converting = await showConverted(features, who.orgId, reports.reports);
+    const items = needsYouItems(receipts, reports, options.now?.() ?? new Date(), converting);
     return c.json({ items }, 200);
   });
 

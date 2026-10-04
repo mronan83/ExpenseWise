@@ -56,9 +56,15 @@ function tripView(home: HomeSnapshot, day: string) {
  * or next, this month, their reports to finish, and the last trips. Built from the same views as the inbox and Trips,
  * so a figure here matches the one there.
  */
-export function homeView(data: HomeData, day: string, shown: number, now = new Date()) {
+export function homeView(
+  data: HomeData,
+  day: string,
+  shown: number,
+  now = new Date(),
+  converting = false,
+) {
   const { home } = data;
-  const items = needsYouItems(data, data.reports, now);
+  const items = needsYouItems(data, data.reports, now, converting);
   const month = home.monthExpenses;
   const offTrip = month.filter((r) => !r.onTrip);
   return {
@@ -75,7 +81,7 @@ export function homeView(data: HomeData, day: string, shown: number, now = new D
     },
     reading: home.reading,
     // Reports to finish: the open and closed ones, newest first (FR-INS-01, Q15).
-    reports: data.reports.reports.map((r) => reportSummary(r, now)),
+    reports: data.reports.reports.map((r) => reportSummary(r, now, converting)),
     recentTrips: home.recentTrips.map((t) => tripSummary(t, home.tallies)),
   };
 }

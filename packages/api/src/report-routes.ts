@@ -1,7 +1,9 @@
 import type { Membership, MoveToReportResult } from '@expensewise/db';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
+import { featureGate, type FeatureGate } from './features.ts';
 import { ProblemError } from './problem.ts';
+import { showConverted } from './reimbursement.ts';
 import { reportDetail, reportSummary } from './report-views.ts';
 import type { ReportStore } from './reports.ts';
 import {
@@ -19,6 +21,8 @@ export interface ReportRouteOptions {
   readonly verifyToken?: TokenVerifier;
   readonly workspace?: WorkspaceStore;
   readonly reports?: ReportStore;
+  /** Which features are on. Built from `workspace` when not given. */
+  readonly features?: FeatureGate;
   readonly now?: () => Date;
 }
 
@@ -29,6 +33,7 @@ export function registerReportRoutes(
   options: ReportRouteOptions,
 ) {
   const auth = requireIdentity(options.verifyToken);
+  const features = options.features ?? featureGate(options);
   const paths = new Set(
     [
       listReportsRoute,
@@ -73,14 +78,15 @@ export function registerReportRoutes(
   const detailOf = async (orgId: string, reportId: string) => {
     const found = await stores().reports.get(orgId, reportId);
     if (!found) throw notFound('report');
-    return reportDetail(found, now());
+    return reportDetail(found, now(), await showConverted(features, orgId, [found]));
   };
 
   app.openapi(listReportsRoute, async (c) => {
     const who = await member(c.var.identity.userId);
     const found = await stores().reports.list(who.orgId, who.memberId, LIST_LIMIT);
     const at = now();
-    return c.json({ reports: found.map((r) => reportSummary(r, at)) }, 200);
+    const on = await showConverted(features, who.orgId, found);
+    return c.json({ reports: found.map((r) => reportSummary(r, at, on)) }, 200);
   });
 
   app.openapi(getReportRoute, async (c) => {

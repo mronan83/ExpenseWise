@@ -2,6 +2,7 @@ import { reopenedClosesAt } from '@expensewise/domain';
 import { and, eq, inArray, isNotNull } from 'drizzle-orm';
 import { appendAuditEvent, type AuditEntry } from './audit.ts';
 import type { Transaction } from './client.ts';
+import { requestConversions } from './conversions.ts';
 import { expenses, reports, trips } from './schema.ts';
 
 /** The reports these expenses are on: a trip's report, or a local expense's own. */
@@ -47,6 +48,8 @@ export async function reopenChangedReports(
   now = new Date(),
 ): Promise<string[]> {
   if (reportIds.length === 0) return [];
+  // A changed amount, currency or date may need converting again (FR-EXP-13).
+  await requestConversions(tx, orgId, now);
   const closed = await tx
     .select({ id: reports.id, closesAt: reports.closesAt })
     .from(reports)

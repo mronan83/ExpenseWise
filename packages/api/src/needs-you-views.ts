@@ -18,14 +18,20 @@ export interface ReceiptsNeedingYou {
 /**
  * Everything in Needs you, in the order to do it (FR-EXP-02): a report that is overdue or in
  * its last week with something left, then receipts that need a look, newest first, then local
- * expenses that need a justification, oldest first, then reports ready to close.
+ * expenses that need a justification, oldest first, then reports ready to close. With
+ * `converting`, reports total in their reimbursement currency (FR-EXP-13).
  */
-export function needsYouItems(receipts: ReceiptsNeedingYou, reports: ReportsNeedingYou, now: Date) {
+export function needsYouItems(
+  receipts: ReceiptsNeedingYou,
+  reports: ReportsNeedingYou,
+  now: Date,
+  converting = false,
+) {
   const receiptItems = receipts.receipts
     .map((r) => inboxItem(r, receipts.runs, receipts.reviews, receipts.pairs))
     .filter((item) => item !== null);
   const reportItems = reports.reports
-    .map((r) => reportItem(r, now))
+    .map((r) => reportItem(r, now, converting))
     .filter((item) => item !== null);
   return [
     ...reportItems.filter((i) => i.reason.code !== 'ready_to_close'),

@@ -162,4 +162,28 @@ export const RULES: readonly Rule[] = [
       literal: '10 * 60 * 1000',
     },
   },
+  {
+    id: 'R-RATE-LOOKBACK',
+    name: 'How far back a purchase’s reference rate may have been published',
+    value: '10 days: on a weekend or holiday, the last rate before it',
+    decided: { by: 'claude', source: 'ADR-0034' },
+    code: {
+      file: 'packages/domain/src/reference-rates.ts',
+      constant: 'REFERENCE_RATE_LOOKBACK_DAYS',
+      literal: '10',
+    },
+    note: 'Your answer to Q25 chose the purchase date’s reference rate; the ECB publishes none on weekends or its holidays, the longest gap being Easter’s four days. Using the last rate before such a day is Claude’s, and so are the 10 days.',
+  },
+  {
+    id: 'R-CONVERSION-SWEEP',
+    name: 'How often what is still converting is tried again',
+    value: 'hourly, at 37 minutes past',
+    decided: { by: 'claude', source: 'ADR-0034' },
+    code: {
+      file: 'packages/workflows/src/conversions.ts',
+      constant: 'CONVERSION_SWEEP',
+      literal: "'37 * * * *'",
+    },
+    note: 'A request to convert normally comes as something changes, within minutes; the sweep catches a failed fetch or a missed request.',
+  },
 ];

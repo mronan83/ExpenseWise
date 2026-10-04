@@ -125,6 +125,7 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
   ['AI provider settings', () => '/settings/ai', []],
   ['sign-in settings', () => '/settings/sign-ins', []],
   ['feature settings', () => '/settings/features', []],
+  ['reimbursement currency settings', () => '/settings/currency', []],
 ];
 
 const session = {

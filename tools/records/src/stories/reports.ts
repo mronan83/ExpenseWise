@@ -534,7 +534,7 @@ export const REPORT_STORIES: readonly Story[] = [
         given:
           'a report with amounts in more than one currency, or a local expense held as a possible duplicate',
         when: 'its totals are shown',
-        then: 'there is one total per currency, never converted until #62, and the possible duplicate counts in none',
+        then: 'there is one total per currency as spent, never converted, and the possible duplicate counts in none; with conversion on, a total in my reimbursement currency comes first (US-RPT-11)',
         decided: ADR29,
         checks: [
           'api/reports › lists the person’s reports with their trips, totals per currency and what holds them',
@@ -767,7 +767,7 @@ export const REPORT_STORIES: readonly Story[] = [
     soThat: 'a report shows one total, the one I will get back',
     feature: 'F-49',
     requirements: ['FR-EXP-13', 'NFR-DAT-02', 'NFR-DAT-04'],
-    status: 'Planned',
+    status: 'Delivered',
     criteria: [
       {
         id: 'AC1',
@@ -775,7 +775,11 @@ export const REPORT_STORIES: readonly Story[] = [
         when: 'I open it',
         then: 'each amount shows in my reimbursement currency beside the amount as spent, and the report totals in that one currency',
         decided: OCT4,
-        checks: [],
+        checks: [
+          'api/reimbursement › totals in one currency: amounts already in it as they are, the rest at their rate, and says what is left out',
+          'api/reimbursement › shows each amount beside its conversion, with the rate, its date and its source',
+          'e2e/signed-in',
+        ],
       },
       {
         id: 'AC2',
@@ -783,7 +787,10 @@ export const REPORT_STORIES: readonly Story[] = [
         when: 'it is converted',
         then: 'it is at the reference rate for its purchase date',
         decided: { by: 'owner', source: 'Q25' },
-        checks: [],
+        checks: [
+          'domain/reference-rates › takes the purchase date’s own rate, against the euro as published',
+          'db/conversions.int › converts at the purchase date’s reference rate, or the last one before it, and copies the rate on',
+        ],
       },
       {
         id: 'AC3',
@@ -792,7 +799,10 @@ export const REPORT_STORIES: readonly Story[] = [
         when: 'the report is totalled',
         then: 'it counts as it is, with no rate applied',
         decided: { by: 'owner', source: 'Q22' },
-        checks: [],
+        checks: [
+          'domain/reimbursement › counts an amount already in it as it is, with no rate',
+          'api/reimbursement › totals in one currency: amounts already in it as they are, the rest at their rate, and says what is left out',
+        ],
       },
       {
         id: 'AC4',
@@ -800,7 +810,10 @@ export const REPORT_STORIES: readonly Story[] = [
         when: 'I choose my reimbursement currency',
         then: 'my reports convert to it',
         decided: { by: 'owner', source: 'Q23' },
-        checks: [],
+        checks: [
+          'db/conversions.int › moves open and closed reports to a new choice, and leaves a submitted one as it was',
+          'api/reimbursement › sets the person’s choice and hands the request to convert to the workflows at once',
+        ],
       },
       {
         id: 'AC5',
@@ -808,7 +821,10 @@ export const REPORT_STORIES: readonly Story[] = [
         when: 'my reports convert',
         then: 'they use my organization’s home currency',
         decided: OCT4,
-        checks: [],
+        checks: [
+          'db/conversions.int › starts as the organization’s home currency, and is the person’s own once chosen',
+          'api/reimbursement › is the organization’s home currency until the person chooses, with every currency to choose from',
+        ],
       },
       {
         id: 'AC6',
@@ -816,10 +832,58 @@ export const REPORT_STORIES: readonly Story[] = [
         when: 'anyone looks at it later, after rates have moved',
         then: 'it keeps the rate it was converted at, that rate’s date and its source, unchanged',
         decided: { by: 'blueprint', source: 'arch §6.7' },
-        checks: [],
+        checks: [
+          'db/conversions.int › keeps the rate it converted at when rates move, and applies it again to an edited amount',
+          'db/conversions.int › refuses a converted amount without its rate, the rate’s date or its source',
+        ],
+      },
+      {
+        id: 'AC7',
+        given: 'a purchase on a weekend or a holiday, when the ECB publishes no rate',
+        when: 'it is converted',
+        then: 'the last rate published before it applies, at most 10 days back, and the rate’s date recorded is the day it was published',
+        decided: { by: 'claude', source: 'ADR-0034' },
+        checks: [
+          'domain/reference-rates › uses the last rate published before a weekend, and records that rate’s own date',
+          'domain/reference-rates › has no rate past the lookback, or for a day both currencies weren’t published',
+        ],
+        rules: ['R-RATE-LOOKBACK'],
+      },
+      {
+        id: 'AC8',
+        given: 'an amount in one currency reimbursed in another, neither of them the euro',
+        when: 'it is converted',
+        then: 'the rate is crossed through the euro, kept to 10 significant digits, and that stored rate alone gives the converted amount, within a cent of the exact cross',
+        decided: { by: 'claude', source: 'ADR-0034' },
+        checks: [
+          'domain/reference-rates › crosses two currencies through the euro, to ten significant digits',
+          'domain/reference-rates › converts up to 100,000.00 within a cent of the exact cross rate',
+        ],
+      },
+      {
+        id: 'AC9',
+        given: 'a report I open, or one on Home or in Needs you',
+        when: 'it is totalled',
+        then: 'the total I see first is in my reimbursement currency, with what was spent beside it, and the report lists each rate used with its date and source',
+        decided: { by: 'claude', source: 'ADR-0034' },
+        checks: [
+          'api/reimbursement › totals in the reimbursement currency on Home and in Needs you too',
+          'api/reimbursement › shows each amount beside its conversion, with the rate, its date and its source',
+        ],
+      },
+      {
+        id: 'AC10',
+        given: 'currency conversion is switched off',
+        when: 'I open my reports, Home or Needs you',
+        then: 'they read exactly as before: one total per currency, nothing converted',
+        decided: { by: 'owner', source: 'Q5' },
+        checks: [
+          'api/reimbursement › reads exactly as before while the feature is off',
+          'db/conversions.int › does nothing while the feature is off',
+        ],
       },
     ],
-    note: 'Replacing the reference rate with the amount on a card statement was not part of your answer to Q25, so it isn’t planned. Until #62, reports total each currency apart (US-RPT-06).',
+    note: 'Replacing the reference rate with the amount on a card statement was not part of your answer to Q25, so it isn’t planned. AC7 to AC9 are Claude’s (ADR-0034), yours to overturn.',
   },
   {
     id: 'US-RPT-12',
@@ -901,5 +965,160 @@ export const REPORT_STORIES: readonly Story[] = [
         checks: [],
       },
     ],
+  },
+  {
+    id: 'US-RPT-14',
+    title: 'Know when an amount isn’t converted yet, or can’t be',
+    as: 'Alex, who travels for work, abroad too',
+    want: 'to see plainly which amounts are still being converted, and which can’t be',
+    soThat: 'I never take a partial total for the one I will get back',
+    feature: 'F-49',
+    requirements: ['FR-EXP-13'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'an amount on a report whose rate isn’t recorded yet',
+        when: 'I open the report',
+        then: 'it says it is converting, the total says how many amounts it leaves out, and the rate is fetched in the background, never while I wait',
+        decided: { by: 'claude', source: 'ADR-0034' },
+        checks: [
+          'domain/reimbursement › is converting while no recorded rate applies: none yet, or another currency, date or target',
+          'api/reimbursement › totals in one currency: amounts already in it as they are, the rest at their rate, and says what is left out',
+          'workflows/conversions › converts what it can, fetches the rates still needed, then converts with them',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'an amount in a currency the ECB doesn’t publish, such as dirhams',
+        when: 'the report is converted',
+        then: 'it stays as spent, marked not converted, and is listed apart from the total',
+        decided: { by: 'claude', source: 'ADR-0034' },
+        checks: [
+          'db/conversions.int › records a currency the source has no rate for, or a day with none in reach, as unconverted',
+          'domain/reimbursement › stays as spent, said plainly, when the source has no rate for it',
+          'api/reimbursement › shows each amount beside its conversion, with the rate, its date and its source',
+        ],
+      },
+      {
+        id: 'AC3',
+        given: 'a trip joins a report, or an amount on one changes',
+        when: 'the change is saved',
+        then: 'conversion is asked for at once, and an hourly sweep tries again whatever is still converting, such as after the ECB was down',
+        decided: { by: 'claude', source: 'ADR-0034' },
+        checks: [
+          'db/conversions.int › asks when something on a report changes, and the sweep finds the organization until it is converted',
+          'workflows/conversions › takes no series as no rate, tries a busy source again, and gives up on a bad request',
+          'workflows/conversions › carries on past an organization that fails, then fails the sweep so it is retried',
+        ],
+        rules: ['R-CONVERSION-SWEEP'],
+      },
+      {
+        id: 'AC4',
+        given: 'a purchase dated today',
+        when: 'it would be converted',
+        then: 'it waits until tomorrow, when today’s rate is published, rather than taking yesterday’s',
+        decided: { by: 'claude', source: 'ADR-0034' },
+        checks: [
+          'domain/reference-rates › waits for the day after a purchase, when that day’s rate is published',
+          'db/conversions.int › waits for the day after a purchase before asking for its rate',
+        ],
+      },
+      {
+        id: 'AC5',
+        given: 'the owner switches currency conversion on',
+        when: 'it is switched',
+        then: 'what is already on reports is converted without waiting for a change',
+        decided: { by: 'claude', source: 'ADR-0034' },
+        checks: [
+          'db/conversions.int › announces a feature switched on or off',
+          'workflows/conversions › run when asked, or when the owner switches the feature on, one at a time per organization',
+        ],
+      },
+    ],
+    note: 'All Claude’s (ADR-0034), yours to overturn. The ECB publishes about 30 currencies; dirhams, dinars, riyals and the pesos of Chile, Colombia and Argentina are among those it doesn’t.',
+  },
+  {
+    id: 'US-RPT-15',
+    title: 'Choose the currency I’m reimbursed in',
+    as: 'Alex, who travels for work, abroad too',
+    want: 'to choose in Settings the currency I’m reimbursed in',
+    soThat: 'my reports total in the money I am actually paid back in',
+    feature: 'F-49',
+    requirements: ['FR-EXP-13'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'I have never chosen one',
+        when: 'I open Settings › Currency',
+        then: 'it shows my organization’s home currency, and every currency I could choose, marking those the ECB has no rate for',
+        decided: { by: 'owner', source: 'Q23' },
+        checks: [
+          'api/reimbursement › is the organization’s home currency until the person chooses, with every currency to choose from',
+          'e2e/signed-in',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'I choose another currency',
+        when: 'I save it',
+        then: 'my open and closed reports move to it and convert again, and a report opened from then on opens in it',
+        decided: { by: 'owner', source: 'Q23' },
+        checks: [
+          'db/conversions.int › moves open and closed reports to a new choice, and leaves a submitted one as it was',
+          'db/conversions.int › opens a new report in the person’s currency while the feature is on, and the home currency while off',
+          'api/reimbursement › sets the person’s choice and hands the request to convert to the workflows at once',
+        ],
+      },
+      {
+        id: 'AC3',
+        given: 'a report already submitted',
+        when: 'I choose another currency',
+        then: 'it keeps the currency it was submitted in',
+        decided: { by: 'claude', source: 'ADR-0034' },
+        checks: [
+          'db/conversions.int › moves open and closed reports to a new choice, and leaves a submitted one as it was',
+        ],
+      },
+      {
+        id: 'AC4',
+        given: 'I chose a currency',
+        when: 'I choose my organization’s again',
+        then: 'my reports follow its home currency, whatever it becomes',
+        decided: { by: 'claude', source: 'ADR-0034' },
+        checks: [
+          'db/conversions.int › starts as the organization’s home currency, and is the person’s own once chosen',
+          'api/reimbursement › sets the person’s choice and hands the request to convert to the workflows at once',
+        ],
+      },
+      {
+        id: 'AC5',
+        given: 'any choice of currency',
+        when: 'it is saved',
+        then: 'it is in the audit trail, with what it was before',
+        decided: { by: 'blueprint', source: 'arch AP4' },
+        checks: [
+          'db/conversions.int › starts as the organization’s home currency, and is the person’s own once chosen',
+        ],
+      },
+      {
+        id: 'AC6',
+        given: 'currency conversion is switched off',
+        when: 'I look in Settings',
+        then: 'there is no Currency page, and asking for my currency answers that the feature is off',
+        decided: { by: 'owner', source: 'Q5' },
+        checks: ['api/reimbursement › looks absent while the feature is off'],
+      },
+      {
+        id: 'AC7',
+        given: 'a currency the app doesn’t support',
+        when: 'it is asked for',
+        then: 'it is refused, and nothing changes',
+        decided: { by: 'claude' },
+        checks: ['api/reimbursement › refuses a currency the app doesn’t support, and a stranger'],
+      },
+    ],
+    note: 'Your answer to Q23: your preferred currency, set in the app. Keeping a submitted report’s currency, and following the organization’s home currency until you choose, are Claude’s (ADR-0034).',
   },
 ];

@@ -35,8 +35,9 @@ export const DOMAINS: readonly Domain[] = [
   },
   {
     name: 'Expenses and trips',
-    about: 'The claim: what was spent, on which trip, coded how, and the miles behind it.',
-    tables: ['expenses', 'trips', 'categories', 'mileage_logs'],
+    about:
+      'The claim: what was spent, on which trip, coded how, the miles behind it, and what it is in the currency it is reimbursed in.',
+    tables: ['expenses', 'expense_conversions', 'trips', 'categories', 'mileage_logs'],
   },
   {
     name: 'Reports and approval',
@@ -64,7 +65,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   members: {
     about:
-      'A person in an organization, with their role and, for approval routing, their manager (FR-GOV-01).',
+      'A person in an organization, with their role, for approval routing their manager (FR-GOV-01), and the currency they are reimbursed in, once they choose one in Settings; until then, their organization’s home currency (FR-EXP-13, Q23).',
   },
   member_sign_ins: {
     about:
@@ -100,7 +101,11 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   expenses: {
     about:
-      'What is claimed: merchant, date, amount and currency, its status, and the trip it is filed to. It also carries when and where it was bought, as its receipt prints them: a local time with its time zone, worked out offline from the city, region and country, and the address (FR-INT-17, ADR-0030). It follows its receipt until a person edits it (ADR-0022) and files to trips by date until a person chooses (ADR-0023). One with a date and no trip is local: it carries a justification and points at its report itself, while one on a trip goes with the trip’s report (FR-EXP-14, ADR-0029). Home sums a member’s month through the member-and-date index, so it needs no index of its own.',
+      'What is claimed: merchant, date, amount and currency, its status, and the trip it is filed to. It also carries when and where it was bought, as its receipt prints them: a local time with its time zone, worked out offline from the city, region and country, and the address (FR-INT-17, ADR-0030). It follows its receipt until a person edits it (ADR-0022) and files to trips by date until a person chooses (ADR-0023). One with a date and no trip is local: it carries a justification and points at its report itself, while one on a trip goes with the trip’s report (FR-EXP-14, ADR-0029). Home sums a member’s month through the member-and-date index, so it needs no index of its own. Its Phase 0 columns for one converted amount (`home_amount_minor`, `fx_rate`, `fx_rate_date`, `fx_source`) assume one home currency per organization and stay unused: conversions are kept in `expense_conversions` (ADR-0034).',
+  },
+  expense_conversions: {
+    about:
+      'An expense’s amount converted to the currency its report is reimbursed in (FR-EXP-13, ADR-0034): what was converted (the amount, its currency and purchase date), into which currency, and the ECB reference rate applied, with the day it was published and its source, copied on so a later rate never changes the claim (NFR-DAT-02, NFR-DAT-04). Or that the source publishes no rate for it, so it stays as spent. One per expense: a new conversion, once the amount, currency, date or reimbursement currency changes, replaces it, and every conversion is in the audit trail. A rate already recorded for a currency, date and reimbursement currency is applied to the others alike, so one day’s rate is fetched once. It goes with its expense when that is deleted. Written only while `reports.currency-conversion` is on, by the conversion workflow.',
   },
   trips: {
     about:
@@ -116,7 +121,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   reports: {
     about:
-      'A member’s claim for reimbursement: the trips and local expenses that point at it, when it closes itself (day 28, later if reopened), and when it closed. Open, then closed by the person or on day 28, reopenable until submitted; approval follows with #24 (FR-EXP-05, FR-EXP-12, ADR-0029). Its currency is the organization’s home currency until #62.',
+      'A member’s claim for reimbursement: the trips and local expenses that point at it, when it closes itself (day 28, later if reopened), and when it closed. Open, then closed by the person or on day 28, reopenable until submitted; approval follows with #24 (FR-EXP-05, FR-EXP-12, ADR-0029). Its currency is the one it is reimbursed in: while currency conversion is on, its member’s, which it opens in and follows until it is submitted; otherwise the organization’s home currency (FR-EXP-13, ADR-0034).',
   },
   approval_steps: {
     about:
@@ -148,6 +153,8 @@ export const FUNCTIONS: Readonly<Record<string, string>> = {
   claim_outbox_batch:
     'Hands the relay a batch of unpublished outbox events, locking them so two sweeps never take the same one. Runs as its owner, so the relay role needs no table rights.',
   mark_outbox_published: 'Marks events the relay has sent, so they are not sent again.',
+  conversion_work_due:
+    'Which organizations have amounts to convert at a moment: an open or closed report in another currency than its member’s, or an amount on one in another currency than the report’s with no conversion recorded for exactly it, its purchase date before that day. Only organizations whose owner switched currency conversion on count, unless the server’s override has it on for all. The hourly sweep asks it outside any organization; it runs as its owner and answers with organization ids only (ADR-0034).',
   report_work_due:
     'Which organizations have report work due at a moment: a trip or local expense whose time to join a report has come, an open report on its day 28, or one with nothing to claim. The hourly schedule asks it outside any organization; it runs as its owner and answers with organization ids only (ADR-0029).',
   member_for_sign_in_email:
@@ -195,8 +202,15 @@ export const RULES: readonly Rule[] = [
   {
     rule: 'Money is exact.',
     mechanism:
-      'Amounts are `bigint` minor units beside a `char(3)` ISO 4217 code with a format check. No float or numeric column holds money.',
-    objects: ['expenses_currency_iso', 'reports_currency_iso', 'receipt_reviews_currency_code'],
+      'Amounts are `bigint` minor units beside a `char(3)` ISO 4217 code with a format check. No float or numeric column holds money; a conversion’s rate, which isn’t money, is an exact `numeric`, kept as applied.',
+    objects: [
+      'expenses_currency_iso',
+      'reports_currency_iso',
+      'receipt_reviews_currency_code',
+      'expense_conversions_currency_iso',
+      'expense_conversions_into_iso',
+      'members_reimbursement_currency_iso',
+    ],
     refs: ['NFR-DAT-01', 'ADR-0008'],
   },
   {
@@ -215,9 +229,26 @@ export const RULES: readonly Rule[] = [
   },
   {
     rule: 'A converted amount carries its rate, the rate’s date and its source.',
-    mechanism: 'All four FX columns are present together or absent together.',
-    objects: ['expenses_fx_complete'],
-    refs: ['NFR-DAT-02'],
+    mechanism:
+      'A conversion is either converted, with its converted amount, a rate above zero, the day the rate was published, on or before the purchase date, and a named source, or has no rate, with none of them. It converts between two different currencies. The Phase 0 columns on expenses keep their own all-or-nothing check, though nothing writes them.',
+    objects: [
+      'expense_conversions_rate_complete',
+      'expense_conversions_source_named',
+      'expense_conversions_two_currencies',
+      'expenses_fx_complete',
+    ],
+    refs: ['NFR-DAT-02', 'ADR-0034'],
+  },
+  {
+    rule: 'An expense has one conversion at a time, in its own organization, and it keeps its rate.',
+    mechanism:
+      'One conversion per organization and expense, pointing at the expense by a composite key and deleted with it. The rate is copied on when it applies; a later rate never rewrites it, and a new conversion replaces it only when the amount, currency, date or reimbursement currency changed, with its audit event.',
+    objects: [
+      'expense_conversions_expense_key',
+      'expense_conversions_expense_fk',
+      'conversion_work_due',
+    ],
+    refs: ['NFR-DAT-04', 'FR-EXP-13', 'ADR-0034'],
   },
   {
     rule: 'The audit trail can’t be changed by anyone.',
