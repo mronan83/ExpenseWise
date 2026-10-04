@@ -119,6 +119,6 @@ export const deleteTripRoute = createRoute({
     204: { description: 'Deleted.' },
     ...common,
     404: problem('No such trip in this organization.'),
-    409: problem('A submitted expense or a report rests on it.'),
+    409: problem('A submitted expense rests on it.'),
   },
 });

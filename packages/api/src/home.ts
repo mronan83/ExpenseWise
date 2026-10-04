@@ -13,6 +13,7 @@ import {
   type ReceiptRecord,
   type ReceiptReviewRecord,
 } from '@expensewise/db';
+import { reportsNeedingYou, type ReportsNeedingYou } from './reports.ts';
 
 /** What Home shows one member on one day, with the receipts that need them. */
 export interface HomeData {
@@ -21,6 +22,8 @@ export interface HomeData {
   readonly runs: ExtractionRunRecord[];
   readonly reviews: ReceiptReviewRecord[];
   readonly pairs: DuplicatePairRecord[];
+  /** The member's open and closed reports, and their unjustified local expenses. */
+  readonly reports: ReportsNeedingYou;
 }
 
 /** What the API needs from the database for Home. Tests use an in-memory fake. */
@@ -53,6 +56,7 @@ export function dbHomeStore(db: Database): HomeStore {
           runs: await listExtractionRuns(tx, ids),
           reviews: await listReceiptReviews(tx, ids),
           pairs: await listOpenDuplicatePairs(tx, ids),
+          reports: await reportsNeedingYou(tx, memberId, needsLimit),
         };
       });
     },

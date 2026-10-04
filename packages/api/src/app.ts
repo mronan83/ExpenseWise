@@ -15,6 +15,8 @@ import { registerHomeRoutes } from './home-routes.ts';
 import { registerInboundRoutes, type InboundRouteOptions } from './inbound-routes.ts';
 import type { ExpenseStore } from './expenses.ts';
 import { registerReceiptRoutes, type ReceiptRouteOptions } from './receipt-routes.ts';
+import { registerReportRoutes } from './report-routes.ts';
+import type { ReportStore } from './reports.ts';
 import { registerTripRoutes } from './trip-routes.ts';
 import type { TripStore } from './trips.ts';
 import { registerWorkspaceRoutes } from './workspace-routes.ts';
@@ -40,6 +42,8 @@ export interface ApiOptions
   readonly trips?: TripStore;
   /** What Home shows, read at once. Without it, Home answers 503. */
   readonly home?: HomeStore;
+  /** Expense reports. Without it, those routes answer 503 and Needs you shows no reports. */
+  readonly reports?: ReportStore;
   /** Encrypts AI provider keys at rest. Without it, saving or testing a key answers 503. */
   readonly secrets?: SecretBox;
   /** Checks AI provider keys with a free call to the provider. */
@@ -147,6 +151,7 @@ export function createApi(options: ApiOptions) {
   registerExpenseRoutes(app, options);
   registerTripRoutes(app, options);
   registerHomeRoutes(app, options);
+  registerReportRoutes(app, options);
   registerInboundRoutes(app, options);
 
   app.doc31('/v1/openapi.json', OPENAPI_INFO);

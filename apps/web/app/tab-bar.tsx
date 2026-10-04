@@ -14,8 +14,7 @@ const TABS = [
     section: (p: string) => p.startsWith('/receipts'),
   },
   { label: 'Trips', href: '/trips', section: (p: string) => p.startsWith('/trips') },
-  // Not built yet: shown so the bar keeps its shape, and marked unavailable.
-  { label: 'Reports' },
+  { label: 'Reports', href: '/reports', section: (p: string) => p.startsWith('/reports') },
 ] as const;
 
 /** Screens that stand alone, without the tab bar. */
@@ -35,17 +34,6 @@ export function TabBar() {
         className="mx-auto grid max-w-md grid-cols-5 items-center px-4 pt-1 pb-[max(0.25rem,env(safe-area-inset-bottom))] text-center text-xs"
       >
         {TABS.map((tab) => {
-          if (!('href' in tab)) {
-            return (
-              <span
-                key={tab.label}
-                aria-disabled="true"
-                className="flex min-h-11 items-center justify-center text-ink-3"
-              >
-                {tab.label}
-              </span>
-            );
-          }
           const current = tab.section(path);
           if ('primary' in tab) {
             return (

@@ -544,6 +544,12 @@ export const CHANGE_LOG: readonly ChangeLogEntry[] = [
   {
     date: '2026-10-04',
     change:
+      'Expense reports (#23; FR-EXP-05, FR-EXP-12, FR-EXP-14, F-17 and F-50 Verified; ADR-0029). A trip goes on your open report 24 hours after you’re back, and an expense on no trip likewise after its date; with no report open, one opens. Close it when nothing needs you, within 28 days, or it closes itself, moving what still needs review to the next report; it warns in its last week. Reopen a closed report until it is submitted; anything that changes on it reopens it too. Move a trip to another report or a new one. A local expense asks why it was for business. Needs you shows a report overdue, closing soon or ready to close, and local expenses needing a reason; Home lists your reports. Totals stay per currency until #62.',
+    by: 'Claude, at your direction',
+  },
+  {
+    date: '2026-10-04',
+    change:
       'More of your answers of Oct 4. Q18: keep matching on the total until #53, built now. Q19: an exact duplicate is deleted with one tap; a possible one can replace the earlier receipt. Q20: a trip still needing review moves to the next report on day 28, or by hand. Q21: an expense on no trip is local and needs a justification (FR-EXP-14, F-50). Q22: cards convert at purchase, so Q23 asks what a receipt in another currency is reimbursed at. Closing a report never submits it. Your reimbursement currency is set in Settings and starts as your organization’s; your organization’s details are editable there too (FR-PLT-11, F-51, #63). #23, #53 and #61 are under way.',
     by: 'Claude, at your direction',
   },

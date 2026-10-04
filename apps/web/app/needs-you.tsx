@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { useState } from 'react';
 import { api } from '../lib/api';
-import { formatMoney, needsYou, RECEIPT_STATUS, type InboxItem } from '../lib/receipts';
+import { inboxCard } from '../lib/needs-you';
+import type { InboxItem } from '../lib/receipts';
 
 /**
  * The Needs you inbox (FR-EXP-02): only what needs the person, each with why and the one
@@ -22,7 +23,7 @@ export function NeedsYouList({ items, count }: { items: InboxItem[]; count: numb
         </h2>
         <p className="mt-1 text-sm text-ink-2">
           Receipts you capture are read automatically. Only the ones ExpenseWise isn&apos;t sure
-          about will show up here.
+          about, local expenses needing a reason, and reports to close will show up here.
         </p>
       </section>
     );
@@ -39,36 +40,41 @@ export function NeedsYouList({ items, count }: { items: InboxItem[]; count: numb
     <section aria-label="Needs you" className="flex flex-col gap-3">
       <ul className="flex flex-col gap-3">
         {shown.map((item) => {
-          const { receipt } = item;
-          const { text, action, href } = needsYou(item);
-          const status = RECEIPT_STATUS[receipt.status];
-          const name = receipt.merchant ?? 'A receipt';
+          const card = inboxCard(item);
+          const edge =
+            card.edge === 'bad'
+              ? 'border-l-bad'
+              : card.edge === 'ok'
+                ? 'border-l-ok'
+                : 'border-l-warn';
           return (
             <li
-              key={receipt.id}
-              className={`rounded-xl border border-l-4 border-rule bg-sheet p-4 ${receipt.status === 'failed' ? 'border-l-bad' : 'border-l-warn'}`}
+              key={card.key}
+              className={`rounded-xl border border-l-4 border-rule bg-sheet p-4 ${edge}`}
             >
               <div className="flex items-baseline justify-between gap-3">
-                <p className="min-w-0 truncate font-semibold">{name}</p>
-                {receipt.total ? (
-                  <p className="font-mono text-sm whitespace-nowrap">
-                    {formatMoney(receipt.total)}
-                  </p>
+                <p className="min-w-0 truncate font-semibold">{card.title}</p>
+                {card.amount ? (
+                  <p className="font-mono text-sm whitespace-nowrap">{card.amount}</p>
                 ) : null}
               </div>
               <p className="text-xs text-ink-2">
-                <span className="whitespace-nowrap">
-                  {receipt.date ?? new Date(receipt.createdAt).toLocaleDateString()}
-                </span>{' '}
-                · <span className={`font-semibold ${status.tone}`}>{status.label}</span>
+                <span className="whitespace-nowrap">{card.when}</span>
+                {card.status ? (
+                  <>
+                    {' '}
+                    ·{' '}
+                    <span className={`font-semibold ${card.status.tone}`}>{card.status.label}</span>
+                  </>
+                ) : null}
               </p>
-              <p className="mt-2 text-sm">{text}</p>
+              <p className="mt-2 text-sm">{card.text}</p>
               <Link
-                href={href}
+                href={card.href}
                 className="mt-3 inline-flex min-h-11 items-center rounded-lg bg-carbon px-4 text-sm font-semibold text-carbon-ink"
               >
-                {action}
-                <span className="sr-only">: {name}</span>
+                {card.action}
+                <span className="sr-only">: {card.title}</span>
               </Link>
             </li>
           );

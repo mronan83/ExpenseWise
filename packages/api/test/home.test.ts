@@ -28,6 +28,7 @@ const trip = (id: string, name: string, startDate: string, endDate: string): Tri
   primaryCity: null,
   startDate,
   endDate,
+  reportId: null,
   createdAt: NOW,
 });
 const AUSTIN = trip(
@@ -92,6 +93,7 @@ function setup(data: Partial<HomeData> = {}, opts: { home?: boolean } = {}) {
         runs: [],
         reviews: [],
         pairs: [],
+        reports: { reports: [], unjustified: [] },
         ...data,
       });
     },
@@ -180,7 +182,9 @@ describe('Home', () => {
     const receipts = [1, 2, 3, 4].map((n) => receipt(n, n === 4 ? 'failed' : 'needs_review'));
     const { body } = await setup({ receipts }).call('/v1/home?day=2026-10-03', 'riley');
     expect(body.needsYou.count).toBe(4);
-    expect(body.needsYou.items.map((i) => [i.receipt.id, i.reason.code])).toEqual([
+    expect(
+      body.needsYou.items.map((i) => [i.kind === 'receipt' ? i.receipt.id : i.kind, i.reason.code]),
+    ).toEqual([
       [receipts[0]!.id, 'unsure'],
       [receipts[1]!.id, 'unsure'],
       [receipts[2]!.id, 'unsure'],

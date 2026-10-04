@@ -718,6 +718,27 @@
         ]
       },
       "InboxItem": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ReceiptInboxItem"
+          },
+          {
+            "$ref": "#/components/schemas/ReportInboxItem"
+          },
+          {
+            "$ref": "#/components/schemas/ExpenseInboxItem"
+          }
+        ],
+        "discriminator": {
+          "propertyName": "kind",
+          "mapping": {
+            "receipt": "#/components/schemas/ReceiptInboxItem",
+            "report": "#/components/schemas/ReportInboxItem",
+            "expense": "#/components/schemas/ExpenseInboxItem"
+          }
+        }
+      },
+      "ReceiptInboxItem": {
         "type": "object",
         "properties": {
           "kind": {
@@ -859,6 +880,249 @@
           "error",
           "by",
           "duplicateOf"
+        ]
+      },
+      "ReportInboxItem": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "report"
+            ]
+          },
+          "report": {
+            "$ref": "#/components/schemas/ReportSummary"
+          },
+          "reason": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "overdue",
+                  "closing_soon",
+                  "ready_to_close"
+                ],
+                "description": "overdue: past day 28 and nothing ready. closing_soon: in its last week, something still needing review, so reimbursement may wait. ready_to_close: nothing left to do."
+              }
+            },
+            "required": [
+              "code"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "report",
+          "reason"
+        ]
+      },
+      "ReportSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "closed",
+              "submitted",
+              "in_approval",
+              "approved",
+              "settled"
+            ],
+            "description": "open: trips and local expenses join it. closed: done, by the person or on day 28, and reopenable until submitted. Submitting is the person’s own act (FR-EXP-12)."
+          },
+          "owner": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string",
+            "description": "What it is reimbursed in: the organization’s home currency."
+          },
+          "openedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "closesAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When an open report closes itself: day 28, later if reopened."
+          },
+          "closedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "tripNames": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "trips": {
+            "type": "integer"
+          },
+          "localExpenses": {
+            "type": "integer"
+          },
+          "needsAttention": {
+            "type": "integer",
+            "description": "Trips with an expense still being read or needing review, and local expenses needing review or a justification. It can’t close while any are left."
+          },
+          "canClose": {
+            "type": "boolean"
+          },
+          "warning": {
+            "type": "boolean",
+            "description": "Open, in its last week, and something still needs review."
+          },
+          "overdue": {
+            "type": "boolean",
+            "description": "Open past its day 28, with nothing on it ready to close."
+          },
+          "totals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "amountMinor": {
+                  "type": "integer"
+                },
+                "currency": {
+                  "type": "string"
+                },
+                "decimal": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "amountMinor",
+                "currency",
+                "decimal"
+              ]
+            },
+            "description": "One total per currency, never converted; possible duplicates are left out (until #62)."
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "status",
+          "owner",
+          "currency",
+          "openedAt",
+          "closesAt",
+          "closedAt",
+          "tripNames",
+          "trips",
+          "localExpenses",
+          "needsAttention",
+          "canClose",
+          "warning",
+          "overdue",
+          "totals"
+        ]
+      },
+      "ExpenseInboxItem": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "expense"
+            ]
+          },
+          "expense": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "merchant": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "date": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "amount": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "amountMinor": {
+                    "type": "integer",
+                    "description": "Integer minor units, e.g. cents."
+                  },
+                  "currency": {
+                    "type": "string",
+                    "example": "USD"
+                  },
+                  "decimal": {
+                    "type": "string",
+                    "example": "6.50",
+                    "description": "The same amount, for display."
+                  }
+                },
+                "required": [
+                  "amountMinor",
+                  "currency",
+                  "decimal"
+                ]
+              },
+              "receiptId": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "uuid"
+              }
+            },
+            "required": [
+              "id",
+              "merchant",
+              "date",
+              "amount",
+              "receiptId"
+            ]
+          },
+          "reason": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "justification"
+                ],
+                "description": "justification: a local expense says nothing yet of why (FR-EXP-14)."
+              }
+            },
+            "required": [
+              "code"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "expense",
+          "reason"
         ]
       },
       "ReceiptDetail": {
@@ -1984,6 +2248,25 @@
             ],
             "description": "Whether merchant, date, currency and amount match what its receipt shows. Null without a receipt."
           },
+          "local": {
+            "type": "boolean",
+            "description": "On no trip, with a date: a local expense, which needs a justification before its report can close (FR-EXP-14)."
+          },
+          "justification": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why a local expense was for business."
+          },
+          "reportId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The report it is on: its trip’s, or its own when local (FR-EXP-05)."
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -2005,6 +2288,9 @@
           "trip",
           "tripFiledBy",
           "matchesReceipt",
+          "local",
+          "justification",
+          "reportId",
           "createdAt",
           "updatedAt"
         ]
@@ -2286,6 +2572,14 @@
             },
             "description": "What its expenses add up to, one total per currency, never converted. Expenses with no amount yet count in none."
           },
+          "reportId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The report it is on (FR-EXP-05), or null before it joins one."
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -2304,6 +2598,7 @@
           "readyCount",
           "needsReviewCount",
           "totals",
+          "reportId",
           "createdAt"
         ]
       },
@@ -2574,6 +2869,13 @@
             "type": "integer",
             "description": "Receipts still being read."
           },
+          "reports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReportSummary"
+            },
+            "description": "Reports to finish: the open and closed ones, newest first (Q15)."
+          },
           "recentTrips": {
             "type": "array",
             "items": {
@@ -2588,8 +2890,242 @@
           "trip",
           "month",
           "reading",
+          "reports",
           "recentTrips"
         ]
+      },
+      "ReportList": {
+        "type": "object",
+        "properties": {
+          "reports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReportSummary"
+            }
+          }
+        },
+        "required": [
+          "reports"
+        ]
+      },
+      "ReportDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ReportSummary"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "tripItems": {
+                "type": "array",
+                "items": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/TripSummary"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "unsettled": {
+                          "type": "integer",
+                          "description": "Its expenses still being read or needing review."
+                        },
+                        "ready": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "unsettled",
+                        "ready"
+                      ]
+                    }
+                  ]
+                }
+              },
+              "localItems": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "status": {
+                      "type": "string",
+                      "enum": [
+                        "processing",
+                        "needs_review",
+                        "ready",
+                        "submitted",
+                        "approved",
+                        "settled"
+                      ],
+                      "description": "processing while its receipt is read; ready when its receipt is Ready and merchant, date, currency and amount are filled in; needs_review otherwise. Submitted, approved and settled follow its report; approved is locked (FR-EXP-03)."
+                    },
+                    "merchant": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "date": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "amount": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "amountMinor": {
+                          "type": "integer",
+                          "description": "Integer minor units, e.g. cents."
+                        },
+                        "currency": {
+                          "type": "string",
+                          "example": "USD"
+                        },
+                        "decimal": {
+                          "type": "string",
+                          "example": "6.50",
+                          "description": "The same amount, for display."
+                        }
+                      },
+                      "required": [
+                        "amountMinor",
+                        "currency",
+                        "decimal"
+                      ]
+                    },
+                    "receiptId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "format": "uuid"
+                    },
+                    "justification": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "held": {
+                      "type": "boolean",
+                      "description": "Held as a possible duplicate (FR-INT-18)."
+                    },
+                    "ready": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "status",
+                    "merchant",
+                    "date",
+                    "amount",
+                    "receiptId",
+                    "justification",
+                    "held",
+                    "ready"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "tripItems",
+              "localItems"
+            ]
+          }
+        ]
+      },
+      "ReportMoveResult": {
+        "type": "object",
+        "properties": {
+          "reportId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The report it is on now."
+          },
+          "dropped": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The report it left, when that left it holding nothing."
+          }
+        },
+        "required": [
+          "reportId",
+          "dropped"
+        ]
+      },
+      "MoveToReport": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "reportId": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "required": [
+              "reportId"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "newReport": {
+                "type": "boolean",
+                "enum": [
+                  true
+                ]
+              }
+            },
+            "required": [
+              "newReport"
+            ],
+            "additionalProperties": false
+          }
+        ],
+        "description": "An open report of the same person, or a new one."
+      },
+      "Justification": {
+        "type": "object",
+        "properties": {
+          "justification": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "justification"
+        ]
+      },
+      "JustifyExpense": {
+        "type": "object",
+        "properties": {
+          "justification": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Why it was for business, up to 500 characters; blank removes it.",
+            "example": "Lunch with the Acme team about the Q4 rollout"
+          }
+        },
+        "required": [
+          "justification"
+        ],
+        "additionalProperties": false
       },
       "WebhookReceipt": {
         "type": "object",
@@ -3550,7 +4086,7 @@
           "Inbox"
         ],
         "summary": "What needs the person: the Needs you inbox",
-        "description": "Receipts that need a look or that no model could read, newest first, each with why (FR-EXP-02). Missing receipts and returned reports join it as they are built.",
+        "description": "What needs the person, each with why (FR-EXP-02): a report overdue or in its last week with something left; receipts that need a look or that no model could read, newest first; local expenses needing a justification; and reports ready to close (FR-EXP-12, FR-EXP-14). Missing receipts and returned reports join it as they are built.",
         "security": [
           {
             "bearerAuth": []
@@ -4810,7 +5346,7 @@
             }
           },
           "409": {
-            "description": "A submitted expense or a report rests on it.",
+            "description": "A submitted expense rests on it.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -4891,6 +5427,623 @@
           },
           "403": {
             "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reports": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "The caller’s expense reports, newest first",
+        "description": "Trips join a report 24 hours after their return date, and local expenses 24 hours after their own; a report closes within 28 days (FR-EXP-05, FR-EXP-12, ADR-0029).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The 50 newest reports.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reports/{reportId}": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "One report, with each trip and local expense on it",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "reportId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The report.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such report in this organization.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reports/{reportId}/close": {
+      "post": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Close a report",
+        "description": "Only with nothing left on it to review: no expense being read or needing a look, and every local expense justified (FR-EXP-12). Closing never submits it.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "reportId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "It is closed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such report in this organization.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It is not open, holds nothing, or something on it still needs review or a justification; blocking names what.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reports/{reportId}/reopen": {
+      "post": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Reopen a closed report",
+        "description": "Possible until it is submitted. It closes itself on its day 28, or a week after reopening if that is later.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "reportId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "It is open.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such report in this organization.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It is open already, or submitted and locked.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/trips/{tripId}/report": {
+      "put": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Move a trip to another open report, or a new one",
+        "description": "Its expenses go with it. A report left holding nothing is dropped (FR-EXP-05, Q20).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "tripId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveToReport"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Moved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportMoveResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such trip, expense or report in this organization.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The report it is on, or the one chosen, is not open; or the report is another person’s.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/expenses/{expenseId}/report": {
+      "put": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "Move a local expense to another open report, or a new one",
+        "description": "Only a local expense: one on a trip goes with its trip.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MoveToReport"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Moved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportMoveResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such trip, expense or report in this organization.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The report it is on, or the one chosen, is not open; or the report is another person’s.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "It is on a trip, or has no date yet, so it is not a local expense.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/expenses/{expenseId}/justification": {
+      "put": {
+        "tags": [
+          "Expenses"
+        ],
+        "summary": "Say why a local expense was for business",
+        "description": "A local expense, one on no trip, needs a justification before its report can close (FR-EXP-14). A closed report it is on reopens.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JustifyExpense"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Justification"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such expense in this organization.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It is being read, or submitted or later.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "It is on a trip, or the justification is too long.",
             "content": {
               "application/problem+json": {
                 "schema": {

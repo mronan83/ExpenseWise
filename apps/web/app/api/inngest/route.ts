@@ -6,9 +6,12 @@ import {
   receiptReadingFunction,
   receiptReadingPorts,
   relayPorts,
+  reportScheduleFunction,
+  reportSchedulePorts,
   type EmailReadingPorts,
   type ReceiptReadingPorts,
   type RelayPorts,
+  type ReportSchedulePorts,
 } from '@expensewise/workflows';
 import { serve } from 'inngest/next';
 import {
@@ -67,6 +70,15 @@ function emailPorts(): EmailReadingPorts {
   return emails;
 }
 
+let schedule: ReportSchedulePorts | undefined;
+function schedulePorts(): ReportSchedulePorts {
+  if (schedule) return schedule;
+  const db = appDatabase();
+  if (!db) throw new Error('The report schedule needs DATABASE_URL');
+  schedule = reportSchedulePorts(db);
+  return schedule;
+}
+
 const handler = workflowsServed
   ? serve({
       client: workflowClient,
@@ -74,6 +86,7 @@ const handler = workflowsServed
         ...relayFunctions,
         receiptReadingFunction(workflowClient, readingPorts),
         emailReadingFunction(workflowClient, emailPorts),
+        reportScheduleFunction(workflowClient, schedulePorts),
       ],
     })
   : undefined;

@@ -96,11 +96,11 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   expenses: {
     about:
-      'What is claimed: merchant, date, amount and currency, its status, and the trip it is filed to. It follows its receipt until a person edits it (ADR-0022) and files to trips by date until a person chooses (ADR-0023). Home sums a member’s month through the member-and-date index, so it needs no index of its own.',
+      'What is claimed: merchant, date, amount and currency, its status, and the trip it is filed to. It follows its receipt until a person edits it (ADR-0022) and files to trips by date until a person chooses (ADR-0023). One with a date and no trip is local: it carries a justification and points at its report itself, while one on a trip goes with the trip’s report (FR-EXP-14, ADR-0029). Home sums a member’s month through the member-and-date index, so it needs no index of its own.',
   },
   trips: {
     about:
-      'A member’s trip: a name, a purpose, a city and its first and last days. Expenses dated inside it file to it (FR-EXP-04, ADR-0023). Home finds the trip under way, the next and the last ones through the member-and-dates index.',
+      'A member’s trip: a name, a purpose, a city and its first and last days. Expenses dated inside it file to it (FR-EXP-04, ADR-0023). It points at the report it is on, which it joins 24 hours after its return date (FR-EXP-05, ADR-0029). Home finds the trip under way, the next and the last ones through the member-and-dates index.',
   },
   categories: {
     about:
@@ -112,7 +112,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   reports: {
     about:
-      'Expenses gathered for approval, usually one trip’s, with its own lifecycle. Drafting starts with #23 and approval with #24.',
+      'A member’s claim for reimbursement: the trips and local expenses that point at it, when it closes itself (day 28, later if reopened), and when it closed. Open, then closed by the person or on day 28, reopenable until submitted; approval follows with #24 (FR-EXP-05, FR-EXP-12, ADR-0029). Its currency is the organization’s home currency until #62.',
   },
   approval_steps: {
     about:
@@ -144,6 +144,8 @@ export const FUNCTIONS: Readonly<Record<string, string>> = {
   claim_outbox_batch:
     'Hands the relay a batch of unpublished outbox events, locking them so two sweeps never take the same one. Runs as its owner, so the relay role needs no table rights.',
   mark_outbox_published: 'Marks events the relay has sent, so they are not sent again.',
+  report_work_due:
+    'Which organizations have report work due at a moment: a trip or local expense whose time to join a report has come, an open report on its day 28, or one with nothing to claim. The hourly schedule asks it outside any organization; it runs as its owner and answers with organization ids only (ADR-0029).',
   member_for_sign_in_email:
     'Which member signs in with an email address, case aside, and that sign-in’s user, for an arriving email that names no organization yet. Runs as its owner and returns ids only, so the app still can’t read sign-ins outside an organization (ADR-0026).',
   reject_audit_mutation:
@@ -290,6 +292,25 @@ export const RULES: readonly Rule[] = [
       'receipt_duplicates_other_fk',
     ],
     refs: ['FR-INT-18', 'ADR-0028'],
+  },
+  {
+    rule: 'A report holds only its member’s trips and expenses, and an expense on a trip goes with the trip.',
+    mechanism:
+      'A trip and a local expense point at a report by a key that includes their member, so they can only point at that member’s report. An expense on a trip has no report of its own; it is on whatever report its trip is on.',
+    objects: [
+      'reports_org_member_id_key',
+      'trips_report_fk',
+      'expenses_report_fk',
+      'expenses_report_only_when_local',
+    ],
+    refs: ['FR-EXP-05', 'FR-EXP-14', 'ADR-0029'],
+  },
+  {
+    rule: 'A report is closed exactly when it has a closed time.',
+    mechanism:
+      'An open report has no closed time and any other has one. Closing, reopening and day 28 go through the domain’s report lifecycle under the organization’s write lock, each with its audit event.',
+    objects: ['reports_closed_when_closed'],
+    refs: ['FR-EXP-12', 'ADR-0029'],
   },
   {
     rule: 'The relay can do one thing.',

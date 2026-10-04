@@ -26,4 +26,6 @@ export interface Seeded {
   readonly trips: Record<'omaha' | 'houston' | 'long' | 'empty', string>;
   readonly receipts: Record<string, string>;
   readonly expenses: Record<string, string>;
+  /** open: still needing review, with a justified and an unjustified local expense. */
+  readonly reports: Record<'open' | 'closed', string>;
 }

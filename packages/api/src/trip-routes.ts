@@ -127,12 +127,6 @@ export function registerTripRoutes(
         detail: `${result.count} of its expenses ${result.count === 1 ? 'is' : 'are'} submitted or later, and stay with their trip.`,
       });
     }
-    if (result.status === 'has_report') {
-      throw new ProblemError(409, 'trip-in-use', 'This trip can’t be deleted', {
-        code: 'has_report',
-        detail: 'A report is made from it.',
-      });
-    }
     return c.body(null, 204);
   });
 }

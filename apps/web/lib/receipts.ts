@@ -1,4 +1,6 @@
 import { api, ApiProblem } from './api';
+import type { ExpenseAmount } from './expenses';
+import type { ReportSummary } from './reports';
 import { prepareReceiptFile, sha256Hex } from './receipt-file';
 import { supabase } from './supabase';
 
@@ -163,11 +165,33 @@ export interface NeedsYouReason {
   } | null;
 }
 
-export interface InboxItem {
+export interface ReceiptInboxItem {
   kind: 'receipt';
   receipt: ReceiptSummary;
   reason: NeedsYouReason;
 }
+
+/** A report overdue, in its last week with something left, or ready to close (FR-EXP-12). */
+export interface ReportInboxItem {
+  kind: 'report';
+  report: ReportSummary;
+  reason: { code: 'overdue' | 'closing_soon' | 'ready_to_close' };
+}
+
+/** A local expense that says nothing yet of why it was for business (FR-EXP-14). */
+export interface ExpenseInboxItem {
+  kind: 'expense';
+  expense: {
+    id: string;
+    merchant: string | null;
+    date: string | null;
+    amount: ExpenseAmount | null;
+    receiptId: string | null;
+  };
+  reason: { code: 'justification' };
+}
+
+export type InboxItem = ReceiptInboxItem | ReportInboxItem | ExpenseInboxItem;
 
 const CHECK_REASONS: Record<ReadingCheck, string> = {
   sums: 'Its parts don’t come to its total.',
@@ -178,7 +202,7 @@ const CHECK_REASONS: Record<ReadingCheck, string> = {
 const KEY_ERRORS = ['no_key', 'unreadable_key', 'key_rejected'];
 
 /** What an inbox item says, and the one thing to do about it. */
-export function needsYou(item: InboxItem): { text: string; action: string; href: string } {
+export function needsYou(item: ReceiptInboxItem): { text: string; action: string; href: string } {
   const { reason, receipt } = item;
   const check = { action: 'Check it', href: `/receipts/${receipt.id}` };
   switch (reason.code) {

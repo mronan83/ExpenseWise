@@ -1,5 +1,6 @@
 import type { ExpenseAmount } from './expenses';
 import type { InboxItem } from './receipts';
+import type { ReportSummary } from './reports';
 import type { TripSummary } from './trips';
 
 /** What Home shows (GET /v1/home): the person's own records only. */
@@ -17,6 +18,8 @@ export interface Home {
     notOnTrip: { expenses: number; spent: ExpenseAmount[] };
   };
   reading: number;
+  /** Reports to finish: open and closed ones, newest first. */
+  reports: ReportSummary[];
   recentTrips: TripSummary[];
 }
 

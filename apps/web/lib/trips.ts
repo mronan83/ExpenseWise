@@ -15,6 +15,8 @@ export interface TripSummary {
   needsReviewCount: number;
   /** One per currency, never converted. */
   totals: ExpenseAmount[];
+  /** The report it is on, once it has joined one. */
+  reportId: string | null;
   createdAt: string;
 }
 

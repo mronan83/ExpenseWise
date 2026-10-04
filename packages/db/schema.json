@@ -675,6 +675,12 @@
           "type": "boolean",
           "nullable": false,
           "default": "false"
+        },
+        {
+          "name": "justification",
+          "type": "text",
+          "nullable": true,
+          "default": null
         }
       ],
       "primaryKey": [
@@ -719,11 +725,13 @@
           "name": "expenses_report_fk",
           "columns": [
             "org_id",
+            "member_id",
             "report_id"
           ],
           "table": "reports",
           "references": [
             "org_id",
+            "member_id",
             "id"
           ]
         },
@@ -773,6 +781,10 @@
         {
           "name": "expenses_fx_complete",
           "definition": "CHECK ((((fx_rate IS NULL) AND (fx_rate_date IS NULL) AND (fx_source IS NULL)) OR ((fx_rate IS NOT NULL) AND (fx_rate_date IS NOT NULL) AND (fx_source IS NOT NULL) AND (home_amount_minor IS NOT NULL))))"
+        },
+        {
+          "name": "expenses_report_only_when_local",
+          "definition": "CHECK (((report_id IS NULL) OR (trip_id IS NULL)))"
         }
       ],
       "indexes": [
@@ -2303,12 +2315,6 @@
           "default": null
         },
         {
-          "name": "trip_id",
-          "type": "uuid",
-          "nullable": true,
-          "default": null
-        },
-        {
           "name": "title",
           "type": "text",
           "nullable": false,
@@ -2355,6 +2361,18 @@
           "type": "timestamp with time zone",
           "nullable": false,
           "default": "now()"
+        },
+        {
+          "name": "closes_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "closed_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
         }
       ],
       "primaryKey": [
@@ -2382,18 +2400,6 @@
           "references": [
             "id"
           ]
-        },
-        {
-          "name": "reports_trip_fk",
-          "columns": [
-            "org_id",
-            "trip_id"
-          ],
-          "table": "trips",
-          "references": [
-            "org_id",
-            "id"
-          ]
         }
       ],
       "uniques": [
@@ -2403,9 +2409,21 @@
             "org_id",
             "id"
           ]
+        },
+        {
+          "name": "reports_org_member_id_key",
+          "columns": [
+            "org_id",
+            "member_id",
+            "id"
+          ]
         }
       ],
       "checks": [
+        {
+          "name": "reports_closed_when_closed",
+          "definition": "CHECK (((status = 'open'::report_status) = (closed_at IS NULL)))"
+        },
         {
           "name": "reports_currency_iso",
           "definition": "CHECK ((currency ~ '^[A-Z]{3}$'::text))"
@@ -2505,6 +2523,12 @@
           "type": "timestamp with time zone",
           "nullable": false,
           "default": "now()"
+        },
+        {
+          "name": "report_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
         }
       ],
       "primaryKey": [
@@ -2532,6 +2556,20 @@
           "references": [
             "id"
           ]
+        },
+        {
+          "name": "trips_report_fk",
+          "columns": [
+            "org_id",
+            "member_id",
+            "report_id"
+          ],
+          "table": "reports",
+          "references": [
+            "org_id",
+            "member_id",
+            "id"
+          ]
         }
       ],
       "uniques": [
@@ -2553,6 +2591,10 @@
         {
           "name": "trips_member_dates_idx",
           "definition": "CREATE INDEX trips_member_dates_idx ON public.trips USING btree (org_id, member_id, start_date)"
+        },
+        {
+          "name": "trips_report_idx",
+          "definition": "CREATE INDEX trips_report_idx ON public.trips USING btree (org_id, report_id)"
         }
       ],
       "policies": [
@@ -2692,6 +2734,7 @@
       "name": "report_status",
       "values": [
         "open",
+        "closed",
         "submitted",
         "in_approval",
         "approved",
@@ -2775,6 +2818,16 @@
       "security": "invoker",
       "volatility": "volatile",
       "executableBy": []
+    },
+    {
+      "name": "report_work_due",
+      "arguments": "as_of timestamp with time zone",
+      "returns": "SETOF uuid",
+      "security": "definer",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
     }
   ],
   "roles": [

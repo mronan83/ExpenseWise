@@ -122,6 +122,13 @@ function Overview({ trip }: { trip: TripDetail }) {
           {trip.totals.map(formatMoney).join(' + ')}
         </p>
       ) : null}
+      {trip.reportId ? (
+        <p>
+          <Link href={`/reports/${trip.reportId}`} className="font-semibold text-carbon underline">
+            Its report
+          </Link>
+        </p>
+      ) : null}
     </section>
   );
 }

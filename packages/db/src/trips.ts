@@ -13,12 +13,15 @@ import { and, desc, eq, exists, gte, inArray, lte, not, or, sql, type SQL } from
 import { appendAuditEvent, lockOrgWrites, type AuditEntry } from './audit.ts';
 import type { Transaction } from './client.ts';
 import { heldAsDuplicate } from './duplicates.ts';
-import { expenses, members, reports, trips } from './schema.ts';
+import { reopenChangedReports, reportsOfExpenses, reportsOfTrips } from './report-touch.ts';
+import { expenses, members, trips } from './schema.ts';
 
 export interface TripRecord extends TripValues {
   readonly id: string;
   readonly memberId: string;
   readonly owner: string;
+  /** The report it is on (FR-EXP-05), or null before it joins one. */
+  readonly reportId: string | null;
   readonly createdAt: Date;
 }
 
@@ -31,6 +34,7 @@ const tripColumns = {
   primaryCity: trips.primaryCity,
   startDate: trips.startDate,
   endDate: trips.endDate,
+  reportId: trips.reportId,
   createdAt: trips.createdAt,
 };
 
@@ -189,10 +193,17 @@ async function fileByDate(
     if (expense.tripPinned || !isTripMovable(expense.status)) continue;
     const tripId = tripFor(expense.transactionDate, windows)?.id ?? null;
     if (tripId === expense.tripId) continue;
+    // The reports it leaves and joins change: a closed one reopens (ADR-0029).
+    const touched = [
+      ...(await reportsOfExpenses(tx, [expense.id])),
+      ...(await reportsOfTrips(tx, [tripId])),
+    ];
+    // On a trip it goes with the trip's report; leaving one, it is local and joins its own.
     await tx
       .update(expenses)
-      .set({ tripId, updatedAt: new Date() })
+      .set({ tripId, reportId: null, updatedAt: new Date() })
       .where(eq(expenses.id, expense.id));
+    await reopenChangedReports(tx, orgId, touched, actor, 'an expense moved trips');
     await appendAuditEvent(tx, orgId, {
       actor,
       entityType: 'expense',
@@ -354,6 +365,13 @@ export async function editTrip(
     action: 'trip.edited',
     payload: changePayload(changes),
   });
+  await reopenChangedReports(
+    tx,
+    orgId,
+    await reportsOfTrips(tx, [tripId]),
+    actor,
+    'a trip on it was edited',
+  );
   const datesMoved = changes.some((c) => c.field === 'startDate' || c.field === 'endDate');
   const refiled = datesMoved
     ? await refileAround(
@@ -373,9 +391,7 @@ export type DeleteTripResult =
   | { readonly status: 'deleted'; readonly refiled: number }
   | { readonly status: 'missing' }
   /** Some of its expenses are submitted or later; they stay with their trip. */
-  | { readonly status: 'has_submitted'; readonly count: number }
-  /** A report is made from it. */
-  | { readonly status: 'has_report' };
+  | { readonly status: 'has_submitted'; readonly count: number };
 
 /**
  * Deletes a trip that nothing submitted rests on. Its expenses file by date to whatever other
@@ -399,12 +415,6 @@ export async function deleteTrip(
     .where(eq(trips.id, tripId))
     .for('update');
   if (!trip) return { status: 'missing' };
-  const [report] = await tx
-    .select({ id: reports.id })
-    .from(reports)
-    .where(eq(reports.tripId, tripId))
-    .limit(1);
-  if (report) return { status: 'has_report' };
   const onTrip = await tx
     .select(fileableColumns)
     .from(expenses)
@@ -415,6 +425,14 @@ export async function deleteTrip(
   if (submitted > 0) return { status: 'has_submitted', count: submitted };
 
   const actor = { type: 'user', id: actorUserId } as const;
+  // The trip leaves its report; a closed one reopens, and one left empty is dropped later.
+  await reopenChangedReports(
+    tx,
+    orgId,
+    await reportsOfTrips(tx, [tripId]),
+    actor,
+    'a trip on it was deleted',
+  );
   // A choice of this trip goes with it: each expense files by date again.
   await tx
     .update(expenses)
@@ -502,10 +520,26 @@ export async function setExpenseTrip(
   }
   if (tripId === expense.tripId && pinned === expense.tripPinned) return { status: 'unchanged' };
 
+  const touched =
+    tripId === expense.tripId
+      ? []
+      : [...(await reportsOfExpenses(tx, [expenseId])), ...(await reportsOfTrips(tx, [tripId]))];
   await tx
     .update(expenses)
-    .set({ tripId, tripPinned: pinned, updatedAt: new Date() })
+    .set({
+      tripId,
+      tripPinned: pinned,
+      ...(tripId === expense.tripId ? {} : { reportId: null }),
+      updatedAt: new Date(),
+    })
     .where(eq(expenses.id, expenseId));
+  await reopenChangedReports(
+    tx,
+    orgId,
+    touched,
+    { type: 'user', id: actorUserId },
+    'an expense moved trips',
+  );
   await appendAuditEvent(tx, orgId, {
     actor: { type: 'user', id: actorUserId },
     entityType: 'expense',

@@ -4,17 +4,18 @@ import { confirmReading } from '@expensewise/extraction';
 import { receiptPath, RECEIPT_BUCKET, type ObjectStore } from '@expensewise/storage';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
+import { needsYouItems, NO_REPORTS } from './needs-you-views.ts';
 import { ProblemError } from './problem.ts';
 import { inboxRoute } from './routes/inbox.ts';
 import {
   comparisonSummary,
-  inboxItem,
   latestRuns,
   normalized,
   receiptDetail,
   receiptSummary,
 } from './receipt-views.ts';
 import type { ReceiptStore } from './receipts.ts';
+import type { ReportStore } from './reports.ts';
 import {
   confirmReceiptRoute,
   fileReceiptRoute,
@@ -36,6 +37,9 @@ export interface ReceiptRouteOptions {
    * seconds. Best effort: the outbox relay delivers anything this misses (ADR-0017).
    */
   readonly dispatch?: (events: readonly CommittedEvent[]) => Promise<void>;
+  /** Reports and local expenses that need the person join Needs you when it is given. */
+  readonly reports?: ReportStore;
+  readonly now?: () => Date;
 }
 
 const LIST_LIMIT = 100;
@@ -190,14 +194,15 @@ export function registerReceiptRoutes(
 
   app.openapi(inboxRoute, async (c) => {
     const who = await member(c.var.identity.userId);
-    // What needs this person: their own receipts (FR-EXP-02).
-    const { receipts, runs, reviews, pairs } = await stores().receipts.list(who.orgId, LIST_LIMIT, {
+    // What needs this person: their own receipts, reports and local expenses (FR-EXP-02).
+    const receipts = await stores().receipts.list(who.orgId, LIST_LIMIT, {
       statuses: ['needs_review', 'failed'],
       memberId: who.memberId,
     });
-    const items = receipts
-      .map((r) => inboxItem(r, runs, reviews, pairs))
-      .filter((item) => item !== null);
+    const reports = options.reports
+      ? await options.reports.needsYou(who.orgId, who.memberId, LIST_LIMIT)
+      : NO_REPORTS;
+    const items = needsYouItems(receipts, reports, options.now?.() ?? new Date());
     return c.json({ items }, 200);
   });
 

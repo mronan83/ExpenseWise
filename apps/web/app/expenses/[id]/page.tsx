@@ -86,6 +86,13 @@ export default function ExpensePage() {
               expense={expense}
               onSaved={(next) => setLoad({ state: 'ready', expense: next })}
             />
+            {expense.local ? (
+              <Justification
+                key={`${expense.id}-${expense.justification ?? ''}`}
+                expense={expense}
+                onSaved={(next) => setLoad({ state: 'ready', expense: next })}
+              />
+            ) : null}
             <Proof expense={expense} />
           </>
         ) : null}
@@ -422,6 +429,19 @@ function TripChoice({
         Trip
       </h2>
       <p>{where}</p>
+      {expense.reportId ? (
+        <p>
+          <Link
+            href={`/reports/${expense.reportId}`}
+            className="font-semibold text-carbon underline"
+          >
+            Its report
+          </Link>
+          {expense.trip ? ', with its trip.' : ', as a local expense.'}
+        </p>
+      ) : expense.local ? (
+        <p className="text-ink-2">It goes on a report 24 hours after its date.</p>
+      ) : null}
       {trips ? (
         <form onSubmit={(e) => void save(e)} className="flex flex-col gap-3">
           <label className="flex flex-col gap-1 text-xs font-medium text-ink-2">
@@ -473,6 +493,112 @@ function TripChoice({
           </button>
         </div>
       ) : null}
+      {error ? (
+        <p role="alert" className="text-sm text-warn">
+          {error}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+const JUSTIFICATION_MAX = 500;
+
+/**
+ * Why a local expense, one on no trip, was for business (FR-EXP-14). Its report can't close
+ * without it.
+ */
+function Justification({
+  expense,
+  onSaved,
+}: {
+  expense: ExpenseDetail;
+  onSaved: (expense: ExpenseDetail) => void;
+}) {
+  const [editing, setEditing] = useState(expense.justification === null && expense.editable);
+  const [text, setText] = useState(expense.justification ?? '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/v1/expenses/${expense.id}/justification`, {
+        method: 'PUT',
+        body: JSON.stringify({ justification: text }),
+      });
+      onSaved(await api<ExpenseDetail>(`/v1/expenses/${expense.id}`));
+    } catch (e) {
+      setError(describeError(e));
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section
+      aria-labelledby="why-title"
+      className={`flex flex-col gap-3 rounded-xl border bg-sheet p-4 text-sm ${expense.justification ? 'border-rule' : 'border-warn'}`}
+    >
+      <h2 id="why-title" className="text-base font-semibold">
+        Why it was for business
+      </h2>
+      {editing ? (
+        <form onSubmit={(e) => void save(e)} className="flex flex-col gap-3">
+          <label className="flex flex-col gap-1 text-xs font-medium text-ink-2">
+            It’s a local expense, on no trip, so its report needs a reason
+            <textarea
+              name="justification"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              maxLength={JUSTIFICATION_MAX}
+              rows={3}
+              required
+              className="rounded-lg border border-rule bg-paper px-3 py-2 text-base text-ink"
+            />
+          </label>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="submit"
+              disabled={busy || text.trim() === ''}
+              className="rounded-lg bg-carbon px-4 py-2 text-sm font-semibold text-carbon-ink disabled:opacity-60"
+            >
+              {busy ? 'Saving…' : 'Save the reason'}
+            </button>
+            {expense.justification ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditing(false);
+                  setText(expense.justification ?? '');
+                  setError(null);
+                }}
+                className="rounded-lg border border-rule px-4 py-2 text-sm font-semibold"
+              >
+                Cancel
+              </button>
+            ) : null}
+          </div>
+        </form>
+      ) : (
+        <>
+          <p className="break-words">
+            {expense.justification ?? 'No reason given. Its report can’t close without one.'}
+          </p>
+          {expense.editable ? (
+            <div>
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="rounded-lg border border-rule px-4 py-2 text-sm font-semibold"
+              >
+                {expense.justification ? 'Change the reason' : 'Add a reason'}
+              </button>
+            </div>
+          ) : null}
+        </>
+      )}
       {error ? (
         <p role="alert" className="text-sm text-warn">
           {error}

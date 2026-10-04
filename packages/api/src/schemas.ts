@@ -444,15 +444,13 @@ export const DuplicateResolutionSchema = z
   })
   .openapi('DuplicateResolution');
 
-export const InboxItemSchema = z
+const ReceiptInboxItemSchema = z
   .object({
     kind: z.literal('receipt'),
     receipt: ReceiptSummarySchema,
     reason: NeedsYouReasonSchema,
   })
-  .openapi('InboxItem');
-
-export const InboxSchema = z.object({ items: z.array(InboxItemSchema) }).openapi('Inbox');
+  .openapi('ReceiptInboxItem');
 
 export const ReceiptListSchema = z
   .object({
@@ -563,6 +561,18 @@ export const ExpenseSummarySchema = z
           'Whether merchant, date, currency and amount match what its receipt shows. Null without ' +
           'a receipt.',
       }),
+    local: z.boolean().openapi({
+      description:
+        'On no trip, with a date: a local expense, which needs a justification before its ' +
+        'report can close (FR-EXP-14).',
+    }),
+    justification: z
+      .string()
+      .nullable()
+      .openapi({ description: 'Why a local expense was for business.' }),
+    reportId: z.string().uuid().nullable().openapi({
+      description: 'The report it is on: its trip’s, or its own when local (FR-EXP-05).',
+    }),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
   })
@@ -698,6 +708,11 @@ export const TripSummarySchema = z
         'What its expenses add up to, one total per currency, never converted. Expenses with ' +
         'no amount yet count in none.',
     }),
+    reportId: z
+      .string()
+      .uuid()
+      .nullable()
+      .openapi({ description: 'The report it is on (FR-EXP-05), or null before it joins one.' }),
     createdAt: z.string().datetime(),
   })
   .openapi('TripSummary');
@@ -756,6 +771,167 @@ export const HomeQuerySchema = z.object({
     }),
 });
 
+// Reports (FR-EXP-05, FR-EXP-12, FR-EXP-14, ADR-0029)
+
+const TotalSchema = z.object({
+  amountMinor: z.number().int(),
+  currency: z.string(),
+  decimal: z.string(),
+});
+
+export const ReportStatusSchema = z
+  .enum(['open', 'closed', 'submitted', 'in_approval', 'approved', 'settled'])
+  .openapi({
+    description:
+      'open: trips and local expenses join it. closed: done, by the person or on day 28, and ' +
+      'reopenable until submitted. Submitting is the person’s own act (FR-EXP-12).',
+  });
+
+export const ReportSummarySchema = z
+  .object({
+    id: z.string().uuid(),
+    title: z.string(),
+    status: ReportStatusSchema,
+    owner: z.string(),
+    currency: z
+      .string()
+      .openapi({ description: 'What it is reimbursed in: the organization’s home currency.' }),
+    openedAt: z.string().datetime(),
+    closesAt: z
+      .string()
+      .datetime()
+      .openapi({ description: 'When an open report closes itself: day 28, later if reopened.' }),
+    closedAt: z.string().datetime().nullable(),
+    tripNames: z.array(z.string()),
+    trips: z.number().int(),
+    localExpenses: z.number().int(),
+    needsAttention: z
+      .number()
+      .int()
+      .openapi({
+        description:
+          'Trips with an expense still being read or needing review, and local expenses needing ' +
+          'review or a justification. It can’t close while any are left.',
+      }),
+    canClose: z.boolean(),
+    warning: z.boolean().openapi({
+      description: 'Open, in its last week, and something still needs review.',
+    }),
+    overdue: z.boolean().openapi({
+      description: 'Open past its day 28, with nothing on it ready to close.',
+    }),
+    totals: z.array(TotalSchema).openapi({
+      description:
+        'One total per currency, never converted; possible duplicates are left out (until #62).',
+    }),
+  })
+  .openapi('ReportSummary');
+
+export const ReportDetailSchema = ReportSummarySchema.extend({
+  tripItems: z.array(
+    TripSummarySchema.extend({
+      unsettled: z
+        .number()
+        .int()
+        .openapi({ description: 'Its expenses still being read or needing review.' }),
+      ready: z.boolean(),
+    }),
+  ),
+  localItems: z.array(
+    z.object({
+      id: z.string().uuid(),
+      status: ExpenseStatusSchema,
+      merchant: z.string().nullable(),
+      date: z.string().nullable(),
+      amount: ExpenseAmountSchema,
+      receiptId: z.string().uuid().nullable(),
+      justification: z.string().nullable(),
+      held: z.boolean().openapi({ description: 'Held as a possible duplicate (FR-INT-18).' }),
+      ready: z.boolean(),
+    }),
+  ),
+}).openapi('ReportDetail');
+
+export const ReportListSchema = z
+  .object({ reports: z.array(ReportSummarySchema) })
+  .openapi('ReportList');
+
+export const MoveToReportSchema = z
+  .union([
+    z.object({ reportId: z.string().uuid() }).strict(),
+    z.object({ newReport: z.literal(true) }).strict(),
+  ])
+  .openapi('MoveToReport', {
+    description: 'An open report of the same person, or a new one.',
+  });
+
+export const ReportMoveResultSchema = z
+  .object({
+    reportId: z.string().uuid().openapi({ description: 'The report it is on now.' }),
+    dropped: z
+      .string()
+      .uuid()
+      .nullable()
+      .openapi({ description: 'The report it left, when that left it holding nothing.' }),
+  })
+  .openapi('ReportMoveResult');
+
+export const JustifyExpenseSchema = z
+  .object({
+    justification: z.string().max(2000).openapi({
+      description: 'Why it was for business, up to 500 characters; blank removes it.',
+      example: 'Lunch with the Acme team about the Q4 rollout',
+    }),
+  })
+  .strict()
+  .openapi('JustifyExpense');
+
+export const JustificationSchema = z
+  .object({ justification: z.string().nullable() })
+  .openapi('Justification');
+
+const ReportInboxItemSchema = z
+  .object({
+    kind: z.literal('report'),
+    report: ReportSummarySchema,
+    reason: z.object({
+      code: z.enum(['overdue', 'closing_soon', 'ready_to_close']).openapi({
+        description:
+          'overdue: past day 28 and nothing ready. closing_soon: in its last week, something ' +
+          'still needing review, so reimbursement may wait. ready_to_close: nothing left to do.',
+      }),
+    }),
+  })
+  .openapi('ReportInboxItem');
+
+const ExpenseInboxItemSchema = z
+  .object({
+    kind: z.literal('expense'),
+    expense: z.object({
+      id: z.string().uuid(),
+      merchant: z.string().nullable(),
+      date: z.string().nullable(),
+      amount: ExpenseAmountSchema,
+      receiptId: z.string().uuid().nullable(),
+    }),
+    reason: z.object({
+      code: z.enum(['justification']).openapi({
+        description: 'justification: a local expense says nothing yet of why (FR-EXP-14).',
+      }),
+    }),
+  })
+  .openapi('ExpenseInboxItem');
+
+export const InboxItemSchema = z
+  .discriminatedUnion('kind', [
+    ReceiptInboxItemSchema,
+    ReportInboxItemSchema,
+    ExpenseInboxItemSchema,
+  ])
+  .openapi('InboxItem');
+
+export const InboxSchema = z.object({ items: z.array(InboxItemSchema) }).openapi('Inbox');
+
 export const HomeSchema = z
   .object({
     day: isoDate().openapi({ description: 'The day Home was built for.' }),
@@ -790,6 +966,9 @@ export const HomeSchema = z
       }),
     }),
     reading: z.number().int().openapi({ description: 'Receipts still being read.' }),
+    reports: z.array(ReportSummarySchema).openapi({
+      description: 'Reports to finish: the open and closed ones, newest first (Q15).',
+    }),
     recentTrips: z
       .array(TripSummarySchema)
       .openapi({ description: 'The last trips to end before the day, latest first.' }),

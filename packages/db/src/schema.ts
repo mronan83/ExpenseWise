@@ -141,6 +141,11 @@ export const trips = pgTable(
     endDate: date('end_date', { mode: 'string' }).notNull(),
     primaryCity: text('primary_city'),
     status: tripStatus('status').notNull().default('planned'),
+    /**
+     * The report it is on: it joins 24 hours after its return date, or a person moves it
+     * (FR-EXP-05). Its expenses go with it.
+     */
+    reportId: uuid('report_id'),
     createdAt: createdAt(),
   },
   (t) => [
@@ -150,6 +155,12 @@ export const trips = pgTable(
       columns: [t.orgId, t.memberId],
       foreignColumns: [members.orgId, members.id],
     }),
+    foreignKey({
+      name: 'trips_report_fk',
+      columns: [t.orgId, t.memberId, t.reportId],
+      foreignColumns: [reports.orgId, reports.memberId, reports.id],
+    }),
+    index('trips_report_idx').on(t.orgId, t.reportId),
     check('trips_dates_ordered', sql`${t.endDate} >= ${t.startDate}`),
     index('trips_member_dates_idx').on(t.orgId, t.memberId, t.startDate),
   ],
@@ -172,16 +183,24 @@ export const categories = pgTable(
   ],
 );
 
+/**
+ * A member's expense report: trips, which join 24 hours after their return date, and local
+ * expenses (FR-EXP-05, FR-EXP-14, ADR-0029). A trip points at its report, and a local
+ * expense too; an expense on a trip goes with its trip.
+ */
 export const reports = pgTable(
   'reports',
   {
     id: id(),
     orgId: orgId(),
     memberId: uuid('member_id').notNull(),
-    tripId: uuid('trip_id'),
     title: text('title').notNull(),
     status: reportStatus('status').notNull().default('open'),
     currency: char('currency', { length: 3 }).notNull(),
+    /** When an open report closes itself: 28 days after opening, later if reopened. */
+    closesAt: timestamp('closes_at', { withTimezone: true }).notNull(),
+    /** When it last closed, by the person or on day 28; null while open. */
+    closedAt: timestamp('closed_at', { withTimezone: true }),
     submittedAt: timestamp('submitted_at', { withTimezone: true }),
     approvedAt: timestamp('approved_at', { withTimezone: true }),
     settledAt: timestamp('settled_at', { withTimezone: true }),
@@ -190,17 +209,15 @@ export const reports = pgTable(
   },
   (t) => [
     unique('reports_org_id_id_key').on(t.orgId, t.id),
+    // What points at a report names its member too, so a report holds only its member's.
+    unique('reports_org_member_id_key').on(t.orgId, t.memberId, t.id),
     foreignKey({
       name: 'reports_member_fk',
       columns: [t.orgId, t.memberId],
       foreignColumns: [members.orgId, members.id],
     }),
-    foreignKey({
-      name: 'reports_trip_fk',
-      columns: [t.orgId, t.tripId],
-      foreignColumns: [trips.orgId, trips.id],
-    }),
     check('reports_currency_iso', isoCurrency(t.currency)),
+    check('reports_closed_when_closed', sql`(${t.status} = 'open') = (${t.closedAt} IS NULL)`),
     index('reports_member_status_idx').on(t.orgId, t.memberId, t.status),
   ],
 );
@@ -212,6 +229,7 @@ export const expenses = pgTable(
     orgId: orgId(),
     memberId: uuid('member_id').notNull(),
     tripId: uuid('trip_id'),
+    /** The report a local expense is on (FR-EXP-14); null for one on a trip. */
     reportId: uuid('report_id'),
     categoryId: uuid('category_id'),
     status: expenseStatus('status').notNull(),
@@ -225,6 +243,11 @@ export const expenses = pgTable(
     fxRateDate: date('fx_rate_date', { mode: 'string' }),
     fxSource: text('fx_source'),
     notes: text('notes'),
+    /**
+     * Why a local expense, one on no trip, was for business. Its report can't close without
+     * it (FR-EXP-14).
+     */
+    justification: text('justification'),
     /**
      * When a person last edited the values. From then on a reading of the receipt never
      * overwrites them (ADR-0022); a difference from the receipt shows instead.
@@ -253,11 +276,13 @@ export const expenses = pgTable(
       columns: [t.orgId, t.tripId],
       foreignColumns: [trips.orgId, trips.id],
     }),
+    // Only a local expense points at a report itself; one on a trip goes with its trip.
     foreignKey({
       name: 'expenses_report_fk',
-      columns: [t.orgId, t.reportId],
-      foreignColumns: [reports.orgId, reports.id],
+      columns: [t.orgId, t.memberId, t.reportId],
+      foreignColumns: [reports.orgId, reports.memberId, reports.id],
     }),
+    check('expenses_report_only_when_local', sql`${t.reportId} IS NULL OR ${t.tripId} IS NULL`),
     foreignKey({
       name: 'expenses_category_fk',
       columns: [t.orgId, t.categoryId],
