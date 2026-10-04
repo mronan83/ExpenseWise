@@ -1,5 +1,5 @@
 import type { CommittedEvent, Membership } from '@expensewise/db';
-import { newId } from '@expensewise/domain';
+import { mayChangeRecord, newId } from '@expensewise/domain';
 import {
   confirmReading,
   correctionsOf,
@@ -17,6 +17,7 @@ import {
   stoppedModels,
   type ModelSettingsStore,
 } from './model-settings.ts';
+import { notYours } from './caller.ts';
 import { needsYouItems, NO_REPORTS } from './needs-you-views.ts';
 import { ProblemError } from './problem.ts';
 import { showConverted } from './reimbursement.ts';
@@ -119,11 +120,19 @@ export function registerReceiptRoutes(
     }
     return membership;
   };
-  const duplicate = (receiptId: string) =>
-    new ProblemError(409, 'duplicate-receipt', 'This file is already filed', {
-      code: 'duplicate_receipt',
-      receiptId,
-    });
+  const duplicate = (receiptId: string | null) =>
+    receiptId
+      ? new ProblemError(409, 'duplicate-receipt', 'This file is already filed', {
+          code: 'duplicate_receipt',
+          receiptId,
+        })
+      : // Another member's, which this caller may not open (ADR-0035).
+        new ProblemError(409, 'duplicate-receipt', 'Someone here already filed this file', {
+          code: 'duplicate_receipt',
+          detail:
+            'Someone else in your organization filed the same file, and a file is claimed ' +
+            'once. Nothing was filed.',
+        });
   const notFound = () =>
     new ProblemError(404, 'not-found', 'No such receipt', { code: 'not_found' });
   const notWaiting = (stale: boolean) =>
@@ -218,6 +227,8 @@ export function registerReceiptRoutes(
 
   app.openapi(receiptUploadRoute, async (c) => {
     const who = await member(c.var.identity.userId);
+    // An auditor files nothing; refused here, before a file is sent for nothing (ADR-0035).
+    if (!mayChangeRecord(who.role, true)) throw notYours();
     const store = files();
     const { sha256 } = c.req.valid('json');
     const existing = await stores().receipts.findBySha256(who.orgId, sha256);
@@ -245,7 +256,11 @@ export function registerReceiptRoutes(
       },
       caller.userId,
     );
-    if (result.status === 'duplicate') throw duplicate(result.receiptId);
+    if (result.status === 'duplicate') {
+      // The upload a colleague's copy made has nothing to prove: it goes.
+      if (result.receiptId === null) await removeFile(receiptPath(who.orgId, body.id));
+      throw duplicate(result.receiptId);
+    }
     if (result.status === 'exists') return c.json(receiptSummary(result.receipt, []), 200);
     await dispatch(result.event);
     return c.json(receiptSummary(result.receipt, []), 202);
@@ -253,7 +268,10 @@ export function registerReceiptRoutes(
 
   app.openapi(listReceiptsRoute, async (c) => {
     const who = await member(c.var.identity.userId);
-    const { receipts, runs, reviews } = await stores().receipts.list(who.orgId, LIST_LIMIT);
+    // A person's Receipts are their own, whatever else their role lets them open (ADR-0035).
+    const { receipts, runs, reviews } = await stores().receipts.list(who.orgId, LIST_LIMIT, {
+      memberId: who.memberId,
+    });
     // Capture to Ready, beside the comparison, where the organization has switched it on.
     const timed = (await features.isOn(who.orgId, 'receipts.capture-time'))
       ? { captureToReady: captureTimeOf(receipts) }

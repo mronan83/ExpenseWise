@@ -247,7 +247,8 @@ describe('expenses', () => {
     expect(amounts.some((m) => m.currencies.includes('JPY'))).toBe(false);
 
     await call('GET', '/v1/expenses', 'riley');
-    expect(filters.at(-1)).toEqual({ amounts: undefined });
+    // Only the caller's own, whatever their role lets them open (ADR-0035).
+    expect(filters.at(-1)).toEqual({ amounts: undefined, memberId: MEMBER });
   });
 
   it('finds the expenses on no trip, or on some trip (Home’s figures open them)', async () => {

@@ -20,6 +20,7 @@ const PAGES: readonly { href: string; label: string; flag?: string | readonly st
   { href: '/settings/features', label: 'Features' },
   { href: '/settings/audit', label: 'Audit trail', flag: 'governance.audit-trail' },
   { href: '/settings/categories', label: 'Categories', flag: 'expenses.categories' },
+  { href: '/settings/people', label: 'People', flag: 'team.invites' },
 ];
 
 /** Moves between the settings pages. */

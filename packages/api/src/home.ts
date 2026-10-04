@@ -1,11 +1,9 @@
 import {
-  assertRowSecurityApplies,
   homeSnapshot,
   listExtractionRuns,
   listOpenDuplicatePairs,
   listReceiptReviews,
   listReceipts,
-  withOrg,
   type Database,
   type DuplicatePairRecord,
   type ExtractionRunRecord,
@@ -13,6 +11,7 @@ import {
   type ReceiptRecord,
   type ReceiptReviewRecord,
 } from '@expensewise/db';
+import { asCaller } from './caller.ts';
 import { reportsNeedingYou, type ReportsNeedingYou } from './reports.ts';
 
 /** What Home shows one member on one day, with the receipts that need them. */
@@ -32,19 +31,16 @@ export interface HomeStore {
   snapshot(orgId: string, memberId: string, day: string, needsLimit: number): Promise<HomeData>;
 }
 
-/** The Home store on Postgres, as expensewise_app. It checks the role once. */
+/**
+ * The Home store on Postgres, as expensewise_app, for the request's caller: they see only
+ * what their role allows (ADR-0035). It checks the role once.
+ */
 export function dbHomeStore(db: Database): HomeStore {
-  let checked: Promise<void> | undefined;
-  const safe = () =>
-    (checked ??= assertRowSecurityApplies(db).catch((error: unknown) => {
-      checked = undefined;
-      throw error;
-    }));
+  const inOrg = asCaller(db);
 
   return {
-    snapshot: async (orgId, memberId, day, needsLimit) => {
-      await safe();
-      return withOrg(db, orgId, async (tx) => {
+    snapshot: (orgId, memberId, day, needsLimit) =>
+      inOrg(orgId, async (tx) => {
         const receipts = await listReceipts(tx, needsLimit, {
           statuses: ['needs_review', 'failed'],
           memberId,
@@ -58,7 +54,6 @@ export function dbHomeStore(db: Database): HomeStore {
           pairs: await listOpenDuplicatePairs(tx, ids),
           reports: await reportsNeedingYou(tx, memberId, needsLimit),
         };
-      });
-    },
+      }),
   };
 }

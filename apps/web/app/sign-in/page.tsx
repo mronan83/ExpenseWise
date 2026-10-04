@@ -6,6 +6,15 @@ import { useState, type FormEvent } from 'react';
 import { formText } from '../../lib/form';
 import { supabase } from '../../lib/supabase';
 
+/**
+ * Where to go after signing in: an invite link that sent the person here (#29). Only a path
+ * on this site, so a link can never send someone elsewhere.
+ */
+function returnTo(search: string): string | undefined {
+  const next = new URLSearchParams(search).get('next');
+  return next && /^\/invite\/[A-Za-z0-9_-]+$/.test(next) ? next : undefined;
+}
+
 /** Email and password sign-in (D-15). Accounts are created in Supabase; sign-ups are off. */
 export default function SignInPage() {
   const router = useRouter();
@@ -28,7 +37,7 @@ export default function SignInPage() {
       setError(failure.message);
       return;
     }
-    router.push('/settings/ai');
+    router.push(returnTo(window.location.search) ?? '/settings/ai');
   }
 
   return (

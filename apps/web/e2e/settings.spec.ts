@@ -71,6 +71,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
       '/settings/categories',
       '/settings/ai-models',
       '/settings/currency',
+      '/settings/people',
+      '/invite/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
     ]) {
       test(`${path} has no WCAG 2.2 AA violations`, async ({ page }) => {
         await page.goto(path);

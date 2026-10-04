@@ -14,7 +14,7 @@ How a change moves from idea to production. The full model is in [docs/06-delive
 ## Rules the code relies on
 
 - **Money** is integer minor units plus an ISO 4217 code. Use `@expensewise/domain` (`money`, `fromDecimal`, `allocate`, `convert`). ESLint blocks `parseFloat` and `Math.round` in domain code.
-- **Tenancy.** Every query runs inside `withOrg(db, orgId, …)`. The API and workers connect as `expensewise_app`, which row-level security confines to one organization.
+- **Tenancy.** Every query runs inside `withOrg(db, orgId, …)`. The API and workers connect as `expensewise_app`, which row-level security confines to one organization. A request a member makes also names them (`withOrg(…, { member })`, or `asCaller(db)` in an API store), so the database keeps them to their own records (ADR-0035); a workflow names no one and acts for the system.
 - **Audit.** Every state change calls `appendAuditEvent()` in the same transaction as the change.
 - **Async work** goes through `enqueueOutbox()` in the same transaction, never a direct call to a queue. The relay in `packages/workflows` hands committed events to Inngest with the outbox id as the event id, so a workflow starts once even if an event is relayed twice.
 - **Feature flags.** Anything a user can see ships behind a flag in `packages/flags/src/registry.ts`, off by default (AP8). Read it on the server with `flags.isEnabled()`. Delete the flag and its off branch once it is on everywhere.
@@ -26,7 +26,8 @@ How a change moves from idea to production. The full model is in [docs/06-delive
 1. Add it to `packages/db/src/schema.ts` with `org_id`, a `unique (org_id, id)` and composite `(org_id, …)` foreign keys.
 2. Run `pnpm --filter @expensewise/db generate`.
 3. Add grants, `ENABLE`/`FORCE ROW LEVEL SECURITY` and a `tenant_isolation` policy in a custom migration (`drizzle-kit generate --custom`).
-4. `pnpm test:integration`. The policy coverage test fails if step 3 was missed.
+4. If its rows belong to one member (a `member_id` column) or hang off a receipt or expense, add the restrictive `own_records` policy and the `own_records` trigger too, as migration 0024 does ([ADR-0035](docs/adr/0035-own-records-and-invite-links.md)). Member-facing API stores run their transactions as the caller with `asCaller(db)`; background work calls `withOrg()` with no member.
+5. `pnpm test:integration`. The policy coverage tests fail if step 3 or 4 was missed.
 
 ## Database migrations
 

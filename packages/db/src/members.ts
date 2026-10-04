@@ -1,5 +1,5 @@
 import { newId, type MemberRole } from '@expensewise/domain';
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { appendAuditEvent } from './audit.ts';
 import { seedStarterCatalog } from './categories.ts';
 import { withOrg, withUser, type Database, type Transaction } from './client.ts';
@@ -11,7 +11,10 @@ export interface Membership {
   readonly role: MemberRole;
 }
 
-/** The members a user signs in as, oldest sign-in first. Needs app.user_id set. */
+/**
+ * The members a user signs in as, oldest sign-in first. A member an owner removed is not one.
+ * Needs app.user_id set.
+ */
 export function membershipsOf(tx: Transaction, userId: string): Promise<Membership[]> {
   return tx
     .select({ orgId: members.orgId, memberId: members.id, role: members.role })
@@ -20,7 +23,7 @@ export function membershipsOf(tx: Transaction, userId: string): Promise<Membersh
       members,
       and(eq(members.orgId, memberSignIns.orgId), eq(members.id, memberSignIns.memberId)),
     )
-    .where(eq(memberSignIns.userId, userId))
+    .where(and(eq(memberSignIns.userId, userId), isNull(members.deactivatedAt)))
     .orderBy(asc(memberSignIns.createdAt));
 }
 

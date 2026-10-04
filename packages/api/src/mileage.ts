@@ -1,10 +1,8 @@
 import {
-  assertRowSecurityApplies,
   editMileage,
   getExpense,
   getMileage,
   logMileage,
-  withOrg,
   type Database,
   type EditMileageResult,
   type ExpenseRecord,
@@ -12,6 +10,7 @@ import {
   type MileageRecord,
 } from '@expensewise/db';
 import type { IsoDate, MileageInput } from '@expensewise/domain';
+import { asCaller } from './caller.ts';
 
 /** A drive and the expense that claims it. */
 export interface MileageEntry {
@@ -44,18 +43,10 @@ export interface MileageStore {
   ): Promise<EditMileageResult>;
 }
 
-/** The mileage store on Postgres, as expensewise_app. It checks the role once. */
+/** The mileage store on Postgres, as expensewise_app and as the caller. */
 export function dbMileageStore(db: Database): MileageStore {
-  let checked: Promise<void> | undefined;
-  const safe = () =>
-    (checked ??= assertRowSecurityApplies(db).catch((error: unknown) => {
-      checked = undefined;
-      throw error;
-    }));
-  const inOrg = async <T>(orgId: string, work: Parameters<typeof withOrg<T>>[2]) => {
-    await safe();
-    return withOrg(db, orgId, work);
-  };
+  // As the caller, so row-level security shows and changes only what their role allows (ADR-0035).
+  const inOrg = asCaller(db);
 
   return {
     log: (orgId, memberId, input, actor, today) =>

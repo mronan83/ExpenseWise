@@ -67,10 +67,10 @@ export const PRINCIPLES: readonly Principle[] = [
     id: 'AP6',
     name: 'Isolation in the database',
     built:
-      'Every tenant table has `org_id`, a forced row-level security policy and composite foreign keys. The app connects as a role that can’t bypass it, and refuses to start if it could.',
+      'Every tenant table has `org_id`, a forced row-level security policy and composite foreign keys. The app connects as a role that can’t bypass it, and refuses to start if it could. Inside an organization, each request names its caller’s membership to the database, and policies and triggers keep a member to their own receipts, expenses, trips and reports; owners, finance admins and auditors see everyone’s, and an auditor changes nothing (ADR-0035). Background work names no member and acts for the system.',
     short:
-      'Inside one organization the API doesn’t yet keep members to their own records (GAP-20, #50).',
-    refs: ['ADR-0001', 'ADR-0013'],
+      'An approver sees only their own records until approval routes reports to them (#24). The audit trail and the outbox are kept to the organization, not to each member (GAP-34, #77).',
+    refs: ['ADR-0001', 'ADR-0013', 'ADR-0035', 'GAP-34', '#77', '#24'],
   },
   {
     id: 'AP7',
@@ -110,7 +110,7 @@ export const COMPONENTS: readonly Component[] = [
     name: 'API',
     technology: 'Hono with zod-openapi; jose for tokens; pdf-lib for report PDFs',
     responsibility:
-      'Verifies the sign-in token, finds the caller’s membership, and serves every operation, including Home, read in one transaction: the Needs you inbox, which says why each item needs the person, then their trip, month and recent trips. Takes Bird’s signed email webhook, checked against the exact bytes before anything parses them. Settles possible duplicates as the person decides, removing a deleted receipt’s file only after the deletion commits. Serves expense reports: closing, reopening, moving a trip or local expense, and justifying one; Needs you adds reports to act on and local expenses needing a reason. Serves the audit trail to owners, finance admins and auditors, a page at a time, and recomputes its hash chain when asked. Exports a closed report as CSV, and as a PDF summary laid out in the request with pdf-lib: a database read and a layout in memory, with no other service. Serves Settings › Organization: the details and the duplicate time window, which every member reads and only the owner changes. Logs, quotes and corrects drives, each only the caller’s own, behind the mileage flag. Serves the categories and types an organization keeps, which only owners and finance admins change, and shows each expense its own, or a suggestion worked out in the request by rules, with no model call. While currency conversion is on, serves each person’s reimbursement currency and shows reports, Home and Needs you in it, beside the amounts as spent. Generates the OpenAPI contract and answers errors as problem documents.',
+      'Verifies the sign-in token, finds the caller’s membership and runs each member-facing store’s transaction as that member, so the database shows them only what their role allows (ADR-0035); a change the database refuses answers 403 `not_yours`. Serves Settings › People: invite links, roles and removing someone, and accepting a link. Serves every operation, including Home, read in one transaction: the Needs you inbox, which says why each item needs the person, then their trip, month and recent trips. Takes Bird’s signed email webhook, checked against the exact bytes before anything parses them. Settles possible duplicates as the person decides, removing a deleted receipt’s file only after the deletion commits. Serves expense reports: closing, reopening, moving a trip or local expense, and justifying one; Needs you adds reports to act on and local expenses needing a reason. Serves the audit trail to owners, finance admins and auditors, a page at a time, and recomputes its hash chain when asked. Exports a closed report as CSV, and as a PDF summary laid out in the request with pdf-lib: a database read and a layout in memory, with no other service. Serves Settings › Organization: the details and the duplicate time window, which every member reads and only the owner changes. Logs, quotes and corrects drives, each only the caller’s own, behind the mileage flag. Serves the categories and types an organization keeps, which only owners and finance admins change, and shows each expense its own, or a suggestion worked out in the request by rules, with no model call. While currency conversion is on, serves each person’s reimbursement currency and shows reports, Home and Needs you in it, beside the amounts as spent. Generates the OpenAPI contract and answers errors as problem documents.',
     where: ['packages/api'],
   },
   {
@@ -124,7 +124,7 @@ export const COMPONENTS: readonly Component[] = [
     name: 'Data access',
     technology: 'Drizzle ORM on node-postgres',
     responsibility:
-      'The schema and migrations, `withOrg()` and every query and write, each with its audit event. Runs migrations and the data steps on release: one takes back anything Supabase’s Data API roles hold, another compares each receipt read before duplicates were looked for, once. Compares each receipt as its reading settles and holds a later copy, and keeps when its first reading settled; corrects a Ready receipt’s field with its expense in one transaction; deletes a receipt only through `delete_receipt()`. Joins trips and local expenses to reports and closes them on day 28, by the organization’s days when it keeps a time zone; any change to a closed report reopens it. Reads a report with every expense on it for its export. Keeps the organization’s details and duplicate window, each change audited. Writes a drive as an expense and its mileage log together, with the rate copied on. Seeds each new organization’s ready-made categories and types through `seed_starter_catalog()`, and keeps the lists and each expense’s choice. Converts a report’s amounts with the rates it is given, records each conversion with its rate, and asks for conversion in the transaction of any change that leaves something to convert. Holds the restore drill’s database checks.',
+      'The schema and migrations, `withOrg()`, which can name the member a transaction acts for (ADR-0035), and every query and write, each with its audit event. Makes, accepts and revokes invite links, keeping only each token’s hash, and changes roles and removes people, never the last owner. Runs migrations and the data steps on release: one takes back anything Supabase’s Data API roles hold, another compares each receipt read before duplicates were looked for, once. Compares each receipt as its reading settles and holds a later copy, and keeps when its first reading settled; corrects a Ready receipt’s field with its expense in one transaction; deletes a receipt only through `delete_receipt()`. Joins trips and local expenses to reports and closes them on day 28, by the organization’s days when it keeps a time zone; any change to a closed report reopens it. Reads a report with every expense on it for its export. Keeps the organization’s details and duplicate window, each change audited. Writes a drive as an expense and its mileage log together, with the rate copied on. Seeds each new organization’s ready-made categories and types through `seed_starter_catalog()`, and keeps the lists and each expense’s choice. Converts a report’s amounts with the rates it is given, records each conversion with its rate, and asks for conversion in the transaction of any change that leaves something to convert. Holds the restore drill’s database checks.',
     where: ['packages/db'],
   },
   {
@@ -668,9 +668,10 @@ export interface Quality {
 export const QUALITY: readonly Quality[] = [
   {
     attribute: 'Security',
-    how: 'Forced row-level security, a runtime role that can’t bypass it, Supabase’s Data API roles stripped on every release, verified tokens, encrypted provider keys, a private bucket, invite-only sign-in, security headers, and production credentials in production builds only.',
-    short: 'Members aren’t yet kept to their own records (GAP-20); no second factor (#8).',
-    refs: ['NFR-SEC-01', 'NFR-SEC-13', 'GAP-20', '#8'],
+    how: 'Forced row-level security, members kept to their own records inside an organization, a runtime role that can’t bypass it, Supabase’s Data API roles stripped on every release, verified tokens, encrypted provider keys, a private bucket, invite-only sign-in, security headers, and production credentials in production builds only.',
+    short:
+      'No second factor (#8). The audit trail and the outbox are kept to the organization, not to each member (GAP-34).',
+    refs: ['NFR-SEC-01', 'NFR-SEC-13', 'FR-GOV-01', 'GAP-34', '#8'],
   },
   {
     attribute: 'Integrity',

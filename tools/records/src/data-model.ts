@@ -18,11 +18,12 @@ export const DOMAINS: readonly Domain[] = [
   {
     name: 'Organizations and people',
     about:
-      'Who is in which organization and what its owner keeps about it, how they sign in, the AI keys an organization brings, the AI models it reads receipts with, and the features its owner has switched on.',
+      'Who is in which organization and what its owner keeps about it, with what role, how they sign in and the links that let someone join, the AI keys an organization brings, the AI models it reads receipts with, and the features its owner has switched on.',
     tables: [
       'organizations',
       'members',
       'member_sign_ins',
+      'member_invites',
       'ai_provider_keys',
       'org_ai_models',
       'org_features',
@@ -80,11 +81,15 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   members: {
     about:
-      'A person in an organization, with their role, for approval routing their manager (FR-GOV-01), and the currency they are reimbursed in, once they choose one in Settings; until then, their organization’s home currency (FR-EXP-13, Q23).',
+      'A person in an organization, with their role, for approval routing their manager (FR-GOV-01), and the currency they are reimbursed in, once they choose one in Settings; until then, their organization’s home currency (FR-EXP-13, Q23). An owner can change the role or remove them; a removed member keeps their row, their records and their history, signs in here no more, and comes back as the same member if invited again (FR-PLT-07, ADR-0035). The role also decides whose records they see: their own, or everyone’s for owners, finance admins and auditors.',
   },
   member_sign_ins: {
     about:
       'The sign-ins that reach a member. One person can have several, such as a personal and a work email, and approvals still see one person (ADR-0016).',
+  },
+  member_invites: {
+    about:
+      'A link an owner made for one person to join with a role (FR-PLT-07, ADR-0035). Only the SHA-256 of its token is kept; the link is shown once. It works once, for 7 days, until it is revoked; an accepted or revoked one stays as the record of who let whom in, and each step is in the audit trail. No email is sent: the owner passes the link on.',
   },
   ai_provider_keys: {
     about:
@@ -175,6 +180,20 @@ export const FUNCTIONS: Readonly<Record<string, string>> = {
     'The organization this transaction works in, from `app.org_id`, which `withOrg()` sets. Every tenant policy compares against it; with no setting it is null and no row matches.',
   app_current_user:
     'The signed-in user for this transaction, from `app.user_id`, set from a verified token. Lets a person find their own memberships before an organization is chosen.',
+  app_current_member:
+    'The member this transaction acts for, from `app.member_id`, which `withOrg()` sets from the caller’s membership. Null for the system’s own work, such as a workflow, which sees and changes every member’s records (ADR-0035).',
+  app_current_member_role:
+    'That member’s role, from `app.member_role`, set with it. A member named without a role is held to their own records.',
+  app_sees_every_member:
+    'Whether this transaction sees every member’s records: the system, owners, finance admins and auditors. Members and approvers see their own (ADR-0035).',
+  app_changes_member:
+    'Whether this transaction may change a record of a given member: the system, or that member themselves unless an auditor. Never null, so a record of a member it can’t see is refused.',
+  app_record_owner:
+    'The member a row belongs to: its own `member_id`, or that of the receipt or expense it hangs off, looked up under the caller’s own row-level security.',
+  enforce_own_records:
+    'Fires before every insert, update and delete of a member’s records and what hangs off them, and refuses one the acting member may not change with an error, so the whole transaction, its audit event included, rolls back. Silent for the system (ADR-0035).',
+  app_invite_hash:
+    'The SHA-256 of the invite token the API was given, from `app.invite_hash`. Lets the person holding a link see that one invite before they belong to its organization; the API clears it once read.',
   delete_receipt:
     'Deletes one receipt of the current organization with its readings, confirmations, duplicate pairs and, unless another receipt proves it, its expense; returns the file to remove. Refuses a receipt whose expense is submitted or further along. Runs as its owner, because the app holds no DELETE right on receipts, readings, confirmations or expenses (ADR-0028).',
   claim_outbox_batch:
@@ -220,6 +239,33 @@ export const RULES: readonly Rule[] = [
       'Every tenant table carries `org_id` and a `tenant_isolation` policy, forced so even the owner’s queries obey it. References are composite `(org_id, id)` foreign keys, so a row can’t point into another organization even though foreign-key checks skip row-level security.',
     objects: ['tenant_isolation', 'app_current_org', 'expenses_trip_fk', 'receipts_expense_fk'],
     refs: ['NFR-SEC-01', 'ADR-0001'],
+  },
+  {
+    rule: 'Inside an organization, each member sees and changes only their own records.',
+    mechanism:
+      'With a member named for the transaction, a restrictive `own_records` policy shows a member or approver only their own receipts, expenses, trips, reports and emails, and the readings, confirmations, duplicate pairs and mileage that hang off them; owners, finance admins and auditors see everyone’s. An `own_records` trigger refuses any change to another member’s rows, and every change by an auditor, with an error rather than a silent skip. With no member named, the system’s own work sees and changes everything, as before (ADR-0035).',
+    objects: [
+      'own_records',
+      'app_current_member',
+      'app_sees_every_member',
+      'app_changes_member',
+      'enforce_own_records',
+    ],
+    refs: ['FR-GOV-01', 'GAP-20', 'ADR-0035'],
+  },
+  {
+    rule: 'An invite link works once, for one organization, and only its holder sees it.',
+    mechanism:
+      'Only the token’s SHA-256 is stored, unique and real; an invite is accepted or revoked, never both, and accepted by a member of its own organization. Before joining, a person sees just the invite whose hash the API set for their transaction (`invite_holder`). The 7 days, the one use and the rest are the domain’s and the API’s to check, under the organization’s write lock.',
+    objects: [
+      'member_invites_token_hash_key',
+      'member_invites_token_hash_hex',
+      'member_invites_accepted_or_revoked',
+      'member_invites_accepted_by_fk',
+      'invite_holder',
+      'app_invite_hash',
+    ],
+    refs: ['FR-PLT-07', 'ADR-0035'],
   },
   {
     rule: 'Supabase’s Data API roles hold nothing in our schema.',
@@ -294,7 +340,8 @@ export const RULES: readonly Rule[] = [
   },
   {
     rule: 'The same file is filed once per organization.',
-    mechanism: 'The file’s SHA-256 is unique within an organization, and must be a real digest.',
+    mechanism:
+      'The file’s SHA-256 is unique within an organization, and must be a real digest. A member filing a file a colleague already filed is refused without being shown the colleague’s receipt (ADR-0035).',
     objects: ['receipts_org_sha256_key', 'receipts_sha256_hex'],
     refs: ['NFR-DAT-06'],
   },

@@ -1,5 +1,4 @@
 import {
-  assertRowSecurityApplies,
   classifyExpense,
   deleteCategory,
   deleteType,
@@ -8,7 +7,6 @@ import {
   memberChoices,
   saveCategory,
   saveType,
-  withOrg,
   type CatalogActor,
   type CatalogDeletion,
   type CatalogRecord,
@@ -22,6 +20,7 @@ import {
   type TypeChange,
   type TypeRecord,
 } from '@expensewise/db';
+import { asCaller } from './caller.ts';
 
 /** What showing expenses with their categories needs, read at once. */
 export interface Classifying {
@@ -68,18 +67,10 @@ export interface CategoryStore {
   ): Promise<Classifying>;
 }
 
-/** The category store on Postgres, as expensewise_app. It checks the role once. */
+/** The category store on Postgres, as expensewise_app and as the caller. */
 export function dbCategoryStore(db: Database): CategoryStore {
-  let checked: Promise<void> | undefined;
-  const safe = () =>
-    (checked ??= assertRowSecurityApplies(db).catch((error: unknown) => {
-      checked = undefined;
-      throw error;
-    }));
-  const inOrg = async <T>(orgId: string, work: Parameters<typeof withOrg<T>>[2]) => {
-    await safe();
-    return withOrg(db, orgId, work);
-  };
+  // As the caller, so row-level security shows and changes only what their role allows (ADR-0035).
+  const inOrg = asCaller(db);
 
   return {
     catalog: (orgId) => inOrg(orgId, (tx) => listCatalog(tx)),

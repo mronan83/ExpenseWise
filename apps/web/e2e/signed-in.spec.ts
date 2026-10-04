@@ -167,6 +167,10 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
   ['an expense with no category', (s) => `/expenses/${s.expenses.dinner}`, []],
   ['AI model settings', () => '/settings/ai-models', []],
   ['reimbursement currency settings', () => '/settings/currency', []],
+  ['people settings, with a member and a link not used yet', () => '/settings/people', []],
+  ['removing someone', () => '/settings/people', [press('Remove sam')]],
+  ['an invite link this account can’t use', (s) => `/invite/${s.invites.join}`, []],
+  ['a revoked invite link', (s) => `/invite/${s.invites.revoked}`, []],
 ];
 
 const session = {

@@ -45,6 +45,7 @@ Each ADR records one decision with its context, the alternatives considered and 
 | [0036](0036-categories-and-types.md) | Categories and types are two lists an organization keeps, and suggestions for them are rules, not a model | D-38 | Accepted (two lists, the category narrowing the types, decided by product owner, Q7; ready-made set, retiring and suggestion rules recommended) | 2026-10-04 |
 | [0033](0033-ready-on-one-confident-reading.md) | Each organization chooses its AI models, and Ready rests on one confident reading | D-35 | Accepted (switches, primary, back-ups and the operator switch decided by product owner, Q8 and Q11; Ready rule, defaults and mechanism recommended, no objection yet) | 2026-10-04 |
 | [0034](0034-reference-rates-for-reimbursement.md) | Amounts are converted at the ECB's reference rate for their purchase date, and keep it | D-36 | Accepted (conversion, the person's own currency and the purchase date's reference rate decided by product owner, Q23, Q25; source, weekend rule and mechanism recommended, no objection) | 2026-10-04 |
+| [0035](0035-own-records-and-invite-links.md) | Each member's records are kept to them in the database, and people join by invite link | D-37 | Accepted (adding #50 and inviting by link decided by product owner; enforcement in the database recommended, Q34 open) | 2026-10-04 |
 
 ## How to add an ADR
 

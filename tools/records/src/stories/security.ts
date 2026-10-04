@@ -9,6 +9,8 @@ const ADR_0020 = { by: 'blueprint', source: 'ADR-0020' } as const;
 const ARCH_65 = { by: 'blueprint', source: 'arch §6.5' } as const;
 const DELIVERY_73 = { by: 'blueprint', source: 'delivery §7.3' } as const;
 const DELIVERY_74 = { by: 'blueprint', source: 'delivery §7.4' } as const;
+const OWNER_OCT_4 = { by: 'owner', source: 'owner 2026-10-04' } as const;
+const ADR_0035 = { by: 'claude', source: 'ADR-0035' } as const;
 
 /** Security (NFR-SEC-01 to NFR-SEC-13) and privacy (NFR-PRV-02 to NFR-PRV-04). */
 export const SECURITY_STORIES: readonly Story[] = [
@@ -90,7 +92,7 @@ export const SECURITY_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'The outbox of pending work is the one table the workflow relay reads across organizations; the app’s own role is still held to one organization there. Within one organization, members are not yet kept apart: any member can see every member’s receipts, expenses and trips (GAP-20). That is harmless while each organization has one person.',
+    note: 'The outbox of pending work is the one table the workflow relay reads across organizations; the app’s own role is still held to one organization there. Within one organization, members are kept apart too since PR #58: each sees and changes only their own records (US-SEC-14 to US-SEC-17).',
   },
   {
     id: 'US-SEC-02',
@@ -428,7 +430,7 @@ export const SECURITY_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'A link works for anyone who holds it until it expires. Any member of the organization can open any of its receipts (GAP-20).',
+    note: 'A link works for anyone who holds it until it expires. Only the receipt’s own member, and owners, finance admins and auditors, can open a receipt to get one (US-SEC-14).',
   },
   {
     id: 'US-SEC-07',
@@ -625,7 +627,7 @@ export const SECURITY_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Sign-ups were turned off by hand in the Supabase dashboard, and nothing checks the setting. Until invites exist (F-23, #29), a person the owner adds gets an organization of their own, not the owner’s.',
+    note: 'Sign-ups were turned off by hand in the Supabase dashboard, and nothing checks the setting. With Invite people switched on (F-23), the owner makes the person’s account, then sends them a link to join the owner’s organization (US-TEAM-01); without it, the person gets an organization of their own.',
   },
   {
     id: 'US-SEC-11',
@@ -865,5 +867,224 @@ export const SECURITY_STORIES: readonly Story[] = [
       },
     ],
     note: 'Unconfirmed (GAP-13, #36): Q3 asks whether each vendor’s standard terms are enough for Phase 1. Supabase, Vercel, Inngest and Anthropic see receipts, and OpenAI on the fallback path. Bird, which receives emailed receipts (ADR-0026), sees them too, and GAP-13 does not name it yet.',
+  },
+  {
+    id: 'US-SEC-14',
+    title: 'Keep my receipts, expenses and trips to me inside a team',
+    as: 'Sam, who files expenses in a team',
+    want: 'no one in my organization who is a member or approver to see or change my receipts, expenses, trips or reports',
+    soThat: 'joining a team doesn’t show my colleagues my spending, or let them change my claims',
+    feature: 'F-61',
+    requirements: ['FR-GOV-01'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'two members of one organization, each with receipts, expenses and trips',
+        when: 'one opens Receipts, Expenses or Trips, or opens one of the other’s by its link',
+        then: 'they see only their own, and the other’s is not found',
+        decided: OWNER_OCT_4,
+        checks: [
+          "api/own-records.int › can't see each other's receipts, expenses or trips",
+          "db/own-records.int › can't see another member's receipts, expenses or trips, or their readings",
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'two members of one organization',
+        when: 'one tries to change or delete the other’s trip, expense or receipt, or to make one in the other’s name',
+        then: 'nothing changes: the app answers as if it weren’t there, and the database refuses it even if the app didn’t',
+        decided: OWNER_OCT_4,
+        checks: [
+          "api/own-records.int › can't change each other's receipts, expenses or trips",
+          "db/own-records.int › can't change, delete or file another member's records",
+        ],
+      },
+      {
+        id: 'AC3',
+        given:
+          'what hangs off my records: each receipt’s readings, my reports, and my duplicate pairs, confirmations, mileage and emails',
+        when: 'a colleague who is a member or approver reads the organization’s data',
+        then: 'those are kept to me too',
+        decided: CLAUDE,
+        checks: [
+          "db/own-records.int › can't see another member's receipts, expenses or trips, or their readings",
+          'db/own-records.int › keeps reports to their member too',
+          'db/own-records.int › keeps every table of a member’s records to that member, for reading and changing',
+        ],
+      },
+      {
+        id: 'AC4',
+        given: 'a file a colleague already filed',
+        when: 'I file the same file',
+        then: 'it is refused, since a file is claimed once in an organization, and I am not shown their receipt',
+        decided: CLAUDE,
+        checks: [
+          'api/own-records.int › refuses the same file a colleague filed, without showing theirs',
+        ],
+      },
+      {
+        id: 'AC5',
+        given: 'an organization of one person',
+        when: 'its owner captures, edits and deletes',
+        then: 'everything works as it did before',
+        decided: CLAUDE,
+        checks: [
+          'db/own-records.int › works for its owner as it did before',
+          'api/own-records.int › works for its owner as before, and joining another replaces it while it is empty',
+        ],
+      },
+      {
+        id: 'AC6',
+        given: 'an approver, while approval isn’t built (#24) and no report is routed to them',
+        when: 'they work in the app',
+        then: 'they see and change only their own records, as a member does',
+        decided: CLAUDE,
+        checks: [
+          "db/own-records.int › can't see another member's receipts, expenses or trips, or their readings",
+        ],
+      },
+    ],
+    note: 'Your choice of Oct 4: #50 before anyone is invited (GAP-20). Approvers see the reports they approve once approval routes them (#24).',
+  },
+  {
+    id: 'US-SEC-15',
+    title: 'Let owners and finance admins see everyone’s records, and change only their own',
+    as: 'Jordan, the finance admin',
+    want: 'to open any member’s receipt, expense or trip, while changing only my own',
+    soThat:
+      'I can check the team’s spending without being able to change what someone else claimed',
+    feature: 'F-61',
+    requirements: ['FR-GOV-01'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'a finance admin or an owner',
+        when: 'they open any member’s receipt, expense or trip by its link',
+        then: 'they see it',
+        decided: OWNER_OCT_4,
+        checks: [
+          "api/own-records.int › lets a finance admin open both members' records, and change neither",
+          "db/own-records.int › lets a finance admin see both members' records, and change neither",
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'a finance admin or an owner looking at another member’s record',
+        when: 'they try to change it',
+        then: 'it is refused: they can change only their own records, and nothing changes',
+        decided: ADR_0035,
+        checks: [
+          "api/own-records.int › lets a finance admin open both members' records, and change neither",
+          "db/own-records.int › lets a finance admin see both members' records, and change neither",
+          'db/own-records.int › deletes the copy through delete_receipt(), and refuses a finance admin doing it for them',
+        ],
+      },
+      {
+        id: 'AC3',
+        given: 'anyone, whatever their role',
+        when: 'they open Receipts, Expenses or Trips',
+        then: 'those list their own records, as Home, Needs you and Reports do',
+        decided: ADR_0035,
+        checks: [
+          'api/expenses › searches by merchant, dates, amount in any currency, and trip (FR-INS-02)',
+          'api/trips › searches by text and dates, and refuses a date that does not exist',
+          "api/own-records.int › lets a finance admin open both members' records, and change neither",
+        ],
+      },
+    ],
+    note: 'Whether owners and finance admins should also change others’ records, or get a list of everyone’s, is Q34. Today an owner who opens a colleague’s record still sees its buttons, and the server refuses them.',
+  },
+  {
+    id: 'US-SEC-16',
+    title: 'Let an auditor read everything and change nothing',
+    as: 'an auditor, who checks the organization’s spending',
+    want: 'to read every member’s receipts, expenses, trips and reports',
+    soThat: 'I can audit the organization with no chance of changing what I audit',
+    feature: 'F-61',
+    requirements: ['FR-GOV-01'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'an auditor',
+        when: 'they open any member’s records',
+        then: 'they can read them',
+        decided: OWNER_OCT_4,
+        checks: [
+          'api/own-records.int › lets an auditor read every record and change nothing',
+          'db/own-records.int › lets an auditor read every record and change nothing, not even their own',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'an auditor',
+        when: 'they try to change any record, or to make one of their own, such as a trip or a receipt',
+        then: 'it is refused',
+        decided: ARCH_69,
+        checks: [
+          'api/own-records.int › lets an auditor read every record and change nothing',
+          'db/own-records.int › lets an auditor read every record and change nothing, not even their own',
+        ],
+      },
+    ],
+  },
+  {
+    id: 'US-SEC-17',
+    title: 'Enforce whose records are whose in the database',
+    as: 'the product owner, who runs ExpenseWise',
+    want: 'the database itself to keep each member to what their role allows, for every request a member makes',
+    soThat:
+      'a route that forgets to check, today or in a later change, still can’t show or change a colleague’s records',
+    feature: 'F-61',
+    requirements: ['FR-GOV-01'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'any request a member makes',
+        when: 'it reads or changes receipts, expenses, trips or reports',
+        then: 'it does so as that member, and the database applies their role',
+        decided: ADR_0035,
+        checks: [
+          "api/own-records.int › can't see each other's receipts, expenses or trips",
+          'db/own-records.int › refuses a member that is not a member id and role',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'background work, such as reading a receipt or closing reports on day 28',
+        when: 'it runs',
+        then: 'it acts for the system and sees and changes every member’s records in its organization, as before',
+        decided: ADR_0035,
+        checks: [
+          'db/own-records.int › acts for the system, as workflows do, when no member is named',
+          'db/own-records.int › acts for the system again after moving to an organization',
+        ],
+      },
+      {
+        id: 'AC3',
+        given: 'a table that holds a member’s records, by its member column, or hangs off one',
+        when: 'the tests run',
+        then: 'they fail unless the table keeps members to their own, for reading and for changing',
+        decided: ADR_0035,
+        checks: [
+          'db/own-records.int › keeps every table of a member’s records to that member, for reading and changing',
+        ],
+      },
+      {
+        id: 'AC4',
+        given: 'a change the database refuses',
+        when: 'it was asked for',
+        then: 'the whole change, its audit event included, is undone, and the app answers that you can change only your own records',
+        decided: ADR_0035,
+        checks: [
+          "api/own-records.int › lets a finance admin open both members' records, and change neither",
+          "db/own-records.int › lets a finance admin see both members' records, and change neither",
+        ],
+      },
+    ],
+    note: 'The audit trail and the outbox are kept to the organization, not to each member, because every member’s change reads the trail to chain its event (GAP-34, #77). No screen shows either to a member.',
   },
 ];

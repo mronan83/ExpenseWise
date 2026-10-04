@@ -232,6 +232,27 @@
       "when": 1791137482745,
       "tag": "0032_expense_conversions_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1791137838718,
+      "tag": "0033_members_leave_and_invites",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1791137846524,
+      "tag": "0034_own_records_and_invites_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1791137893564,
+      "tag": "0035_own_records_conversions",
+      "breakpoints": true
     }
   ]
 }

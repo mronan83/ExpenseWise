@@ -83,10 +83,12 @@ export function registerExpenseRoutes(
     const { amount, onTrip, ...search } = c.req.valid('query');
     // The schema admits only plain decimals, which always read in some currency.
     const amounts = amount === undefined ? undefined : (amountMatches(amount) ?? []);
+    // A person's Expenses are their own, whatever else their role lets them open (ADR-0035).
     const found = await stores().expenses.list(who.orgId, LIST_LIMIT, {
       ...search,
       amounts,
       onTrip: onTrip === undefined ? undefined : onTrip === 'yes',
+      memberId: who.memberId,
     });
     const summaries = expenseSummaries(found);
     const categories = await categoriesOn(who.orgId);

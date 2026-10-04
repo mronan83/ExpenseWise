@@ -25,6 +25,11 @@
       "cache": false,
       "env": ["DATABASE_URL"]
     },
+    "@expensewise/api#test:integration": {
+      "cache": false,
+      "env": ["DATABASE_URL"],
+      "dependsOn": ["@expensewise/db#test:integration"]
+    },
     "test:e2e": {
       "cache": false,
       "dependsOn": ["build"]

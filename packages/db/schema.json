@@ -260,6 +260,16 @@
       "indexes": [],
       "policies": [
         {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (approver_member_id = app_current_member()) OR (EXISTS ( SELECT 1\n   FROM reports r\n  WHERE ((r.org_id = approval_steps.org_id) AND (r.id = approval_steps.report_id)))))",
+          "check": null
+        },
+        {
           "name": "tenant_isolation",
           "command": "ALL",
           "permissive": true,
@@ -874,6 +884,16 @@
       "indexes": [],
       "policies": [
         {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (EXISTS ( SELECT 1\n   FROM expenses e\n  WHERE ((e.org_id = expense_conversions.org_id) AND (e.id = expense_conversions.expense_id)))))",
+          "check": null
+        },
+        {
           "name": "tenant_isolation",
           "command": "ALL",
           "permissive": true,
@@ -884,7 +904,12 @@
           "check": "(org_id = app_current_org())"
         }
       ],
-      "triggers": [],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.expense_conversions FOR EACH ROW EXECUTE FUNCTION enforce_own_records('expense')"
+        }
+      ],
       "grants": {
         "expensewise_app": [
           "INSERT",
@@ -1398,6 +1423,16 @@
       ],
       "policies": [
         {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (member_id = app_current_member()))",
+          "check": null
+        },
+        {
           "name": "tenant_isolation",
           "command": "ALL",
           "permissive": true,
@@ -1408,7 +1443,12 @@
           "check": "(org_id = app_current_org())"
         }
       ],
-      "triggers": [],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.expenses FOR EACH ROW EXECUTE FUNCTION enforce_own_records('member')"
+        }
+      ],
       "grants": {
         "expensewise_app": [
           "INSERT",
@@ -1585,6 +1625,16 @@
       ],
       "policies": [
         {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (EXISTS ( SELECT 1\n   FROM receipts r\n  WHERE ((r.org_id = extraction_runs.org_id) AND (r.id = extraction_runs.receipt_id)))))",
+          "check": null
+        },
+        {
           "name": "tenant_isolation",
           "command": "ALL",
           "permissive": true,
@@ -1595,7 +1645,12 @@
           "check": "(org_id = app_current_org())"
         }
       ],
-      "triggers": [],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.extraction_runs FOR EACH ROW EXECUTE FUNCTION enforce_own_records('receipt')"
+        }
+      ],
       "grants": {
         "expensewise_app": [
           "INSERT",
@@ -1742,6 +1797,207 @@
       ],
       "policies": [
         {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (member_id = app_current_member()))",
+          "check": null
+        },
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.inbound_emails FOR EACH ROW EXECUTE FUNCTION enforce_own_records('member')"
+        }
+      ],
+      "grants": {
+        "expensewise_app": [
+          "INSERT",
+          "SELECT"
+        ]
+      }
+    },
+    {
+      "name": "member_invites",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "role",
+          "type": "member_role",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "label",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "token_hash",
+          "type": "character(64)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_by_member_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "expires_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "accepted_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "accepted_by_member_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "revoked_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "member_invites_accepted_by_fk",
+          "columns": [
+            "org_id",
+            "accepted_by_member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "member_invites_created_by_fk",
+          "columns": [
+            "org_id",
+            "created_by_member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "member_invites_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "member_invites_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "member_invites_token_hash_key",
+          "columns": [
+            "token_hash"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "member_invites_accepted_by_someone",
+          "definition": "CHECK (((accepted_at IS NULL) = (accepted_by_member_id IS NULL)))"
+        },
+        {
+          "name": "member_invites_accepted_or_revoked",
+          "definition": "CHECK (((accepted_at IS NULL) OR (revoked_at IS NULL)))"
+        },
+        {
+          "name": "member_invites_expires_after_made",
+          "definition": "CHECK ((expires_at > created_at))"
+        },
+        {
+          "name": "member_invites_label_short",
+          "definition": "CHECK (((label IS NULL) OR (length(label) <= 80)))"
+        },
+        {
+          "name": "member_invites_token_hash_hex",
+          "definition": "CHECK ((token_hash ~ '^[0-9a-f]{64}$'::text))"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "member_invites_org_created_idx",
+          "definition": "CREATE INDEX member_invites_org_created_idx ON public.member_invites USING btree (org_id, created_at)"
+        }
+      ],
+      "policies": [
+        {
+          "name": "invite_holder",
+          "command": "SELECT",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "((token_hash)::text = app_invite_hash())",
+          "check": null
+        },
+        {
           "name": "tenant_isolation",
           "command": "ALL",
           "permissive": true,
@@ -1756,7 +2012,8 @@
       "grants": {
         "expensewise_app": [
           "INSERT",
-          "SELECT"
+          "SELECT",
+          "UPDATE"
         ]
       }
     },
@@ -1942,6 +2199,12 @@
         {
           "name": "reimbursement_currency",
           "type": "character(3)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "deactivated_at",
+          "type": "timestamp with time zone",
           "nullable": true,
           "default": null
         }
@@ -2181,6 +2444,16 @@
       "indexes": [],
       "policies": [
         {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (EXISTS ( SELECT 1\n   FROM expenses e\n  WHERE ((e.org_id = mileage_logs.org_id) AND (e.id = mileage_logs.expense_id)))))",
+          "check": null
+        },
+        {
           "name": "tenant_isolation",
           "command": "ALL",
           "permissive": true,
@@ -2191,7 +2464,12 @@
           "check": "(org_id = app_current_org())"
         }
       ],
-      "triggers": [],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.mileage_logs FOR EACH ROW EXECUTE FUNCTION enforce_own_records('expense')"
+        }
+      ],
       "grants": {
         "expensewise_app": [
           "DELETE",
@@ -2851,6 +3129,16 @@
       ],
       "policies": [
         {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (EXISTS ( SELECT 1\n   FROM receipts r\n  WHERE ((r.org_id = receipt_duplicates.org_id) AND (r.id = receipt_duplicates.receipt_id)))))",
+          "check": null
+        },
+        {
           "name": "tenant_isolation",
           "command": "ALL",
           "permissive": true,
@@ -2861,7 +3149,12 @@
           "check": "(org_id = app_current_org())"
         }
       ],
-      "triggers": [],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.receipt_duplicates FOR EACH ROW EXECUTE FUNCTION enforce_own_records('receipt')"
+        }
+      ],
       "grants": {
         "expensewise_app": [
           "INSERT",
@@ -3028,6 +3321,16 @@
       ],
       "policies": [
         {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (EXISTS ( SELECT 1\n   FROM receipts r\n  WHERE ((r.org_id = receipt_reviews.org_id) AND (r.id = receipt_reviews.receipt_id)))))",
+          "check": null
+        },
+        {
           "name": "tenant_isolation",
           "command": "ALL",
           "permissive": true,
@@ -3038,7 +3341,12 @@
           "check": "(org_id = app_current_org())"
         }
       ],
-      "triggers": [],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.receipt_reviews FOR EACH ROW EXECUTE FUNCTION enforce_own_records('receipt')"
+        }
+      ],
       "grants": {
         "expensewise_app": [
           "INSERT",
@@ -3210,6 +3518,16 @@
       "indexes": [],
       "policies": [
         {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (member_id = app_current_member()))",
+          "check": null
+        },
+        {
           "name": "tenant_isolation",
           "command": "ALL",
           "permissive": true,
@@ -3220,7 +3538,12 @@
           "check": "(org_id = app_current_org())"
         }
       ],
-      "triggers": [],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.receipts FOR EACH ROW EXECUTE FUNCTION enforce_own_records('member')"
+        }
+      ],
       "grants": {
         "expensewise_app": [
           "INSERT",
@@ -3377,6 +3700,16 @@
       ],
       "policies": [
         {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (member_id = app_current_member()))",
+          "check": null
+        },
+        {
           "name": "tenant_isolation",
           "command": "ALL",
           "permissive": true,
@@ -3387,7 +3720,12 @@
           "check": "(org_id = app_current_org())"
         }
       ],
-      "triggers": [],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.reports FOR EACH ROW EXECUTE FUNCTION enforce_own_records('member')"
+        }
+      ],
       "grants": {
         "expensewise_app": [
           "DELETE",
@@ -3539,6 +3877,16 @@
       ],
       "policies": [
         {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (member_id = app_current_member()))",
+          "check": null
+        },
+        {
           "name": "tenant_isolation",
           "command": "ALL",
           "permissive": true,
@@ -3549,7 +3897,12 @@
           "check": "(org_id = app_current_org())"
         }
       ],
-      "triggers": [],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.trips FOR EACH ROW EXECUTE FUNCTION enforce_own_records('member')"
+        }
+      ],
       "grants": {
         "expensewise_app": [
           "DELETE",
@@ -3710,6 +4063,36 @@
   ],
   "functions": [
     {
+      "name": "app_changes_member",
+      "arguments": "owner uuid",
+      "returns": "boolean",
+      "security": "invoker",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
+    },
+    {
+      "name": "app_current_member",
+      "arguments": "",
+      "returns": "uuid",
+      "security": "invoker",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
+    },
+    {
+      "name": "app_current_member_role",
+      "arguments": "",
+      "returns": "text",
+      "security": "invoker",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
+    },
+    {
       "name": "app_current_org",
       "arguments": "",
       "returns": "uuid",
@@ -3723,6 +4106,36 @@
       "name": "app_current_user",
       "arguments": "",
       "returns": "text",
+      "security": "invoker",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
+    },
+    {
+      "name": "app_invite_hash",
+      "arguments": "",
+      "returns": "text",
+      "security": "invoker",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
+    },
+    {
+      "name": "app_record_owner",
+      "arguments": "kind text, org uuid, rec jsonb",
+      "returns": "uuid",
+      "security": "invoker",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
+    },
+    {
+      "name": "app_sees_every_member",
+      "arguments": "",
+      "returns": "boolean",
       "security": "invoker",
       "volatility": "stable",
       "executableBy": [
@@ -3758,6 +4171,14 @@
       "executableBy": [
         "expensewise_app"
       ]
+    },
+    {
+      "name": "enforce_own_records",
+      "arguments": "",
+      "returns": "trigger",
+      "security": "invoker",
+      "volatility": "volatile",
+      "executableBy": []
     },
     {
       "name": "mark_outbox_published",
