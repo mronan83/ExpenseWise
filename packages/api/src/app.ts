@@ -15,6 +15,8 @@ import type { HomeStore } from './home.ts';
 import { registerHomeRoutes } from './home-routes.ts';
 import { registerInboundRoutes, type InboundRouteOptions } from './inbound-routes.ts';
 import type { ExpenseStore } from './expenses.ts';
+import type { MileageStore } from './mileage.ts';
+import { registerMileageRoutes } from './mileage-routes.ts';
 import { registerReceiptRoutes, type ReceiptRouteOptions } from './receipt-routes.ts';
 import { registerReportRoutes } from './report-routes.ts';
 import type { ReportStore } from './reports.ts';
@@ -41,6 +43,8 @@ export interface ApiOptions
   readonly expenses?: ExpenseStore;
   /** Trips and the expenses filed to them. Without it, those routes answer 503. */
   readonly trips?: TripStore;
+  /** Drives logged by hand (FR-CAP-03). Without it, those routes answer 503. */
+  readonly mileage?: MileageStore;
   /** What Home shows, read at once. Without it, Home answers 503. */
   readonly home?: HomeStore;
   /** Expense reports. Without it, those routes answer 503 and Needs you shows no reports. */
@@ -159,6 +163,7 @@ export function createApi(options: ApiOptions) {
   registerReceiptRoutes(app, routes);
   registerExpenseRoutes(app, routes);
   registerTripRoutes(app, routes);
+  registerMileageRoutes(app, routes);
   registerHomeRoutes(app, routes);
   registerReportRoutes(app, routes);
   registerInboundRoutes(app, routes);

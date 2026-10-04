@@ -15,9 +15,12 @@ import {
   type ExpenseDetail,
   type ExpenseField,
 } from '../../../lib/expenses';
+import { useFeatures } from '../../../lib/features';
+import { describeRate, distanceOf, MILEAGE_FLAG, type MileageEntry } from '../../../lib/mileage';
 import { formatMoney, RECEIPT_STATUS } from '../../../lib/receipts';
 import { supabase } from '../../../lib/supabase';
 import { tripDates, type TripSummary } from '../../../lib/trips';
+import { MileageForm } from '../../mileage/mileage-form';
 
 type Load =
   | { state: 'loading' }
@@ -55,6 +58,9 @@ export default function ExpensePage() {
   }, [refresh]);
 
   const expense = load.state === 'ready' ? load.expense : null;
+  const featureOn = useFeatures();
+  // A drive is changed as mileage, which shows its purpose too (ADR-0038).
+  const mileageShown = expense?.source === 'mileage' && featureOn(MILEAGE_FLAG);
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]">
@@ -82,16 +88,24 @@ export default function ExpensePage() {
         {expense ? (
           <>
             <Verdict expense={expense} />
-            <Claim
-              key={expense.updatedAt}
-              expense={expense}
-              onSaved={(next) => setLoad({ state: 'ready', expense: next })}
-            />
+            {mileageShown ? (
+              <Drive
+                key={expense.updatedAt}
+                expense={expense}
+                onSaved={(next) => setLoad({ state: 'ready', expense: next })}
+              />
+            ) : (
+              <Claim
+                key={expense.updatedAt}
+                expense={expense}
+                onSaved={(next) => setLoad({ state: 'ready', expense: next })}
+              />
+            )}
             <TripChoice
               expense={expense}
               onSaved={(next) => setLoad({ state: 'ready', expense: next })}
             />
-            {expense.local ? (
+            {expense.local && !mileageShown ? (
               <Justification
                 key={`${expense.id}-${expense.justification ?? ''}`}
                 expense={expense}
@@ -301,7 +315,7 @@ function Claim({
               }
             />
           </dl>
-          {expense.editable ? (
+          {expense.editable && expense.source !== 'mileage' ? (
             <div>
               <button
                 type="button"
@@ -314,6 +328,108 @@ function Claim({
           ) : null}
         </>
       )}
+      {error ? (
+        <p role="alert" className="text-sm text-warn">
+          {error}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
+/**
+ * A drive logged by hand (FR-CAP-03): where, why, how far, and the rate copied onto it.
+ * Changeable before it is submitted; new miles or a new date price it again (ADR-0038).
+ */
+function Drive({
+  expense,
+  onSaved,
+}: {
+  expense: ExpenseDetail;
+  onSaved: (expense: ExpenseDetail) => void;
+}) {
+  const [entry, setEntry] = useState<MileageEntry | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    void api<MileageEntry>(`/v1/mileage/${expense.id}`).then(
+      (found) => {
+        if (live) setEntry(found);
+      },
+      (e: unknown) => {
+        if (live) setError(describeError(e));
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [expense.id]);
+
+  const drive = entry?.mileage;
+  return (
+    <section
+      aria-labelledby="drive-title"
+      className="flex flex-col gap-3 rounded-xl border border-rule bg-sheet p-4 text-sm"
+    >
+      <h2 id="drive-title" className="text-base font-semibold">
+        This drive
+      </h2>
+      {!drive && !error ? <p className="text-ink-2">Loading…</p> : null}
+      {drive && editing ? (
+        <MileageForm
+          initial={drive}
+          submitLabel="Save"
+          busyLabel="Saving…"
+          onCancel={() => setEditing(false)}
+          onSubmit={async (draft) => {
+            const changed = Object.fromEntries(
+              (Object.keys(draft) as (keyof typeof draft)[])
+                .filter((f) => draft[f] !== drive[f])
+                .map((f) => [f, draft[f]]),
+            );
+            if (Object.keys(changed).length === 0) {
+              setEditing(false);
+              return;
+            }
+            const saved = await api<MileageEntry>(`/v1/mileage/${expense.id}`, {
+              method: 'PATCH',
+              body: JSON.stringify(changed),
+            });
+            setEntry(saved);
+            setEditing(false);
+            onSaved(saved);
+          }}
+        />
+      ) : null}
+      {drive && !editing ? (
+        <>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+            <Row label="Date" value={drive.date} differs={false} />
+            <Row label="Destination" value={drive.destination} differs={false} />
+            <Row label="Purpose" value={drive.purpose} differs={false} />
+            <Row label="Distance" value={distanceOf(drive)} differs={false} />
+            <Row label="Rate" value={describeRate(drive.rate)} differs={false} />
+            <Row
+              label="Amount"
+              value={expense.amount ? formatMoney(expense.amount) : null}
+              differs={false}
+            />
+          </dl>
+          {expense.editable ? (
+            <div>
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="rounded-lg border border-rule px-4 py-2 text-sm font-semibold"
+              >
+                Change the drive
+              </button>
+            </div>
+          ) : null}
+        </>
+      ) : null}
       {error ? (
         <p role="alert" className="text-sm text-warn">
           {error}
@@ -341,7 +457,9 @@ function Proof({ expense }: { expense: ExpenseDetail }) {
   if (!proof) {
     return (
       <p className="rounded-xl border border-rule bg-sheet px-4 py-3 text-sm text-ink-2">
-        Typed in by hand, with no receipt.
+        {expense.source === 'mileage'
+          ? 'A drive, logged by hand: it needs no receipt.'
+          : 'Typed in by hand, with no receipt.'}
       </p>
     );
   }

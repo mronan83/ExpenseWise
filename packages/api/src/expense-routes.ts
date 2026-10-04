@@ -131,6 +131,12 @@ export function registerExpenseRoutes(
           : 'It is submitted or approved. An approved expense is corrected by a reversal.',
       });
     }
+    if (result.status === 'mileage') {
+      throw new ProblemError(409, 'not-editable', 'This expense can’t be edited here', {
+        code: 'mileage',
+        detail: `It is a drive, paid at miles × its rate: change it with PATCH /v1/mileage/${expenseId}.`,
+      });
+    }
     if (result.status === 'invalid') {
       throw new ProblemError(422, 'invalid-value', 'A value is not valid', {
         code: 'invalid_value',

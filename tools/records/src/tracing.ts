@@ -6,6 +6,16 @@ import type { ChangeLogEntry, Gap, Question } from './model.ts';
  */
 export const GAPS: readonly Gap[] = [
   {
+    id: 'GAP-31',
+    title: 'Home doesn’t show business miles, though mileage exists.',
+    affects: ['FR-INS-01', 'F-22'],
+    severity: 'Low',
+    evidence:
+      'FR-INS-01 asks Home for business miles once mileage exists, and manual mileage was built in PR #58 (#17). Home’s request has no flag check of its own yet, so the figure was left out of that change rather than shown while mileage is switched off. A drive does count in Home’s spend for the month, as any expense does.',
+    fix: 'Sum the person’s drives dated this month and show the figure on Home behind the expenses.mileage flag (#74).',
+    backlog: 74,
+  },
+  {
     id: 'GAP-25',
     title: 'Photos emailed in are stored with their location.',
     affects: ['NFR-PRV-03'],
@@ -618,6 +628,15 @@ export const QUESTIONS: readonly Question[] = [
       date: '2026-10-04',
       text: 'A, the user story format as laid out. Go back through the entire build and capture every user story and its acceptance criteria. Asked where they live: in these records (tools/records/src/stories), beside the requirements, and published as a fifth page, User stories & acceptance criteria, after each release; the traceability page links each requirement to its stories.',
     },
+  },
+  {
+    id: 'Q31',
+    title: 'Which rate mileage pays',
+    ask: 'Manual mileage (#17) pays each drive at a rate copied onto it from its date. Nothing in the app held a rate, so Claude chose the IRS standard mileage rate for business use: 72.5 cents a mile in 2026, 70 cents in 2025, back to 2022 (ADR-0038). A: keep the IRS business rate, added each December when the IRS announces the next year’s; until it is added, a drive dated in the new year is refused rather than paid at the old rate. B: your own rate a mile, set in Settings, with the IRS rate as its starting value. C: something else.',
+    why: 'The rate decides every mileage claim, and it is copied onto each drive, so a later change never alters one already logged (NFR-DAT-04). The IRS rate is what a solo professional can deduct without keeping vehicle costs; an employer may pay less, or more as taxable pay. An organization outside the US would need its own rate and currency, which only B gives.',
+    recommendation:
+      'A, while you are the only organization; B before a second organization, or anyone outside the US, joins.',
+    affects: ['FR-CAP-03', 'F-13', 'NFR-DAT-04'],
   },
 ];
 

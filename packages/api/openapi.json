@@ -3027,6 +3027,234 @@
         },
         "additionalProperties": false
       },
+      "MileageQuote": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-09-22"
+          },
+          "miles": {
+            "type": "string",
+            "example": "38.4"
+          },
+          "rate": {
+            "$ref": "#/components/schemas/MileageRate"
+          },
+          "amount": {
+            "type": "object",
+            "properties": {
+              "amountMinor": {
+                "type": "integer",
+                "example": 2784
+              },
+              "currency": {
+                "type": "string",
+                "example": "USD"
+              },
+              "decimal": {
+                "type": "string",
+                "example": "27.84"
+              }
+            },
+            "required": [
+              "amountMinor",
+              "currency",
+              "decimal"
+            ]
+          }
+        },
+        "required": [
+          "date",
+          "miles",
+          "rate",
+          "amount"
+        ]
+      },
+      "MileageRate": {
+        "type": "object",
+        "properties": {
+          "perUnit": {
+            "type": "string",
+            "example": "0.725",
+            "description": "Currency units a mile, as a plain decimal: 72.5 cents is \"0.725\"."
+          },
+          "currency": {
+            "type": "string",
+            "example": "USD"
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "mi",
+              "km"
+            ]
+          },
+          "effectiveFrom": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-09-22",
+            "description": "The day the rate took effect."
+          },
+          "source": {
+            "type": "string",
+            "example": "irs-business",
+            "description": "Where it came from: irs-business is the IRS standard rate for business use."
+          }
+        },
+        "required": [
+          "perUnit",
+          "currency",
+          "unit",
+          "effectiveFrom",
+          "source"
+        ]
+      },
+      "MileageEntry": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ExpenseDetail"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "mileage": {
+                "$ref": "#/components/schemas/Mileage"
+              }
+            },
+            "required": [
+              "mileage"
+            ]
+          }
+        ]
+      },
+      "Mileage": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-09-22",
+            "description": "The day of the drive."
+          },
+          "destination": {
+            "type": "string",
+            "example": "IAH, George Bush Intercontinental"
+          },
+          "purpose": {
+            "type": "string",
+            "example": "Drive to the airport for the Acme onsite",
+            "description": "Why the drive was for business; also the expense’s justification."
+          },
+          "miles": {
+            "type": "string",
+            "example": "38.4",
+            "description": "A plain decimal."
+          },
+          "unit": {
+            "type": "string",
+            "enum": [
+              "mi",
+              "km"
+            ]
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "route",
+              "gps"
+            ],
+            "description": "manual: typed in."
+          },
+          "rate": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MileageRate"
+              },
+              {
+                "description": "The rate in force on its date, copied on when it was logged and again when its date or miles changed, so a later rate never alters it (NFR-DAT-04)."
+              }
+            ]
+          }
+        },
+        "required": [
+          "date",
+          "destination",
+          "purpose",
+          "miles",
+          "unit",
+          "method",
+          "rate"
+        ]
+      },
+      "LogMileage": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "YYYY-MM-DD: today at the latest, and a day the rate is known for.",
+            "example": "2026-09-22"
+          },
+          "destination": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Where you drove to. Up to 200 characters.",
+            "example": "IAH"
+          },
+          "purpose": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Why the drive was for business. Up to 500 characters.",
+            "example": "Drive to the airport for the Acme onsite"
+          },
+          "miles": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "More than 0 and at most 1000, two decimal places at most.",
+            "example": "38.4"
+          }
+        },
+        "required": [
+          "date",
+          "destination",
+          "purpose",
+          "miles"
+        ],
+        "additionalProperties": false
+      },
+      "EditMileage": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "YYYY-MM-DD: today at the latest, and a day the rate is known for.",
+            "example": "2026-09-22"
+          },
+          "destination": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Where you drove to. Up to 200 characters.",
+            "example": "IAH"
+          },
+          "purpose": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Why the drive was for business. Up to 500 characters.",
+            "example": "Drive to the airport for the Acme onsite"
+          },
+          "miles": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "More than 0 and at most 1000, two decimal places at most.",
+            "example": "38.4"
+          }
+        },
+        "additionalProperties": false
+      },
       "Home": {
         "type": "object",
         "properties": {
@@ -5268,7 +5496,7 @@
             }
           },
           "409": {
-            "description": "It can’t be edited now: its receipt is being read, or it is submitted or later.",
+            "description": "It can’t be edited now: its receipt is being read, or it is submitted or later; or it is a drive, edited as mileage.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -5813,6 +6041,385 @@
           },
           "409": {
             "description": "A submitted expense rests on it.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/mileage/quote": {
+      "get": {
+        "tags": [
+          "Mileage"
+        ],
+        "summary": "What a drive would pay, before it is logged",
+        "description": "FR-CAP-03, ADR-0038. The rate in force on the date and miles × rate, rounded half-up to the cent. Nothing is saved.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "description": "YYYY-MM-DD.",
+              "example": "2026-09-22"
+            },
+            "required": true,
+            "description": "YYYY-MM-DD.",
+            "name": "date",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "description": "A plain decimal.",
+              "example": "38.4"
+            },
+            "required": true,
+            "description": "A plain decimal.",
+            "name": "miles",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The rate and the amount.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MileageQuote"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The date or miles are missing.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Mileage is switched off for this organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The date or miles are not valid, or no rate is known for the date; field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/mileage": {
+      "post": {
+        "tags": [
+          "Mileage"
+        ],
+        "summary": "Log a drive",
+        "description": "FR-CAP-03, NFR-DAT-04, ADR-0038. A Ready expense of the caller’s for miles × the rate in force on the date, with the rate copied onto it. It files to the caller’s trip its date falls in, and joins reports, as any expense does; its purpose is its justification.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LogMileage"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The drive, as an expense.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MileageEntry"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Mileage is switched off for this organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not valid, or no rate is known for the date; field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/mileage/{expenseId}": {
+      "get": {
+        "tags": [
+          "Mileage"
+        ],
+        "summary": "One of the caller’s drives",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The drive, as an expense.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MileageEntry"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such drive of the caller’s, or mileage is switched off for this organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Mileage"
+        ],
+        "summary": "Correct a drive before it is submitted",
+        "description": "ADR-0038. Changes the fields sent and records who changed what. A new date or new miles price it again at the rate in force on its date, copied on afresh; a new destination or purpose leaves the rate and amount as they are.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EditMileage"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The drive as it is now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MileageEntry"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such drive of the caller’s, or mileage is switched off for this organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It is submitted or later. An approved drive is corrected by a reversal.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not valid; field names which.",
             "content": {
               "application/problem+json": {
                 "schema": {

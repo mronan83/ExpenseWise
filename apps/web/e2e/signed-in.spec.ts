@@ -86,6 +86,18 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
   ['an expense with when and where it was bought', (s) => `/expenses/${s.expenses.uber}`, []],
   ['editing when and where it was bought', (s) => `/expenses/${s.expenses.uber}`, [press('Edit')]],
   ['an expense still being read', (s) => `/expenses/${s.expenses.processing}`, []],
+  [
+    'adding mileage',
+    () => '/mileage/new',
+    [
+      fill('Date', '2026-09-22'),
+      fill('Miles', '38.4'),
+      fill('Destination', 'IAH airport'),
+      fill('Business purpose', 'Drive to the airport for the Acme onsite'),
+    ],
+  ],
+  ['a drive logged as mileage', (s) => `/expenses/${s.expenses.mileage}`, []],
+  ['changing a drive', (s) => `/expenses/${s.expenses.mileage}`, [press('Change the drive')]],
   ['Trips', () => '/trips', []],
   [
     'searching trips',
