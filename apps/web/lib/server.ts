@@ -1,4 +1,9 @@
-import { createSecretBox, storedKeyReader, type ArrivedEmail } from '@expensewise/api';
+import {
+  createSecretBox,
+  storedKeyReader,
+  storedRouteKeyReader,
+  type ArrivedEmail,
+} from '@expensewise/api';
 import { createDatabase, type Database } from '@expensewise/db';
 import { SUPPORTED_MEDIA_TYPES } from '@expensewise/extraction';
 import {
@@ -125,4 +130,15 @@ export function providerKeyReader() {
   const secrets = secretBox();
   if (!db || !secrets) return undefined;
   return storedKeyReader(db, secrets);
+}
+
+/**
+ * Decrypts an organization's OpenRouteService key, for the route-measuring workflow
+ * (ADR-0039). It is sealed with the same box as the AI keys, bound to the organization.
+ */
+export function routeKeyReader() {
+  const db = appDatabase();
+  const secrets = secretBox();
+  if (!db || !secrets) return undefined;
+  return storedRouteKeyReader(db, secrets);
 }

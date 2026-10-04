@@ -1,4 +1,4 @@
-import type { ReportForExport } from '@expensewise/db';
+import { ROUTE_MILEAGE_FLAG, type ReportForExport } from '@expensewise/db';
 import {
   canExportReport,
   isReportExportable,
@@ -95,7 +95,10 @@ export function registerReportExportRoutes(
         detail: 'It is still open. Close it first.',
       });
     }
-    return found;
+    // A drive's measured and claimed miles show while route mileage is on (Q33); off, the
+    // export is as it always was.
+    if (await features.isOn(who.orgId, ROUTE_MILEAGE_FLAG)) return found;
+    return { ...found, expenses: found.expenses.map(({ miles: _miles, ...e }) => e) };
   };
 
   const download = (found: ReportForExport, extension: 'csv' | 'pdf', contentType: string) => ({

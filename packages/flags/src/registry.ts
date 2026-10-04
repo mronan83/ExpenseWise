@@ -71,6 +71,13 @@ export const FLAGS = {
       'Add a mileage expense: date, destination, purpose and miles, at the rate in force on the ' +
       'day (FR-CAP-03, #17).',
   },
+  'expenses.route-mileage': {
+    name: 'Route mileage',
+    description:
+      'Add a drive by its start, stops and end, measured by OpenRouteService with your ' +
+      'organization’s own key in Settings › Mileage, with saved places and a reason for any ' +
+      'change to the measured miles (FR-CAP-04, #20).',
+  },
   'reports.export': {
     name: 'Report export',
     description: 'Export a closed report as CSV or PDF (FR-SET-01, #25).',

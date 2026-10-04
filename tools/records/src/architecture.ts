@@ -110,21 +110,21 @@ export const COMPONENTS: readonly Component[] = [
     name: 'API',
     technology: 'Hono with zod-openapi; jose for tokens; pdf-lib for report PDFs',
     responsibility:
-      'Verifies the sign-in token, finds the caller’s membership and runs each member-facing store’s transaction as that member, so the database shows them only what their role allows (ADR-0035); a change the database refuses answers 403 `not_yours`. Serves Settings › People: invite links, roles and removing someone, and accepting a link. Serves every operation, including Home, read in one transaction: the Needs you inbox, which says why each item needs the person, then their trip, month and recent trips. Takes Bird’s signed email webhook, checked against the exact bytes before anything parses them. Settles possible duplicates as the person decides, removing a deleted receipt’s file only after the deletion commits. Serves expense reports: closing, reopening, moving a trip or local expense, and justifying one; Needs you adds reports to act on and local expenses needing a reason. Serves the audit trail to owners, finance admins and auditors, a page at a time, and recomputes its hash chain when asked. Exports a closed report as CSV, and as a PDF summary laid out in the request with pdf-lib: a database read and a layout in memory, with no other service. Serves Settings › Organization: the details and the duplicate time window, which every member reads and only the owner changes. Logs, quotes and corrects drives, each only the caller’s own, behind the mileage flag, and serves the rate a mile they are paid at, which every member reads and only owners and finance admins set from a day (Q28). Serves the categories and types an organization keeps, which only owners and finance admins change, and shows each expense its own, or a suggestion worked out in the request by rules, with no model call; while they are on, Needs you also lists the person’s Ready expenses that have neither, with that suggestion (Q27). While currency conversion is on, serves each person’s reimbursement currency and shows reports, Home and Needs you in it, beside the amounts as spent. Generates the OpenAPI contract and answers errors as problem documents.',
+      'Verifies the sign-in token, finds the caller’s membership and runs each member-facing store’s transaction as that member, so the database shows them only what their role allows (ADR-0035); a change the database refuses answers 403 `not_yours`. Serves Settings › People: invite links, roles and removing someone, and accepting a link. Serves every operation, including Home, read in one transaction: the Needs you inbox, which says why each item needs the person, then their trip, month and recent trips. Takes Bird’s signed email webhook, checked against the exact bytes before anything parses them. Settles possible duplicates as the person decides, removing a deleted receipt’s file only after the deletion commits. Serves expense reports: closing, reopening, moving a trip or local expense, and justifying one; Needs you adds reports to act on and local expenses needing a reason. Serves the audit trail to owners, finance admins and auditors, a page at a time, and recomputes its hash chain when asked. Exports a closed report as CSV, and as a PDF summary laid out in the request with pdf-lib: a database read and a layout in memory, with no other service. Serves Settings › Organization: the details and the duplicate time window, which every member reads and only the owner changes. Logs, quotes and corrects drives, each only the caller’s own, behind the mileage flag, and serves the rate a mile they are paid at, which every member reads and only owners and finance admins set from a day (Q28); behind route mileage, logs a drive by its stops and hands the request to measure it on, changes its stops or the miles it claims with a reason, keeps each person’s saved places, and keeps the organization’s OpenRouteService key, checked with one short route as it is saved and stored encrypted, the one call to that service made in a request (ADR-0039). Serves the categories and types an organization keeps, which only owners and finance admins change, and shows each expense its own, or a suggestion worked out in the request by rules, with no model call; while they are on, Needs you also lists the person’s Ready expenses that have neither, with that suggestion (Q27). While currency conversion is on, serves each person’s reimbursement currency and shows reports, Home and Needs you in it, beside the amounts as spent. Generates the OpenAPI contract and answers errors as problem documents.',
     where: ['packages/api'],
   },
   {
     name: 'Domain',
     technology: 'TypeScript, no I/O',
     responsibility:
-      'The rules: money, dates, lifecycles, editing an expense and its time and place, filing to trips, when two receipts are the same purchase, exactly or possibly, and how two expenses merge, when something joins a report and what day 28 does, counted in an organization’s time zone or at UTC−12, what a report’s export holds and who may export it, an organization’s details and the duplicate window’s bounds, which reference rate a purchase date takes and what a report adds up to in the reimbursement currency, approvals, what a drive pays: the organization’s latest change on or before its date, its own rate a mile or the IRS rate again, else the IRS business rate, held as a table with the last day it is known for (ADR-0038, Q28), all through one function, how categories and types nest and which pairs can be chosen, and the rules that suggest a type from a person’s past choices, the reading and the merchant’s name. Tested to 90% coverage or more.',
+      'The rules: money, dates, lifecycles, editing an expense and its time and place, filing to trips, when two receipts are the same purchase, exactly or possibly, and how two expenses merge, when something joins a report and what day 28 does, counted in an organization’s time zone or at UTC−12, what a report’s export holds and who may export it, an organization’s details and the duplicate window’s bounds, which reference rate a purchase date takes and what a report adds up to in the reimbursement currency, approvals, what a drive pays: the organization’s latest change on or before its date, its own rate a mile or the IRS rate again, else the IRS business rate, held as a table with the last day it is known for (ADR-0038, Q28), all through one function, and a drive by its route: its stops, the miles in hundredths from whole metres in integer arithmetic, and when other miles need a reason (ADR-0039), how categories and types nest and which pairs can be chosen, and the rules that suggest a type from a person’s past choices, the reading and the merchant’s name. Tested to 90% coverage or more.',
     where: ['packages/domain'],
   },
   {
     name: 'Data access',
     technology: 'Drizzle ORM on node-postgres',
     responsibility:
-      'The schema and migrations, `withOrg()`, which can name the member a transaction acts for (ADR-0035), and every query and write, each with its audit event. Makes, accepts and revokes invite links, keeping only each token’s hash, and changes roles and removes people, never the last owner. Runs migrations and the data steps on release: one takes back anything Supabase’s Data API roles hold, another compares each receipt read before duplicates were looked for, once. Compares each receipt as its reading settles and holds a later copy, and keeps when its first reading settled; corrects a Ready receipt’s field with its expense in one transaction; deletes a receipt only through `delete_receipt()`. Joins trips and local expenses to reports and closes them on day 28, by the organization’s days when it keeps a time zone; any change to a closed report reopens it. Reads a report with every expense on it for its export. Keeps the organization’s details and duplicate window, each change audited. Writes a drive as an expense and its mileage log together, with the rate copied on, reading the organization’s own rates a mile in the same transaction, and keeps those rates, each change audited. Lists a member’s Ready expenses with no category and type for Needs you, leaving out any held as a possible duplicate. Seeds each new organization’s ready-made categories and types through `seed_starter_catalog()`, and keeps the lists and each expense’s choice. Converts a report’s amounts with the rates it is given, records each conversion with its rate, and asks for conversion in the transaction of any change that leaves something to convert. Holds the restore drill’s database checks.',
+      'The schema and migrations, `withOrg()`, which can name the member a transaction acts for (ADR-0035), and every query and write, each with its audit event. Makes, accepts and revokes invite links, keeping only each token’s hash, and changes roles and removes people, never the last owner. Runs migrations and the data steps on release: one takes back anything Supabase’s Data API roles hold, another compares each receipt read before duplicates were looked for, once. Compares each receipt as its reading settles and holds a later copy, and keeps when its first reading settled; corrects a Ready receipt’s field with its expense in one transaction; deletes a receipt only through `delete_receipt()`. Joins trips and local expenses to reports and closes them on day 28, by the organization’s days when it keeps a time zone; any change to a closed report reopens it. Reads a report with every expense on it for its export. Keeps the organization’s details and duplicate window, each change audited. Writes a drive as an expense and its mileage log together, with the rate copied on, reading the organization’s own rates a mile in the same transaction, and keeps those rates, each change audited; a drive by its route with its stops and the request to measure it, and records a measurement only for the request it was made for. Keeps each member’s saved places and the organization’s routing key, as ciphertext. Lists a member’s Ready expenses with no category and type for Needs you, leaving out any held as a possible duplicate. Seeds each new organization’s ready-made categories and types through `seed_starter_catalog()`, and keeps the lists and each expense’s choice. Converts a report’s amounts with the rates it is given, records each conversion with its rate, and asks for conversion in the transaction of any change that leaves something to convert. Holds the restore drill’s database checks.',
     where: ['packages/db'],
   },
   {
@@ -138,7 +138,7 @@ export const COMPONENTS: readonly Component[] = [
     name: 'Workflows',
     technology: 'Inngest',
     responsibility:
-      'Reads receipts, with the models each organization chose or side by side, reads emailed receipts, relays the outbox, keeps expense reports on time and converts their amounts with the ECB’s reference rates, fetched over HTTPS. Reads an organization’s feature switches inside its transaction where it has no request to ask, the server’s override first, as the API does (ADR-0032). An email is fetched as it arrived, its sender proved by a DKIM signature aligned with the From domain (mailauth), its parts read (postal-mime) and its attachments filed like uploads; with nothing attached, its HTML becomes text (html-to-text) laid out as a PDF (pdf-lib) and filed instead. Each step retries on its own; a failed run still settles its receipt.',
+      'Reads receipts, with the models each organization chose or side by side, reads emailed receipts, relays the outbox, keeps expense reports on time, converts their amounts with the ECB’s reference rates, fetched over HTTPS, and measures drives by their route with OpenRouteService: Pelias search for each stop, then driving-car directions, on the organization’s own key. Reads an organization’s feature switches inside its transaction where it has no request to ask, the server’s override first, as the API does (ADR-0032). An email is fetched as it arrived, its sender proved by a DKIM signature aligned with the From domain (mailauth), its parts read (postal-mime) and its attachments filed like uploads; with nothing attached, its HTML becomes text (html-to-text) laid out as a PDF (pdf-lib) and filed instead. Each step retries on its own; a failed run still settles its receipt.',
     where: ['packages/workflows'],
   },
   {
@@ -186,6 +186,10 @@ export const SERVICES: readonly { readonly name: string; readonly role: string }
     role: 'The agent mailbox emailed receipts arrive at, on inbox.ai, with an allowlist of senders; signs its webhooks and keeps each message as it arrived for 30 days (ADR-0026).',
   },
   {
+    name: 'OpenRouteService',
+    role: 'HeiGIT’s routing service on OpenStreetMap data: finds each stop of a drive by its route and measures the drive by car, on each organization’s own free Standard key, kept in Settings (ADR-0039).',
+  },
+  {
     name: 'European Central Bank',
     role: 'Its data API publishes the euro reference rates a report’s amounts are converted at; public, with no key or account (ADR-0034).',
   },
@@ -221,6 +225,7 @@ export const CONTEXT_DIAGRAM = `flowchart LR
   W -->|"read receipt"| AN["Anthropic"]
   W -.->|"fallback"| OA["OpenAI"]
   W -->|"reference rates"| ECB["ECB data API"]
+  W -->|"find stops, route a drive"| ORS["OpenRouteService"]
   E["Email from a member"] --> BI["Bird mailbox<br/>allowlist"]
   BI -->|"signed webhook"| W
   W -->|"fetch as it arrived"| BI
@@ -392,6 +397,39 @@ export const FLOWS: readonly Flow[] = [
     refs: ['FR-EXP-13', 'NFR-DAT-02', 'NFR-DAT-04', 'ADR-0034'],
   },
   {
+    id: 'route-mileage',
+    title: 'A drive measured by its route',
+    about:
+      'Measuring calls another service, so it never happens in a request: saving the drive asks for it through the outbox, and the workflow finds each stop and routes through them, then records the result as the system, only for the request it was made for. Each address goes as typed, with the key in a header; nothing else of the drive does (Q32). A stop not found or a refused key needs a look at once; a busy or used-up service is asked again, then needs a look (ADR-0039).',
+    diagram: `sequenceDiagram
+  actor P as Person
+  participant A as API
+  participant DB as Postgres
+  participant I as Inngest
+  participant O as OpenRouteService
+  P->>A: POST /v1/mileage/routes: date, purpose, stops, round trip
+  A->>DB: One transaction: expense (processing), mileage log with the day's rate, route, stops, outbox event, audit
+  A->>I: mileage.route_measure_requested, after commit
+  A-->>P: The drive, Measuring…
+  I->>A: route-measuring (/api/inngest)
+  A->>DB: The stops, if this request is still the one it waits for
+  A->>DB: The organization's key, decrypted
+  loop Each stop
+    A->>O: Pelias search: the address as typed
+  end
+  A->>O: driving-car directions through the points, back to the start on a round trip
+  alt Measured
+    A->>DB: Each place and leg in metres, the total, miles, provider, when; miles × the rate on its date; Ready
+  else Not found, refused key, too far
+    A->>DB: Needs a look, with the reason
+  else Busy or used up (429, 5xx)
+    Note over I,O: Tried again 3 times, then needs a look
+  end
+  P->>A: PUT /v1/mileage/{id}/route/miles with a reason
+  A->>DB: Claimed miles at the day's rate; the measured miles stay; audit`,
+    refs: ['FR-CAP-04', 'NFR-DAT-04', 'Q31', 'Q32', 'Q33', 'ADR-0039'],
+  },
+  {
     id: 'request',
     title: 'Every API request',
     about:
@@ -515,7 +553,7 @@ export const SETTINGS: readonly Setting[] = [
     names: ['APP_ENCRYPTION_KEY'],
     kind: 'Secret',
     where: 'Vercel (optional)',
-    use: 'Derives the key that encrypts each organization’s AI provider keys (ADR-0015).',
+    use: 'Derives the key that encrypts each organization’s AI provider keys (ADR-0015) and its OpenRouteService key (ADR-0039).',
   },
   {
     names: ['INNGEST_EVENT_KEY', 'INNGEST_SIGNING_KEY'],
@@ -654,6 +692,8 @@ export const BACKGROUND: Readonly<Record<string, string>> = {
     'When a report has something to convert, or the owner switches currency conversion on: points open and closed reports at their member’s reimbursement currency, converts what rates already recorded allow, fetches the rest from the ECB’s data API, then converts again, recording each rate with its date and source. Requests for one organization close together run once, one at a time (ADR-0034).',
   'amount-conversion-sweep':
     'Hourly, at 37 past: asks which organizations still have amounts converting (conversion_work_due(), ids only), then converts in each as amount-conversion does. One failing doesn’t hold up the rest; logs one line of counts (ADR-0034).',
+  'route-measuring':
+    'When a drive by its route is saved, or its stops change: loads its stops if the request is still the one it waits for, finds each with OpenRouteService’s Pelias search, narrowed to the organization’s country when it keeps one, and routes by car through them in order, back to the start on a round trip, with the organization’s own key; then records each place and leg in whole metres, the total, its miles and its source, and claims those miles at the rate on the drive’s date, as the system in one transaction. A stop not found, a missing or refused key or no road leaves the drive needing a look with the reason; a busy or used-up service (429, 5xx) is tried again 3 times, then the drive needs a look. One organization’s drives one at a time (ADR-0039).',
   'report-schedule':
     'Hourly, at seven past: asks which organizations have report work due (report_work_due(), ids only), then in each, as the app and in one transaction, puts due trips and local expenses on the open report or a new one, closes reports on day 28 with what is ready, moves the rest on, and drops reports with nothing to claim. The days are the organization’s own when organization settings are on and it keeps a time zone, and UTC−12’s otherwise (ADR-0037). Safe to repeat; logs one line of counts (ADR-0029).',
 };

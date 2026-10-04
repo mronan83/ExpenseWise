@@ -1,4 +1,4 @@
-import type { ExportExpense, ReportStatus } from '@expensewise/domain';
+import { plainMiles, type ExportExpense, type ReportStatus } from '@expensewise/domain';
 import { and, eq, not, or, sql } from 'drizzle-orm';
 import type { Transaction } from './client.ts';
 import { heldAsDuplicate } from './duplicates.ts';
@@ -7,6 +7,8 @@ import {
   expenses,
   expenseTypes,
   members,
+  mileageLogs,
+  mileageRoutes,
   organizations,
   reports,
   trips,
@@ -68,6 +70,10 @@ export async function reportForExport(
       note: expenses.notes,
       amountMinor: expenses.amountMinor,
       currency: expenses.currency,
+      method: mileageLogs.method,
+      claimedMiles: mileageLogs.distance,
+      measuredMiles: mileageRoutes.measuredMiles,
+      milesReason: mileageRoutes.milesReason,
     })
     .from(expenses)
     .leftJoin(trips, and(eq(trips.orgId, expenses.orgId), eq(trips.id, expenses.tripId)))
@@ -78,6 +84,14 @@ export async function reportForExport(
     .leftJoin(
       expenseTypes,
       and(eq(expenseTypes.orgId, expenses.orgId), eq(expenseTypes.id, expenses.typeId)),
+    )
+    .leftJoin(
+      mileageLogs,
+      and(eq(mileageLogs.orgId, expenses.orgId), eq(mileageLogs.expenseId, expenses.id)),
+    )
+    .leftJoin(
+      mileageRoutes,
+      and(eq(mileageRoutes.orgId, expenses.orgId), eq(mileageRoutes.expenseId, expenses.id)),
     )
     .where(
       and(
@@ -98,6 +112,16 @@ export async function reportForExport(
       note: r.note,
       amountMinor: r.amountMinor,
       currency: r.currency,
+      // A drive's miles: measured on its route, if it was, and claimed, with why they differ.
+      ...(r.method === null || r.claimedMiles === null
+        ? {}
+        : {
+            miles: {
+              measured: r.measuredMiles === null ? null : plainMiles(r.measuredMiles),
+              claimed: plainMiles(r.claimedMiles),
+              reason: r.milesReason,
+            },
+          }),
     })),
   };
 }

@@ -131,6 +131,12 @@ export function registerMileageRoutes(
         detail: 'It is submitted or approved. An approved drive is corrected by a reversal.',
       });
     }
+    if (result.status === 'route') {
+      throw new ProblemError(409, 'route-drive', 'This drive is changed by its route', {
+        code: 'route',
+        detail: 'Change its stops, or claim other miles with a reason (ADR-0039).',
+      });
+    }
     return c.json(await shown(who, expenseId), 200);
   });
 }
