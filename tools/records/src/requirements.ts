@@ -146,11 +146,12 @@ export const FUNCTIONAL: readonly Requirement[] = [
     status: 'Verified',
     capabilities: ['Intelligence · Confidence-gated review'],
     features: ['F-06'],
-    note: 'With #52 a receipt is read once, by the primary (Q11), so Ready will rest on that reading alone rather than on two models agreeing. That replaces ADR-0017 and gets its own decision record when #52 is built.',
+    note: 'Once AI model settings are on for an organization, its primary reads each receipt once (Q11), and Ready rests on that one confident reading, its sums and date passing, rather than on two models agreeing (ADR-0033). With them off, both compared models must agree, as before.',
     checks: [
       'extraction/review › needs merchant, date, currency and total read with high confidence',
       'workflows/receipts › files it as Ready when both read it with confidence and agree',
       'workflows/receipts › asks for a look when the models disagree',
+      'workflows/receipts › files it as Ready on one confident reading by the primary, and asks no back-up',
     ],
   },
   {
@@ -230,11 +231,13 @@ export const FUNCTIONAL: readonly Requirement[] = [
     sources: ['ADR-0017', 'ADR-0006', 'roadmap inc 0'],
     priority: 'Must',
     phase: 'P1',
-    status: 'Partial',
+    status: 'Verified',
     features: ['F-06', 'F-07'],
-    checks: ['api/receipts › keeps a running comparison of the two models'],
-    shortfalls: ['#21'],
-    note: 'Ends with #52: one model reads each receipt (your answer to Q11). The tier decision (#21) then rests on the eval set.',
+    checks: [
+      'api/receipts › keeps a running comparison of the two models',
+      'api/model-settings › shows each model, the primary, what each does now and how each has read our receipts',
+    ],
+    note: 'The tier is chosen in Settings › AI models (#21, done with #52): with AI model settings on, the primary you choose reads each receipt (Q11), and each model’s confidence, time and spend sit beside the choice. With them off, two compared models still read every receipt.',
   },
   {
     id: 'FR-INT-09',
@@ -244,7 +247,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
     phase: 'P1',
     status: 'Verified',
     features: ['F-08'],
-    note: 'Replaced by FR-INT-16 once #52 is built: your answer to Q8 makes OpenAI a model like the others, which can be primary, not a fallback.',
+    note: 'Still how an organization reads with AI model settings off. With them on, FR-INT-16 replaces it (ADR-0033): your answer to Q8 makes OpenAI a model like the others, which can be primary or a back-up, not a fallback. Retired when the flag is removed.',
     checks: [
       'workflows/receipts › reads the receipt when Anthropic has no credit, and asks for a look',
       'workflows/receipts › settles as failed when the fallback has no credit either',
@@ -327,10 +330,16 @@ export const FUNCTIONAL: readonly Requirement[] = [
     sources: ['owner 2026-10-03'],
     priority: 'Must',
     phase: 'P1',
-    status: 'Planned',
+    status: 'Verified',
     features: ['F-45'],
-    backlog: [52],
-    note: 'Your requirement of Oct 3, and your answers to Q8 (1C, 2A; OpenAI is a model like the others, not a fallback) and Q11 (B; one primary, the rest back-ups). Any model that is on can be made primary at any time, whatever the eval set says of it (Oct 3). It is how the tier decision (#21) takes effect, and it replaces the fallback rule (FR-INT-09) once built.',
+    checks: [
+      'api/model-settings › saves any model as primary and the back-ups in order, for owners and finance admins',
+      'workflows/receipts › reads with the back-ups in the order set, only while the ones before could not',
+      'workflows/receipts › files it for a person to fill in when every model is off',
+      'workflows/reading-plan › leaves out a model the operator stopped, whatever the organization chose',
+      'db/ai-models.int › keeps the primary and the order, records each change once, and nothing for a repeat',
+    ],
+    note: 'Your requirement of Oct 3, and your answers to Q8 (1C, 2A; OpenAI is a model like the others, not a fallback) and Q11 (B; one primary, the rest back-ups), built behind receipts.model-settings (ADR-0033). Any model that is on can be made primary at any time, whatever the eval set says of it (Oct 3). It is how the tier decision (#21) takes effect, and it replaces the fallback rule (FR-INT-09) for an organization that switches it on. The operator’s switch is a server setting, FLAG_OVERRIDES; the app keeps no record of who changed it.',
   },
   {
     id: 'FR-INT-17',
@@ -1580,8 +1589,12 @@ export const NON_FUNCTIONAL: readonly Requirement[] = [
     phase: 'P1',
     status: 'Partial',
     features: ['F-07'],
-    checks: ['api/receipts › keeps a running comparison of the two models'],
-    shortfalls: ['#21'],
+    checks: [
+      'api/receipts › keeps a running comparison of the two models',
+      'api/model-settings › shows each model, the primary, what each does now and how each has read our receipts',
+    ],
+    shortfalls: ['GAP-30'],
+    note: 'The tier is now chosen by your setting: the primary in Settings › AI models, with each model’s readings, sureness, time and spend on your receipts beside it (#52). Nothing yet prompts re-confirming it after about 100 real receipts (GAP-30), and the eval harness has never run against a model (NFR-AI-01).',
   },
 
   // Architecture and portability

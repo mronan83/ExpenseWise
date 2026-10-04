@@ -10,6 +10,7 @@ const RUNS = { by: 'claude', source: 'ADR-0017' } as const;
 const FALLBACK_RULES = { by: 'claude', source: 'ADR-0020' } as const;
 const REVIEWS = { by: 'claude', source: 'ADR-0021' } as const;
 const TIME_PLACE = { by: 'claude', source: 'ADR-0030' } as const;
+const MODEL_SETTINGS = { by: 'claude', source: 'ADR-0033' } as const;
 
 /**
  * Reading receipts: the fields, the Ready rule and its checks, confirming and correcting, the
@@ -182,7 +183,7 @@ export const READING_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Until the model tier is chosen (#21). With #52 a receipt will be read once, by the primary model (Q11), so Ready will rest on that one reading; that replaces ADR-0017 and gets its own decision record. While the Anthropic account has no credit, which you chose on Oct 4 not to buy (#4, withdrawn), the fallback reads every receipt and each one Needs a look (US-READ-09).',
+    note: 'How a receipt is read while AI model settings are off. Once they are on, the primary reads each receipt once (Q11) and Ready rests on that one confident reading (US-READ-19, ADR-0033). While the Anthropic account has no credit, which you chose on Oct 4 not to buy (#4, withdrawn), the fallback reads every receipt and each one Needs a look (US-READ-09).',
   },
   {
     id: 'US-READ-03',
@@ -727,7 +728,7 @@ export const READING_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'The fallback model, GPT-5.6 Luna, and the rule that its reading alone is never Ready are Claude’s recommendations (ADR-0020); a person can make it Ready with Looks right (US-READ-05). Since Oct 3 it reads every receipt, while the Anthropic account has no credit (#4, withdrawn Oct 4). FR-INT-16 replaces it once #52 is built.',
+    note: 'The fallback model, GPT-5.6 Luna, and the rule that its reading alone is never Ready are Claude’s recommendations (ADR-0020); a person can make it Ready with Looks right (US-READ-05). Since Oct 3 it reads every receipt, while the Anthropic account has no credit (#4, withdrawn Oct 4). Once AI model settings are on, FR-INT-16 replaces it: GPT-5.6 Luna is a model like the others, primary or back-up (US-READ-17, ADR-0033).',
   },
   {
     id: 'US-READ-10',
@@ -943,7 +944,7 @@ export const READING_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Claude collects nothing while the Anthropic account has no credit (#4, withdrawn Oct 4). The tier decision (#21) becomes your choice of primary model in Settings (#52), with this comparison beside it; re-confirming it after about 100 real receipts waits on that.',
+    note: 'Claude collects nothing while the Anthropic account has no credit (#4, withdrawn Oct 4). The tier decision (#21) is now your choice of primary in Settings › AI models (#52), with each model’s record beside it (US-READ-17); nothing yet asks you to re-confirm it after about 100 real receipts (GAP-30).',
   },
   {
     id: 'US-READ-13',
@@ -1214,8 +1215,8 @@ export const READING_STORIES: readonly Story[] = [
     want: 'to turn each AI model on or off for my organization, and choose the one that reads our receipts first',
     soThat: 'we pay only for the models we choose, and receipts keep moving when one can’t read',
     feature: 'F-45',
-    requirements: ['FR-INT-16'],
-    status: 'Planned',
+    requirements: ['FR-INT-16', 'FR-INT-08'],
+    status: 'Delivered',
     criteria: [
       {
         id: 'AC1',
@@ -1223,7 +1224,11 @@ export const READING_STORIES: readonly Story[] = [
         when: 'I open Settings',
         then: 'I can turn each AI model on or off for my organization',
         decided: { by: 'owner', source: 'Q8' },
-        checks: [],
+        checks: [
+          'api/model-settings › saves any model as primary and the back-ups in order, for owners and finance admins',
+          'api/model-settings › lets anyone see the models, and only owners and finance admins change them',
+          'e2e/signed-in',
+        ],
       },
       {
         id: 'AC2',
@@ -1231,7 +1236,12 @@ export const READING_STORIES: readonly Story[] = [
         when: 'I choose the primary',
         then: 'exactly one is primary; any model that is on can be made primary at any time, OpenAI’s included, whatever the eval set says of it',
         decided: OCT3,
-        checks: [],
+        checks: [
+          'extraction/model-settings › needs exactly one primary, and it must be on',
+          'db/ai-models.int › allows one primary, only while it is on, and keeps organizations apart',
+          'api/model-settings › saves any model as primary and the back-ups in order, for owners and finance admins',
+          'workflows/receipts › reads with OpenAI’s model as primary, like any other',
+        ],
       },
       {
         id: 'AC3',
@@ -1239,7 +1249,11 @@ export const READING_STORIES: readonly Story[] = [
         when: 'a receipt is read',
         then: 'the primary reads it; a model that is on but not primary is a back-up, and reads only when the primary can’t, in the order I set',
         decided: { by: 'owner', source: 'Q11' },
-        checks: [],
+        checks: [
+          'workflows/receipts › files it as Ready on one confident reading by the primary, and asks no back-up',
+          'workflows/receipts › reads with the back-ups in the order set, only while the ones before could not',
+          'extraction/model-settings › reads with the primary first, then each back-up that is on, in the order set',
+        ],
       },
       {
         id: 'AC4',
@@ -1247,7 +1261,9 @@ export const READING_STORIES: readonly Story[] = [
         when: 'any of our receipts is read',
         then: 'that model doesn’t read it',
         decided: OCT3,
-        checks: [],
+        checks: [
+          'workflows/reading-plan › reads with the primary, then the back-ups that are on, once they are on',
+        ],
       },
       {
         id: 'AC5',
@@ -1255,7 +1271,10 @@ export const READING_STORIES: readonly Story[] = [
         when: 'a receipt is filed',
         then: 'it is filed but not read, for a person to fill in',
         decided: { by: 'owner', source: 'Q8' },
-        checks: [],
+        checks: [
+          'workflows/receipts › files it for a person to fill in when every model is off',
+          'api/model-settings › lets every model be off, so receipts are filed for a person to fill in',
+        ],
       },
       {
         id: 'AC6',
@@ -1263,10 +1282,80 @@ export const READING_STORIES: readonly Story[] = [
         when: 'it is saved',
         then: 'the change records who made it',
         decided: OCT3,
-        checks: [],
+        checks: [
+          'db/ai-models.int › keeps the primary and the order, records each change once, and nothing for a repeat',
+          'api/model-settings › saves any model as primary and the back-ups in order, for owners and finance admins',
+        ],
+      },
+      {
+        id: 'AC7',
+        given: 'a receipt filed while every model was off',
+        when: 'I open Needs you or the receipt',
+        then: 'it says nothing read it, and entering every field files it Ready, with who filled it in',
+        decided: { by: 'owner', source: 'Q8' },
+        checks: [
+          'api/model-settings › puts a receipt nothing read in Needs you, to be filled in by hand',
+          'e2e/signed-in',
+        ],
+      },
+      {
+        id: 'AC8',
+        given: 'a model whose provider has no key saved',
+        when: 'I switch it on, or a receipt is read',
+        then: 'it stays off: Settings won’t switch it on, and the reading passes over it',
+        decided: MODEL_SETTINGS,
+        checks: [
+          'api/model-settings › refuses a primary that is off, a model missing or unknown, and a model with no key',
+          'workflows/receipts › passes over a model with no key, storing nothing for it',
+          'workflows/reading-plan › leaves out a model whose provider has no key: it stays off',
+        ],
+      },
+      {
+        id: 'AC9',
+        given: 'I changed the models',
+        when: 'a receipt is read next, or read again',
+        then: 'it is read with the settings as they are then',
+        decided: MODEL_SETTINGS,
+        checks: [
+          'workflows/receipts › reads each request with the settings as they are then, read again included',
+        ],
+      },
+      {
+        id: 'AC10',
+        given: 'I open Settings › AI models',
+        when: 'I choose',
+        then: 'each model shows how it has read our latest receipts (readings, how many were sure, time and spend), what it does now and its list price, beside the choice',
+        decided: MODEL_SETTINGS,
+        checks: [
+          'api/model-settings › shows each model, the primary, what each does now and how each has read our receipts',
+          'e2e/signed-in',
+        ],
+      },
+      {
+        id: 'AC11',
+        given: 'nobody has saved a choice yet',
+        when: 'a receipt is read',
+        then: 'Sonnet 5.5 is primary, then Haiku 4.5 and GPT-5.6 Luna, each while its key is there; Opus 5.5 and Fable 5.1 are off',
+        decided: MODEL_SETTINGS,
+        rules: ['R-MODEL-DEFAULTS'],
+        checks: [
+          'extraction/model-settings › starts with Sonnet 5.5 primary, then Haiku 4.5 and GPT-5.6 Luna, the rest off',
+          'workflows/reading-plan › reads with the primary, then the back-ups that are on, once they are on',
+        ],
+      },
+      {
+        id: 'AC12',
+        given: 'AI model settings are not switched on for my organization',
+        when: 'a receipt is read, or I look for the settings',
+        then: 'two models read it side by side, as before, and the settings answer as absent',
+        decided: { by: 'owner', source: 'Q5' },
+        checks: [
+          'workflows/reading-plan › reads side by side, as before, while AI model settings are off',
+          'api/model-settings › answers 404 feature_off while AI model settings are off',
+        ],
       },
     ],
-    note: 'Your requirement of Oct 3, with your answers to Q8 and Q11 (#52). It is how the tier decision (#21) takes effect, and it replaces the fallback rule (FR-INT-09). A receipt will then be read once, by the primary, so Ready will rest on that one reading; that needs a decision record replacing ADR-0017.',
+    note: 'Your requirement of Oct 3, with your answers to Q8 and Q11 (#52), behind receipts.model-settings (ADR-0033). It is how the tier decision (#21) takes effect, and it replaces the fallback rule (FR-INT-09) once switched on. Every model in the price table can be chosen, Opus 5.5 and Fable 5.1 included; which models are offered, the defaults and that a model with no key stays off are Claude’s, for you to confirm.',
   },
   {
     id: 'US-READ-18',
@@ -1277,7 +1366,7 @@ export const READING_STORIES: readonly Story[] = [
       'I can stop a model during an outage or a bad release, whatever each organization has chosen',
     feature: 'F-45',
     requirements: ['FR-INT-16'],
-    status: 'Planned',
+    status: 'Partial',
     criteria: [
       {
         id: 'AC1',
@@ -1285,7 +1374,12 @@ export const READING_STORIES: readonly Story[] = [
         when: 'any organization’s receipt is read',
         then: 'that model doesn’t read it, whatever the organization’s own setting',
         decided: { by: 'owner', source: 'Q8' },
-        checks: [],
+        checks: [
+          'flags/flags › stops a model only when its operator switch is set off',
+          'workflows/reading-plan › leaves out a model the operator stopped, whatever the organization chose',
+          'workflows/receipts › stores a stopped compared model as failed, asks it nothing, and never asks a stopped fallback',
+          'api/model-settings › shows a model the operator stopped as reading nothing, whatever was chosen',
+        ],
       },
       {
         id: 'AC2',
@@ -1294,8 +1388,10 @@ export const READING_STORIES: readonly Story[] = [
         then: 'the change records who made it',
         decided: OCT3,
         checks: [],
+        untested: 66,
       },
     ],
+    note: 'Each switch is a server-only flag, `operator.<model id>`, set off in FLAG_OVERRIDES in Vercel; unset, each organization decides. Changing it is a Vercel setting and a redeploy (ADR-0032), so the app itself records nothing of who changed it: only Vercel’s own records do, which nothing here checks (AC2).',
   },
   {
     id: 'US-EVAL-01',
@@ -1442,5 +1538,71 @@ export const READING_STORIES: readonly Story[] = [
       },
     ],
     note: 'SROIE was planned for the public layer, but its usual mirrors carry code rather than receipts, so generated US restaurant card slips cover the merchant, date, tip and card instead: Claude’s substitution.',
+  },
+  {
+    id: 'US-READ-19',
+    title: 'Ready on one confident reading',
+    as: 'Alex, who travels for work',
+    want: 'a receipt read by our chosen model to be Ready when that one reading is sure of it and its sums and date hold',
+    soThat:
+      'I don’t pay for two readings of every receipt, and still needn’t look at the ones that are clear',
+    feature: 'F-45',
+    requirements: ['FR-INT-02', 'FR-INT-16'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given:
+          'the first model that could read a receipt read its merchant, date, currency and total with high confidence, and its sums and date pass',
+        when: 'the receipt settles',
+        then: 'it is Ready on that one reading, and its expense is filed with it',
+        decided: MODEL_SETTINGS,
+        checks: [
+          'workflows/receipts › files it as Ready on one confident reading by the primary, and asks no back-up',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'that reading isn’t sure of a filing field, or its parts don’t make its total',
+        when: 'the receipt settles',
+        then: 'it Needs a look, no back-up is asked, and its expense starts from that reading',
+        decided: MODEL_SETTINGS,
+        checks: [
+          'workflows/receipts › asks for a look when the primary is unsure, and still asks no back-up',
+          'workflows/receipts › asks for a look when the one reading’s parts don’t make its total',
+        ],
+      },
+      {
+        id: 'AC3',
+        given: 'the primary couldn’t read it, and a back-up did with confidence',
+        when: 'the receipt settles',
+        then: 'it is Ready, like a reading by any other model that is on',
+        decided: MODEL_SETTINGS,
+        checks: [
+          'workflows/receipts › reads with the back-ups in the order set, only while the ones before could not',
+          'workflows/receipts › notes a primary that runs out of retries as unavailable, then reads with a back-up',
+        ],
+      },
+      {
+        id: 'AC4',
+        given: 'every model that is on failed to read it',
+        when: 'the receipt settles',
+        then: 'it is Not read',
+        decided: MODEL_SETTINGS,
+        checks: ['workflows/receipts › settles as not read when every model that is on fails'],
+      },
+      {
+        id: 'AC5',
+        given: 'a receipt read this way',
+        when: 'I open it',
+        then: 'it shows the model reading it while it is read, then each model that read, marked primary or back-up, and which one read it',
+        decided: MODEL_SETTINGS,
+        checks: [
+          'api/model-settings › shows the model reading it, then each model that read, as primary or back-up',
+          'e2e/signed-in',
+        ],
+      },
+    ],
+    note: 'One confident reading is weaker evidence than two that agree (ADR-0017); the sums and date checks still apply, and a back-up’s confident reading counts like any other because you made every model that is on a model like the others (Q8). Claude’s rule, for you to confirm (ADR-0033).',
   },
 ];

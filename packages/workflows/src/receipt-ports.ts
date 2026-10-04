@@ -1,6 +1,8 @@
 import {
   assertRowSecurityApplies,
+  getModelSettings,
   getReceipt,
+  listProviderKeys,
   recordExtractionRun,
   runsForRequest,
   settleReceipt,
@@ -16,6 +18,8 @@ import {
   type StoredAnthropicKey,
 } from '@expensewise/extraction';
 import type { ObjectStore } from '@expensewise/storage';
+import { featureOn } from './features.ts';
+import { readingPlanFor } from './reading-plan.ts';
 import type { KeyProblem, ReceiptReadingPorts } from './receipts.ts';
 
 /**
@@ -47,6 +51,8 @@ export interface ReceiptReadingDeps {
     orgId: string,
     provider: ModelProvider,
   ) => Promise<StoredAnthropicKey | KeyProblem>;
+  /** FLAG_OVERRIDES, when not the server's own: the kill switches and operator stops. */
+  readonly flagOverrides?: string;
 }
 
 /**
@@ -57,7 +63,19 @@ export interface ReceiptReadingDeps {
 export function receiptReadingPorts(deps: ReceiptReadingDeps): ReceiptReadingPorts {
   const { inOrg } = checkedDatabase(deps.db);
 
+  const overrides = () => deps.flagOverrides ?? process.env.FLAG_OVERRIDES;
+
   return {
+    // Read at the start of every reading, so a change in Settings applies to the next one,
+    // read again included (FR-INT-16).
+    readingPlan: (orgId) =>
+      inOrg(orgId, async (tx) => {
+        const settingsOn = await featureOn(tx, orgId, 'receipts.model-settings', overrides());
+        if (!settingsOn) return readingPlanFor({ settingsOn, overrides: overrides() });
+        const keyed = new Set((await listProviderKeys(tx)).map((k) => k.provider));
+        const saved = await getModelSettings(tx);
+        return readingPlanFor({ settingsOn, saved, keyed, overrides: overrides() });
+      }),
     loadReceipt: (orgId, receiptId) => inOrg(orgId, (tx) => getReceipt(tx, receiptId)),
     fetchFile: (storageKey) => deps.files.download(storageKey),
     async extractor(orgId, model) {

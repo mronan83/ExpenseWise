@@ -56,6 +56,16 @@ export function parseOverrides(
 }
 
 /**
+ * Whether the operator has stopped an AI model for every organization: its switch,
+ * `operator.<model id>`, is set off in FLAG_OVERRIDES (FR-INT-16). Unset or on, each
+ * organization decides, so a model with no switch is never stopped.
+ */
+export function modelStopped(model: string, overrides: Partial<Record<FlagKey, boolean>>): boolean {
+  const key = `operator.${model}`;
+  return isFlagKey(key) && overrides[key] === false;
+}
+
+/**
  * Feature flags, evaluated on the server. An override wins, then the source, then the
  * default, which is always off. A source that fails or is slow never breaks a request:
  * the flag reads as off, so new code stays dark rather than half-released.

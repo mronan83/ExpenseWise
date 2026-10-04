@@ -53,7 +53,13 @@ for (const colorScheme of ['light', 'dark'] as const) {
   test.describe(`settings accessibility in ${colorScheme} mode`, () => {
     test.use({ colorScheme });
 
-    for (const path of ['/sign-in', '/settings/ai', '/settings/sign-ins', '/settings/features']) {
+    for (const path of [
+      '/sign-in',
+      '/settings/ai',
+      '/settings/sign-ins',
+      '/settings/features',
+      '/settings/ai-models',
+    ]) {
       test(`${path} has no WCAG 2.2 AA violations`, async ({ page }) => {
         await page.goto(path);
         await expect(page.getByRole('heading', { level: 1 })).toBeVisible();

@@ -1,7 +1,9 @@
 import type { Membership } from '@expensewise/db';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
+import { featureGate, type FeatureGate } from './features.ts';
 import type { HomeStore } from './home.ts';
+import type { ModelSettingsStore } from './model-settings.ts';
 import { homeView } from './home-views.ts';
 import { ProblemError } from './problem.ts';
 import { homeRoute } from './routes/home.ts';
@@ -11,6 +13,10 @@ export interface HomeRouteOptions {
   readonly verifyToken?: TokenVerifier;
   readonly workspace?: WorkspaceStore;
   readonly home?: HomeStore;
+  /** Which features are on. Built from `workspace` when not given. */
+  readonly features?: FeatureGate;
+  /** Present where AI model settings can be on (FR-INT-16). */
+  readonly modelSettings?: ModelSettingsStore;
   readonly now?: () => Date;
 }
 
@@ -23,6 +29,7 @@ export function registerHomeRoutes(
   options: HomeRouteOptions,
 ) {
   app.use(homeRoute.getRoutingPath(), requireIdentity(options.verifyToken));
+  const features = options.features ?? featureGate(options);
 
   const stores = () => {
     if (!options.workspace || !options.home) {
@@ -56,6 +63,9 @@ export function registerHomeRoutes(
     const day =
       c.req.valid('query').day ?? (options.now?.() ?? new Date()).toISOString().slice(0, 10);
     const data = await stores().home.snapshot(who.orgId, who.memberId, day, NEEDS_LIMIT);
-    return c.json(homeView(data, day, NEEDS_SHOWN, options.now?.() ?? new Date()), 200);
+    const settingsOn =
+      options.modelSettings !== undefined &&
+      (await features.isOn(who.orgId, 'receipts.model-settings'));
+    return c.json(homeView(data, day, NEEDS_SHOWN, options.now?.() ?? new Date(), settingsOn), 200);
   });
 }

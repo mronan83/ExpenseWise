@@ -138,7 +138,7 @@ export const COMPONENTS: readonly Component[] = [
     name: 'Workflows',
     technology: 'Inngest',
     responsibility:
-      'Reads receipts, reads emailed receipts, relays the outbox and keeps expense reports on time. An email is fetched as it arrived, its sender proved by a DKIM signature aligned with the From domain (mailauth), its parts read (postal-mime) and its attachments filed like uploads; with nothing attached, its HTML becomes text (html-to-text) laid out as a PDF (pdf-lib) and filed instead. Each step retries on its own; a failed run still settles its receipt.',
+      'Reads receipts, with the models each organization chose or side by side, reads emailed receipts, relays the outbox and keeps expense reports on time. A workflow reads a feature’s switch inside the organization’s transaction, the server’s override winning, as the API does. An email is fetched as it arrived, its sender proved by a DKIM signature aligned with the From domain (mailauth), its parts read (postal-mime) and its attachments filed like uploads; with nothing attached, its HTML becomes text (html-to-text) laid out as a PDF (pdf-lib) and filed instead. Each step retries on its own; a failed run still settles its receipt.',
     where: ['packages/workflows'],
   },
   {
@@ -257,20 +257,28 @@ export const FLOWS: readonly Flow[] = [
   A->>I: Sends the event after commit
   A-->>W: Filed
   I->>A: Read a receipt (/api/inngest)
+  A->>DB: Which models: the organization’s settings, its keys, the operator’s stops
   A->>S: Check the file
-  par Each compared model
-    A->>M: Image to fields
+  alt AI model settings on
+    loop The primary, then each back-up while none has read it
+      A->>M: Image to fields
+    end
+    Note over A: Ready needs one confident reading,<br/>sums that make the total and a plausible date
+  else Side by side
+    par Each compared model
+      A->>M: Image to fields
+    end
+    opt No Claude model could read it
+      A->>M: OpenAI fallback
+    end
+    Note over A: Ready needs confident readings that agree,<br/>sums that make the total and a plausible date
   end
-  opt No Claude model could read it
-    A->>M: OpenAI fallback
-  end
-  Note over A: Ready needs confident readings that agree,<br/>sums that make the total and a plausible date
   A->>DB: One transaction: receipt settles, expense follows, files to its trip by date,<br/>and a later copy of another receipt is held for a look
   Note over DB: Ready only when the receipt is Ready and the claim is complete
   P->>W: Opens Home
   W->>A: GET /v1/home, with the person’s own day
   A-->>W: What needs them, their trip, month and recent trips`,
-    refs: ['ADR-0017', 'ADR-0020', 'ADR-0022', 'ADR-0023', 'FR-INT-04'],
+    refs: ['ADR-0017', 'ADR-0020', 'ADR-0022', 'ADR-0023', 'ADR-0033', 'FR-INT-04', 'FR-INT-16'],
   },
   {
     id: 'email-in',
@@ -539,7 +547,7 @@ export const SETTINGS: readonly Setting[] = [
     names: ['FLAG_OVERRIDES'],
     kind: 'Server variable',
     where: 'Vercel production (shell.build-version=on since Oct 4), local and tests',
-    use: 'Forces flags on or off for every organization, beating each owner’s switch: the kill switch.',
+    use: 'Forces flags on or off for every organization, beating each owner’s switch: the kill switch. The reading workflow reads it too, for the organization’s switch and for the operator’s switch per AI model: `operator.<model id>=off` stops that model reading anyone’s receipts (FR-INT-16).',
   },
   {
     names: ['CI', 'E2E_BASE_URL', 'E2E_PORT', 'PLAYWRIGHT_CHROMIUM_EXECUTABLE'],
@@ -609,7 +617,7 @@ export const WORKFLOWS: Readonly<Record<string, string>> = {
 /** What each background function does, by id. */
 export const BACKGROUND: Readonly<Record<string, string>> = {
   'receipt-reading':
-    'Reads a receipt when it is uploaded or read again: checks the file, reads it with each compared model in parallel steps, falls back to OpenAI when none could, then settles the receipt, its expense and its trip.',
+    'Reads a receipt when it is uploaded or read again: chooses the models, checks the file, then reads it and settles the receipt, its expense and its trip. Side by side, each compared model reads in parallel steps and OpenAI reads when none could (ADR-0017, ADR-0020). Under the organization’s AI model settings, the primary reads it and each back-up only when the ones before it read nothing, one step at a time, and one confident reading makes it Ready; with every model off it is filed for a person to fill in (ADR-0033). A model the operator stopped reads nothing.',
   'email-reading':
     'Reads an email that arrived at the receipts address: fetches it from Bird as it was received, proves its sender by DKIM, finds the member who signs in with that address, then stores and files each PDF or photo as a receipt, or with none the email’s text as a PDF, and hands their reading on. Mail from anyone else is dropped with nothing kept. Logs one line per email with what came of it (ADR-0026, ADR-0027).',
   'outbox-relay':

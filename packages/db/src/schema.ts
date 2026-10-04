@@ -23,6 +23,7 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
 
@@ -396,10 +397,17 @@ export const extractionRuns = pgTable(
      * a no-op instead of a second row; a new request (read again) gets a new id.
      */
     requestId: uuid('request_id'),
+    /**
+     * Why this model read, under the organization's AI model settings (FR-INT-16): primary,
+     * or backup when the models before it produced no reading. Null for readings made side
+     * by side (ADR-0017), where the model itself says whether it was compared or the fallback.
+     */
+    role: text('role'),
     createdAt: createdAt(),
   },
   (t) => [
     unique('extraction_runs_request_key').on(t.orgId, t.receiptId, t.model, t.requestId),
+    check('extraction_runs_role_known', sql`${t.role} IN ('primary', 'backup')`),
     foreignKey({
       name: 'extraction_runs_receipt_fk',
       columns: [t.orgId, t.receiptId],
@@ -715,5 +723,43 @@ export const orgFeatures = pgTable(
       foreignColumns: [members.orgId, members.id],
     }),
     check('org_features_flag_format', sql`${t.flag} ~ '^[a-z]+\\.[a-z-]+$'`),
+  ],
+);
+
+/**
+ * Which AI models read one organization's receipts, once its owner has switched on AI model
+ * settings (FR-INT-16, ADR-0033): one row per model, on or off, in the order back-ups are
+ * tried. Exactly one model that is on is the primary, or none when every model is off. An
+ * organization with no rows reads with the defaults in @expensewise/extraction.
+ */
+export const orgAiModels = pgTable(
+  'org_ai_models',
+  {
+    id: id(),
+    orgId: orgId(),
+    /** A model id from @expensewise/extraction, such as `claude-sonnet-5-5`. */
+    model: text('model').notNull(),
+    enabled: boolean('enabled').notNull(),
+    isPrimary: boolean('is_primary').notNull().default(false),
+    /** Its place in the order back-ups are tried, from 0. */
+    position: integer('position').notNull(),
+    updatedByMemberId: uuid('updated_by_member_id').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('org_ai_models_org_id_id_key').on(t.orgId, t.id),
+    unique('org_ai_models_org_model_key').on(t.orgId, t.model),
+    uniqueIndex('org_ai_models_one_primary')
+      .on(t.orgId)
+      .where(sql`is_primary`),
+    foreignKey({
+      name: 'org_ai_models_updated_by_fk',
+      columns: [t.orgId, t.updatedByMemberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    check('org_ai_models_model_format', sql`${t.model} ~ '^[a-z0-9][a-z0-9.-]*$'`),
+    check('org_ai_models_primary_is_on', sql`${t.enabled} OR NOT ${t.isPrimary}`),
+    check('org_ai_models_position_not_negative', sql`${t.position} >= 0`),
   ],
 );

@@ -1,4 +1,5 @@
 export * from './ai-keys.ts';
+export * from './ai-models.ts';
 export * from './audit.ts';
 export * from './client.ts';
 export * from './connection.ts';

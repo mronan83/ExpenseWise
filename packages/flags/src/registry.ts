@@ -87,7 +87,42 @@ export const FLAGS = {
       'Settings › People: invite someone by link with a role, change their role or revoke it ' +
       '(FR-PLT-07, #29).',
   },
+  // The operator's switch per AI model (FR-INT-16, US-READ-18). Unlike a feature, it acts
+  // only when FLAG_OVERRIDES turns it off: then that model reads no organization's receipts,
+  // whatever each has chosen. Unset or on, each organization decides. See modelStopped().
+  'operator.claude-sonnet-5-5': {
+    name: 'Operator switch: Sonnet 5.5',
+    serverOnly: true,
+    description: operatorSwitch('Sonnet 5.5'),
+  },
+  'operator.claude-haiku-4-5': {
+    name: 'Operator switch: Haiku 4.5',
+    serverOnly: true,
+    description: operatorSwitch('Haiku 4.5'),
+  },
+  'operator.gpt-5.6-luna': {
+    name: 'Operator switch: GPT-5.6 Luna',
+    serverOnly: true,
+    description: operatorSwitch('GPT-5.6 Luna'),
+  },
+  'operator.claude-opus-5-5': {
+    name: 'Operator switch: Opus 5.5',
+    serverOnly: true,
+    description: operatorSwitch('Opus 5.5'),
+  },
+  'operator.claude-fable-5-1': {
+    name: 'Operator switch: Fable 5.1',
+    serverOnly: true,
+    description: operatorSwitch('Fable 5.1'),
+  },
 } as const satisfies Record<string, FlagDefinition>;
+
+function operatorSwitch(label: string): string {
+  return (
+    `Set off in FLAG_OVERRIDES, ${label} reads no organization’s receipts, whatever each ` +
+    'has chosen, during an outage or a bad release. Unset, each organization decides.'
+  );
+}
 
 export type FlagKey = keyof typeof FLAGS;
 

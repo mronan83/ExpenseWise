@@ -59,6 +59,9 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
   ['merging a possible duplicate', (s) => `/receipts/${s.receipts.dinnerSlip}`, [press('Merge')]],
   ['the earlier of a possible pair', (s) => `/receipts/${s.receipts.dinner}`, []],
   ['a receipt being read', (s) => `/receipts/${s.receipts.processing}`, []],
+  ['a receipt the primary model read', (s) => `/receipts/${s.receipts.primaryRead}`, []],
+  ['a receipt a back-up model read', (s) => `/receipts/${s.receipts.backupRead}`, []],
+  ['a receipt filed with every AI model off', (s) => `/receipts/${s.receipts.notRead}`, []],
   ['Expenses', () => '/expenses', []],
   [
     'expenses on no trip, opened from Home',
@@ -125,6 +128,7 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
   ['AI provider settings', () => '/settings/ai', []],
   ['sign-in settings', () => '/settings/sign-ins', []],
   ['feature settings', () => '/settings/features', []],
+  ['AI model settings', () => '/settings/ai-models', []],
 ];
 
 const session = {

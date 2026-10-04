@@ -6,6 +6,7 @@ import { useFeatures } from '../../lib/features';
 /** Settings pages. One with a flag shows only while that feature is on (Q5). */
 const PAGES: readonly { href: string; label: string; flag?: string }[] = [
   { href: '/settings/ai', label: 'AI providers' },
+  { href: '/settings/ai-models', label: 'AI models', flag: 'receipts.model-settings' },
   { href: '/settings/sign-ins', label: 'Sign-ins' },
   { href: '/settings/features', label: 'Features' },
 ];

@@ -2,7 +2,7 @@
 
 When neither Claude model can read a receipt, the workflow reads it once with OpenAI's GPT-5.6 Luna on the organization's own OpenAI key. A fallback reading can make a receipt **Needs a look**, never **Ready**.
 
-- **Status:** Accepted (fallback decided by product owner; the model and the Ready rule are recommended, no objection)
+- **Status:** Accepted (fallback decided by product owner; the model and the Ready rule are recommended, no objection); amended, for each organization with AI model settings on, by [ADR-0033](0033-ready-on-one-confident-reading.md): GPT-5.6 Luna is a model like the others, and a back-up's confident reading is Ready
 - **Date:** 2026-10-02
 - **Deciders:** Product owner; Claude (principal architect)
 - **Decision register:** D-22

@@ -162,6 +162,20 @@
       "when": 1791118492960,
       "tag": "0022_org_features_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1791120527041,
+      "tag": "0023_ai_model_settings",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791120541804,
+      "tag": "0024_ai_model_settings_rls",
+      "breakpoints": true
     }
   ]
 }

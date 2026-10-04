@@ -32,8 +32,16 @@ export interface ReceiptSummary {
   expenseId: string | null;
 }
 
-/** compared: weighed by the tier decision. fallback: read only because Claude couldn't. */
-export type ReadingRole = 'compared' | 'fallback';
+/**
+ * compared: weighed by the tier decision. fallback: read only because Claude couldn't. Under
+ * the organization's AI model settings: primary, the model chosen to read every receipt;
+ * backup, read only because the models before it couldn't (FR-INT-16).
+ */
+export type ReadingRole = 'compared' | 'fallback' | 'primary' | 'backup';
+
+/** Readings made under the organization's AI model settings, rather than side by side. */
+export const underSettings = (readings: readonly Pick<Reading, 'role'>[]) =>
+  readings.some((r) => r.role === 'primary' || r.role === 'backup');
 
 /**
  * A check a reading fails, which keeps it from being Ready: its sums or date (FR-INT-04), or
@@ -166,7 +174,7 @@ export const FIELD_LABELS: Record<CorrectableField, string> = {
 
 /** Why a receipt is in the Needs you inbox (FR-EXP-02). */
 export interface NeedsYouReason {
-  code: 'failed' | 'duplicate' | 'fallback' | 'differ' | 'checks' | 'unsure';
+  code: 'failed' | 'duplicate' | 'fallback' | 'differ' | 'checks' | 'unsure' | 'not_read';
   fields: string[];
   checks: ReadingCheck[];
   error: string | null;
@@ -260,6 +268,12 @@ export function needsYou(item: ReceiptInboxItem): { text: string; action: string
       return { text: reason.checks.map((c) => CHECK_REASONS[c]).join(' '), ...check };
     case 'unsure':
       return { text: 'A model wasn’t sure of it, or couldn’t read it.', ...check };
+    case 'not_read':
+      return {
+        text: 'Every AI model is off, so nothing read it.',
+        action: 'Fill it in',
+        href: `/receipts/${receipt.id}`,
+      };
   }
 }
 
@@ -342,9 +356,12 @@ export function formatSeconds(ms: number | null): string {
   return ms === null ? '–' : `${(ms / 1000).toFixed(1)} s`;
 }
 
-/** The provider behind a reading, by its role: Claude compares, OpenAI is the fallback. */
-export const providerOf = (reading: Pick<Reading, 'role'>) =>
-  reading.role === 'fallback' ? 'OpenAI' : 'Anthropic';
+/**
+ * The provider behind a reading: Claude compares, OpenAI is the fallback; under the
+ * organization's AI model settings, OpenAI's model reads like any other.
+ */
+export const providerOf = (reading: Pick<Reading, 'role' | 'model'>) =>
+  reading.role === 'fallback' || reading.model.startsWith('gpt-') ? 'OpenAI' : 'Anthropic';
 
 /** What a failed reading's error code means for the person looking at it. */
 export function describeReadingError(error: string | null, provider = 'Anthropic'): string {
@@ -360,6 +377,7 @@ export function describeReadingError(error: string | null, provider = 'Anthropic
   if (error.startsWith('unavailable'))
     return `${provider} didn't answer after several tries. Read it again later.`;
   if (error.startsWith('model_')) return 'The model could not read this document.';
+  if (error === 'stopped') return 'Switched off for every organization for now.';
   return 'This model could not read the receipt.';
 }
 

@@ -18,6 +18,7 @@ import {
   dbExpenseStore,
   dbReceiptStore,
   dbHomeStore,
+  dbModelSettingsStore,
   dbReportStore,
   dbTripStore,
   dbWorkspaceStore,
@@ -25,7 +26,7 @@ import {
 } from '@expensewise/api';
 import { createDatabase, runReportSchedule, setRolePasswords } from '@expensewise/db';
 import { runMigrations } from '@expensewise/db/migrate';
-import { COMPARISON_MODELS, FALLBACK_MODEL } from '@expensewise/extraction';
+import { COMPARISON_MODELS, FALLBACK_MODEL, type ModelId } from '@expensewise/extraction';
 import { readWith, receiptReadingPorts, settleReading } from '@expensewise/workflows';
 import { BENCH_PORT, E2E_USER, type Seeded } from './config';
 
@@ -138,6 +139,11 @@ const store = {
 /** What each model answers for a receipt: a reading, or nothing usable. */
 type Script = Partial<Record<string, Record<string, unknown> | 'refuse'>>;
 const scripts = new Map<string, Script>();
+/**
+ * Receipts read under the organization's AI model settings (FR-INT-16), in this order: the
+ * primary, then each back-up only while the ones before it read nothing. Empty: every model off.
+ */
+const orders = new Map<string, ModelId[]>();
 
 const reading = (
   merchant: string,
@@ -200,6 +206,16 @@ async function dispatch(
         }),
     } as unknown as Parameters<typeof readWith>[0];
     const request = { orgId: event.orgId, receiptId, requestId: event.outboxId };
+    const order = orders.get(receiptId);
+    if (order) {
+      for (const [i, model] of order.entries()) {
+        const role = i === 0 ? 'primary' : 'backup';
+        const outcome = await readWith(ports, request, model, 'image/png', { role });
+        if (outcome === 'confident' || outcome === 'unsure') break;
+      }
+      await settleReading(ports, request, undefined, { mode: 'primary', order });
+      continue;
+    }
     const outcomes = [];
     for (const model of COMPARISON_MODELS) {
       outcomes.push(await readWith(ports, request, model, 'image/png'));
@@ -227,6 +243,7 @@ const app = createHttpApp({
   trips: dbTripStore(db),
   home: dbHomeStore(db),
   reports: dbReportStore(db),
+  modelSettings: dbModelSettingsStore(db),
   files: store,
   dispatch,
   secrets: createSecretBox('bench-only-secret-0123456789'),
@@ -294,7 +311,12 @@ const trips = {
 };
 
 const receipts: Record<string, string> = {};
-async function capture(name: string, source: 'camera' | 'upload', script?: Script) {
+async function capture(
+  name: string,
+  source: 'camera' | 'upload',
+  script?: Script,
+  order?: ModelId[],
+) {
   const bytes = receiptImage(name);
   const sha256 = createHash('sha256').update(bytes).digest('hex');
   const described = { contentType: 'image/png', byteSize: bytes.length, sha256 };
@@ -305,6 +327,7 @@ async function capture(name: string, source: 'camera' | 'upload', script?: Scrip
   );
   files.set(ticket.path, bytes);
   if (script) scripts.set(ticket.receiptId, script);
+  if (order) orders.set(ticket.receiptId, order);
   await call('POST', '/v1/receipts', { id: ticket.receiptId, source, ...described });
   receipts[name] = ticket.receiptId;
 }
@@ -435,6 +458,26 @@ await capture(
   both(reading('Amazon.com', '2026-09-29', 'USD', '86.97', { documentType: 'purchase_summary' })),
 );
 await capture('processing', 'upload');
+// Read under the AI model settings (FR-INT-16): Ready on one confident reading by the primary;
+// a back-up's unsure reading when the primary couldn't; and nothing read, every model off.
+await capture(
+  'primaryRead',
+  'camera',
+  { [sonnet]: reading('Verve Coffee Roasters', '2026-09-30', 'USD', '9.75') },
+  [sonnet, haiku],
+);
+await capture(
+  'backupRead',
+  'camera',
+  {
+    [sonnet]: 'refuse',
+    [haiku]: reading('Upstream Brewing Company', '2026-09-30', 'USD', '41.20', {
+      total: { value: '41.20', confidence: 'low' },
+    }),
+  },
+  [sonnet, haiku],
+);
+await capture('notRead', 'upload', {}, []);
 // A ride in Chicago, and a lunch on no trip: a local expense, Ready, given a reason below.
 await capture('chicago', 'camera', both(reading('Lyft', '2026-09-02', 'USD', '24.60')));
 await capture('lunch', 'camera', both(reading('Zuni Café', '2026-09-27', 'USD', '48.20')));

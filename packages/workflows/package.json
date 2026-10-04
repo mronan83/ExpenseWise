@@ -15,6 +15,7 @@
     "@expensewise/db": "workspace:*",
     "@expensewise/domain": "workspace:*",
     "@expensewise/extraction": "workspace:*",
+    "@expensewise/flags": "workspace:*",
     "@expensewise/storage": "workspace:*",
     "html-to-text": "^9.0.5",
     "inngest": "^4.21.1",

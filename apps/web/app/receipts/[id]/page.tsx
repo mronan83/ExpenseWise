@@ -15,6 +15,7 @@ import {
   isLocked,
   MERGE_FIELDS,
   RECEIPT_STATUS,
+  underSettings,
   type CorrectableField,
   type DuplicateSide,
   type MergeField,
@@ -172,7 +173,7 @@ export default function ReceiptPage() {
               />
             ) : null}
             {receipt.confirmation ? <Filed confirmation={receipt.confirmation} /> : null}
-            <Comparison receipt={receipt} />
+            {receipt.readings.length > 0 ? <Comparison receipt={receipt} /> : null}
             <div className="flex flex-wrap items-center gap-3">
               <button
                 type="button"
@@ -211,11 +212,19 @@ function Verdict({ receipt, stale }: { receipt: ReceiptDetail; stale: boolean })
   const status = RECEIPT_STATUS[receipt.status];
   const fallback = receipt.readings.find((r) => r.role === 'fallback');
   const checks = describeChecks(receipt.readings);
+  // Under the organization's AI model settings: one model reads, a back-up only if it can't.
+  const settings = underSettings(receipt.readings);
+  const reader = receipt.readings.find((r) => r.fields);
+  const primary = receipt.readings.find((r) => r.role === 'primary');
   let text: string;
   if (receipt.status === 'processing') {
     text = stale
       ? 'This is taking longer than it should. Try reading it again.'
-      : 'Both models are reading it. This takes a few seconds.';
+      : settings && primary
+        ? `${primary.label} is reading it. This takes a few seconds.`
+        : 'Both models are reading it. This takes a few seconds.';
+  } else if (receipt.status === 'extracted' && receipt.confirmation?.model === 'none') {
+    text = `${receipt.confirmation.by} filled it in by hand.`;
   } else if (receipt.status === 'extracted' && receipt.confirmation) {
     const { by, label, corrections } = receipt.confirmation;
     const fixes = corrections.map((c) => FIELD_LABELS[c.field].toLowerCase());
@@ -224,8 +233,12 @@ function Verdict({ receipt, stale }: { receipt: ReceiptDetail; stale: boolean })
         ? `, correcting the ${new Intl.ListFormat('en', { type: 'conjunction' }).format(fixes)}`
         : ''
     }.`;
+  } else if (receipt.status === 'extracted' && settings && reader) {
+    text = `${reader.label} read it with confidence.`;
   } else if (receipt.status === 'extracted') {
     text = 'Both models read it with confidence and agree.';
+  } else if (receipt.status === 'needs_review' && receipt.readings.length === 0) {
+    text = 'Every AI model is switched off, so nothing read it. Fill it in below.';
   } else if (receipt.status === 'failed') {
     text = 'No model could read it. See why below.';
   } else if (receipt.duplicates.some((d) => d.held)) {
@@ -237,6 +250,13 @@ function Verdict({ receipt, stale }: { receipt: ReceiptDetail; stale: boolean })
       `Claude couldn't read it, so ${fallback.label} did. One reading, so check it before you rely on it.`,
       ...checks,
     ].join(' ');
+  } else if (settings && reader?.role === 'backup' && primary) {
+    text = [
+      `${primary.label} couldn't read it, so ${reader.label} did, as a back-up.`,
+      ...(checks.length > 0 ? checks : [`${reader.label} wasn't sure of it.`]),
+    ].join(' ');
+  } else if (settings && reader && checks.length === 0) {
+    text = `${reader.label} wasn't sure of it.`;
   } else if (receipt.differences.length > 0) {
     text = [`The models disagree on ${receipt.differences.join(', ')}.`, ...checks].join(' ');
   } else if (checks.length > 0) {
@@ -788,7 +808,8 @@ function Review({
       onConfirmed(
         await api<ReceiptDetail>(`/v1/receipts/${receipt.id}/confirm`, {
           method: 'POST',
-          body: JSON.stringify({ model: chosen?.model ?? model, corrections }),
+          // With nothing read (every AI model off), no model is named: every field is typed.
+          body: JSON.stringify({ model: chosen?.model ?? (model || undefined), corrections }),
         }),
       );
     } catch (e) {
@@ -977,8 +998,10 @@ function Comparison({ receipt }: { receipt: ReceiptDetail }) {
             {readings.map((r) => (
               <th key={r.model} scope="col" className="pb-2 font-semibold">
                 {r.label}
-                {r.role === 'fallback' ? (
-                  <span className="block text-xs font-normal text-ink-2">fallback</span>
+                {r.role === 'fallback' || r.role === 'backup' ? (
+                  <span className="block text-xs font-normal text-ink-2">
+                    {r.role === 'backup' ? 'back-up' : 'fallback'}
+                  </span>
                 ) : null}
               </th>
             ))}

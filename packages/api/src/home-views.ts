@@ -56,9 +56,16 @@ function tripView(home: HomeSnapshot, day: string) {
  * or next, this month, their reports to finish, and the last trips. Built from the same views as the inbox and Trips,
  * so a figure here matches the one there.
  */
-export function homeView(data: HomeData, day: string, shown: number, now = new Date()) {
+export function homeView(
+  data: HomeData,
+  day: string,
+  shown: number,
+  now = new Date(),
+  /** Whether the organization reads under its AI model settings (receipts.model-settings). */
+  settingsOn = false,
+) {
   const { home } = data;
-  const items = needsYouItems(data, data.reports, now);
+  const items = needsYouItems(data, data.reports, now, settingsOn);
   const month = home.monthExpenses;
   const offTrip = month.filter((r) => !r.onTrip);
   return {
