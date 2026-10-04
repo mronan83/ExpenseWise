@@ -238,7 +238,7 @@ export const RULES: readonly Rule[] = [
       constant: 'IRS_BUSINESS_RATES_THROUGH',
       literal: "'2026-12-31'",
     },
-    note: 'Nothing in the app held a rate, so Claude chose the IRS rate; Q28 asks whether you want your own. Each year’s rate is added when the IRS announces it in December; until then a drive dated after the last day known is refused rather than paid at the old rate.',
+    note: 'Nothing in the app held a rate, so Claude chose the IRS rate; Q28 asks whether you want your own. Each year’s rate is added when the IRS announces it in December (#76 for 2027); until then a drive dated after the last day known is refused rather than paid at the old rate.',
   },
   {
     id: 'R-MILEAGE-MAX',
