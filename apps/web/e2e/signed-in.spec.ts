@@ -125,6 +125,13 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
   ['AI provider settings', () => '/settings/ai', []],
   ['sign-in settings', () => '/settings/sign-ins', []],
   ['feature settings', () => '/settings/features', []],
+  ['the audit trail, with its chain checked', () => '/settings/audit', []],
+  ['the audit trail, older changes shown', () => '/settings/audit', [press('Show older changes')]],
+  [
+    'one receipt’s history, opened from the receipt',
+    (s) => `/settings/audit?entityType=receipt&entityId=${s.receipts.coffee}`,
+    [],
+  ],
 ];
 
 const session = {
@@ -254,3 +261,69 @@ for (const [title, path, steps, at] of SCREENS) {
     expect(errors, 'errors in the console').toEqual([]);
   });
 }
+
+test('a receipt opens its history in the audit trail, under the chain checked intact', async ({
+  page,
+}) => {
+  await page.goto(`/receipts/${seeded.receipts.coffee}`, { waitUntil: 'networkidle' });
+  await page.getByRole('link', { name: 'History of this receipt' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Audit trail' })).toBeVisible();
+  await expect(page.getByText(/^Chain intact: [\d,]+ events checked$/)).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: /^History of receipt / })).toBeVisible();
+  await expect(page.getByText('Receipt captured', { exact: true })).toHaveCount(1);
+});
+
+test('hides a record’s History link while the audit trail is off', async ({ page }) => {
+  // As if the owner had switched it off: the features list says so.
+  await page.route(
+    (url) => url.pathname === '/api/v1/features',
+    (route) => route.fulfill({ json: { features: [], canSwitch: true } }),
+  );
+  await page.goto(`/expenses/${seeded.expenses.coffee}`, { waitUntil: 'networkidle' });
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(page.getByRole('link', { name: /^History/ })).toHaveCount(0);
+});
+
+test('hides a record’s History link from a role that can’t read the trail', async ({ page }) => {
+  // As a member or approver: the trail answers 403 forbidden_role.
+  await page.route(
+    (url) => url.pathname === '/api/v1/audit/events',
+    (route) =>
+      route.fulfill({
+        status: 403,
+        contentType: 'application/problem+json',
+        body: JSON.stringify({ title: 'Forbidden', status: 403, code: 'forbidden_role' }),
+      }),
+  );
+  await page.goto(`/reports/${seeded.reports.open}`, { waitUntil: 'networkidle' });
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(page.getByRole('link', { name: /^History/ })).toHaveCount(0);
+});
+
+test('the audit trail holds no key or token in any event’s details', async ({ request }) => {
+  // The bench saved this Anthropic key through the API; only its last four characters may show.
+  const KEY = 'sk-ant-bench-0000-wxyz';
+  const SECRET_FIELD = /"(api_?key|secret|password|token|access_?token|ciphertext)":/i;
+  const headers = { authorization: `Bearer ${E2E_USER}` };
+  let cursor: string | null = null;
+  let seen = 0;
+  do {
+    const res = await request.get(
+      `${BENCH_URL}/api/v1/audit/events?limit=100${cursor ? `&cursor=${cursor}` : ''}`,
+      { headers },
+    );
+    expect(res.status()).toBe(200);
+    const page = (await res.json()) as {
+      events: { sequence: number; payload: unknown }[];
+      nextCursor: string | null;
+    };
+    for (const event of page.events) {
+      const details = JSON.stringify(event.payload);
+      expect(details, `event #${event.sequence}`).not.toContain(KEY.slice(0, 12));
+      expect(details, `event #${event.sequence}`).not.toMatch(SECRET_FIELD);
+    }
+    seen += page.events.length;
+    cursor = page.nextCursor;
+  } while (cursor);
+  expect(seen).toBeGreaterThan(50);
+});

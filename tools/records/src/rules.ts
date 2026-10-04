@@ -162,4 +162,11 @@ export const RULES: readonly Rule[] = [
       literal: '10 * 60 * 1000',
     },
   },
+  {
+    id: 'R-AUDIT-PAGE',
+    name: 'Changes on one page of the audit trail',
+    value: '50, newest first; up to 100 when the API is asked for more',
+    decided: { by: 'claude' },
+    code: { file: 'packages/api/src/audit.ts', constant: 'AUDIT_PAGE_SIZE', literal: '50' },
+  },
 ];

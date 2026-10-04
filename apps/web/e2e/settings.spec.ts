@@ -38,6 +38,8 @@ test.describe('sign-in and AI provider settings', () => {
       ['POST', '/api/v1/me/sign-ins'],
       ['GET', '/api/v1/features'],
       ['PUT', '/api/v1/settings/features/expenses.mileage'],
+      ['GET', '/api/v1/audit/events'],
+      ['GET', '/api/v1/audit/verification'],
     ] as const) {
       const res = await request.fetch(path, {
         method,
@@ -53,7 +55,13 @@ for (const colorScheme of ['light', 'dark'] as const) {
   test.describe(`settings accessibility in ${colorScheme} mode`, () => {
     test.use({ colorScheme });
 
-    for (const path of ['/sign-in', '/settings/ai', '/settings/sign-ins', '/settings/features']) {
+    for (const path of [
+      '/sign-in',
+      '/settings/ai',
+      '/settings/sign-ins',
+      '/settings/features',
+      '/settings/audit',
+    ]) {
       test(`${path} has no WCAG 2.2 AA violations`, async ({ page }) => {
         await page.goto(path);
         await expect(page.getByRole('heading', { level: 1 })).toBeVisible();

@@ -1,3 +1,4 @@
+import type { MemberRole } from './approvals.ts';
 import { DomainError } from './errors.ts';
 
 /** Hash that precedes the first event of every organization's chain. */
@@ -70,4 +71,38 @@ export async function verifyAuditChain(
     expectedPrev = hash;
   }
   return { ok: true };
+}
+
+/**
+ * Who reads an organization's audit trail (FR-GOV-06): its owners, finance admins and
+ * auditors. Members and approvers don't.
+ */
+export const AUDIT_READER_ROLES: readonly MemberRole[] = ['owner', 'finance_admin', 'auditor'];
+
+export const canReadAuditTrail = (role: MemberRole): boolean => AUDIT_READER_ROLES.includes(role);
+
+/** Field names that only ever hold a credential. A hint such as `keyHint` is not one. */
+const SECRET_NAME =
+  /^(api_?key|secret|client_?secret|password|passphrase|token|access_?token|refresh_?token|id_?token|bearer|authorization|cookie|private_?key|ciphertext|signing_?key)$/i;
+
+/** Values shaped like a credential: a provider key, a JWT, a cloud or chat token. */
+const SECRET_VALUE =
+  /^(sk-[\w-]{16,}|sk_(live|test)_\w{16,}|rk_(live|test)_\w{16,}|gh[pousr]_\w{20,}|github_pat_\w{20,}|xox[abprs]-[\w-]{10,}|AKIA[0-9A-Z]{16}|eyJ[\w-]{8,}\.eyJ[\w-]{8,}\.[\w-]*)$/;
+
+/**
+ * The paths of the fields in an event's details that look like a secret, by name or by
+ * value. The trail shows details as stored, so none may hold one; the checks use this to
+ * prove it.
+ */
+export function secretLikeFields(value: unknown, path = ''): string[] {
+  if (typeof value === 'string') return SECRET_VALUE.test(value.trim()) ? [path || '(value)'] : [];
+  if (Array.isArray(value)) return value.flatMap((v, i) => secretLikeFields(v, `${path}[${i}]`));
+  if (value && typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>).flatMap(([k, v]) => {
+      const at = path ? `${path}.${k}` : k;
+      if (SECRET_NAME.test(k) && v !== null && v !== '') return [at];
+      return secretLikeFields(v, at);
+    });
+  }
+  return [];
 }

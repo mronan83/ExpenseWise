@@ -1,5 +1,6 @@
 import {
   createHttpApp,
+  dbAuditStore,
   dbExpenseStore,
   dbHomeStore,
   dbReportStore,
@@ -40,6 +41,7 @@ const handler = handle(
     trips: db && dbTripStore(db),
     home: db && dbHomeStore(db),
     reports: db && dbReportStore(db),
+    audit: db && dbAuditStore(db),
     files: receiptFiles(),
     dispatch: dispatchEvents,
     secrets: secretBox(),

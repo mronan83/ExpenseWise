@@ -663,7 +663,9 @@ export const FUNCTIONAL: readonly Requirement[] = [
       'db/audit.int › blocks even the table owner from rewriting history',
       'domain/audit › detects removed and reordered events',
       'db/receipts.int › stores the row, the event that has it read, and an audit event, together',
+      'db/audit.int › recomputes the chain on request, and finds the first event an edit broke',
     ],
+    note: 'The chain is checked by the tests and, since #26, on screen: Settings › Audit trail recomputes it from every stored event each time an owner, finance admin or auditor opens it, while that feature is on (FR-GOV-06). It shows an edited, removed or reordered event. It still has no copy outside the database, so an edit made with every later hash recomputed, or the newest events removed, would not show (#69).',
   },
   {
     id: 'FR-GOV-06',
@@ -671,9 +673,14 @@ export const FUNCTIONAL: readonly Requirement[] = [
     sources: ['design §5.2', 'roadmap inc 3'],
     priority: 'Should',
     phase: 'P1',
-    status: 'Planned',
+    status: 'Verified',
     features: ['F-20'],
-    backlog: [26],
+    checks: [
+      'api/audit',
+      'db/audit.int › lists the trail newest first, a page at a time, by record and by who made it',
+      'e2e/signed-in › a receipt opens its history in the audit trail, under the chain checked intact',
+    ],
+    note: 'Settings › Audit trail, behind governance.audit-trail: every change newest first, with when, who, what and which record, its details as stored, and the hash chain recomputed at the top. Owners can read it too, and a receipt, an expense and a report link to their own history; members and approvers are refused (Claude’s, for you to confirm).',
   },
   {
     id: 'FR-GOV-07',
@@ -1295,6 +1302,7 @@ export const NON_FUNCTIONAL: readonly Requirement[] = [
       'db/audit.int › blocks even the table owner from rewriting history',
     ],
     shortfalls: ['GAP-10'],
+    note: 'The table’s owner can still switch the audit trail’s guard off. An event it then edits shows as the chain breaking, now on screen as well as in the tests (FR-GOV-06); one edited with every later hash recomputed, or removed from the end, would take a copy kept outside the database to show, which there isn’t yet (#69).',
   },
   {
     id: 'NFR-DAT-06',
