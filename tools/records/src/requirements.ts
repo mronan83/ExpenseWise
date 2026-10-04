@@ -125,7 +125,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
   // Intelligence
   {
     id: 'FR-INT-01',
-    text: 'Read merchant, date, currency, total, subtotal, taxes, tip, card last four, line items and document type into a fixed schema, each field with its confidence. No free-text parsing.',
+    text: 'Read merchant, date, currency, total, subtotal, taxes, tip, card last four, time, address, line items and document type into a fixed schema, each field with its confidence. No free-text parsing.',
     sources: ['arch §6.5', 'ADR-0006'],
     priority: 'Must',
     phase: 'P1',
@@ -338,10 +338,19 @@ export const FUNCTIONAL: readonly Requirement[] = [
     sources: ['owner 2026-10-03'],
     priority: 'Must',
     phase: 'P1',
-    status: 'Planned',
+    status: 'Verified',
+    capabilities: ['Intelligence · Field extraction', 'Expense management · Expenses'],
     features: ['F-46'],
-    backlog: [53],
-    note: 'Your requirement of Oct 3 and your answer to Q9. Claude’s assumption, yours to overturn: a different time or address on the expense shows against its receipt, as other fields do, but doesn’t by itself reject it at review, which checks what is claimed (FR-GOV-10).',
+    checks: [
+      'extraction/normalize › reads the time as HH:MM and the address with its city, region and country',
+      'extraction/place › falls back to its region, then to a country with one time zone',
+      'domain/expense-details › sets, tidies and clears fields, and says what changed',
+      'db/expense-details.int › keeps a person’s edit over any later reading, and refuses a malformed one',
+      'api/expenses › edits when and where it was bought, working out the time zone from the place',
+      'evals/score › scores the time and place a document prints (FR-INT-17)',
+      'e2e/signed-in',
+    ],
+    note: 'Your requirement of Oct 3 and your answer to Q9. The time zone is looked up offline from the city, region and country (ADR-0030), so no address leaves ExpenseWise; where the place can’t pin one, it is blank for the person to set. Claude’s assumption, yours to overturn: a different time or address on the expense shows against its receipt, as other fields do, but doesn’t by itself reject it at review, which checks what is claimed (FR-GOV-10).',
   },
   {
     id: 'FR-INT-18',

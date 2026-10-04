@@ -2,7 +2,8 @@ import type { ExpenseRecord } from '@expensewise/db';
 import { isExpenseEditable, type ExpenseValues } from '@expensewise/domain';
 import { proofDifferences } from '@expensewise/extraction';
 import type { ExpensesWithProof } from './expenses.ts';
-import { amountView, currentReview, receiptSummary } from './receipt-views.ts';
+import { detailsOf } from '@expensewise/extraction/place';
+import { amountView, currentReview, filedReading, receiptSummary } from './receipt-views.ts';
 import type { ReceiptWithReadings } from './receipts.ts';
 
 /**
@@ -23,6 +24,7 @@ export function proofOf(proof: ReceiptWithReadings) {
     receiptId: receipt.id,
     status: receipt.status,
     confirmedBy: currentReview(receipt, runs, reviews)?.reviewedBy ?? null,
+    details: detailsOf(filedReading(receipt, runs, reviews)),
   };
 }
 
@@ -48,10 +50,20 @@ export function expenseSummary(expense: ExpenseRecord, proof: ReceiptWithReading
   };
 }
 
+/** Where the expense's time or place differs from what its receipt prints. */
+const PROOF_DETAILS = ['time', 'address', 'city', 'country'] as const;
+
 export function expenseDetail(expense: ExpenseRecord, proof: ReceiptWithReadings | null) {
   const shown = proof ? proofOf(proof) : null;
   return {
     ...expenseSummary(expense, proof),
+    // When and where it was bought (FR-INT-17); any part may be blank.
+    time: expense.time,
+    timeZone: expense.timeZone,
+    address: expense.address,
+    city: expense.city,
+    region: expense.region,
+    country: expense.country,
     editable: isExpenseEditable(expense.status),
     editedAt: expense.editedAt?.toISOString() ?? null,
     proof: shown
@@ -63,6 +75,14 @@ export function expenseDetail(expense: ExpenseRecord, proof: ReceiptWithReadings
           date: shown.values.transactionDate,
           amount: amountView(shown.values.amountMinor, shown.values.currency),
           differences: proofDifferences(expense, shown.values),
+          time: shown.details.time,
+          address: shown.details.address,
+          city: shown.details.city,
+          country: shown.details.country,
+          // A difference shows, but doesn't by itself reject the expense at review.
+          detailDifferences: PROOF_DETAILS.filter(
+            (f) => shown.details[f] !== null && shown.details[f] !== expense[f],
+          ),
         }
       : null,
   };

@@ -1,6 +1,7 @@
 import type { CommittedEvent, Membership } from '@expensewise/db';
 import { newId } from '@expensewise/domain';
 import { confirmReading } from '@expensewise/extraction';
+import { detailsOf } from '@expensewise/extraction/place';
 import { receiptPath, RECEIPT_BUCKET, type ObjectStore } from '@expensewise/storage';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
@@ -279,6 +280,7 @@ export function registerReceiptRoutes(
         corrections,
       },
       caller.userId,
+      detailsOf(normalized(run)),
     );
     if (outcome === 'missing') throw notFound();
     if (outcome === 'duplicate') throw heldAsDuplicate();

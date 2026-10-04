@@ -5,8 +5,13 @@ import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { api, ApiProblem } from '../../../lib/api';
 import {
+  DETAIL_LABELS,
   EXPENSE_FIELD_LABELS,
   EXPENSE_STATUS,
+  placeOf,
+  timeOf,
+  timeZones,
+  type DetailField,
   type ExpenseDetail,
   type ExpenseField,
 } from '../../../lib/expenses';
@@ -131,12 +136,19 @@ function Verdict({ expense }: { expense: ExpenseDetail }) {
   );
 }
 
-type Draft = Record<ExpenseField, string>;
+type Draft = Record<ExpenseField | DetailField, string>;
+const LABELS = { ...EXPENSE_FIELD_LABELS, ...DETAIL_LABELS };
 const draftOf = (e: ExpenseDetail): Draft => ({
   merchant: e.merchant ?? '',
   date: e.date ?? '',
   currency: e.amount?.currency ?? '',
   amount: e.amount?.decimal ?? '',
+  time: e.time ?? '',
+  timeZone: e.timeZone ?? '',
+  address: e.address ?? '',
+  city: e.city ?? '',
+  region: e.region ?? '',
+  country: e.country ?? '',
 });
 
 /** What the expense claims. Editable while it needs a look or is Ready (FR-EXP-09). */
@@ -153,11 +165,12 @@ function Claim({
   const [error, setError] = useState<string | null>(null);
   const shown = draftOf(expense);
   const differs = new Set(expense.proof?.differences ?? []);
+  const detailDiffers = new Set(expense.proof?.detailDifferences ?? []);
 
   async function save(event: FormEvent) {
     event.preventDefault();
     const changed = Object.fromEntries(
-      (Object.keys(draft) as ExpenseField[])
+      (Object.keys(draft) as (keyof Draft)[])
         .filter((f) => draft[f].trim() !== shown[f])
         .map((f) => [f, draft[f].trim()]),
     );
@@ -181,9 +194,9 @@ function Claim({
     }
   }
 
-  const input = (field: ExpenseField, extra: Record<string, string | number> = {}) => (
+  const input = (field: keyof Draft, extra: Record<string, string | number> = {}) => (
     <label className="flex flex-col gap-1 text-xs font-medium text-ink-2">
-      {EXPENSE_FIELD_LABELS[field]}
+      {LABELS[field]}
       <input
         name={field}
         value={draft[field]}
@@ -210,6 +223,38 @@ function Claim({
             {input('amount', { inputMode: 'decimal', autoComplete: 'off' })}
             {input('currency', { maxLength: 3, autoCapitalize: 'characters', autoComplete: 'off' })}
           </div>
+          <fieldset className="flex flex-col gap-3 pt-1">
+            <legend className="mb-2 text-xs font-semibold text-ink">When and where</legend>
+            <div className="grid grid-cols-2 gap-3">
+              {input('time', { type: 'time' })}
+              {input('country', {
+                maxLength: 2,
+                autoCapitalize: 'characters',
+                autoComplete: 'off',
+              })}
+            </div>
+            {input('address', { maxLength: 300, autoComplete: 'off' })}
+            <div className="grid grid-cols-2 gap-3">
+              {input('city', { maxLength: 100, autoComplete: 'off' })}
+              {input('region', { maxLength: 100, autoComplete: 'off' })}
+            </div>
+            <label className="flex flex-col gap-1 text-xs font-medium text-ink-2">
+              {LABELS.timeZone}
+              <select
+                name="timeZone"
+                value={draft.timeZone}
+                onChange={(e) => setDraft({ ...draft, timeZone: e.target.value })}
+                className="rounded-lg border border-rule bg-paper px-3 py-2 text-base text-ink"
+              >
+                <option value="">Work it out from the place</option>
+                {timeZones(expense.timeZone).map((zone) => (
+                  <option key={zone} value={zone}>
+                    {zone.replaceAll('_', ' ')}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </fieldset>
           <div className="flex flex-wrap gap-3">
             <button
               type="submit"
@@ -240,6 +285,20 @@ function Claim({
               label="Amount"
               value={expense.amount ? formatMoney(expense.amount) : null}
               differs={differs.has('amount') || differs.has('currency')}
+            />
+            <Row
+              label="Time"
+              value={timeOf(expense.time, expense.timeZone)}
+              differs={detailDiffers.has('time')}
+            />
+            <Row
+              label="Place"
+              value={placeOf(expense)}
+              differs={
+                detailDiffers.has('address') ||
+                detailDiffers.has('city') ||
+                detailDiffers.has('country')
+              }
             />
           </dl>
           {expense.editable ? (
@@ -312,6 +371,8 @@ function Proof({ expense }: { expense: ExpenseDetail }) {
           value={proof.amount ? formatMoney(proof.amount) : null}
           differs={false}
         />
+        <Row label="Time" value={proof.time} differs={false} />
+        <Row label="Place" value={placeOf(proof)} differs={false} />
       </dl>
       {fields.length > 0 ? (
         <p className="text-sm text-warn">

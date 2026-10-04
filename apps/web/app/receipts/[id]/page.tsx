@@ -41,6 +41,8 @@ type Fields = NonNullable<Reading['fields']>;
 const ROWS: { key: keyof Fields; label: string; filing?: string }[] = [
   { key: 'merchant', label: 'Merchant', filing: 'merchant' },
   { key: 'date', label: 'Date', filing: 'date' },
+  { key: 'time', label: 'Time' },
+  { key: 'address', label: 'Address' },
   { key: 'total', label: 'Total', filing: 'total' },
   { key: 'currency', label: 'Currency', filing: 'currency' },
   { key: 'subtotal', label: 'Subtotal' },
@@ -929,7 +931,7 @@ function Comparison({ receipt }: { receipt: ReceiptDetail }) {
           })}
           <tr className="border-t border-rule">
             <th scope="row" className="py-2 text-left text-xs font-medium text-ink-2">
-              Time
+              Read in
             </th>
             {readings.map((r) => (
               <td key={r.model} className="py-2 tabular-nums">

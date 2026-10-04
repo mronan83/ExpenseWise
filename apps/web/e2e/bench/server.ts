@@ -155,6 +155,8 @@ const reading = (
   taxes: [],
   tip: null,
   cardLastFour: null,
+  time: null,
+  address: null,
   lineItems: [],
   ...more,
 });
@@ -316,12 +318,24 @@ await capture('folio', 'upload', {
     },
   ),
 });
+// When and where a ride was bought, as its receipt prints them (FR-INT-17).
+const eppley = {
+  time: { value: '18:42', confidence: 'high' },
+  address: {
+    printed: 'Eppley Airfield, 4501 Abbott Dr, Omaha, NE 68110',
+    city: 'Omaha',
+    region: 'NE',
+    country: 'US',
+    confidence: 'high',
+  },
+};
 // A ride: its booking fee and airport surcharge are neither tax nor tip, and still add up.
 await capture(
   'uber',
   'camera',
   both(
     reading('Uber', '2026-09-30', 'USD', '31.45', {
+      ...eppley,
       documentType: 'ride_receipt',
       subtotal: { value: '25.20', confidence: 'high' },
       fees: [
@@ -338,6 +352,7 @@ await capture(
   'upload',
   both(
     reading('Uber Technologies Inc.', '2026-09-30', 'USD', '31.45', {
+      ...eppley,
       documentType: 'ride_receipt',
       subtotal: { value: '25.20', confidence: 'high' },
       fees: [

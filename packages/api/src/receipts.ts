@@ -26,7 +26,7 @@ import {
   type ReceiptReviewRecord,
   type ResolveDuplicateResult,
 } from '@expensewise/db';
-import type { MergeField } from '@expensewise/domain';
+import type { ExpenseDetails, MergeField } from '@expensewise/domain';
 
 /** A receipt with what its expense shows of it: its readings and any confirmations. */
 export interface ReceiptWithReadings {
@@ -79,6 +79,8 @@ export interface ReceiptStore {
     receiptId: string,
     review: NewReceiptReview,
     actorUserId: string,
+    /** The time and place of the reading confirmed (FR-INT-17). */
+    details?: ExpenseDetails,
   ): Promise<ConfirmReceiptResult>;
   /**
    * Settles an open pair as the person decided. The receipt kept is one of the two; any other
@@ -132,8 +134,8 @@ export function dbReceiptStore(db: Database): ReceiptStore {
       }),
     requestReading: (orgId, receiptId, actor) =>
       inOrg(orgId, (tx) => requestReceiptReading(tx, orgId, receiptId, actor)),
-    confirm: (orgId, receiptId, review, actor) =>
-      inOrg(orgId, (tx) => confirmReceipt(tx, orgId, receiptId, review, actor)),
+    confirm: (orgId, receiptId, review, actor, details) =>
+      inOrg(orgId, (tx) => confirmReceipt(tx, orgId, receiptId, review, actor, details)),
     resolveDuplicate: (orgId, receiptId, otherReceiptId, decision, actor) =>
       inOrg(orgId, (tx) => {
         if (decision.action === 'keep_both') {

@@ -37,6 +37,11 @@ export function restaurantReceipt(random: Random): SyntheticDocument {
   const card = String(random.int(1000, 9999));
   const brand = random.pick(CARD_BRANDS);
 
+  // Drawn in the order the slip prints them, so a seed makes the same slip it always has.
+  const street = random.int(10, 899);
+  const phone = `(555) ${random.int(200, 899)}-${random.int(1000, 9999)}`;
+  const time = `${random.int(11, 21)}:${String(random.int(0, 59)).padStart(2, '0')}`;
+
   const rows = items
     .map(
       ([d, c]) => `<div class="row"><span>${escapeHtml(d)}</span><span>${dollars(c)}</span></div>`,
@@ -50,9 +55,9 @@ export function restaurantReceipt(random: Random): SyntheticDocument {
     .hr { border-top: 1px dashed #777; margin: 8px 0; }
     .hand { font-family: 'Comic Sans MS', cursive; color: #1b3a8a; font-size: 16px; }
   </style></head><body><div class="slip">
-    <div class="c"><b>${escapeHtml(name.toUpperCase())}</b><br>${random.int(10, 899)} Main St<br>Tel (555) ${random.int(200, 899)}-${random.int(1000, 9999)}</div>
+    <div class="c"><b>${escapeHtml(name.toUpperCase())}</b><br>${street} Main St<br>Tel ${phone}</div>
     <div class="hr"></div>
-    <div class="row"><span>${printedDate(date, 'us')}</span><span>${random.int(11, 21)}:${String(random.int(0, 59)).padStart(2, '0')}</span></div>
+    <div class="row"><span>${printedDate(date, 'us')}</span><span>${time}</span></div>
     <div class="row"><span>Server: ${random.pick(['Dana', 'Luis', 'Mei', 'Omar'])}</span><span>Table ${random.int(1, 40)}</span></div>
     <div class="hr"></div>${rows}<div class="hr"></div>
     <div class="row"><span>Subtotal</span><span>${dollars(subtotal)}</span></div>
@@ -76,6 +81,7 @@ export function restaurantReceipt(random: Random): SyntheticDocument {
       tip: dollars(tip),
       total: dollars(total),
       cardLastFour: card,
+      time,
     },
     html,
     format: 'photo',

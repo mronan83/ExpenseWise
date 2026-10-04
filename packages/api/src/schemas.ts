@@ -228,6 +228,12 @@ export const ReceiptReadingSchema = z
           description: 'Fees and surcharges that are neither tax nor tip, such as a booking fee.',
         }),
         cardLastFour: TextFieldSchema,
+        time: TextFieldSchema.openapi({
+          description: 'When it was bought, HH:MM local time, if printed (FR-INT-17).',
+        }),
+        address: TextFieldSchema.openapi({
+          description: 'The merchant’s address as printed. Neither decides Ready.',
+        }),
       })
       .nullable(),
     problems: z.array(z.string()),
@@ -601,9 +607,29 @@ export const ExpenseDetailSchema = ExpenseSummarySchema.extend({
       differences: z
         .array(ExpenseFieldSchema)
         .openapi({ description: 'Where the expense differs from its receipt.' }),
+      time: z.string().nullable(),
+      address: z.string().nullable(),
+      city: z.string().nullable(),
+      country: z.string().nullable(),
+      detailDifferences: z.array(z.enum(['time', 'address', 'city', 'country'])).openapi({
+        description:
+          'Where its time or place differs from the receipt’s. Shown, never a reason to reject.',
+      }),
     })
     .nullable()
     .openapi({ description: 'What its receipt shows (FR-EXP-08).' }),
+  time: z
+    .string()
+    .nullable()
+    .openapi({ description: 'When it was bought, HH:MM local time (FR-INT-17).' }),
+  timeZone: z.string().nullable().openapi({
+    description: 'The IANA time zone of that time: worked out from the place, or set by a person.',
+    example: 'America/Chicago',
+  }),
+  address: z.string().nullable().openapi({ description: 'The merchant’s address as printed.' }),
+  city: z.string().nullable(),
+  region: z.string().nullable().openapi({ description: 'State, province or region.' }),
+  country: z.string().nullable().openapi({ description: 'ISO 3166-1 alpha-2.', example: 'US' }),
 }).openapi('ExpenseDetail');
 
 export const ExpenseListSchema = z
@@ -619,6 +645,15 @@ export const EditExpenseSchema = z
     date: edited('The transaction date, YYYY-MM-DD.', '2026-09-24'),
     currency: edited('An ISO 4217 code. The amount keeps its written value.', 'USD'),
     amount: edited('A plain decimal in the expense’s currency.', '6.50'),
+    time: edited('When it was bought, HH:MM local time; blank clears it.', '18:42'),
+    timeZone: edited(
+      'An IANA time zone. Blank, it is worked out from the place; left out, it is worked out again when the place changes.',
+      'America/Chicago',
+    ),
+    address: z.string().max(300).optional().openapi({ description: 'The address, as printed.' }),
+    city: edited('The city or town.', 'Omaha'),
+    region: edited('State, province or region.', 'NE'),
+    country: edited('ISO 3166-1 alpha-2.', 'US'),
   })
   .strict()
   .refine((e) => Object.values(e).some((v) => v !== undefined), {

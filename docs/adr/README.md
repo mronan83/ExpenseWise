@@ -2,7 +2,7 @@
 
 The index of ExpenseWise architecture decision records (ADRs) and how to add one.
 
-Each ADR records one decision with its context, the alternatives considered and an exit path. ADR-0001 to ADR-0012 record decisions D-01 to D-12 from the blueprint's decision register (v0.3, 30 September 2026). "Decided by product owner" records the product owner's call from 30 September 2026. "Recommended; no objection" means Claude is proceeding on it unless the product owner objects. ADR-0013 records D-13, decided after v0.3, ADR-0014 records D-16, ADR-0015 records D-17, ADR-0016 records D-18, ADR-0017 records D-19, ADR-0018 records D-20, ADR-0019 records D-21, ADR-0020 records D-22, ADR-0021 records D-23, ADR-0022 records D-24, ADR-0023 records D-25, ADR-0024 records D-26, ADR-0025 records D-27, ADR-0026 records D-28, ADR-0027 records D-29, ADR-0028 records D-30, and ADR-0029 records D-31.
+Each ADR records one decision with its context, the alternatives considered and an exit path. ADR-0001 to ADR-0012 record decisions D-01 to D-12 from the blueprint's decision register (v0.3, 30 September 2026). "Decided by product owner" records the product owner's call from 30 September 2026. "Recommended; no objection" means Claude is proceeding on it unless the product owner objects. ADR-0013 records D-13, decided after v0.3, ADR-0014 records D-16, ADR-0015 records D-17, ADR-0016 records D-18, ADR-0017 records D-19, ADR-0018 records D-20, ADR-0019 records D-21, ADR-0020 records D-22, ADR-0021 records D-23, ADR-0022 records D-24, ADR-0023 records D-25, ADR-0024 records D-26, ADR-0025 records D-27, ADR-0026 records D-28, ADR-0027 records D-29, ADR-0028 records D-30, ADR-0029 records D-31, and ADR-0030 records D-32.
 
 ## Index
 
@@ -37,6 +37,7 @@ Each ADR records one decision with its context, the alternatives considered and 
 | [0027](0027-email-text-as-a-pdf-receipt.md) | An emailed receipt's text becomes a PDF receipt | D-29 | Accepted (product owner asked for HTML email bodies first; how recommended, no objection) | 2026-10-03 |
 | [0028](0028-possible-duplicates.md) | Possible duplicates are judged on what was read, held for the person, and deleted whole | D-30 | Accepted (requirement, merge and delete decided by product owner; matching and mechanism recommended, no objection) | 2026-10-04 |
 | [0029](0029-expense-reports.md) | Expense reports gather trips and local expenses, and close within 28 days | D-31 | Accepted (lifecycle and rules decided by product owner; schedule, timing and mechanism recommended, no objection) | 2026-10-04 |
+| [0030](0030-receipt-time-and-place.md) | A receipt's time and place are read with it, and the time zone is looked up offline | D-32 | Accepted (what is read decided by product owner; offline lookup and rules recommended, no objection) | 2026-10-04 |
 
 ## How to add an ADR
 

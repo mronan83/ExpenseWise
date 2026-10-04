@@ -46,5 +46,8 @@ describe.each([
     expect(html).toContain(truth.total);
     expect(html).toContain(truth.cardLastFour);
     expect(truth.date).toMatch(/^2026-\d{2}-\d{2}$/);
+    // A time or city in the truth is one the document prints.
+    if (truth.time !== undefined) expect(html).toContain(truth.time);
+    if (truth.city !== undefined) expect(html).toContain(truth.city);
   });
 });

@@ -62,6 +62,10 @@ export interface Reading {
     tip: MoneyField | null;
     fees: MoneyField | null;
     cardLastFour: TextField | null;
+    /** When it was bought, HH:MM as printed (FR-INT-17). */
+    time: TextField | null;
+    /** The merchant's address as printed. */
+    address: TextField | null;
   } | null;
   problems: string[];
   checks: ReadingCheck[];

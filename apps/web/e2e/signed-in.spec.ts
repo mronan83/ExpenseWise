@@ -81,6 +81,8 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
     [press('Change trip')],
   ],
   ['an expense put on a trip by hand', (s) => `/expenses/${s.expenses.lufthansa}`, []],
+  ['an expense with when and where it was bought', (s) => `/expenses/${s.expenses.uber}`, []],
+  ['editing when and where it was bought', (s) => `/expenses/${s.expenses.uber}`, [press('Edit')]],
   ['an expense still being read', (s) => `/expenses/${s.expenses.processing}`, []],
   ['Trips', () => '/trips', []],
   [

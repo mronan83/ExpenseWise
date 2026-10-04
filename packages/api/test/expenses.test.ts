@@ -6,7 +6,7 @@ import type {
   ReceiptRecord,
   ReceiptReviewRecord,
 } from '@expensewise/db';
-import { applyExpenseEdit } from '@expensewise/domain';
+import { applyDetailsEdit, applyExpenseEdit } from '@expensewise/domain';
 import type { ReceiptExtraction } from '@expensewise/extraction';
 import { describe, expect, it } from 'vitest';
 import { createApi } from '../src/app.ts';
@@ -43,6 +43,8 @@ const reading: ReceiptExtraction = {
   taxes: [],
   tip: null,
   cardLastFour: null,
+  time: null,
+  address: null,
   lineItems: [],
 };
 
@@ -92,6 +94,12 @@ function setup() {
     tripId: null,
     tripName: null,
     tripPinned: false,
+    time: null,
+    timeZone: null,
+    address: null,
+    city: null,
+    region: null,
+    country: null,
     reportId: null,
     tripReportId: null,
     justification: null,
@@ -112,6 +120,7 @@ function setup() {
     }),
   ];
   const filters: ExpenseFilter[] = [];
+  const edits: Parameters<ExpenseStore['edit']>[2][] = [];
   const trips: Record<string, { name: string; memberId: string }> = {
     [TRIP]: { name: 'Houston · Acme onsite', memberId: MEMBER },
     [THEIR_TRIP]: { name: 'Denver', memberId: 'someone-else' },
@@ -136,11 +145,19 @@ function setup() {
       if (current.status !== 'needs_review' && current.status !== 'ready') {
         return Promise.resolve({ status: 'not_editable', current: current.status });
       }
-      const result = applyExpenseEdit(current, edit);
+      const { details: detailsEdit, ...valuesEdit } = edit;
+      const result = applyExpenseEdit(current, valuesEdit);
       if (!result.ok) return Promise.resolve({ status: 'invalid', problem: result.error });
-      if (result.value.changes.length === 0) return Promise.resolve({ status: 'unchanged' });
-      expenses[i] = { ...current, ...result.value.values, editedAt: NOW };
-      return Promise.resolve({ status: 'edited', changes: result.value.changes });
+      const placed = applyDetailsEdit(current, detailsEdit ?? {});
+      if (!placed.ok) return Promise.resolve({ status: 'invalid', problem: placed.error });
+      const { changes } = result.value;
+      const detailChanges = placed.value.changes;
+      if (changes.length === 0 && detailChanges.length === 0) {
+        return Promise.resolve({ status: 'unchanged' });
+      }
+      edits.push(edit);
+      expenses[i] = { ...current, ...result.value.values, ...placed.value.details, editedAt: NOW };
+      return Promise.resolve({ status: 'edited', changes, detailChanges });
     },
     setTrip: (_org, id, choice) => {
       const i = expenses.findIndex((e) => e.id === id);
@@ -186,7 +203,7 @@ function setup() {
       body: (await res.json().catch(() => null)) as Record<string, unknown>,
     };
   };
-  return { call, expenses, receipt, reviews, filters };
+  return { call, expenses, receipt, reviews, filters, edits };
 }
 
 describe('expenses', () => {
@@ -290,6 +307,58 @@ describe('expenses', () => {
     // Editing changes the claim, never the proof.
     const list = await call('GET', '/v1/expenses', 'riley');
     expect((list.body.expenses as { matchesReceipt: boolean }[])[0]!.matchesReceipt).toBe(false);
+  });
+
+  it('edits when and where it was bought, working out the time zone from the place', async () => {
+    const { call, edits } = setup();
+    const res = await call('PATCH', `/v1/expenses/${EXPENSE}`, 'riley', {
+      time: '6:42',
+      city: 'Omaha',
+      region: 'NE',
+      country: 'us',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      time: '06:42',
+      timeZone: 'America/Chicago',
+      city: 'Omaha',
+      region: 'NE',
+      country: 'US',
+      editedAt: NOW.toISOString(),
+    });
+    expect(edits.at(-1)).toEqual({
+      details: {
+        time: '6:42',
+        city: 'Omaha',
+        region: 'NE',
+        country: 'us',
+        timeZone: 'America/Chicago',
+      },
+    });
+
+    // A time zone the person sets stays; a place that pins no zone clears it (the US has many).
+    const set = await call('PATCH', `/v1/expenses/${EXPENSE}`, 'riley', {
+      city: 'Denver',
+      timeZone: 'America/Denver',
+    });
+    expect(set.body).toMatchObject({ city: 'Denver', timeZone: 'America/Denver' });
+    const unknown = await call('PATCH', `/v1/expenses/${EXPENSE}`, 'riley', {
+      city: 'Nowhereville',
+      region: '',
+    });
+    expect(unknown.body).toMatchObject({ city: 'Nowhereville', region: null, timeZone: null });
+    // A blank time zone asks for it from the place again.
+    const fromPlace = await call('PATCH', `/v1/expenses/${EXPENSE}`, 'riley', {
+      region: 'CO',
+      timeZone: 'America/New_York',
+    });
+    expect(fromPlace.body).toMatchObject({ timeZone: 'America/New_York' });
+    expect(
+      (await call('PATCH', `/v1/expenses/${EXPENSE}`, 'riley', { timeZone: ' ' })).body,
+    ).toMatchObject({ city: 'Nowhereville', region: 'CO', timeZone: 'America/Denver' });
+    expect(
+      await call('PATCH', `/v1/expenses/${EXPENSE}`, 'riley', { time: '25:00' }),
+    ).toMatchObject({ status: 422, body: { code: 'invalid_value', field: 'time' } });
   });
 
   it('names the field that is not valid', async () => {

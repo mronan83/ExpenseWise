@@ -31,6 +31,8 @@ const good: ReceiptExtraction = {
   taxes: [{ label: 'Sales tax', value: '3.75', confidence: 'high' }],
   tip: { value: '9.10', confidence: 'medium' },
   cardLastFour: { value: '4417', confidence: 'high' },
+  time: null,
+  address: null,
   lineItems: [],
 };
 
@@ -130,6 +132,31 @@ describe('scoreDocument', () => {
     });
     expect(s.fields.map((f) => f.field)).toEqual(['documentType', 'currency', 'total']);
     expect(s.allCorrect).toBe(true);
+  });
+
+  it('scores the time and place a document prints (FR-INT-17)', () => {
+    const placed = { ...truth, time: '18:42', city: 'Omaha', country: 'US' };
+    const read = (time: string | null, city: string | null) =>
+      scoreDocument(placed, {
+        outcome: 'extracted',
+        extraction: {
+          ...good,
+          time: time === null ? null : { value: time, confidence: 'high' },
+          address: {
+            printed: '1615 Howard St, Omaha, NE 68102',
+            city,
+            region: 'NE',
+            country: 'US',
+            confidence: 'high',
+          },
+        },
+      }).fields.filter((f) => ['time', 'city', 'country'].includes(f.field));
+    expect(read('18:42', 'OMAHA')).toEqual([
+      { field: 'time', correct: true, confidence: 'high' },
+      { field: 'city', correct: true, confidence: 'high' },
+      { field: 'country', correct: true, confidence: 'high' },
+    ]);
+    expect(read(null, 'Lincoln').map((f) => f.correct)).toEqual([false, false, true]);
   });
 
   it('counts a refusal as every scored field wrong', () => {

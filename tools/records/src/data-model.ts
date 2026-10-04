@@ -80,7 +80,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   extraction_runs: {
     about:
-      'One model’s reading of one receipt for one request, with its outcome, confidence, timing and cost. Its outcome is confident only when the reading would be Ready on its own, its sums and date included (FR-INT-04). Readings since `receipt-v2` also read fees and whether a document is a purchase summary; older ones read back as having no fees (ADR-0027). Each request is read once per model, so a retry adds nothing (ADR-0017, NFR-DAT-06).',
+      'One model’s reading of one receipt for one request, with its outcome, confidence, timing and cost. Its outcome is confident only when the reading would be Ready on its own, its sums and date included (FR-INT-04). Readings since `receipt-v2` also read fees and whether a document is a purchase summary; older ones read back as having no fees (ADR-0027). Since `receipt-v3` they read the time of purchase and the merchant’s address too; older ones read back without them (ADR-0030). Each request is read once per model, so a retry adds nothing (ADR-0017, NFR-DAT-06).',
   },
   receipt_reviews: {
     about:
@@ -96,7 +96,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   expenses: {
     about:
-      'What is claimed: merchant, date, amount and currency, its status, and the trip it is filed to. It follows its receipt until a person edits it (ADR-0022) and files to trips by date until a person chooses (ADR-0023). One with a date and no trip is local: it carries a justification and points at its report itself, while one on a trip goes with the trip’s report (FR-EXP-14, ADR-0029). Home sums a member’s month through the member-and-date index, so it needs no index of its own.',
+      'What is claimed: merchant, date, amount and currency, its status, and the trip it is filed to. It also carries when and where it was bought, as its receipt prints them: a local time with its time zone, worked out offline from the city, region and country, and the address (FR-INT-17, ADR-0030). It follows its receipt until a person edits it (ADR-0022) and files to trips by date until a person chooses (ADR-0023). One with a date and no trip is local: it carries a justification and points at its report itself, while one on a trip goes with the trip’s report (FR-EXP-14, ADR-0029). Home sums a member’s month through the member-and-date index, so it needs no index of its own.',
   },
   trips: {
     about:
@@ -201,6 +201,13 @@ export const RULES: readonly Rule[] = [
       'From Ready onward, amount, currency and date must be present; only processing and needs-review expenses may lack them.',
     objects: ['expenses_complete_when_ready'],
     refs: ['FR-EXP-01'],
+  },
+  {
+    rule: 'A time of purchase is a time of day, and a country is a two-letter code.',
+    mechanism:
+      'Checks keep `transaction_time` HH:MM from 00:00 to 23:59 and `merchant_country` two capital letters. Each may be empty: a receipt that prints no time or place is never held for it. The time zone is checked against the runtime’s list when a person sets it (ADR-0030).',
+    objects: ['expenses_time_of_day', 'expenses_country_code'],
+    refs: ['FR-INT-17', 'ADR-0030'],
   },
   {
     rule: 'A converted amount carries its rate, the rate’s date and its source.',

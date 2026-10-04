@@ -1534,6 +1534,54 @@
                   "value",
                   "confidence"
                 ]
+              },
+              "time": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "value": {
+                    "type": "string"
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  }
+                },
+                "required": [
+                  "value",
+                  "confidence"
+                ],
+                "description": "When it was bought, HH:MM local time, if printed (FR-INT-17)."
+              },
+              "address": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "value": {
+                    "type": "string"
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  }
+                },
+                "required": [
+                  "value",
+                  "confidence"
+                ],
+                "description": "The merchant’s address as printed. Neither decides Ready."
               }
             },
             "required": [
@@ -1546,7 +1594,9 @@
               "taxTotal",
               "tip",
               "fees",
-              "cardLastFour"
+              "cardLastFour",
+              "time",
+              "address"
             ]
           },
           "problems": {
@@ -2391,6 +2441,43 @@
                       ]
                     },
                     "description": "Where the expense differs from its receipt."
+                  },
+                  "time": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "address": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "city": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "country": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "detailDifferences": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "time",
+                        "address",
+                        "city",
+                        "country"
+                      ]
+                    },
+                    "description": "Where its time or place differs from the receipt’s. Shown, never a reason to reject."
                   }
                 },
                 "required": [
@@ -2400,15 +2487,69 @@
                   "merchant",
                   "date",
                   "amount",
-                  "differences"
+                  "differences",
+                  "time",
+                  "address",
+                  "city",
+                  "country",
+                  "detailDifferences"
                 ],
                 "description": "What its receipt shows (FR-EXP-08)."
+              },
+              "time": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "When it was bought, HH:MM local time (FR-INT-17)."
+              },
+              "timeZone": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "The IANA time zone of that time: worked out from the place, or set by a person.",
+                "example": "America/Chicago"
+              },
+              "address": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "The merchant’s address as printed."
+              },
+              "city": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "region": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "State, province or region."
+              },
+              "country": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "ISO 3166-1 alpha-2.",
+                "example": "US"
               }
             },
             "required": [
               "editable",
               "editedAt",
-              "proof"
+              "proof",
+              "time",
+              "timeZone",
+              "address",
+              "city",
+              "region",
+              "country"
             ]
           }
         ]
@@ -2439,6 +2580,41 @@
             "maxLength": 200,
             "description": "A plain decimal in the expense’s currency.",
             "example": "6.50"
+          },
+          "time": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "When it was bought, HH:MM local time; blank clears it.",
+            "example": "18:42"
+          },
+          "timeZone": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "An IANA time zone. Blank, it is worked out from the place; left out, it is worked out again when the place changes.",
+            "example": "America/Chicago"
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 300,
+            "description": "The address, as printed."
+          },
+          "city": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "The city or town.",
+            "example": "Omaha"
+          },
+          "region": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "State, province or region.",
+            "example": "NE"
+          },
+          "country": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "ISO 3166-1 alpha-2.",
+            "example": "US"
           }
         },
         "additionalProperties": false

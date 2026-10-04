@@ -20,7 +20,7 @@ import {
   type Transaction,
   type TripChoice,
 } from '@expensewise/db';
-import type { ExpenseEdit } from '@expensewise/domain';
+import type { DetailsEdit, ExpenseEdit } from '@expensewise/domain';
 import type { ReceiptWithReadings } from './receipts.ts';
 
 /** Expenses with what their receipts show: the receipts, their readings and reviews. */
@@ -56,7 +56,7 @@ export interface ExpenseStore {
   edit(
     orgId: string,
     expenseId: string,
-    edit: ExpenseEdit,
+    edit: ExpenseEdit & { readonly details?: DetailsEdit },
     actorUserId: string,
   ): Promise<EditExpenseResult>;
   /** Puts it on a trip, on none, or back to filing by date (ADR-0023). */
