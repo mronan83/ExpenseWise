@@ -275,13 +275,14 @@ function ExcludeForm({
           {line.claimed ? ` It takes ${formatMoney(line.claimed)} off the claim.` : ''}
         </legend>
         {EXCLUSION_REASONS.map((r) => (
-          <label key={r.value} className="flex items-center gap-2">
+          <label key={r.value} className="flex min-h-11 items-center gap-2">
             <input
               type="radio"
               name="reason"
               value={r.value}
               checked={reason === r.value}
               onChange={() => setReason(r.value)}
+              className="size-5"
             />
             {r.label}
           </label>
