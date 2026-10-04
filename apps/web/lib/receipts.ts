@@ -283,7 +283,11 @@ export function needsYou(item: ReceiptInboxItem): { text: string; action: string
     }
     case 'duplicate': {
       const of = reason.duplicateOf;
-      const what = [of?.merchant, of?.amount ? formatMoney(of.amount) : null, of?.date]
+      const what = [
+        of?.merchant,
+        of?.amount ? formatMoney(of.amount) : null,
+        of?.date && isIsoDate(of.date) ? showDate(of.date) : of?.date,
+      ]
         .filter(Boolean)
         .join(', ');
       return {
