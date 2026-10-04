@@ -10,6 +10,8 @@ import { meRoute } from './routes/me.ts';
 import { readyRoute } from './routes/ready.ts';
 import type { Readiness } from './schemas.ts';
 import type { SecretBox } from './secret-box.ts';
+import type { CategoryStore } from './categories.ts';
+import { registerCategoryRoutes } from './category-routes.ts';
 import { registerExpenseRoutes } from './expense-routes.ts';
 import type { HomeStore } from './home.ts';
 import { registerHomeRoutes } from './home-routes.ts';
@@ -45,6 +47,8 @@ export interface ApiOptions
   readonly home?: HomeStore;
   /** Expense reports. Without it, those routes answer 503 and Needs you shows no reports. */
   readonly reports?: ReportStore;
+  /** Categories and types (FR-EXP-11). Without it, those routes answer 503 and expenses show none. */
+  readonly categories?: CategoryStore;
   /** Encrypts AI provider keys at rest. Without it, saving or testing a key answers 503. */
   readonly secrets?: SecretBox;
   /** Checks AI provider keys with a free call to the provider. */
@@ -162,6 +166,7 @@ export function createApi(options: ApiOptions) {
   registerHomeRoutes(app, routes);
   registerReportRoutes(app, routes);
   registerInboundRoutes(app, routes);
+  registerCategoryRoutes(app, routes);
 
   app.doc31('/v1/openapi.json', OPENAPI_INFO);
 

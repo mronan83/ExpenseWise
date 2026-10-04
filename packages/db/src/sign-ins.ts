@@ -1,4 +1,4 @@
-import { and, asc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, sql } from 'drizzle-orm';
 import { appendAuditEvent } from './audit.ts';
 import { switchOrg, withOrg, type Database, type Transaction } from './client.ts';
 import { lockSignIn, type Membership } from './members.ts';
@@ -6,6 +6,7 @@ import {
   aiProviderKeys,
   categories,
   expenses,
+  expenseTypes,
   memberSignIns,
   members,
   mileageLogs,
@@ -38,7 +39,13 @@ export function listSignIns(tx: Transaction, memberId: string): Promise<SignIn[]
 }
 
 /** Tables whose rows mean an organization holds someone's work. */
-const WORK_TABLES = [receipts, expenses, trips, mileageLogs, reports, categories, aiProviderKeys];
+const WORK_TABLES = [receipts, expenses, trips, mileageLogs, reports, aiProviderKeys];
+
+/**
+ * Categories and types are someone's work once a person added or changed one; the ready-made
+ * set every organization starts with is no one's (ADR-0036).
+ */
+const CATALOG_TABLES = [categories, expenseTypes];
 
 /**
  * Whether the current organization can be left behind without losing anything: one member,
@@ -58,6 +65,14 @@ async function isEmptySoloOrganization(tx: Transaction): Promise<boolean> {
       ).length > 0
     )
       return false;
+  }
+  for (const table of CATALOG_TABLES) {
+    const changed = await tx
+      .select({ one: sql`1` })
+      .from(table)
+      .where(isNotNull(table.updatedByMemberId))
+      .limit(1);
+    if (changed.length > 0) return false;
   }
   return true;
 }

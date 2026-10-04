@@ -1,3 +1,4 @@
+import type { ExpenseCategory } from './categories';
 import type { ReceiptSummary } from './receipts';
 
 export type ExpenseStatus =
@@ -33,6 +34,8 @@ export interface ExpenseSummary {
   justification: string | null;
   /** The report it is on: its trip’s, or its own when local. */
   reportId: string | null;
+  /** Its category and type, while that feature is on (FR-EXP-11). */
+  category?: ExpenseCategory;
   createdAt: string;
   updatedAt: string;
 }

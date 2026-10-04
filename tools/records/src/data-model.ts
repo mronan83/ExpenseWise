@@ -35,8 +35,9 @@ export const DOMAINS: readonly Domain[] = [
   },
   {
     name: 'Expenses and trips',
-    about: 'The claim: what was spent, on which trip, coded how, and the miles behind it.',
-    tables: ['expenses', 'trips', 'categories', 'mileage_logs'],
+    about:
+      'The claim: what was spent, on which trip, coded to which category and type, and the miles behind it.',
+    tables: ['expenses', 'trips', 'categories', 'expense_types', 'category_types', 'mileage_logs'],
   },
   {
     name: 'Reports and approval',
@@ -100,7 +101,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   expenses: {
     about:
-      'What is claimed: merchant, date, amount and currency, its status, and the trip it is filed to. It also carries when and where it was bought, as its receipt prints them: a local time with its time zone, worked out offline from the city, region and country, and the address (FR-INT-17, ADR-0030). It follows its receipt until a person edits it (ADR-0022) and files to trips by date until a person chooses (ADR-0023). One with a date and no trip is local: it carries a justification and points at its report itself, while one on a trip goes with the trip’s report (FR-EXP-14, ADR-0029). Home sums a member’s month through the member-and-date index, so it needs no index of its own.',
+      'What is claimed: merchant, date, amount and currency, its status, and the trip it is filed to. It also carries when and where it was bought, as its receipt prints them: a local time with its time zone, worked out offline from the city, region and country, and the address (FR-INT-17, ADR-0030). It follows its receipt until a person edits it (ADR-0022) and files to trips by date until a person chooses (ADR-0023). One with a date and no trip is local: it carries a justification and points at its report itself, while one on a trip goes with the trip’s report (FR-EXP-14, ADR-0029). Home sums a member’s month through the member-and-date index, so it needs no index of its own. It carries the category and type a person chose, with when, all three together or none (FR-EXP-11); a suggestion is never stored, and suggestions read a member’s past choices through the member-and-chosen-at index (FR-INT-10, ADR-0036).',
   },
   trips: {
     about:
@@ -108,7 +109,15 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   categories: {
     about:
-      'Expense categories with their GL and tax codes, per organization. Defined in Phase 0; nothing uses it yet. Its shape, and the types inside it, wait on Q7 (FR-EXP-11, #51).',
+      'The categories an organization codes its expenses to, with their general ledger and tax codes; they nest (FR-EXP-11, Q7, ADR-0036). Every organization starts with a ready-made five, seeded by `seed_starter_catalog()`; owners and finance admins rename, move, code and retire them, and delete one only while no expense has it. A ready-made one keeps its `starter_key`; one a person changed names who did, so an untouched set is no one’s work. People see and change them only while `expenses.categories` is on; the ready-made set is seeded either way.',
+  },
+  expense_types: {
+    about:
+      'The types an organization’s expenses are, such as Airfare or Business meal: a second list beside the categories, which also nests, where rules will attach (Q7, #72). Every organization starts with a ready-made nine, whose `starter_key` keyword suggestions look for, so a renamed one keeps its suggestions (FR-INT-10, ADR-0036). Retired, never deleted, once an expense has one.',
+  },
+  category_types: {
+    about:
+      'Which types each category allows: choosing a category narrows the types to these (Q7). A type may be allowed in several. Taking a type out of a category changes no expense that already has the pair; the pair is checked only when a person chooses (ADR-0036).',
   },
   mileage_logs: {
     about:
@@ -152,6 +161,8 @@ export const FUNCTIONS: Readonly<Record<string, string>> = {
     'Which organizations have report work due at a moment: a trip or local expense whose time to join a report has come, an open report on its day 28, or one with nothing to claim. The hourly schedule asks it outside any organization; it runs as its owner and answers with organization ids only (ADR-0029).',
   member_for_sign_in_email:
     'Which member signs in with an email address, case aside, and that sign-in’s user, for an arriving email that names no organization yet. Runs as its owner and returns ids only, so the app still can’t read sign-ins outside an organization (ADR-0026).',
+  seed_starter_catalog:
+    'Gives an organization the ready-made categories and types, and which types each allows, unless it has a category or type already, so running it again adds nothing. Runs as its caller: the release ran it for every organization as the owner, and the app runs it inside `withOrg()` as an organization is created, where row-level security keeps it to that one (ADR-0036).',
   reject_audit_mutation:
     'Fires on any UPDATE, DELETE or TRUNCATE of audit_events and refuses it, whoever asks.',
 };
@@ -281,6 +292,29 @@ export const RULES: readonly Rule[] = [
       'org_features_updated_by_fk',
     ],
     refs: ['ADR-0032'],
+  },
+  {
+    rule: 'An expense’s category and type are its organization’s own, chosen together.',
+    mechanism:
+      'Categories and types point at their parents, and the allowances and expenses at both, by composite keys, so nothing reaches into another organization. Each list keeps a name once and a ready-made key once per organization, and nothing is its own parent; deeper loops, and whether a category allows the type chosen, are checked by the domain (`nestsInItself`, `checkChoice`) under the organization’s write lock. An expense has a category, a type and when they were chosen, or none of the three.',
+    objects: [
+      'categories_parent_fk',
+      'categories_org_name_key',
+      'categories_org_starter_key',
+      'categories_not_own_parent',
+      'expense_types_parent_fk',
+      'expense_types_org_name_key',
+      'expense_types_org_starter_key',
+      'expense_types_not_own_parent',
+      'category_types_pair_key',
+      'category_types_category_fk',
+      'category_types_type_fk',
+      'expenses_category_fk',
+      'expenses_type_fk',
+      'expenses_classified_whole',
+      'seed_starter_catalog',
+    ],
+    refs: ['FR-EXP-11', 'ADR-0036'],
   },
   {
     rule: 'A sign-in reaches one member.',

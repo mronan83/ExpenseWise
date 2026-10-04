@@ -1,6 +1,7 @@
 import { isIsoDate, MERGE_FIELDS, SUPPORTED_CURRENCIES } from '@expensewise/domain';
 import { CORRECTABLE_FIELDS, READING_CHECKS } from '@expensewise/extraction';
 import { z } from '@hono/zod-openapi';
+import { ExpenseCategorySchema } from './category-schemas.ts';
 import { ORG_FEATURE_KEYS, type OrgFeatureKey } from './features.ts';
 
 /** RFC 9457 problem details. Every error response uses this shape. */
@@ -625,6 +626,8 @@ export const ExpenseSummarySchema = z
     reportId: z.string().uuid().nullable().openapi({
       description: 'The report it is on: its trip’s, or its own when local (FR-EXP-05).',
     }),
+    // Only while categories and types are switched on (FR-EXP-11, FR-INT-10).
+    category: ExpenseCategorySchema.optional(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
   })

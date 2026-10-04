@@ -829,7 +829,7 @@ export const REPORT_STORIES: readonly Story[] = [
     soThat: 'spend is coded the way we book it, and people pick only types that fit',
     feature: 'F-43',
     requirements: ['FR-EXP-11'],
-    status: 'Planned',
+    status: 'Partial',
     criteria: [
       {
         id: 'AC1',
@@ -837,7 +837,12 @@ export const REPORT_STORIES: readonly Story[] = [
         when: 'its categories and types are set up',
         then: 'they are two separate lists, and each can nest',
         decided: Q7,
-        checks: [],
+        checks: [
+          'db/categories.int › adds, renames, nests, codes and retires categories and types, each in the audit trail',
+          'domain/categories › reads a list as a tree: each after its parent, siblings by name, with its depth',
+          'api/categories › lists both trees in order, with the types each category allows, for everyone',
+          'e2e/signed-in › category settings',
+        ],
       },
       {
         id: 'AC2',
@@ -845,7 +850,10 @@ export const REPORT_STORIES: readonly Story[] = [
         when: 'I edit it',
         then: 'I choose which types it allows',
         decided: Q7,
-        checks: [],
+        checks: [
+          'db/categories.int › adds, renames, nests, codes and retires categories and types, each in the audit trail',
+          'e2e/signed-in › editing a category',
+        ],
       },
       {
         id: 'AC3',
@@ -853,7 +861,10 @@ export const REPORT_STORIES: readonly Story[] = [
         when: 'I allow it in several categories',
         then: 'it is offered under each of them',
         decided: { by: 'claude' },
-        checks: [],
+        checks: [
+          'db/categories.int › adds, renames, nests, codes and retires categories and types, each in the audit trail',
+          'domain/categories › suggests a ready-made type under another category that allows it, and never a retired one',
+        ],
       },
       {
         id: 'AC4',
@@ -862,6 +873,7 @@ export const REPORT_STORIES: readonly Story[] = [
         then: 'the general ledger and tax codes go on the category, and the rules, such as attendees, a mileage rate or a receipt being needed, go on the type',
         decided: { by: 'claude' },
         checks: [],
+        untested: 72,
       },
       {
         id: 'AC5',
@@ -869,10 +881,80 @@ export const REPORT_STORIES: readonly Story[] = [
         when: 'it starts',
         then: 'it has a ready-made set that owners and finance admins rename, add to or retire; one in use is retired, never deleted, so old claims keep it',
         decided: { by: 'claude' },
-        checks: [],
+        checks: [
+          'db/categories.int › gives a new organization the ready-made categories and types, once',
+          'db/categories.int › deletes only what no expense has and nothing sits under; one in use is retired and kept',
+          'api/categories › says what is wrong with a change, and refuses to delete one in use',
+        ],
+      },
+      {
+        id: 'AC6',
+        given: 'a category',
+        when: 'I set it up',
+        then: 'it carries its general ledger code and its tax code, each optional',
+        decided: { by: 'claude', source: 'ADR-0036' },
+        checks: [
+          'db/categories.int › adds, renames, nests, codes and retires categories and types, each in the audit trail',
+          'domain/categories › keeps a code trimmed, a blank one as none, and refuses a long one',
+        ],
+      },
+      {
+        id: 'AC7',
+        given: 'I am neither an owner nor a finance admin',
+        when: 'I try to change the categories or types',
+        then: 'I am refused, and I can still read them to choose from',
+        decided: { by: 'blueprint', source: 'design §5.2' },
+        checks: [
+          'api/categories › lets only owners and finance admins add, change, retire or delete them',
+          'api/categories › lists both trees in order, with the types each category allows, for everyone',
+        ],
+      },
+      {
+        id: 'AC8',
+        given: 'a category or type',
+        when: 'anyone adds, changes, retires or deletes it',
+        then: 'the audit trail says who did what',
+        decided: { by: 'blueprint', source: 'arch AP4' },
+        checks: [
+          'db/categories.int › adds, renames, nests, codes and retires categories and types, each in the audit trail',
+          'db/categories.int › deletes only what no expense has and nothing sits under; one in use is retired and kept',
+        ],
+      },
+      {
+        id: 'AC9',
+        given: 'a category or type',
+        when: 'I put it under another',
+        then: 'it can’t go under itself or anything under it, and a name is used once in its list, case aside',
+        decided: { by: 'claude', source: 'ADR-0036' },
+        checks: [
+          'domain/categories › refuses a parent that is the node itself or one of its descendants',
+          'db/categories.int › adds, renames, nests, codes and retires categories and types, each in the audit trail',
+        ],
+      },
+      {
+        id: 'AC10',
+        given: 'an organization that existed before categories arrived',
+        when: 'they arrive',
+        then: 'it starts from the same ready-made set as a new one, and an untouched set is no one’s work, so a sign-in can still move out of an empty organization',
+        decided: { by: 'claude', source: 'ADR-0036' },
+        checks: [
+          'db/categories.int › gives a new organization the ready-made categories and types, once',
+          'db/categories.int › seeds only the organization it runs in',
+          'db/categories.int › is no one’s work until a person changes it, so a sign-in can still move out',
+        ],
+      },
+      {
+        id: 'AC11',
+        given: 'categories are switched off for my organization',
+        when: 'anyone uses the app',
+        then: 'nothing changes: Settings has no Categories page, expenses show none and need none, and the API answers 404 feature_off',
+        decided: { by: 'owner', source: 'Q5' },
+        checks: [
+          'api/categories › answers 404 feature_off on every route, and shows expenses as before',
+        ],
       },
     ],
-    note: 'Your answer to Q7 chose two trees, the category narrowing the types. AC3 to AC5 are Claude’s assumptions (FR-EXP-11, #51), yours to overturn.',
+    note: 'Your answer to Q7 chose two trees, the category narrowing the types. AC3 to AC6, AC9 and AC10 are Claude’s assumptions (FR-EXP-11, ADR-0036), yours to overturn. The ready-made set: Travel (Airfare, Lodging, Ground transport, Mileage), Meals (Business meal, Per-diem meal), Office (Office supplies), Software (Software) and Other (Other). Rules on types wait until the rules themselves are built (#72).',
   },
   {
     id: 'US-RPT-13',
@@ -882,7 +964,7 @@ export const REPORT_STORIES: readonly Story[] = [
     soThat: 'every expense is coded correctly without my knowing finance’s codes',
     feature: 'F-43',
     requirements: ['FR-EXP-11'],
-    status: 'Planned',
+    status: 'Partial',
     criteria: [
       {
         id: 'AC1',
@@ -891,6 +973,7 @@ export const REPORT_STORIES: readonly Story[] = [
         then: 'it carries a category and a type',
         decided: OCT3,
         checks: [],
+        untested: 72,
       },
       {
         id: 'AC2',
@@ -898,8 +981,77 @@ export const REPORT_STORIES: readonly Story[] = [
         when: 'I pick its type',
         then: 'only the types that category allows are offered',
         decided: Q7,
+        checks: [
+          'domain/categories › refuses a type the category does not allow, and anything missing or retired',
+          'db/categories.int › takes a type its category allows, once, and records who chose it',
+          'api/categories › takes a type its category allows, confirmed from then on',
+          'e2e/signed-in › choosing a category and type',
+        ],
+      },
+      {
+        id: 'AC3',
+        given: 'an expense with no category and type, and none to suggest',
+        when: 'I see it, on its page or in the expense list',
+        then: 'it says it has none',
+        decided: { by: 'claude', source: 'ADR-0036' },
+        checks: [
+          'api/categories › suggests one from what the expense shows, marked as a suggestion, or says it has none',
+          'e2e/signed-in › an expense with no category',
+        ],
+      },
+      {
+        id: 'AC4',
+        given: 'an expense with no category and type',
+        when: 'I look at Needs you, or close its report',
+        then: 'it is not in Needs you, and holds nothing up',
+        decided: { by: 'claude', source: 'ADR-0036' },
         checks: [],
+        untested: 72,
+      },
+      {
+        id: 'AC5',
+        given: 'a category or type that is retired',
+        when: 'I choose for an expense',
+        then: 'it is not offered, but an expense that already has it keeps it, marked retired',
+        decided: { by: 'claude', source: 'ADR-0036' },
+        checks: [
+          'domain/categories › refuses a type the category does not allow, and anything missing or retired',
+          'api/categories › keeps a retired type on the expense that has it, marked retired',
+          'db/categories.int › deletes only what no expense has and nothing sits under; one in use is retired and kept',
+        ],
+      },
+      {
+        id: 'AC6',
+        given: 'my expense is submitted or later',
+        when: 'I try to change its category or type',
+        then: 'it stays as it went in',
+        decided: ADR29,
+        checks: [
+          'api/categories › leaves a submitted expense as it went in',
+          'db/categories.int › takes a type its category allows, once, and records who chose it',
+        ],
+      },
+      {
+        id: 'AC7',
+        given: 'an expense on a report I have closed',
+        when: 'I give it a category and type',
+        then: 'the report opens again, as for any change to it',
+        decided: ADR29,
+        checks: [
+          'db/categories.int › opens a closed report again when an expense on it is given a category',
+        ],
+      },
+      {
+        id: 'AC8',
+        given: 'I choose or confirm a category and type',
+        when: 'it is saved',
+        then: 'the audit trail records who chose what, and what it had before',
+        decided: { by: 'blueprint', source: 'arch AP4' },
+        checks: [
+          'db/categories.int › takes a type its category allows, once, and records who chose it',
+        ],
       },
     ],
+    note: 'An expense without a category and type says so but holds nothing up, Claude’s choice so that nothing working today is blocked by switching categories on, and so that Needs you isn’t filled with every expense you already have (ADR-0036). Whether submitting a report should need them is Q29; #72 builds the answer and its test.',
   },
 ];

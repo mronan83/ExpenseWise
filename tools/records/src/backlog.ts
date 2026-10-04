@@ -405,9 +405,10 @@ export const BACKLOG: readonly BacklogItem[] = [
     priority: 'P2',
     effort: 'M',
     severity: 'Low',
-    blocker: { kind: 'items', items: [51] },
+    blocker: { kind: 'none' },
     source: 'Roadmap increment 2',
     affects: ['FR-INT-10', 'F-15'],
+    done: { date: '2026-10-04', in: 'PR #58' },
   },
   {
     num: 19,
@@ -843,6 +844,20 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none' },
     source: 'Product owner, Oct 3',
     affects: ['FR-EXP-11', 'F-43', 'FR-INT-10', 'F-15'],
+    done: { date: '2026-10-04', in: 'PR #58' },
+  },
+  {
+    num: 72,
+    title: 'Require a category and type where it counts, and hang rules on types',
+    type: 'Gap',
+    detail:
+      'Categories and types are built (#51), but an expense without them only says so; nothing refuses one. Once reports are submitted (#24), refuse to submit one while an expense on it has no category and type, as your answer to Q29 settles. And as each rule is built, such as meal attendees, the mileage rate (#17) or a receipt needed above a limit, attach it to the type, as US-RPT-12 assumes.',
+    priority: 'P3',
+    effort: 'M',
+    severity: 'Low',
+    blocker: { kind: 'items', items: [24], then: 'and your answer to Q29' },
+    source: 'GAP-29',
+    affects: ['GAP-29', 'FR-EXP-11', 'F-43'],
   },
   {
     num: 52,

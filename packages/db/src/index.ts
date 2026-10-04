@@ -1,5 +1,6 @@
 export * from './ai-keys.ts';
 export * from './audit.ts';
+export * from './categories.ts';
 export * from './client.ts';
 export * from './connection.ts';
 export * from './data-api.ts';

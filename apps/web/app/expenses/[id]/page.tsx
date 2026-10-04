@@ -5,6 +5,12 @@ import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { api, ApiProblem } from '../../../lib/api';
 import {
+  categoryText,
+  indented,
+  type Catalog,
+  type ExpenseCategory,
+} from '../../../lib/categories';
+import {
   DETAIL_LABELS,
   EXPENSE_FIELD_LABELS,
   EXPENSE_STATUS,
@@ -87,6 +93,15 @@ export default function ExpensePage() {
               expense={expense}
               onSaved={(next) => setLoad({ state: 'ready', expense: next })}
             />
+            {/* Sent only while categories are switched on for the organization. */}
+            {expense.category ? (
+              <CategoryChoice
+                key={`category-${expense.updatedAt}`}
+                expense={expense}
+                shown={expense.category}
+                onSaved={(next) => setLoad({ state: 'ready', expense: next })}
+              />
+            ) : null}
             <TripChoice
               expense={expense}
               onSaved={(next) => setLoad({ state: 'ready', expense: next })}
@@ -387,6 +402,204 @@ function Proof({ expense }: { expense: ExpenseDetail }) {
       >
         Open the receipt
       </Link>
+    </section>
+  );
+}
+
+const SUGGESTED_FROM = {
+  history: 'what you chose last time for this merchant',
+  keywords: 'its merchant and what its receipt shows',
+} as const;
+
+/**
+ * Its category and type (FR-EXP-11): chosen, or suggested until the person confirms it
+ * (FR-INT-10), or missing, which it says. The type is chosen from those the category allows.
+ */
+function CategoryChoice({
+  expense,
+  shown,
+  onSaved,
+}: {
+  expense: ExpenseDetail;
+  shown: ExpenseCategory;
+  onSaved: (expense: ExpenseDetail) => void;
+}) {
+  const [catalog, setCatalog] = useState<Catalog | null>(null);
+  const [categoryId, setCategoryId] = useState('');
+  const [typeId, setTypeId] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const changeable = expense.status === 'processing' || expense.editable;
+
+  async function save(choice: { categoryId: string; typeId: string }) {
+    setBusy(true);
+    setError(null);
+    try {
+      onSaved(
+        await api<ExpenseDetail>(`/v1/expenses/${expense.id}/category`, {
+          method: 'PUT',
+          body: JSON.stringify(choice),
+        }),
+      );
+    } catch (e) {
+      setError(describeError(e));
+      setBusy(false);
+    }
+  }
+
+  async function open() {
+    setBusy(true);
+    setError(null);
+    try {
+      const list = await api<Catalog>('/v1/categories');
+      setCatalog(list);
+      const current = list.categories.find((c) => c.id === shown.category?.id && c.active);
+      setCategoryId(current?.id ?? '');
+      setTypeId(
+        current && shown.type && current.typeIds.includes(shown.type.id) ? shown.type.id : '',
+      );
+    } catch (e) {
+      setError(describeError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const category = catalog?.categories.find((c) => c.id === categoryId);
+  const offered = catalog?.types.filter((t) => t.active && category?.typeIds.includes(t.id)) ?? [];
+  const pickCategory = (id: string) => {
+    setCategoryId(id);
+    const allowed = catalog?.categories.find((c) => c.id === id)?.typeIds ?? [];
+    const active = catalog?.types.filter((t) => t.active && allowed.includes(t.id)) ?? [];
+    setTypeId(
+      active.some((t) => t.id === typeId) ? typeId : active.length === 1 ? active[0]!.id : '',
+    );
+  };
+
+  let summary: ReactNode;
+  if (shown.state === 'confirmed') {
+    summary = <p>{categoryText(shown)}</p>;
+  } else if (shown.state === 'suggested' && shown.basis) {
+    summary = (
+      <p>
+        <span className="font-semibold">Suggested:</span> {categoryText(shown)}.{' '}
+        <span className="text-ink-2">
+          From {SUGGESTED_FROM[shown.basis]}, until you confirm it.
+        </span>
+      </p>
+    );
+  } else {
+    summary = <p>No category or type yet. Every expense needs one of each.</p>;
+  }
+
+  return (
+    <section
+      aria-labelledby="category-title"
+      className={`flex flex-col gap-3 rounded-xl border bg-sheet p-4 text-sm ${shown.state === 'confirmed' ? 'border-rule' : 'border-warn'}`}
+    >
+      <h2 id="category-title" className="text-base font-semibold">
+        Category and type
+      </h2>
+      {summary}
+      {catalog ? (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            void save({ categoryId, typeId });
+          }}
+          className="flex flex-col gap-3"
+        >
+          <label className="flex flex-col gap-1 text-xs font-medium text-ink-2">
+            Category
+            <select
+              name="categoryId"
+              value={categoryId}
+              onChange={(e) => pickCategory(e.target.value)}
+              required
+              className="rounded-lg border border-rule bg-paper px-3 py-2 text-base text-ink"
+            >
+              <option value="">Choose a category</option>
+              {catalog.categories
+                .filter((c) => c.active)
+                .map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {indented(c)}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-medium text-ink-2">
+            Type
+            <select
+              name="typeId"
+              value={typeId}
+              onChange={(e) => setTypeId(e.target.value)}
+              required
+              disabled={!category}
+              className="rounded-lg border border-rule bg-paper px-3 py-2 text-base text-ink disabled:opacity-60"
+            >
+              <option value="">{category ? 'Choose a type' : 'Choose a category first'}</option>
+              {offered.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {indented(t)}
+                </option>
+              ))}
+            </select>
+          </label>
+          {category && offered.length === 0 ? (
+            <p className="text-xs text-warn">This category allows no type in use yet.</p>
+          ) : null}
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="submit"
+              disabled={busy || !categoryId || !typeId}
+              className="rounded-lg bg-carbon px-4 py-2 text-sm font-semibold text-carbon-ink disabled:opacity-60"
+            >
+              {busy ? 'Saving…' : 'Save'}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setCatalog(null);
+                setError(null);
+              }}
+              className="rounded-lg border border-rule px-4 py-2 text-sm font-semibold"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
+      ) : changeable ? (
+        <div className="flex flex-wrap gap-3">
+          {shown.state === 'suggested' && shown.category && shown.type ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void save({ categoryId: shown.category!.id, typeId: shown.type!.id })}
+              className="rounded-lg bg-carbon px-4 py-2 text-sm font-semibold text-carbon-ink disabled:opacity-60"
+            >
+              Use this
+            </button>
+          ) : null}
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void open()}
+            className="rounded-lg border border-rule px-4 py-2 text-sm font-semibold disabled:opacity-60"
+          >
+            {shown.state === 'confirmed'
+              ? 'Change'
+              : shown.state === 'suggested'
+                ? 'Choose another'
+                : 'Choose'}
+          </button>
+        </div>
+      ) : null}
+      {error ? (
+        <p role="alert" className="text-sm text-warn">
+          {error}
+        </p>
+      ) : null}
     </section>
   );
 }

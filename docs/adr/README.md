@@ -2,7 +2,7 @@
 
 The index of ExpenseWise architecture decision records (ADRs) and how to add one.
 
-Each ADR records one decision with its context, the alternatives considered and an exit path. ADR-0001 to ADR-0012 record decisions D-01 to D-12 from the blueprint's decision register (v0.3, 30 September 2026). "Decided by product owner" records the product owner's call from 30 September 2026. "Recommended; no objection" means Claude is proceeding on it unless the product owner objects. ADR-0013 records D-13, decided after v0.3, ADR-0014 records D-16, ADR-0015 records D-17, ADR-0016 records D-18, ADR-0017 records D-19, ADR-0018 records D-20, ADR-0019 records D-21, ADR-0020 records D-22, ADR-0021 records D-23, ADR-0022 records D-24, ADR-0023 records D-25, ADR-0024 records D-26, ADR-0025 records D-27, ADR-0026 records D-28, ADR-0027 records D-29, ADR-0028 records D-30, ADR-0029 records D-31, ADR-0030 records D-32, ADR-0031 records D-33, and ADR-0032 records D-34.
+Each ADR records one decision with its context, the alternatives considered and an exit path. ADR-0001 to ADR-0012 record decisions D-01 to D-12 from the blueprint's decision register (v0.3, 30 September 2026). "Decided by product owner" records the product owner's call from 30 September 2026. "Recommended; no objection" means Claude is proceeding on it unless the product owner objects. ADR-0013 records D-13, decided after v0.3, ADR-0014 records D-16, ADR-0015 records D-17, ADR-0016 records D-18, ADR-0017 records D-19, ADR-0018 records D-20, ADR-0019 records D-21, ADR-0020 records D-22, ADR-0021 records D-23, ADR-0022 records D-24, ADR-0023 records D-25, ADR-0024 records D-26, ADR-0025 records D-27, ADR-0026 records D-28, ADR-0027 records D-29, ADR-0028 records D-30, ADR-0029 records D-31, ADR-0030 records D-32, ADR-0031 records D-33, ADR-0032 records D-34, and ADR-0036 records D-38.
 
 ## Index
 
@@ -40,6 +40,7 @@ Each ADR records one decision with its context, the alternatives considered and 
 | [0030](0030-receipt-time-and-place.md) | A receipt's time and place are read with it, and the time zone is looked up offline | D-32 | Accepted (what is read decided by product owner; offline lookup and rules recommended, no objection) | 2026-10-04 |
 | [0031](0031-duplicates-on-time-and-place.md) | Duplicates are matched on time and place, and told apart as exact or possible | D-33 | Accepted (matching and exact versus possible decided by product owner; 30-minute window and display recommended) | 2026-10-04 |
 | [0032](0032-features-switched-per-organization.md) | Every new feature ships switched off, and each organization's owner switches it on | D-34 | Accepted (flagging every feature decided by product owner, Q5; switch per organization recommended) | 2026-10-04 |
+| [0036](0036-categories-and-types.md) | Categories and types are two lists an organization keeps, and suggestions for them are rules, not a model | D-38 | Accepted (two lists, the category narrowing the types, decided by product owner, Q7; ready-made set, retiring and suggestion rules recommended) | 2026-10-04 |
 
 ## How to add an ADR
 

@@ -1,5 +1,6 @@
 export * from './app.ts';
 export * from './auth.ts';
+export * from './categories.ts';
 export * from './schemas.ts';
 export * from './redact.ts';
 export * from './ai-providers.ts';
