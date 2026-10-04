@@ -994,7 +994,7 @@ export const SECURITY_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Whether owners and finance admins should also change others’ records, or get a list of everyone’s, is Q34. Today an owner who opens a colleague’s record still sees its buttons, and the server refuses them.',
+    note: 'Whether owners and finance admins should also change others’ records, or get a list of everyone’s, is Q30. Today an owner who opens a colleague’s record still sees its buttons, and the server refuses them.',
   },
   {
     id: 'US-SEC-16',
@@ -1085,6 +1085,6 @@ export const SECURITY_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'The audit trail and the outbox are kept to the organization, not to each member, because every member’s change reads the trail to chain its event (GAP-34, #77). No screen shows either to a member.',
+    note: 'The audit trail and the outbox are kept to the organization, not to each member, because every member’s change reads the trail to chain its event (GAP-31, #74). No screen shows either to a member.',
   },
 ];

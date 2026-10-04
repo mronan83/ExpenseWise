@@ -66,7 +66,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
       'api/mileage › logs a drive for the caller and answers with it as an expense, its rate copied on',
       'e2e/signed-in',
     ],
-    note: 'Built in PR #58 (#17), behind the expenses.mileage flag: a drive is an expense paid at the IRS business rate in force on its date (ADR-0038), which the product owner is asked to confirm (Q31).',
+    note: 'Built in PR #58 (#17), behind the expenses.mileage flag: a drive is an expense paid at the IRS business rate in force on its date (ADR-0038), which the product owner is asked to confirm (Q28).',
   },
   {
     id: 'FR-CAP-04',
@@ -586,8 +586,8 @@ export const FUNCTIONAL: readonly Requirement[] = [
       'db/categories.int › takes a type its category allows, once, and records who chose it',
       'api/categories › lists both trees in order, with the types each category allows, for everyone',
     ],
-    shortfalls: ['GAP-29'],
-    note: 'Your requirement of Oct 3 and your answer to Q7: two trees, the category filtering the types. Claude’s assumptions, yours to overturn: a type can be allowed in several categories; the GL and tax codes sit on the category, and the rules (attendees, mileage rate, receipt needed) on the type. Built in PR #58 behind `expenses.categories`: an expense without them says so, but nothing refuses one yet, and no rule hangs off a type yet (GAP-29, Q29).',
+    shortfalls: ['GAP-28'],
+    note: 'Your requirement of Oct 3 and your answer to Q7: two trees, the category filtering the types. Claude’s assumptions, yours to overturn: a type can be allowed in several categories; the GL and tax codes sit on the category, and the rules (attendees, mileage rate, receipt needed) on the type. Built in PR #58 behind `expenses.categories`: an expense without them says so, but nothing refuses one yet, and no rule hangs off a type yet (GAP-28, Q27).',
   },
   {
     id: 'FR-EXP-12',
@@ -816,7 +816,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
     features: ['F-19'],
     checks: ['domain/report-export', 'db/report-export.int', 'api/report-export'],
     shortfalls: ['#24'],
-    note: 'You asked for export (#25) before approval (#24), so until approval exists it exports closed reports, not approved ones: a closed report, or one further on, exports as CSV and as a PDF summary, and an open one is refused. Approved reports export once #24 makes them; whether export should then wait for approval is Q32.',
+    note: 'You asked for export (#25) before approval (#24), so until approval exists it exports closed reports, not approved ones: a closed report, or one further on, exports as CSV and as a PDF summary, and an open one is refused. Approved reports export once #24 makes them; whether export should then wait for approval is Q29.',
   },
   {
     id: 'FR-SET-02',
@@ -862,8 +862,8 @@ export const FUNCTIONAL: readonly Requirement[] = [
       'api/expenses › finds the expenses on no trip, or on some trip (Home’s figures open them)',
       'e2e/signed-in',
     ],
-    shortfalls: ['GAP-31'],
-    note: 'Your requirement of Oct 3 widened it from this month’s figures to a dashboard: current trip, past trips, unprocessed receipts, unassigned expenses and incomplete reports. Receipts that need a look are already in Needs you (FR-EXP-02); your answers to Q14 (A: information only) and Q15 (B: reports join with #23) settle the rest. Built in PR #43; reports to finish joined in PR #52. Mileage exists since PR #58 (#17), so business miles are owed (GAP-31, #74); money awaiting reimbursement comes when payouts exist.',
+    shortfalls: ['GAP-30'],
+    note: 'Your requirement of Oct 3 widened it from this month’s figures to a dashboard: current trip, past trips, unprocessed receipts, unassigned expenses and incomplete reports. Receipts that need a look are already in Needs you (FR-EXP-02); your answers to Q14 (A: information only) and Q15 (B: reports join with #23) settle the rest. Built in PR #43; reports to finish joined in PR #52. Mileage exists since PR #58 (#17), so business miles are owed (GAP-30, #73); money awaiting reimbursement comes when payouts exist.',
   },
   {
     id: 'FR-INS-02',
@@ -1505,8 +1505,8 @@ export const NON_FUNCTIONAL: readonly Requirement[] = [
       'db/receipt-corrections.int › keeps when the first reading settled, never before filing, and not a later one',
       'api/receipts › shows the 95th percentile beside the comparison, over the receipts read, with the feature on',
     ],
-    shortfalls: ['#78'],
-    note: 'Measured since PR #58: the time from filing to the first settled reading, kept on each receipt (receipts read before were filled in from the audit trail), and its 95th percentile shown beside the model comparison with Capture-to-Ready time switched on (GAP-16). Whether production meets 30 seconds is read there; nobody has read it yet (#78).',
+    shortfalls: ['#75'],
+    note: 'Measured since PR #58: the time from filing to the first settled reading, kept on each receipt (receipts read before were filled in from the audit trail), and its 95th percentile shown beside the model comparison with Capture-to-Ready time switched on (GAP-16). Whether production meets 30 seconds is read there; nobody has read it yet (#75).',
   },
   {
     id: 'NFR-PERF-02',
@@ -1596,13 +1596,14 @@ export const NON_FUNCTIONAL: readonly Requirement[] = [
   {
     id: 'NFR-UX-06',
     text: 'Dates show one way everywhere: Sep 30, 2026, with the time as 1:12 PM where it matters. Forms keep the phone’s own date picker, and a model’s reading table keeps each date exactly as read.',
-    enforcedBy: 'One date formatter in the web app',
+    enforcedBy:
+      'One date formatter (`showDate` and its kin in the domain package), and a signed-in screen check that fails on a date shown as 2026-09-30',
     sources: ['owner 2026-10-03'],
     priority: 'Should',
     phase: 'P1',
-    status: 'Planned',
-    backlog: [55],
-    note: 'Your answer to Q12.',
+    status: 'Verified',
+    checks: ['domain/display', 'e2e/signed-in'],
+    note: 'Your answer to Q12, built in PR #58 (#55). Every signed-in screen is checked for a date shown as 2026-09-30, outside form fields and a model’s reading table.',
   },
   {
     id: 'NFR-UX-05',
@@ -1664,8 +1665,8 @@ export const NON_FUNCTIONAL: readonly Requirement[] = [
       'api/receipts › keeps a running comparison of the two models',
       'api/model-settings › shows each model, the primary, what each does now and how each has read our receipts',
     ],
-    shortfalls: ['GAP-30'],
-    note: 'The tier is now chosen by your setting: the primary in Settings › AI models, with each model’s readings, sureness, time and spend on your receipts beside it (#52). Nothing yet prompts re-confirming it after about 100 real receipts (GAP-30), and the eval harness has never run against a model (NFR-AI-01).',
+    shortfalls: ['GAP-29'],
+    note: 'The tier is now chosen by your setting: the primary in Settings › AI models, with each model’s readings, sureness, time and spend on your receipts beside it (#52). Nothing yet prompts re-confirming it after about 100 real receipts (GAP-29), and the eval harness has never run against a model (NFR-AI-01).',
   },
 
   // Architecture and portability
@@ -1772,15 +1773,14 @@ export const NON_FUNCTIONAL: readonly Requirement[] = [
     sources: ['arch AP8', 'delivery §7.6'],
     priority: 'Must',
     phase: 'P0',
-    status: 'Partial',
+    status: 'Verified',
     features: ['F-31'],
     checks: [
       'e2e/shell › ships the build-version change dark: its flag is off by default',
       'api/features',
       'db/features.int',
     ],
-    shortfalls: ['#22'],
-    note: 'Your answer to Q5 (Oct 4): every feature from then on ships behind a flag, and each organization’s owner switches it on in Settings › Features after checking it (ADR-0032). The screens released before then stay unflagged.',
+    note: 'Your answer to Q5 (Oct 4): every feature from then on ships behind a flag, and each organization’s owner switches it on in Settings › Features after checking it (ADR-0032). The screens released before then stay unflagged, as you chose. The build version, Phase 0’s flagged change, is turned on in production by the override setting (#22).',
   },
   {
     id: 'NFR-DEL-06',

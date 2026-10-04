@@ -56,6 +56,6 @@ Portability is designed in: standard Postgres, the S3 API and containerizable No
 ## Links
 
 - [Containers](../05-architecture.md#63-containers), [technology stack](../05-architecture.md#68-technology-stack)
-- [Environments](../06-delivery-lifecycle.md#73-environments), [release management](../06-delivery-lifecycle.md#77-release-management-and-operations)
+- [Environments](../06-delivery-lifecycle.md#72-environments), [release management](../06-delivery-lifecycle.md#74-release-management-and-operations)
 - [Risk register](../08-risk-register.md): R5, R6
 - [ADR-0002](0002-architecture-style.md), [ADR-0010](0010-residency-and-compliance.md)

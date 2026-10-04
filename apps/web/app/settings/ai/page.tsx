@@ -1,5 +1,6 @@
 'use client';
 
+import { showDateTime } from '@expensewise/domain';
 import Link from 'next/link';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, ApiProblem } from '../../../lib/api';
@@ -228,9 +229,7 @@ function ProviderCard({
       </div>
       <p className="text-sm text-ink-2">{withModels ? info.useWithModels : info.use}</p>
       {status.verifiedAt ? (
-        <p className="text-sm text-ink-2">
-          Last checked {new Date(status.verifiedAt).toLocaleString()}
-        </p>
+        <p className="text-sm text-ink-2">Last checked {showDateTime(status.verifiedAt)}</p>
       ) : null}
       <form onSubmit={save} className="flex flex-col gap-2">
         <label htmlFor={inputId} className="text-sm font-medium">

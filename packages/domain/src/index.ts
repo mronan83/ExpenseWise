@@ -4,6 +4,7 @@ export * from './capture-time.ts';
 export * from './categories.ts';
 export * from './currency.ts';
 export * from './dates.ts';
+export * from './display.ts';
 export * from './decimal.ts';
 export * from './duplicates.ts';
 export * from './errors.ts';

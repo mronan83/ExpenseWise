@@ -566,7 +566,7 @@ export const READING_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Since PR #58, with Where each field was read switched on, each field shows the line of the receipt it was read from (US-READ-25), and a Ready receipt’s field is corrected with a tap (US-READ-26). Corrections wait in the database until the real-world eval layer is built (#39).',
+    note: 'Since PR #58, with Where each field was read switched on, each field shows the line of the receipt it was read from (US-READ-20), and a Ready receipt’s field is corrected with a tap (US-READ-21). Corrections wait in the database until the real-world eval layer is built (#39).',
   },
   {
     id: 'US-READ-08',
@@ -944,7 +944,7 @@ export const READING_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Claude collects nothing while the Anthropic account has no credit (#4, withdrawn Oct 4). The tier decision (#21) is now your choice of primary in Settings › AI models (#52), with each model’s record beside it (US-READ-17); nothing yet asks you to re-confirm it after about 100 real receipts (GAP-30).',
+    note: 'Claude collects nothing while the Anthropic account has no credit (#4, withdrawn Oct 4). The tier decision (#21) is now your choice of primary in Settings › AI models (#52), with each model’s record beside it (US-READ-17); nothing yet asks you to re-confirm it after about 100 real receipts (GAP-29).',
   },
   {
     id: 'US-READ-13',
@@ -1204,10 +1204,10 @@ export const READING_STORIES: readonly Story[] = [
         decided: { by: 'blueprint', source: 'journeys §4.2' },
         rules: ['R-CAPTURE-READY'],
         checks: [],
-        untested: 78,
+        untested: 75,
       },
     ],
-    note: 'Since PR #58 capture to Ready is measured on every receipt, and its 95th percentile shows beside the comparison with Capture-to-Ready time switched on (US-READ-27). That measures AC4; whether production meets it is read on the page once the feature is on (#78).',
+    note: 'Since PR #58 capture to Ready is measured on every receipt, and its 95th percentile shows beside the comparison with Capture-to-Ready time switched on (US-READ-22). That measures AC4; whether production meets it is read on the page once the feature is on (#75).',
   },
   {
     id: 'US-READ-17',
@@ -1541,7 +1541,7 @@ export const READING_STORIES: readonly Story[] = [
     note: 'SROIE was planned for the public layer, but its usual mirrors carry code rather than receipts, so generated US restaurant card slips cover the merchant, date, tip and card instead: Claude’s substitution.',
   },
   {
-    id: 'US-READ-25',
+    id: 'US-READ-20',
     title: 'See the line of the receipt each field was read from',
     as: 'Alex, who travels for work',
     want: 'each field of a reading to show the line of the receipt it was read from',
@@ -1622,7 +1622,7 @@ export const READING_STORIES: readonly Story[] = [
     note: 'Your design (DP3) shows the receipt’s text with the unsure line highlighted. The models give the line’s words, not its position on the image, so it shows as text beside each field instead: Claude’s decision, yours to overturn. Asking for the lines costs a few more output tokens per reading, only where the feature is on.',
   },
   {
-    id: 'US-READ-26',
+    id: 'US-READ-21',
     title: 'Correct a field of a Ready receipt with one tap',
     as: 'Alex, who travels for work',
     want: 'to correct any field of a receipt that is already Ready with one tap',
@@ -1736,7 +1736,7 @@ export const READING_STORIES: readonly Story[] = [
     note: 'A correction made on the receipt page is the person saying the model misread it, so it is kept as an eval candidate; an edit made on the expense page is not, since it may be a choice rather than a misreading: Claude’s decision. Correcting an approved expense (FR-EXP-03) waits on approval (#24); nothing can be submitted yet.',
   },
   {
-    id: 'US-READ-27',
+    id: 'US-READ-22',
     title: 'See how long receipts take from capture to Ready',
     as: 'the product owner',
     want: 'the time from capturing a receipt to its being read, at the 95th percentile, beside the model comparison',

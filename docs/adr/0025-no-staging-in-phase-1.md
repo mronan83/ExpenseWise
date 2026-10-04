@@ -45,5 +45,5 @@ A staging project can be added at any time. It means a second Supabase project, 
 
 ## Links
 
-- [Delivery lifecycle §7.3](../06-delivery-lifecycle.md#73-environments), [ADR-0009](0009-delivery-model.md), [ADR-0014](0014-supabase-free-plan.md)
+- [Delivery lifecycle §7.3](../06-delivery-lifecycle.md#72-environments), [ADR-0009](0009-delivery-model.md), [ADR-0014](0014-supabase-free-plan.md)
 - Backlog #3, #30 and #57; GAP-02 and GAP-22

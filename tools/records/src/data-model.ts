@@ -141,7 +141,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   expense_types: {
     about:
-      'The types an organization’s expenses are, such as Airfare or Business meal: a second list beside the categories, which also nests, where rules will attach (Q7, #72). Every organization starts with a ready-made nine, whose `starter_key` keyword suggestions look for, so a renamed one keeps its suggestions (FR-INT-10, ADR-0036). Retired, never deleted, once an expense has one.',
+      'The types an organization’s expenses are, such as Airfare or Business meal: a second list beside the categories, which also nests, where rules will attach (Q7, #71). Every organization starts with a ready-made nine, whose `starter_key` keyword suggestions look for, so a renamed one keeps its suggestions (FR-INT-10, ADR-0036). Retired, never deleted, once an expense has one.',
   },
   category_types: {
     about:

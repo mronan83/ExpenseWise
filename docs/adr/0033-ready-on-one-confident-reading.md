@@ -55,7 +55,7 @@ Reading each receipt once removes the second reading that ADR-0017's Ready rule 
 
 ### Negative
 
-- **Ready no longer has two independent readings behind it.** One confident reading is weaker evidence than two that agree (ADR-0017). Contained by the sums and date checks, and by the eval set and the comparison that remain; re-confirming the choice after about 100 real receipts is not prompted yet (GAP-30, #73).
+- **Ready no longer has two independent readings behind it.** One confident reading is weaker evidence than two that agree (ADR-0017). Contained by the sums and date checks, and by the eval set and the comparison that remain; re-confirming the choice after about 100 real receipts is not prompted yet (GAP-29, #72).
 - **The running comparison stops growing for organizations with the setting on,** since two models no longer read the same receipt. Each model's own record keeps counting.
 - **Readings are made one after another,** so an outage of the primary adds its retries before a back-up reads.
 - **The operator's switch needs a deploy:** `FLAG_OVERRIDES` is read when the server starts (ADR-0032).

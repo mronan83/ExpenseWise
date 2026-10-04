@@ -46,6 +46,6 @@ This is a process decision and can change at any increment boundary. The gates, 
 
 ## Links
 
-- [Delivery lifecycle](../06-delivery-lifecycle.md): [operating model](../06-delivery-lifecycle.md#71-operating-model), [roles](../06-delivery-lifecycle.md#72-roles-and-accountability), [quality gates](../06-delivery-lifecycle.md#74-quality-gates)
+- [Delivery lifecycle](../06-delivery-lifecycle.md): [operating model](../06-delivery-lifecycle.md#71-operating-model), [roles](../06-delivery-lifecycle.md#71-roles-and-accountability), [quality gates](../06-delivery-lifecycle.md#73-quality-gates)
 - [Roadmap](../07-roadmap.md)
 - [Risk register](../08-risk-register.md): R7

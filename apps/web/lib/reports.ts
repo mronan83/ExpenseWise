@@ -1,3 +1,4 @@
+import { showDate } from '@expensewise/domain';
 import type { ExpenseAmount, ExpenseStatus } from './expenses';
 import { formatMoney } from './receipts';
 import type { TripSummary } from './trips';
@@ -99,8 +100,7 @@ export function reportName(report: Pick<ReportSummary, 'tripNames' | 'localExpen
   return rest.length === 0 ? first : `${first} + ${rest.length} more`;
 }
 
-const day = (iso: string) =>
-  new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' }).format(new Date(iso));
+const day = (iso: string) => showDate(iso);
 
 /** When it closed, or closes, in a few words. */
 export function reportWhen(report: ReportSummary): string {
@@ -160,14 +160,8 @@ export function leftOut(r: ReimbursementTotal): string | null {
   return parts.length > 0 ? parts.join(' · ') : null;
 }
 
-const published = (iso: string) =>
-  new Intl.DateTimeFormat(undefined, {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(new Date(`${iso}T00:00:00Z`));
+const published = (iso: string) => showDate(iso);
 
-/** Where a rate came from: "ECB reference rate, 25 Sep 2026". */
+/** Where a rate came from: "ECB reference rate, Sep 25, 2026". */
 export const rateSource = (r: AppliedRate) =>
   `${r.source === 'ECB' ? 'ECB reference rate' : r.source}, ${published(r.date)}`;

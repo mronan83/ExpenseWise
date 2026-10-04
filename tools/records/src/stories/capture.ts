@@ -539,7 +539,7 @@ export const CAPTURE_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Add mileage is on the Expenses page. Miles only: kilometres and routes come with route-based mileage (#20). Which rate it pays is Claude’s choice, put to you in Q31.',
+    note: 'Add mileage is on the Expenses page. Miles only: kilometres and routes come with route-based mileage (#20). Which rate it pays is Claude’s choice, put to you in Q28.',
   },
   {
     id: 'US-MILE-02',

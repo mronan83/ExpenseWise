@@ -2,7 +2,7 @@
 
 Inside an organization, Postgres keeps each member to their own receipts, expenses, trips and reports, using the caller's membership that every request names; owners, finance admins and auditors see everyone's, everyone changes only their own, and an auditor changes nothing. People join by a one-time link an owner makes in Settings › People, with no email sent.
 
-- **Status:** Accepted (adding #50 and inviting by link decided by product owner, Oct 4; enforcing it in the database, and what owners, finance admins and auditors may do, recommended, with Q34 open)
+- **Status:** Accepted (adding #50 and inviting by link decided by product owner, Oct 4; enforcing it in the database, and what owners, finance admins and auditors may do, recommended, with Q30 open)
 - **Date:** 2026-10-04
 - **Deciders:** Product owner ("Add #50; invite by link", Oct 4); Claude (principal architect), for the design
 - **Decision register:** D-37. Closes GAP-20 (#50) and builds #29; extends [ADR-0001](0001-target-segment-and-tenancy.md)'s tenant isolation inside one organization and follows [ADR-0016](0016-several-sign-ins-per-person.md) for an empty organization of one's own.
@@ -20,7 +20,7 @@ Seven other changes were being written against `withOrg(db, orgId, fn)` at the s
    - **Writes:** an `own_records` trigger on the same tables refuses an insert, update or delete of a row that isn't the acting member's own, and any change at all by an auditor, with an error. A trigger rather than a policy because row-level security skips a refused update silently, and the code would then write an audit event for a change that never happened.
    - **No member named means the system.** Workflows, the release's data steps and the people store name no member and see and change every member's records, as before, so their code and `withOrg(db, orgId, fn)` are unchanged. `switchOrg()` also drops the member, since it serves the system.
 2. **The API names the caller for every member-facing store.** Each request gets a slot (AsyncLocalStorage); resolving the caller through the workspace store fills it, so no route can forget; and the receipt, expense, trip, report and Home stores run their transactions as that member through one helper, `asCaller()`, which refuses to run without one rather than act for the system. A refusal from the database answers 403 `not_yours`.
-3. **What each role does.** A member or approver sees and changes their own. Owners and finance admins see everyone's and change their own. An auditor reads everyone's and changes nothing, not even a receipt of their own. Receipts, Expenses and Trips list the caller's own for every role, as Home, Needs you and Reports already did; seeing a colleague's record is by its link. Whether owners and finance admins should also change others' records, or get a list of everyone's, is Q34.
+3. **What each role does.** A member or approver sees and changes their own. Owners and finance admins see everyone's and change their own. An auditor reads everyone's and changes nothing, not even a receipt of their own. Receipts, Expenses and Trips list the caller's own for every role, as Home, Needs you and Reports already did; seeing a colleague's record is by its link. Whether owners and finance admins should also change others' records, or get a list of everyone's, is Q30.
 4. **Approvers, today.** Nothing routes a report to an approver until approval (#24), so an approver sees only their own records. The approval-step policy already shows a step to its approver; #24 adds the report it names.
 5. **One file is claimed once.** The same file filed by a colleague is refused, without the colleague's receipt being shown: the organization-wide unique key catches it.
 6. **Invites by link** (#29, behind `team.invites`). An owner makes a link with a role in Settings › People. Its token is 32 random bytes; only its SHA-256 is stored. It works once, for 7 days, until revoked. Before joining, the person holding it sees only that invite (`invite_holder`, through `app.invite_hash`). Accepting needs a signed-in account: sign-ups stay off (D-15), so the owner makes the account in Supabase first, and both screens say so. An empty one-person organization the person's first sign-in made is left behind, as linking a sign-in does (ADR-0016); one with work, invites or other people in it is refused and nothing changes.
@@ -33,7 +33,7 @@ Seven other changes were being written against `withOrg(db, orgId, fn)` at the s
 | Check ownership in each API route | Every route, today's and the seven being written, would have to remember; one that forgot would leak silently. |
 | Row-level security for writes too | A refused update is skipped without an error, so a change an owner can see but not make would still write its audit event. |
 | Make `withOrg()` refuse to run without a member | Every workflow and the other changes in flight call it without one. The member-facing stores refuse instead. |
-| Owners and finance admins change everyone's records | Lets a claim change under its claimant. Least privilege until approval gives a way to send a claim back; asked as Q34. |
+| Owners and finance admins change everyone's records | Lets a claim change under its claimant. Least privilege until approval gives a way to send a claim back; asked as Q30. |
 | Invite by email | Needs a sender domain and email notifications (#27). The product owner chose links. |
 | Keep the token in the URL path of the API | Paths reach logs; the API takes it in the body. Only the page's own address carries it. |
 
@@ -48,8 +48,8 @@ Seven other changes were being written against `withOrg(db, orgId, fn)` at the s
 ### Negative
 
 - **Two settings per transaction** and a function call per row checked. Small at this scale; the per-row parent lookups for readings and pairs ride on unique keys.
-- **The audit trail and outbox stay organization-wide** for every member's transaction, because each member chains the next audit event. No operation shows them; GAP-34 (#77).
-- **An owner opening a colleague's record sees actions that the server refuses** (403), until the screens hide them or Q34 changes what owners may do.
+- **The audit trail and outbox stay organization-wide** for every member's transaction, because each member chains the next audit event. No operation shows them; GAP-31 (#74).
+- **An owner opening a colleague's record sees actions that the server refuses** (403), until the screens hide them or Q30 changes what owners may do.
 - **A link works for whoever holds it** for 7 days. The owner sends it to one person and can revoke it; it works once.
 
 ## Exit path / reversibility
@@ -60,5 +60,5 @@ Seven other changes were being written against `withOrg(db, orgId, fn)` at the s
 
 ## Links
 
-- GAP-20, GAP-34, Q34, FR-GOV-01, FR-PLT-07, F-23, F-61, backlog #50, #29, #24, #27, #77
+- GAP-20, GAP-31, Q30, FR-GOV-01, FR-PLT-07, F-23, F-61, backlog #50, #29, #24, #27, #74
 - [ADR-0001](0001-target-segment-and-tenancy.md), [ADR-0016](0016-several-sign-ins-per-person.md), [ADR-0032](0032-features-switched-per-organization.md)

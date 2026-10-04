@@ -1,3 +1,4 @@
+import { showDate } from '@expensewise/domain';
 import { formatMoney, needsYou, RECEIPT_STATUS, type InboxItem } from './receipts';
 import { reportHolds, reportName, reportTotal, type ReportSummary } from './reports';
 
@@ -19,8 +20,7 @@ export interface InboxCard {
 const totalsText = (report: ReportSummary) =>
   report.totals.length > 0 || report.reimbursement ? reportTotal(report) : null;
 
-const day = (iso: string) =>
-  new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short' }).format(new Date(iso));
+const day = (iso: string) => showDate(iso);
 
 /** What an inbox item says, and the one thing to do about it (FR-EXP-02). */
 export function inboxCard(item: InboxItem): InboxCard {
@@ -31,7 +31,7 @@ export function inboxCard(item: InboxItem): InboxCard {
         key: `receipt-${receipt.id}`,
         title: receipt.merchant ?? 'A receipt',
         amount: receipt.total ? formatMoney(receipt.total) : null,
-        when: receipt.date ?? new Date(receipt.createdAt).toLocaleDateString(),
+        when: showDate(receipt.date ?? receipt.createdAt),
         status: RECEIPT_STATUS[receipt.status],
         ...needsYou(item),
         edge: receipt.status === 'failed' ? 'bad' : 'warn',

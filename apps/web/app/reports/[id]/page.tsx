@@ -1,5 +1,6 @@
 'use client';
 
+import { showDate } from '@expensewise/domain';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -52,8 +53,7 @@ function reimbursedText(r: Reimbursed): string {
   return r.amount ? formatMoney(r.amount) : '–';
 }
 
-const day = (iso: string) =>
-  new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'long' }).format(new Date(iso));
+const day = (iso: string) => showDate(iso);
 
 /** What the report needs, in a sentence (FR-EXP-12). */
 function verdict(report: ReportDetail): string {
@@ -418,9 +418,7 @@ export default function ReportPage() {
                   {busy ? 'Working…' : 'Reopen'}
                 </button>
               ) : null}
-              <span className="text-xs text-ink-2">
-                Opened {new Date(report.openedAt).toLocaleDateString()}
-              </span>
+              <span className="text-xs text-ink-2">Opened {showDate(report.openedAt)}</span>
             </div>
             {report.status !== 'open' && features('reports.export') ? (
               <div className="flex flex-wrap items-center gap-3">

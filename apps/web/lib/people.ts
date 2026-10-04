@@ -1,3 +1,5 @@
+import { showDate } from '@expensewise/domain';
+
 /** Settings › People and invite links (FR-PLT-07, ADR-0035), behind team.invites. */
 
 export type Role = 'member' | 'approver' | 'finance_admin' | 'owner' | 'auditor';
@@ -64,5 +66,4 @@ export interface InvitePreview {
   standing: 'none' | 'empty' | 'not_empty' | 'this';
 }
 
-export const shortDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+export const shortDate = (iso: string) => showDate(iso);

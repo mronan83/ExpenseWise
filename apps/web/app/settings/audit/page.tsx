@@ -1,5 +1,6 @@
 'use client';
 
+import { showDateTime } from '@expensewise/domain';
 import Link from 'next/link';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, ApiProblem } from '../../../lib/api';
@@ -53,14 +54,7 @@ function describeError(error: unknown): string {
   return 'Something went wrong. Try again.';
 }
 
-const when = (at: string) =>
-  new Date(at).toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+const when = (at: string) => showDateTime(at);
 
 const plural = (n: number, one: string) =>
   `${n.toLocaleString('en-US')} ${one}${n === 1 ? '' : 's'}`;

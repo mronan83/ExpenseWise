@@ -1,5 +1,6 @@
 'use client';
 
+import { showDate } from '@expensewise/domain';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
@@ -311,7 +312,11 @@ function Claim({
         <>
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
             <Row label="Merchant" value={expense.merchant} differs={differs.has('merchant')} />
-            <Row label="Date" value={expense.date} differs={differs.has('date')} />
+            <Row
+              label="Date"
+              value={expense.date && showDate(expense.date)}
+              differs={differs.has('date')}
+            />
             <Row
               label="Amount"
               value={expense.amount ? formatMoney(expense.amount) : null}
@@ -423,7 +428,7 @@ function Drive({
       {drive && !editing ? (
         <>
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-            <Row label="Date" value={drive.date} differs={false} />
+            <Row label="Date" value={showDate(drive.date)} differs={false} />
             <Row label="Destination" value={drive.destination} differs={false} />
             <Row label="Purpose" value={drive.purpose} differs={false} />
             <Row label="Distance" value={distanceOf(drive)} differs={false} />
@@ -500,7 +505,7 @@ function Proof({ expense }: { expense: ExpenseDetail }) {
       </p>
       <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
         <Row label="Merchant" value={proof.merchant} differs={false} />
-        <Row label="Date" value={proof.date} differs={false} />
+        <Row label="Date" value={proof.date && showDate(proof.date)} differs={false} />
         <Row
           label="Amount"
           value={proof.amount ? formatMoney(proof.amount) : null}

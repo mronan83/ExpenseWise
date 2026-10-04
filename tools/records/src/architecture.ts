@@ -69,8 +69,8 @@ export const PRINCIPLES: readonly Principle[] = [
     built:
       'Every tenant table has `org_id`, a forced row-level security policy and composite foreign keys. The app connects as a role that can’t bypass it, and refuses to start if it could. Inside an organization, each request names its caller’s membership to the database, and policies and triggers keep a member to their own receipts, expenses, trips and reports; owners, finance admins and auditors see everyone’s, and an auditor changes nothing (ADR-0035). Background work names no member and acts for the system.',
     short:
-      'An approver sees only their own records until approval routes reports to them (#24). The audit trail and the outbox are kept to the organization, not to each member (GAP-34, #77).',
-    refs: ['ADR-0001', 'ADR-0013', 'ADR-0035', 'GAP-34', '#77', '#24'],
+      'An approver sees only their own records until approval routes reports to them (#24). The audit trail and the outbox are kept to the organization, not to each member (GAP-31, #74).',
+    refs: ['ADR-0001', 'ADR-0013', 'ADR-0035', 'GAP-31', '#74', '#24'],
   },
   {
     id: 'AP7',
@@ -670,8 +670,8 @@ export const QUALITY: readonly Quality[] = [
     attribute: 'Security',
     how: 'Forced row-level security, members kept to their own records inside an organization, a runtime role that can’t bypass it, Supabase’s Data API roles stripped on every release, verified tokens, encrypted provider keys, a private bucket, invite-only sign-in, security headers, and production credentials in production builds only.',
     short:
-      'No second factor (#8). The audit trail and the outbox are kept to the organization, not to each member (GAP-34).',
-    refs: ['NFR-SEC-01', 'NFR-SEC-13', 'FR-GOV-01', 'GAP-34', '#8'],
+      'No second factor (#8). The audit trail and the outbox are kept to the organization, not to each member (GAP-31).',
+    refs: ['NFR-SEC-01', 'NFR-SEC-13', 'FR-GOV-01', 'GAP-31', '#8'],
   },
   {
     attribute: 'Integrity',

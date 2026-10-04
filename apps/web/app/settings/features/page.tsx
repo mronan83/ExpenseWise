@@ -1,5 +1,6 @@
 'use client';
 
+import { showDate } from '@expensewise/domain';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiProblem } from '../../../lib/api';
@@ -20,13 +21,10 @@ const describeError = (error: unknown) =>
     ? [error.message, error.detail].filter(Boolean).join('. ')
     : 'Something went wrong. Try again.';
 
-const switchedOn = (at: string) =>
-  new Date(at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-
 function stateText(f: Feature): string {
   if (f.source === 'override') return `${f.enabled ? 'On' : 'Off'} for everyone, set on the server`;
   if (f.source === 'organization' && f.switchedAt) {
-    return `${f.enabled ? 'On' : 'Off'} since ${switchedOn(f.switchedAt)}`;
+    return `${f.enabled ? 'On' : 'Off'} since ${showDate(f.switchedAt)}`;
   }
   return 'Off: not switched on yet';
 }

@@ -1,5 +1,6 @@
 'use client';
 
+import { showDate } from '@expensewise/domain';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type ChangeEvent } from 'react';
@@ -196,7 +197,7 @@ export default function ReceiptsPage() {
                             {r.merchant ?? (r.status === 'processing' ? 'Reading…' : 'Receipt')}
                           </span>
                           <span className="text-xs text-ink-2">
-                            {r.date ?? new Date(r.createdAt).toLocaleDateString()} ·{' '}
+                            {showDate(r.date ?? r.createdAt)} ·{' '}
                             <span className={RECEIPT_STATUS[r.status].tone}>
                               {RECEIPT_STATUS[r.status].label}
                             </span>

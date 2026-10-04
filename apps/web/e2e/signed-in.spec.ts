@@ -255,6 +255,26 @@ async function open(
   }
 }
 
+/**
+ * Text that shows a date as 2026-09-30 rather than Sep 30, 2026 (Q12, NFR-UX-06). Form fields
+ * keep the phone's own date picker, and a model's reading keeps each date as it was read.
+ */
+function rawDates(page: Page): Promise<string[]> {
+  return page.evaluate(() => {
+    const found: string[] = [];
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const parent = node.parentElement;
+      if (!parent || parent.closest('input, textarea, select, script, style, [data-as-read]')) {
+        continue;
+      }
+      const match = /\b\d{4}-\d{2}-\d{2}\b/.exec(node.textContent ?? '');
+      if (match && parent.checkVisibility()) found.push(node.textContent!.trim().slice(0, 80));
+    }
+    return found;
+  });
+}
+
 for (const [title, path, steps, at] of SCREENS) {
   test(`${title}: fits the screen and passes WCAG 2.2 AA, in light and dark`, async ({
     page,
@@ -274,6 +294,8 @@ for (const [title, path, steps, at] of SCREENS) {
       await open(page, path(seeded), steps, settled);
       const where = `${colorScheme}, ${size.width}px`;
       expect(await layoutProblems(page), where).toEqual([]);
+      if (colorScheme === 'light')
+        expect(await rawDates(page), 'dates read Sep 30, 2026').toEqual([]);
       // The tab bar covers whatever is scrolled under it until the person scrolls on; that
       // is not a target too small to tap. Axe sees the page with the bar in its place at the
       // end instead, and focus never stops behind it (scroll-padding in globals.css).

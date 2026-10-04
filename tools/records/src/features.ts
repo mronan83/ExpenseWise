@@ -149,7 +149,7 @@ export const FEATURES: readonly Feature[] = [
       'api/own-records.int',
       'domain/people › lets owners, finance admins and auditors see everyone’s, and members and approvers their own',
     ],
-    note: 'No flag: a security control, on before anyone is invited (#50). Enforced by Postgres for every request a member makes; background work acts for the system. An approver sees only their own records until approval routes reports to them (#24). Whether owners and finance admins should change others’ records, or list them, is Q34.',
+    note: 'No flag: a security control, on before anyone is invited (#50). Enforced by Postgres for every request a member makes; background work acts for the system. An approver sees only their own records until approval routes reports to them (#24). Whether owners and finance admins should change others’ records, or list them, is Q30.',
   },
   {
     id: 'F-51',
@@ -502,7 +502,7 @@ export const FEATURES: readonly Feature[] = [
     screens: ['/mileage/new'],
     flags: ['expenses.mileage'],
     checks: ['domain/mileage', 'db/mileage.int', 'api/mileage', 'e2e/expenses', 'e2e/signed-in'],
-    note: 'A drive is an expense of the person’s, source mileage, for miles × the IRS business rate in force on its date, with the drive and that rate on its mileage log (ADR-0038). So it lists with expenses, files to the trip its date falls in, joins its report and counts in every total with no change to them; its destination is its merchant and its purpose its justification. Add mileage is on the Expenses page and the drive on its expense’s page, both hidden while the flag is off. The IRS rates are known through 2026; a drive dated later is refused until the 2027 rate is added (Q31).',
+    note: 'A drive is an expense of the person’s, source mileage, for miles × the IRS business rate in force on its date, with the drive and that rate on its mileage log (ADR-0038). So it lists with expenses, files to the trip its date falls in, joins its report and counts in every total with no change to them; its destination is its merchant and its purpose its justification. Add mileage is on the Expenses page and the drive on its expense’s page, both hidden while the flag is off. The IRS rates are known through 2026; a drive dated later is refused until the 2027 rate is added (Q28).',
   },
   {
     id: 'F-14',
@@ -755,7 +755,7 @@ export const FEATURES: readonly Feature[] = [
     screens: ['/settings/categories'],
     flags: ['expenses.categories'],
     checks: ['domain/categories', 'db/categories.int', 'api/categories', 'e2e/signed-in'],
-    note: 'Two lists that each nest, and the types each category allows (Q7). Every organization starts with five categories and nine types, seeded for those that existed and for each new one; owners and finance admins rename, add, move, code and retire them, and delete one only while no expense has it. An expense without a category and type says so on its page and in the list, and blocks nothing (Q29, GAP-29). Behind `expenses.categories`, which also brings suggestions (F-15). Seven screens in the signed-in checks.',
+    note: 'Two lists that each nest, and the types each category allows (Q7). Every organization starts with five categories and nine types, seeded for those that existed and for each new one; owners and finance admins rename, add, move, code and retire them, and delete one only while no expense has it. An expense without a category and type says so on its page and in the list, and blocks nothing (Q27, GAP-28). Behind `expenses.categories`, which also brings suggestions (F-15). Seven screens in the signed-in checks.',
   },
   {
     id: 'F-15',
@@ -902,8 +902,8 @@ export const FEATURES: readonly Feature[] = [
       'api/expenses › finds the expenses on no trip, or on some trip (Home’s figures open them)',
       'e2e/signed-in',
     ],
-    shortfalls: ['GAP-31'],
-    note: 'Needs you, then the trip under way or next, this month, receipts being read, reports to finish (since PR #52) and recent trips, from one request built for the person’s own day. Each figure opens its list; the Expenses page takes the search from the link. Mileage exists since PR #58 (#17), and a drive counts in this month’s spend like any expense; the business miles figure itself is #74.',
+    shortfalls: ['GAP-30'],
+    note: 'Needs you, then the trip under way or next, this month, receipts being read, reports to finish (since PR #52) and recent trips, from one request built for the person’s own day. Each figure opens its list; the Expenses page takes the search from the link. Mileage exists since PR #58 (#17), and a drive counts in this month’s spend like any expense; the business miles figure itself is #73.',
   },
 
   // Domain rules: built and tested ahead of the screens that will use them

@@ -1377,7 +1377,7 @@ export const OPERATIONS_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Since PR #58 a reading the app made Ready can be corrected in place with a tap, with Where each field was read switched on (US-READ-26), until its expense is submitted.',
+    note: 'Since PR #58 a reading the app made Ready can be corrected in place with a tap, with Where each field was read switched on (US-READ-21), until its expense is submitted.',
   },
   {
     id: 'US-UX-05',
@@ -1386,7 +1386,7 @@ export const OPERATIONS_STORIES: readonly Story[] = [
     want: 'every date shown the same way, as Sep 30, 2026, with the time as 1:12 PM where it matters',
     soThat: 'I never wonder whether 10/3 means October 3 or 10 March',
     requirements: ['NFR-UX-06'],
-    status: 'Planned',
+    status: 'Partial',
     criteria: [
       {
         id: 'AC1',
@@ -1394,7 +1394,11 @@ export const OPERATIONS_STORIES: readonly Story[] = [
         when: 'I read it',
         then: 'it reads like Sep 30, 2026',
         decided: Q12,
-        checks: [],
+        checks: [
+          'domain/display › shows a calendar date as Sep 30, 2026, never moved a day by a time zone',
+          'domain/display › shows two dates as one range, naming the month and year once where they repeat',
+          'e2e/signed-in',
+        ],
       },
       {
         id: 'AC2',
@@ -1402,7 +1406,7 @@ export const OPERATIONS_STORIES: readonly Story[] = [
         when: 'it is shown',
         then: 'it follows the date as 1:12 PM',
         decided: Q12,
-        checks: [],
+        checks: ['domain/display › shows the time as 1:12 PM where it matters, after the date'],
       },
       {
         id: 'AC3',
@@ -1411,6 +1415,7 @@ export const OPERATIONS_STORIES: readonly Story[] = [
         then: 'it keeps the phone’s own date picker',
         decided: CLAUDE,
         checks: [],
+        untested: 66,
       },
       {
         id: 'AC4',
@@ -1419,6 +1424,7 @@ export const OPERATIONS_STORIES: readonly Story[] = [
         then: 'the date stays exactly as the model read it, so a difference between readings stays visible',
         decided: CLAUDE,
         checks: [],
+        untested: 66,
       },
     ],
     note: 'Your answer to Q12 (#55). The date picker and the reading table were the exceptions the question set out; your answer chose the format.',

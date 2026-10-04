@@ -937,7 +937,7 @@ export const REPORT_STORIES: readonly Story[] = [
         then: 'the general ledger and tax codes go on the category, and the rules, such as attendees, a mileage rate or a receipt being needed, go on the type',
         decided: { by: 'claude' },
         checks: [],
-        untested: 72,
+        untested: 71,
       },
       {
         id: 'AC5',
@@ -1018,7 +1018,7 @@ export const REPORT_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Your answer to Q7 chose two trees, the category narrowing the types. AC3 to AC6, AC9 and AC10 are Claude’s assumptions (FR-EXP-11, ADR-0036), yours to overturn. The ready-made set: Travel (Airfare, Lodging, Ground transport, Mileage), Meals (Business meal, Per-diem meal), Office (Office supplies), Software (Software) and Other (Other). Rules on types wait until the rules themselves are built (#72).',
+    note: 'Your answer to Q7 chose two trees, the category narrowing the types. AC3 to AC6, AC9 and AC10 are Claude’s assumptions (FR-EXP-11, ADR-0036), yours to overturn. The ready-made set: Travel (Airfare, Lodging, Ground transport, Mileage), Meals (Business meal, Per-diem meal), Office (Office supplies), Software (Software) and Other (Other). Rules on types wait until the rules themselves are built (#71).',
   },
   {
     id: 'US-RPT-13',
@@ -1037,7 +1037,7 @@ export const REPORT_STORIES: readonly Story[] = [
         then: 'it carries a category and a type',
         decided: OCT3,
         checks: [],
-        untested: 72,
+        untested: 71,
       },
       {
         id: 'AC2',
@@ -1070,7 +1070,7 @@ export const REPORT_STORIES: readonly Story[] = [
         then: 'it is not in Needs you, and holds nothing up',
         decided: { by: 'claude', source: 'ADR-0036' },
         checks: [],
-        untested: 72,
+        untested: 71,
       },
       {
         id: 'AC5',
@@ -1116,10 +1116,10 @@ export const REPORT_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'An expense without a category and type says so but holds nothing up, Claude’s choice so that nothing working today is blocked by switching categories on, and so that Needs you isn’t filled with every expense you already have (ADR-0036). Whether submitting a report should need them is Q29; #72 builds the answer and its test.',
+    note: 'An expense without a category and type says so but holds nothing up, Claude’s choice so that nothing working today is blocked by switching categories on, and so that Needs you isn’t filled with every expense you already have (ADR-0036). Whether submitting a report should need them is Q27; #71 builds the answer and its test.',
   },
   {
-    id: 'US-RPT-24',
+    id: 'US-RPT-16',
     title: 'Export a closed report as a spreadsheet',
     as: 'Riley, a solo professional who self-attests',
     want: 'to download a closed report as a CSV file',
@@ -1217,10 +1217,10 @@ export const REPORT_STORIES: readonly Story[] = [
         untested: 66,
       },
     ],
-    note: 'FR-SET-01 asks for approved reports. You asked for export before approval (#24), so until approval exists a closed report is exported: AC5 is Claude’s reading, yours to confirm, and Q32 asks what export should take once approval exists. The columns, who may export and the CSV’s form are Claude’s too. A converted amount joins as a column with your reimbursement currency (#62). The file’s name is checked through the API; tapping the buttons is not yet checked end to end.',
+    note: 'FR-SET-01 asks for approved reports. You asked for export before approval (#24), so until approval exists a closed report is exported: AC5 is Claude’s reading, yours to confirm, and Q29 asks what export should take once approval exists. The columns, who may export and the CSV’s form are Claude’s too. A converted amount joins as a column with your reimbursement currency (#62). The file’s name is checked through the API; tapping the buttons is not yet checked end to end.',
   },
   {
-    id: 'US-RPT-25',
+    id: 'US-RPT-17',
     title: 'Export a closed report as a PDF summary',
     as: 'Riley, a solo professional who self-attests',
     want: 'a closed report as one PDF document, with its totals',

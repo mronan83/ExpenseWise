@@ -25,7 +25,7 @@ Expense, receipt, mileage and trip app. A pnpm + Turborepo TypeScript monorepo, 
 ## Conventions
 
 - Conventional Commits, small PRs, and the PR template's Definition of Done.
-- Tests sit next to domain code (`*.test.ts`). Integration tests are in `packages/db/test` (`*.int.test.ts`).
+- Tests sit next to domain code (`*.test.ts`). Integration tests are in `packages/db/test` and `packages/api/test` (`*.int.test.ts`).
 - A flaky test is a bug. Never skip, quarantine or retry to get to green.
 
 ## Records: requirements, traceability and backlog

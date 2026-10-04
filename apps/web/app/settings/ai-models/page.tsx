@@ -1,5 +1,6 @@
 'use client';
 
+import { showDate } from '@expensewise/domain';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiProblem } from '../../../lib/api';
@@ -368,11 +369,7 @@ function Models({
       ) : null}
       <p className="text-xs text-ink-2">
         {settings.saved && settings.updatedAt
-          ? `Last changed ${new Date(settings.updatedAt).toLocaleDateString('en-US', {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
-            })}. Every change is in the audit trail.`
+          ? `Last changed ${showDate(settings.updatedAt)}. Every change is in the audit trail.`
           : 'These are the starting choices: nothing has been saved yet.'}
       </p>
     </section>

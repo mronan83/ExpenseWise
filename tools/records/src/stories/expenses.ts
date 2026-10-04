@@ -1006,7 +1006,7 @@ export const EXPENSE_STORIES: readonly Story[] = [
         checks: [],
       },
     ],
-    note: 'Mileage is built (#17), and business miles join Home with #74; what awaits reimbursement once payouts exist.',
+    note: 'Mileage is built (#17), and business miles join Home with #73; what awaits reimbursement once payouts exist.',
   },
   // Category suggestions (FR-INT-10, ADR-0036)
   {

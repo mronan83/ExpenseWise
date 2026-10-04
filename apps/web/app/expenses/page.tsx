@@ -1,5 +1,6 @@
 'use client';
 
+import { showDate } from '@expensewise/domain';
 import Link from 'next/link';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, ApiProblem } from '../../lib/api';
@@ -145,7 +146,7 @@ export default function ExpensesPage() {
                       <span className={EXPENSE_STATUS[e.status].tone}>
                         {EXPENSE_STATUS[e.status].label}
                       </span>
-                      {e.date ? ` · ${e.date}` : ''}
+                      {e.date ? ` · ${showDate(e.date)}` : ''}
                       {e.source === 'mileage' ? ' · Mileage' : ''}
                       {e.trip ? ` · ${e.trip.name}` : ''}
                       {e.matchesReceipt === false ? (

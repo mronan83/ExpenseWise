@@ -1,5 +1,6 @@
 'use client';
 
+import { showDateTime } from '@expensewise/domain';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
@@ -209,7 +210,7 @@ export default function ReceiptPage() {
                 </Link>
               ) : null}
               <span className="text-xs text-ink-2">
-                Added by {receipt.uploadedBy}, {new Date(receipt.createdAt).toLocaleString()}
+                Added by {receipt.uploadedBy}, {showDateTime(receipt.createdAt)}
               </span>
             </div>
             {message ? (
@@ -329,11 +330,7 @@ function shown(side: DuplicateSide, field: MergeField): string | null {
   }
 }
 
-const added = (side: DuplicateSide) =>
-  `${new Date(side.createdAt).toLocaleString(undefined, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  })}, by ${side.source}`;
+const added = (side: DuplicateSide) => `${showDateTime(side.createdAt)}, by ${side.source}`;
 
 type Which = 'self' | 'other';
 
@@ -1228,7 +1225,8 @@ function Comparison({ receipt, sources }: { receipt: ReceiptDetail; sources: boo
       <h2 id="readings-title" className="sr-only">
         What each model read
       </h2>
-      <table className="w-full table-fixed text-sm">
+      {/* Dates stay exactly as each model read them, so a difference shows (NFR-UX-06). */}
+      <table data-as-read className="w-full table-fixed text-sm">
         <caption className="sr-only">Each model&apos;s reading, side by side</caption>
         <thead>
           <tr className="text-left">
