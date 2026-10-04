@@ -24,6 +24,7 @@ import {
   type ReceiptDetail,
   type TextField,
 } from '../../../lib/receipts';
+import { placeOf } from '../../../lib/expenses';
 import { supabase } from '../../../lib/supabase';
 
 type Load =
@@ -123,8 +124,8 @@ export default function ReceiptPage() {
   const held = receipt?.duplicates.some((d) => d.held) ?? false;
 
   /** After a decision: this page if this receipt was kept, else the one that was. */
-  async function decided(result: Resolution) {
-    setMessage(RESOLVED[result.outcome]);
+  async function decided(result: Resolution, note?: string) {
+    setMessage(note ?? RESOLVED[result.outcome]);
     if (result.kept === id) await refresh();
     else router.replace(`/receipts/${result.kept}`);
   }
@@ -228,7 +229,9 @@ function Verdict({ receipt, stale }: { receipt: ReceiptDetail; stale: boolean })
   } else if (receipt.status === 'failed') {
     text = 'No model could read it. See why below.';
   } else if (receipt.duplicates.some((d) => d.held)) {
-    text = 'It looks like the same purchase as another receipt. Decide below before it counts.';
+    text = receipt.duplicates.some((d) => d.held && d.kind === 'exact')
+      ? 'It is a copy of another receipt. Decide below before it counts.'
+      : 'It looks like the same purchase as another receipt. Decide below before it counts.';
   } else if (fallback?.fields) {
     text = [
       `Claude couldn't read it, so ${fallback.label} did. One reading, so check it before you rely on it.`,
@@ -298,23 +301,25 @@ const added = (side: DuplicateSide) =>
 type Which = 'self' | 'other';
 
 /**
- * Another receipt that looks like the same purchase (FR-INT-18, ADR-0028), side by side with
- * this one, and what the person decides: keep both, delete one, or merge one into the other.
- * Deleting goes with the receipt's file and expense, so it asks first.
+ * Another receipt that is the same purchase (FR-INT-18, ADR-0028, ADR-0031), side by side
+ * with this one, and what the person decides. An exact copy is deleted with one tap; a
+ * possible one can replace the earlier receipt; either can be kept, deleted or merged.
+ * Deleting one of the person's choosing goes with its file and expense, so it asks first.
  */
 function Duplicate({
   pair,
   onDecided,
 }: {
   pair: PossibleDuplicate;
-  onDecided: (result: Resolution) => void;
+  onDecided: (result: Resolution, note?: string) => void;
 }) {
-  const { self, other, held } = pair;
+  const { self, other, held, kind } = pair;
   const sides: Record<Which, DuplicateSide> = { self, other };
   // The later copy is the one held; the earlier is the one to keep, unless it is locked.
   const copy: Which = held ? 'self' : 'other';
   const original: Which = held ? 'other' : 'self';
   const [mode, setMode] = useState<'choose' | 'delete' | 'merge'>('choose');
+  const [allChoices, setAllChoices] = useState(kind === 'possible');
   const [doomed, setDoomed] = useState<Which>(copy);
   const [primary, setPrimary] = useState<Which>(isLocked(sides[copy]) ? copy : original);
   const [fields, setFields] = useState<MergeField[]>([]);
@@ -333,7 +338,7 @@ function Duplicate({
   const mergeable = (which: Which) =>
     sides[which].expenseStatus === 'needs_review' || sides[which].expenseStatus === 'ready';
 
-  async function decide(body: Record<string, unknown>) {
+  async function decide(body: Record<string, unknown>, note?: string) {
     setBusy(true);
     setError(null);
     try {
@@ -342,6 +347,7 @@ function Duplicate({
           method: 'POST',
           body: JSON.stringify(body),
         }),
+        note,
       );
     } catch (e) {
       setError(describeError(e));
@@ -350,6 +356,27 @@ function Duplicate({
   }
 
   const keep = (which: Which) => sides[which === 'self' ? 'other' : 'self'].receiptId;
+  // One tap, keeping the earlier receipt; it takes any note or trip only the copy has.
+  const deleteCopy = () =>
+    void decide(
+      mergeable(original)
+        ? { action: 'merge', primary: sides[original].receiptId, fields: [] }
+        : { action: 'delete', keep: sides[original].receiptId },
+      'Deleted the copy, its file and its expense.',
+    );
+  // The later receipt stays, as for an amended one, taking any note or trip it lacks.
+  const replaceEarlier = () =>
+    void decide(
+      { action: 'merge', primary: sides[copy].receiptId, fields: [] },
+      'Replaced the earlier receipt with this one.',
+    );
+  const totalsDiffer = shown(self, 'amount') !== shown(other, 'amount');
+  const intro =
+    kind === 'exact'
+      ? held
+        ? 'This is a copy of an earlier receipt: the same merchant, day, time and total.'
+        : 'A later receipt is a copy of this one: the same merchant, day, time and total.'
+      : `${held ? 'This looks like the same purchase as an earlier receipt' : 'A later receipt looks like the same purchase as this one'}${totalsDiffer ? ', with another total, as when a tip is added or a receipt amended' : ''}.`;
   const choice = (
     group: string,
     value: Which,
@@ -380,13 +407,9 @@ function Duplicate({
       className="flex flex-col gap-3 rounded-xl border border-rule bg-sheet p-4 text-sm"
     >
       <h2 id={`duplicate-${other.receiptId}`} className="text-base font-semibold">
-        Possible duplicate
+        {kind === 'exact' ? 'Duplicate' : 'Possible duplicate'}
       </h2>
-      <p>
-        {held
-          ? 'This looks like the same purchase as an earlier receipt. It stays out of your totals until you decide.'
-          : 'A later receipt looks like the same purchase as this one. It stays out of your totals until you decide.'}
-      </p>
+      <p>{intro} It stays out of your totals until you decide.</p>
       <table className="w-full table-fixed">
         <caption className="sr-only">This receipt and the other, side by side</caption>
         <thead>
@@ -438,6 +461,28 @@ function Duplicate({
               </tr>
             );
           })}
+          {(['Time', 'Place'] as const).map((label) => {
+            const [mine, theirs] = [self, other].map((side) =>
+              label === 'Time' ? side.time : placeOf(side),
+            );
+            const differs = mine !== theirs;
+            return (
+              <tr
+                key={label}
+                className={`border-t border-rule align-top ${differs ? 'bg-carbon-wash' : ''}`}
+              >
+                <th scope="row" className="py-2 text-left text-xs font-medium text-ink-2">
+                  {label}
+                  {differs ? <span className="block text-warn">differs</span> : null}
+                </th>
+                {[mine, theirs].map((value, i) => (
+                  <td key={i} className="py-2 pr-2 break-words tabular-nums">
+                    {value ?? <span className="text-ink-3">–</span>}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
           <tr className="border-t border-rule align-top">
             <th scope="row" className="py-2 text-left text-xs font-medium text-ink-2">
               Added
@@ -451,8 +496,39 @@ function Duplicate({
         </tbody>
       </table>
 
+      {mode === 'choose' && kind === 'exact' && !isLocked(sides[copy]) ? (
+        <p className="text-xs text-ink-2">
+          Delete the copy keeps the earlier receipt, which takes any note or trip only the copy has.
+        </p>
+      ) : null}
+      {mode === 'choose' && kind === 'possible' && mergeable(copy) && !isLocked(sides[original]) ? (
+        <p className="text-xs text-ink-2">
+          Replace keeps the later receipt, as for an amended one, and deletes the earlier; any note
+          or trip only the earlier has moves across.
+        </p>
+      ) : null}
       {mode === 'choose' ? (
         <div className="flex flex-wrap gap-2">
+          {kind === 'exact' && !isLocked(sides[copy]) ? (
+            <button
+              type="button"
+              onClick={deleteCopy}
+              disabled={busy}
+              className="rounded-lg bg-bad px-3 py-2 text-sm font-semibold text-paper disabled:opacity-60"
+            >
+              {busy ? 'Deleting…' : 'Delete the copy'}
+            </button>
+          ) : null}
+          {kind === 'possible' && mergeable(copy) && !isLocked(sides[original]) ? (
+            <button
+              type="button"
+              onClick={replaceEarlier}
+              disabled={busy}
+              className="rounded-lg bg-carbon px-3 py-2 text-sm font-semibold text-carbon-ink disabled:opacity-60"
+            >
+              {busy ? 'Replacing…' : 'Replace the earlier one'}
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={() => void decide({ action: 'keep_both' })}
@@ -461,22 +537,35 @@ function Duplicate({
           >
             Keep both
           </button>
-          <button
-            type="button"
-            onClick={() => setMode('delete')}
-            disabled={busy}
-            className="rounded-lg border border-rule px-3 py-2 text-sm font-semibold text-bad disabled:opacity-60"
-          >
-            Delete one
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode('merge')}
-            disabled={busy}
-            className="rounded-lg border border-rule px-3 py-2 text-sm font-semibold disabled:opacity-60"
-          >
-            Merge
-          </button>
+          {allChoices ? (
+            <>
+              <button
+                type="button"
+                onClick={() => setMode('delete')}
+                disabled={busy}
+                className="rounded-lg border border-rule px-3 py-2 text-sm font-semibold text-bad disabled:opacity-60"
+              >
+                Delete one
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('merge')}
+                disabled={busy}
+                className="rounded-lg border border-rule px-3 py-2 text-sm font-semibold disabled:opacity-60"
+              >
+                Merge
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setAllChoices(true)}
+              disabled={busy}
+              className="rounded-lg border border-rule px-3 py-2 text-sm font-semibold disabled:opacity-60"
+            >
+              Other choices
+            </button>
+          )}
         </div>
       ) : null}
 

@@ -5,7 +5,14 @@ import type {
   ReceiptRecord,
   ReceiptReviewRecord,
 } from '@expensewise/db';
-import { isCurrencyCode, money, toDecimal, zero, type Money } from '@expensewise/domain';
+import {
+  duplicateKind,
+  isCurrencyCode,
+  money,
+  toDecimal,
+  zero,
+  type Money,
+} from '@expensewise/domain';
 import {
   assumedZeros,
   COMPARISON_MODELS,
@@ -275,8 +282,18 @@ function duplicateSideView(side: DuplicateSide) {
     amount: amountView(side.amountMinor, side.currency),
     notes: side.notes,
     trip: side.tripId && side.tripName ? { id: side.tripId, name: side.tripName } : null,
+    time: side.time,
+    address: side.address,
+    city: side.city,
+    country: side.country,
   };
 }
+
+/**
+ * How sure the pair is, judged on what both say now (ADR-0031). A pair whose expenses have
+ * since been edited apart stays a possible one until the person decides.
+ */
+const kindOf = (p: DuplicatePairRecord) => duplicateKind(p.self, p.other) ?? 'possible';
 
 /**
  * The receipts this one may duplicate, side by side with it, for the person to keep both,
@@ -287,6 +304,7 @@ export function duplicatesOf(receiptId: string, pairs: readonly DuplicatePairRec
   return pairs
     .filter((p) => p.receiptId === receiptId)
     .map((p) => ({
+      kind: kindOf(p),
       held: p.heldReceiptId === receiptId,
       self: duplicateSideView(p.self),
       other: duplicateSideView(p.other),
@@ -324,6 +342,7 @@ export function needsYouReason(
       ...none,
       code: 'duplicate' as const,
       duplicateOf: {
+        kind: kindOf(held),
         receiptId: other.receiptId,
         merchant: other.merchant,
         date: other.transactionDate,

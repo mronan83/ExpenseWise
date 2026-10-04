@@ -2,7 +2,7 @@
 
 Two receipts that read as the same purchase are a possible duplicate. The later one waits in Needs you and counts in no total until the person keeps both, deletes one, or merges one into the other. Deleting removes the receipt with everything that hangs off it, through one function the app can call but can't get around, and the file goes once that has committed.
 
-- **Status:** Accepted (requirement and merge and delete rules decided by product owner, Oct 3; matching and mechanism recommended, no objection)
+- **Status:** Accepted (requirement and merge and delete rules decided by product owner, Oct 3; matching and mechanism recommended, no objection). Its matching rule is amended by [ADR-0031](0031-duplicates-on-time-and-place.md).
 - **Date:** 2026-10-04
 - **Deciders:** Product owner (what is a duplicate to them, merge and delete); Claude (principal architect), for the design
 - **Decision register:** D-30. Builds on [ADR-0021](0021-confirming-a-reading.md) and [ADR-0022](0022-expense-follows-its-receipt.md).

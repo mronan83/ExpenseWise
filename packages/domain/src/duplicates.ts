@@ -48,29 +48,96 @@ export function similarMerchants(a: string, b: string): boolean {
 }
 
 /**
- * Whether two expenses look like one purchase filed twice (FR-INT-18): the same currency and
- * total, dated within a day, from a similar merchant. Every one of those must be known on
- * both, since a guess about a missing field is no evidence.
+ * How far apart two printings of one purchase may be: the itemized bill and the card slip with
+ * the tip on it come minutes apart.
  */
-export function looksLikeSamePurchase(a: ExpenseValues, b: ExpenseValues): boolean {
-  if (
-    a.merchant === null ||
-    a.transactionDate === null ||
-    a.currency === null ||
-    a.amountMinor === null ||
-    b.merchant === null ||
-    b.transactionDate === null ||
-    b.currency === null ||
-    b.amountMinor === null
-  ) {
-    return false;
+export const DUPLICATE_TIME_WINDOW_MINUTES = 30;
+
+/** What a duplicate check knows of a purchase: what is claimed, and when and where it was. */
+export interface PurchaseFacts extends ExpenseValues {
+  readonly time: string | null;
+  readonly address: string | null;
+  readonly city: string | null;
+  readonly country: string | null;
+}
+
+/** exact: the same in everything both say. possible: the same purchase, perhaps amended. */
+export type DuplicateKind = 'exact' | 'possible';
+
+/** Spellings of the same street word, as printed on receipts. */
+const STREET_WORDS: Readonly<Record<string, string>> = {
+  street: 'st',
+  avenue: 'ave',
+  road: 'rd',
+  boulevard: 'blvd',
+  drive: 'dr',
+  suite: 'ste',
+  north: 'n',
+  south: 's',
+  east: 'e',
+  west: 'w',
+};
+
+const placeWords = (text: string) => merchantWords(text).map((word) => STREET_WORDS[word] ?? word);
+
+/**
+ * Whether two purchases were in the same place: the same city, or failing that addresses whose
+ * shorter's words are all in the longer. A different country says no. Null when either doesn't
+ * say where.
+ */
+export function samePlace(a: PurchaseFacts, b: PurchaseFacts): boolean | null {
+  if (a.country !== null && b.country !== null && a.country !== b.country) return false;
+  if (a.city !== null && b.city !== null) {
+    return placeWords(a.city).join('') === placeWords(b.city).join('');
   }
-  return (
+  if (a.address !== null && b.address !== null) {
+    const x = placeWords(a.address);
+    const y = placeWords(b.address);
+    if (x.length === 0 || y.length === 0) return null;
+    const [shorter, longer] = x.length <= y.length ? [x, y] : [y, x];
+    const words = new Set(longer);
+    return shorter.every((word) => words.has(word));
+  }
+  return null;
+}
+
+const minutesOf = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
+
+/**
+ * Whether two receipts are one purchase filed twice (FR-INT-18, ADR-0031), and how sure:
+ *
+ * - With a time and a place on both, those decide, whatever the total: a similar merchant, the
+ *   same place and day, and times at most half an hour apart. Exact when the time and the
+ *   total are the same too; possible otherwise, as with a tip added or an amended receipt.
+ * - With the time on both but the place on neither or one, the total must match too.
+ * - With the time on one or neither, the earlier rule stands (Q18): a similar merchant, the
+ *   same currency and total, dated a day apart at most. Possible, never exact.
+ *
+ * A merchant and a date must be known on both, since a guess about a missing one is no evidence.
+ */
+export function duplicateKind(a: PurchaseFacts, b: PurchaseFacts): DuplicateKind | null {
+  if (a.merchant === null || b.merchant === null) return null;
+  if (a.transactionDate === null || b.transactionDate === null) return null;
+  if (!similarMerchants(a.merchant, b.merchant)) return null;
+  const sameTotal =
+    a.currency !== null &&
     a.currency === b.currency &&
-    a.amountMinor === b.amountMinor &&
-    Math.abs(daysBetween(a.transactionDate, b.transactionDate)) <= DUPLICATE_DAY_WINDOW &&
-    similarMerchants(a.merchant, b.merchant)
-  );
+    a.amountMinor !== null &&
+    a.amountMinor === b.amountMinor;
+  const place = samePlace(a, b);
+  if (place === false) return null;
+
+  if (a.time !== null && b.time !== null) {
+    if (a.transactionDate !== b.transactionDate) return null;
+    const apart = Math.abs(minutesOf(a.time) - minutesOf(b.time));
+    if (apart > DUPLICATE_TIME_WINDOW_MINUTES) return null;
+    if (sameTotal) return apart === 0 ? 'exact' : 'possible';
+    return place === true ? 'possible' : null;
+  }
+  return sameTotal &&
+    Math.abs(daysBetween(a.transactionDate, b.transactionDate)) <= DUPLICATE_DAY_WINDOW
+    ? 'possible'
+    : null;
 }
 
 /** What a merge can take from the duplicate into the primary. An amount brings its currency. */

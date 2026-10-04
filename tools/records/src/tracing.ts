@@ -14,6 +14,10 @@ export const GAPS: readonly Gap[] = [
       'Your review of Oct 4: the same purchase with a tip added, or an amended receipt, has another total, so it isn’t flagged. Since PR #49 a match needs the same vendor and total, dated a day apart at most; time and place aren’t read from receipts yet.',
     fix: 'Match on vendor, date, time and location, the total free to differ, and tell a duplicate (everything the same) from a possible one that may need a merge or a replacement (#61, after #53).',
     backlog: 61,
+    closed: {
+      date: '2026-10-04',
+      note: 'PR #54 (ADR-0031): with a time and a place on both receipts, a similar merchant at the same place on the same day, at most 30 minutes apart, is one purchase, whatever the total; exact when the minute and the total match too. Without them, the total still decides (Q18).',
+    },
   },
   {
     id: 'GAP-01',
@@ -541,6 +545,12 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-04',
+    change:
+      'Duplicates matched on time and place, exact or possible (#61; FR-INT-18 and F-48 Verified; GAP-23 closed; ADR-0031). Where both receipts say when and where, those decide, whatever the total: a similar merchant at the same place on the same day, at most 30 minutes apart, is one purchase. Exact when the minute and the total match too: Delete the copy takes one tap. Otherwise possible, as with the card slip and its tip: Replace the earlier one keeps the later receipt. Receipts that don’t both say when and where are still matched on the total, a day either way (Q18). Two purchases at the same café hours apart are no longer flagged. The 30 minutes is Claude’s reading of “the same time”, yours to change.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-04',
     change:

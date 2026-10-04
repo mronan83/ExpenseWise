@@ -301,13 +301,25 @@ const DuplicateSideSchema = z
     amount: DuplicateAmountSchema,
     notes: z.string().nullable(),
     trip: z.object({ id: z.string().uuid(), name: z.string() }).nullable(),
+    time: z.string().nullable().openapi({ description: 'When it was bought, HH:MM local time.' }),
+    address: z.string().nullable(),
+    city: z.string().nullable(),
+    country: z.string().nullable().openapi({ description: 'ISO 3166-1 alpha-2.' }),
   })
   .openapi('DuplicateSide', {
     description: 'One receipt of a possible duplicate pair, with the expense it proves.',
   });
 
+const DuplicateKindSchema = z.enum(['exact', 'possible']).openapi({
+  description:
+    'exact: the same merchant, day, time and total, and no other place. possible: the same ' +
+    'purchase perhaps amended, such as a tip added, or matched on the total alone where the ' +
+    'receipts don’t both say when and where (FR-INT-18, ADR-0031).',
+});
+
 export const PossibleDuplicateSchema = z
   .object({
+    kind: DuplicateKindSchema,
     held: z.boolean().openapi({
       description:
         'Whether this receipt is the later copy, which needs a look until the person decides ' +
@@ -388,6 +400,7 @@ export const NeedsYouReasonSchema = z
       .openapi({ description: 'fallback: the model that read it.', example: 'GPT-5.6 Luna' }),
     duplicateOf: z
       .object({
+        kind: DuplicateKindSchema,
         receiptId: z.string().uuid(),
         merchant: z.string().nullable(),
         date: z.string().nullable(),

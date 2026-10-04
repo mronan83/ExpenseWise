@@ -88,7 +88,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   receipt_duplicates: {
     about:
-      'Two of a member’s receipts that read as the same purchase: same currency and total, dated a day apart at most, a similar merchant (FR-INT-18). The later one is held: it needs a look, whatever its reading settled to, which is kept here to restore, and its expense counts in no total. Open until the person decides. Keep both dismisses the pair, which is never flagged again; delete and merge remove the row with the receipt (ADR-0028).',
+      'Two of a member’s receipts that read as the same purchase (FR-INT-18): with a time and a place on both, a similar merchant at the same place on the same day, at most 30 minutes apart, whatever the total; otherwise the same currency and total, dated a day apart at most (ADR-0031). Whether a pair is exact or possible is judged from both expenses when shown, and the audit event records it as flagged. The later one is held: it needs a look, whatever its reading settled to, which is kept here to restore, and its expense counts in no total. Open until the person decides. Keep both dismisses the pair, which is never flagged again; delete and merge remove the row with the receipt (ADR-0028).',
   },
   inbound_emails: {
     about:

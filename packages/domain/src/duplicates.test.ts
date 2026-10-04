@@ -1,19 +1,34 @@
 import { describe, expect, it } from 'vitest';
 import {
-  looksLikeSamePurchase,
+  duplicateKind,
   mergeExpenses,
   merchantWords,
+  samePlace,
   similarMerchants,
   type MergeableExpense,
+  type PurchaseFacts,
 } from './duplicates.ts';
 import type { ExpenseValues } from './expense-values.ts';
 
-const ride: ExpenseValues = {
+const claim: ExpenseValues = {
   merchant: 'Uber',
   transactionDate: '2026-10-02',
   currency: 'USD',
   amountMinor: 3142,
 };
+const ride: PurchaseFacts = { ...claim, time: null, address: null, city: null, country: null };
+/** A dinner's itemized bill, and the card slip printed after it with the tip. */
+const bill: PurchaseFacts = {
+  merchant: 'Pappas Bros. Steakhouse',
+  transactionDate: '2026-09-23',
+  currency: 'USD',
+  amountMinor: 9310,
+  time: '19:58',
+  address: '1200 McKinney St, Houston, TX 77010',
+  city: 'Houston',
+  country: 'US',
+};
+const slip: PurchaseFacts = { ...bill, time: '20:03', amountMinor: 10810 };
 
 describe('merchant names', () => {
   it('reduces a name to its words, without case, accents, punctuation or company suffixes', () => {
@@ -35,29 +50,67 @@ describe('merchant names', () => {
   });
 });
 
-describe('the same purchase filed twice', () => {
-  it('matches the same currency and total, a day apart at most, from a similar merchant', () => {
-    expect(looksLikeSamePurchase(ride, { ...ride, merchant: 'Uber Technologies' })).toBe(true);
-    expect(looksLikeSamePurchase(ride, { ...ride, transactionDate: '2026-10-03' })).toBe(true);
+describe('where a purchase was', () => {
+  it('is the same city, or addresses with the same words, street words spelled either way', () => {
+    expect(samePlace(bill, { ...bill, city: 'HOUSTON' })).toBe(true);
+    const unnamed = { ...bill, city: null };
+    expect(
+      samePlace(unnamed, { ...unnamed, address: '1200 MCKINNEY STREET, HOUSTON TX 77010' }),
+    ).toBe(true);
+    expect(samePlace(unnamed, { ...unnamed, address: '5839 Westheimer Rd, Houston' })).toBe(false);
   });
 
-  it('does not match a different total, currency, merchant, or dates two days apart', () => {
-    expect(looksLikeSamePurchase(ride, { ...ride, amountMinor: 3143 })).toBe(false);
-    expect(looksLikeSamePurchase(ride, { ...ride, currency: 'CAD' })).toBe(false);
-    expect(looksLikeSamePurchase(ride, { ...ride, merchant: 'Lyft' })).toBe(false);
-    expect(looksLikeSamePurchase(ride, { ...ride, transactionDate: '2026-10-04' })).toBe(false);
+  it('is somewhere else in another city or country, and unknown when either doesn’t say', () => {
+    expect(samePlace(bill, { ...bill, city: 'Dallas' })).toBe(false);
+    expect(samePlace(bill, { ...bill, country: 'CA' })).toBe(false);
+    expect(samePlace(bill, { ...bill, city: null, address: null })).toBeNull();
+  });
+});
+
+describe('the same purchase filed twice (FR-INT-18)', () => {
+  it('is exact when the time, place and total are all the same', () => {
+    expect(duplicateKind(bill, { ...bill, merchant: 'Pappas Bros Steakhouse' })).toBe('exact');
   });
 
-  it('never matches on a guess: every field must be known on both', () => {
-    expect(looksLikeSamePurchase(ride, { ...ride, merchant: null })).toBe(false);
-    expect(looksLikeSamePurchase({ ...ride, transactionDate: null }, ride)).toBe(false);
+  it('is possible when the total differs at the same time and place, as with a tip added', () => {
+    expect(duplicateKind(bill, slip)).toBe('possible');
+    expect(duplicateKind(bill, { ...bill, time: '20:10' })).toBe('possible');
+  });
+
+  it('is two purchases when they say different times, places or days, whatever the total', () => {
+    expect(duplicateKind(bill, { ...bill, time: '13:05' })).toBeNull();
+    expect(duplicateKind(bill, { ...bill, city: 'Dallas' })).toBeNull();
+    expect(duplicateKind(bill, { ...bill, transactionDate: '2026-09-24' })).toBeNull();
+    expect(duplicateKind(bill, { ...bill, merchant: 'Bayside Grill' })).toBeNull();
+  });
+
+  it('needs the total to match when only the time is known on both', () => {
+    const unplaced = { ...bill, address: null, city: null, country: null };
+    expect(duplicateKind(unplaced, { ...unplaced })).toBe('exact');
+    expect(duplicateKind(unplaced, { ...unplaced, amountMinor: 10810 })).toBeNull();
+  });
+
+  it('falls back to the total and a day either way without a time on both (Q18)', () => {
+    expect(duplicateKind(ride, { ...ride, merchant: 'Uber Technologies' })).toBe('possible');
+    expect(duplicateKind(ride, { ...ride, transactionDate: '2026-10-03' })).toBe('possible');
+    expect(duplicateKind(ride, { ...ride, time: '18:42' })).toBe('possible');
+    expect(duplicateKind(ride, { ...ride, amountMinor: 3143 })).toBeNull();
+    expect(duplicateKind(ride, { ...ride, currency: 'CAD' })).toBeNull();
+    expect(duplicateKind(ride, { ...ride, merchant: 'Lyft' })).toBeNull();
+    expect(duplicateKind(ride, { ...ride, transactionDate: '2026-10-04' })).toBeNull();
+  });
+
+  it('never matches on a guess: the merchant and the date must be known on both', () => {
+    expect(duplicateKind(ride, { ...ride, merchant: null })).toBeNull();
+    expect(duplicateKind({ ...ride, transactionDate: null }, ride)).toBeNull();
+    expect(duplicateKind({ ...bill, merchant: null }, bill)).toBeNull();
   });
 });
 
 describe('merging a duplicate into the primary', () => {
-  const primary: MergeableExpense = { ...ride, notes: null, tripId: null };
+  const primary: MergeableExpense = { ...claim, notes: null, tripId: null };
   const duplicate: MergeableExpense = {
-    ...ride,
+    ...claim,
     merchant: 'Uber Technologies',
     transactionDate: '2026-10-03',
     notes: 'Airport to office',
