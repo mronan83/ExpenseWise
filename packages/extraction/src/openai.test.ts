@@ -1,7 +1,19 @@
 import { describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import { OpenAIExtractor, ProviderHttpError, strictJsonSchema } from './openai.ts';
-import { PROMPT_VERSION, SYSTEM_PROMPT } from './prompt.ts';
-import type { ReceiptExtraction } from './schema.ts';
+import {
+  PROMPT_VERSION,
+  SOURCES_PROMPT_VERSION,
+  SOURCES_SYSTEM_PROMPT,
+  SYSTEM_PROMPT,
+} from './prompt.ts';
+import {
+  ReceiptExtractionSchema,
+  SCHEMA_VERSION,
+  SOURCES_SCHEMA_VERSION,
+  sourcesOf,
+  type ReceiptExtraction,
+} from './schema.ts';
 
 const parsed: ReceiptExtraction = {
   documentType: 'receipt',
@@ -185,5 +197,55 @@ describe('strictJsonSchema', () => {
       required: ['merchant', 'properties'],
       additionalProperties: false,
     });
+  });
+
+  it('asks for source lines in strict mode only when told to, and keeps them', async () => {
+    const sources = {
+      merchant: 'BAYSIDE GRILL',
+      date: null,
+      time: null,
+      address: null,
+      currency: null,
+      total: 'TOTAL 10.00',
+      subtotal: null,
+      taxes: null,
+      tip: null,
+      fees: null,
+      cardLastFour: null,
+    };
+    const answer = { ...parsed, sources };
+    const fetch = stubFetch(200, message({ type: 'output_text', text: JSON.stringify(answer) }));
+    const run = await new OpenAIExtractor(KEY, 'gpt-5.6-luna', {
+      fetch,
+      fieldSources: true,
+    }).extract(jpeg);
+    expect(run).toMatchObject({
+      outcome: 'extracted',
+      promptVersion: SOURCES_PROMPT_VERSION,
+      schemaVersion: SOURCES_SCHEMA_VERSION,
+    });
+    expect(sourcesOf(run.extraction)).toEqual(sources);
+    const body = JSON.parse(fetch.mock.calls[0]?.[1]?.body as string) as {
+      instructions: string;
+      tools?: unknown;
+      text: { format: { schema: { properties: Record<string, { required?: string[] }> } } };
+    };
+    expect(body.instructions).toBe(SOURCES_SYSTEM_PROMPT);
+    expect(body.text.format.schema.properties.sources?.required).toContain('total');
+    expect(body).not.toHaveProperty('tools');
+  });
+
+  it('sends the receipt-v3 prompt and schema unchanged when source lines are not asked for', async () => {
+    const fetch = stubFetch(200, message({ type: 'output_text', text: JSON.stringify(parsed) }));
+    const run = await new OpenAIExtractor(KEY, 'gpt-5.6-luna', { fetch }).extract(jpeg);
+    expect(run).toMatchObject({ promptVersion: PROMPT_VERSION, schemaVersion: SCHEMA_VERSION });
+    const body = JSON.parse(fetch.mock.calls[0]?.[1]?.body as string) as {
+      instructions: string;
+      text: { format: { schema: unknown } };
+    };
+    expect(body.instructions).toBe(SYSTEM_PROMPT);
+    expect(body.text.format.schema).toEqual(
+      strictJsonSchema(z.toJSONSchema(ReceiptExtractionSchema)),
+    );
   });
 });

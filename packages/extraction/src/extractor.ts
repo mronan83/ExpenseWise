@@ -25,6 +25,8 @@ export interface ExtractionRun {
   readonly extraction: ReceiptExtraction | null;
   readonly model: ModelId;
   readonly promptVersion: string;
+  /** The structure asked for; receipt-v3 when not given (ADR-0006). */
+  readonly schemaVersion?: string;
   readonly latencyMs: number;
   readonly usage: TokenUsage;
   readonly costNanoUsd: bigint;

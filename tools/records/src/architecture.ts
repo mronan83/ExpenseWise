@@ -124,21 +124,21 @@ export const COMPONENTS: readonly Component[] = [
     name: 'Data access',
     technology: 'Drizzle ORM on node-postgres',
     responsibility:
-      'The schema and migrations, `withOrg()` and every query and write, each with its audit event. Runs migrations and the data steps on release: one takes back anything Supabase’s Data API roles hold, another compares each receipt read before duplicates were looked for, once. Compares each receipt as its reading settles and holds a later copy; deletes a receipt only through `delete_receipt()`. Joins trips and local expenses to reports and closes them on day 28; any change to a closed report reopens it. Holds the restore drill’s database checks.',
+      'The schema and migrations, `withOrg()` and every query and write, each with its audit event. Runs migrations and the data steps on release: one takes back anything Supabase’s Data API roles hold, another compares each receipt read before duplicates were looked for, once. Compares each receipt as its reading settles and holds a later copy, and keeps when its first reading settled; corrects a Ready receipt’s field with its expense in one transaction; deletes a receipt only through `delete_receipt()`. Joins trips and local expenses to reports and closes them on day 28; any change to a closed report reopens it. Holds the restore drill’s database checks.',
     where: ['packages/db'],
   },
   {
     name: 'Receipt reading',
     technology: 'Anthropic SDK; OpenAI over HTTPS',
     responsibility:
-      'Turns an image or PDF into fields with a confidence each, through one prompt and one schema, the time of purchase and the merchant’s address among them. Works out a time zone from the city, region and country offline (city-timezones), so no address leaves ExpenseWise. Compares two Claude models and falls back to OpenAI; checks that a reading’s sums make its total, counting fees as well as tax and tip, that its date is plausible and that it isn’t a purchase summary before it can be Ready; checks a reading against the expense.',
+      'Turns an image or PDF into fields with a confidence each, through one prompt and one schema, the time of purchase and the merchant’s address among them; where an organization switched on Where each field was read, a variant of both also asks for the line of the receipt behind each field, under its own versions, and every other organization’s request is unchanged (GAP-14). Works out a time zone from the city, region and country offline (city-timezones), so no address leaves ExpenseWise. Compares two Claude models and falls back to OpenAI; checks that a reading’s sums make its total, counting fees as well as tax and tip, that its date is plausible and that it isn’t a purchase summary before it can be Ready; checks a reading against the expense.',
     where: ['packages/extraction'],
   },
   {
     name: 'Workflows',
     technology: 'Inngest',
     responsibility:
-      'Reads receipts, reads emailed receipts, relays the outbox and keeps expense reports on time. An email is fetched as it arrived, its sender proved by a DKIM signature aligned with the From domain (mailauth), its parts read (postal-mime) and its attachments filed like uploads; with nothing attached, its HTML becomes text (html-to-text) laid out as a PDF (pdf-lib) and filed instead. Each step retries on its own; a failed run still settles its receipt.',
+      'Reads receipts, reads emailed receipts, relays the outbox and keeps expense reports on time. Reads an organization’s feature switches where it has no request to ask, the server’s override first, as the API does (ADR-0032). An email is fetched as it arrived, its sender proved by a DKIM signature aligned with the From domain (mailauth), its parts read (postal-mime) and its attachments filed like uploads; with nothing attached, its HTML becomes text (html-to-text) laid out as a PDF (pdf-lib) and filed instead. Each step retries on its own; a failed run still settles its receipt.',
     where: ['packages/workflows'],
   },
   {
@@ -539,7 +539,7 @@ export const SETTINGS: readonly Setting[] = [
     names: ['FLAG_OVERRIDES'],
     kind: 'Server variable',
     where: 'Vercel production (shell.build-version=on since Oct 4), local and tests',
-    use: 'Forces flags on or off for every organization, beating each owner’s switch: the kill switch.',
+    use: 'Forces flags on or off for every organization, beating each owner’s switch: the kill switch. Read by the API and by the workflows alike.',
   },
   {
     names: ['CI', 'E2E_BASE_URL', 'E2E_PORT', 'PLAYWRIGHT_CHROMIUM_EXECUTABLE'],

@@ -171,18 +171,28 @@ export function filedReading(
   runs: readonly ExtractionRunRecord[],
   reviews: readonly ReceiptReviewRecord[] = [],
 ): NormalizedExtraction | null {
-  if (receipt.status === 'processing') return null;
+  return normalized(filedRun(receipt, runs, reviews));
+}
+
+/**
+ * The stored reading a receipt's expense is filed with, as filedReading picks it: the one a
+ * member confirmed, else the most capable compared model's that read it, else the fallback's.
+ */
+export function filedRun(
+  receipt: ReceiptRecord,
+  runs: readonly ExtractionRunRecord[],
+  reviews: readonly ReceiptReviewRecord[] = [],
+): ExtractionRunRecord | undefined {
+  if (receipt.status === 'processing') return undefined;
   const latest = latestRuns(receipt.id, runs);
   const review = currentReview(receipt, runs, reviews);
-  if (review) return normalized(latest.find((r) => r.model === review.model));
+  if (review) return latest.find((r) => r.model === review.model);
   const compared = [...COMPARISON_MODELS]
     .reverse()
-    .map((model) => normalized(latest.find((r) => r.model === model)));
-  return (
-    compared.find((n) => n !== null) ??
-    normalized(latest.find((r) => r.model === FALLBACK_MODEL)) ??
-    null
-  );
+    .map((model) => latest.find((r) => r.model === model))
+    .find((run) => normalized(run) !== null);
+  const fallback = latest.find((r) => r.model === FALLBACK_MODEL);
+  return compared ?? (normalized(fallback) !== null ? fallback : undefined);
 }
 
 function differencesOf(receipt: ReceiptRecord, runs: readonly ExtractionRunRecord[]): string[] {

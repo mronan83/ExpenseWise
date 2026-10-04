@@ -80,15 +80,15 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   receipts: {
     about:
-      'A captured file: where it is stored, its fingerprint, whether it has been read, and when it was last compared for duplicates. It stays linked to the expense it proves (FR-EXP-08, ADR-0022). Home lists a member’s own that need a look or failed, and counts those still being read. The app can’t delete one directly; only `delete_receipt()` can (ADR-0028).',
+      'A captured file: where it is stored, its fingerprint, whether it has been read, when its first reading settled, and when it was last compared for duplicates. With its filing time, the settled time gives capture to read, whose 95th percentile Receipts shows (NFR-PERF-01, R-CAPTURE-READY); receipts read before it was kept took theirs from the audit trail. It stays linked to the expense it proves (FR-EXP-08, ADR-0022). Home lists a member’s own that need a look or failed, and counts those still being read. The app can’t delete one directly; only `delete_receipt()` can (ADR-0028).',
   },
   extraction_runs: {
     about:
-      'One model’s reading of one receipt for one request, with its outcome, confidence, timing and cost. Its outcome is confident only when the reading would be Ready on its own, its sums and date included (FR-INT-04). Readings since `receipt-v2` also read fees and whether a document is a purchase summary; older ones read back as having no fees (ADR-0027). Since `receipt-v3` they read the time of purchase and the merchant’s address too; older ones read back without them (ADR-0030). Each request is read once per model, so a retry adds nothing (ADR-0017, NFR-DAT-06).',
+      'One model’s reading of one receipt for one request, with its outcome, confidence, timing and cost. Its outcome is confident only when the reading would be Ready on its own, its sums and date included (FR-INT-04). Readings since `receipt-v2` also read fees and whether a document is a purchase summary; older ones read back as having no fees (ADR-0027). Since `receipt-v3` they read the time of purchase and the merchant’s address too; older ones read back without them (ADR-0030). An organization with Where each field was read switched on is asked `receipt-v4`, which also keeps in the output the line of the receipt behind each field (GAP-14); every other organization is still asked `receipt-v3`. Each request is read once per model, so a retry adds nothing (ADR-0017, NFR-DAT-06).',
   },
   receipt_reviews: {
     about:
-      'A person confirming a reading that needed a look, as read or corrected. Append-only; each correction keeps what the model read (ADR-0021).',
+      'A person confirming a reading that needed a look, as read or corrected, or correcting a field of a Ready receipt with a tap (GAP-14). Each row holds every value the receipt is then filed with; the newest for its latest reading decides. Append-only; each correction keeps what the model read, as an eval candidate (ADR-0021).',
   },
   receipt_duplicates: {
     about:
@@ -237,6 +237,13 @@ export const RULES: readonly Rule[] = [
     mechanism: 'The file’s SHA-256 is unique within an organization, and must be a real digest.',
     objects: ['receipts_org_sha256_key', 'receipts_sha256_hex'],
     refs: ['NFR-DAT-06'],
+  },
+  {
+    rule: 'A receipt settles after it is filed.',
+    mechanism:
+      'Its first settled reading’s time is never before its filing time, so capture to read is never negative. Settling sets it once, on the database’s clock, and reading the receipt again keeps it.',
+    objects: ['receipts_settled_after_capture'],
+    refs: ['NFR-PERF-01'],
   },
   {
     rule: 'Each request is read once per model.',

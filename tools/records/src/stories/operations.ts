@@ -1377,7 +1377,7 @@ export const OPERATIONS_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'A reading the app made Ready can’t yet be corrected in place (GAP-14, #37), so not every automatic action can be undone yet.',
+    note: 'Since PR #58 a reading the app made Ready can be corrected in place with a tap, with Where each field was read switched on (US-READ-26), until its expense is submitted.',
   },
   {
     id: 'US-UX-05',

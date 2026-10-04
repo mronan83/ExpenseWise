@@ -270,6 +270,10 @@ export const GAPS: readonly Gap[] = [
       'The receipt page shows each model’s values with their confidence and the original image; the schema asks for no source text. Since #47 a reading that needs a look can be corrected, but a Ready one can’t.',
     fix: 'Ask the model for each field’s source line and highlight it, and correct any field with a tap, as a reversal once it is an expense (#37).',
     backlog: 37,
+    closed: {
+      date: '2026-10-04',
+      note: 'PR #58, behind Where each field was read: each field shows the line of the receipt it was read from, as text (no highlight on the image: the models give no position), and a Ready receipt’s field is corrected with a tap through its expense, until the expense is submitted. Correcting an approved one is a reversal, which comes with approval (#24).',
+    },
   },
   {
     id: 'GAP-17',
@@ -304,6 +308,10 @@ export const GAPS: readonly Gap[] = [
       'Each reading stores its own latency; nothing records the time from filing to settlement.',
     fix: 'Record it at settlement and show the p95 beside the comparison (#32).',
     backlog: 32,
+    closed: {
+      date: '2026-10-04',
+      note: 'PR #58: each receipt keeps when its first reading settled, and the comparison shows the 95th percentile against 30 seconds, behind Capture-to-Ready time. Reading production’s figure is #78.',
+    },
   },
 ];
 

@@ -33,6 +33,11 @@ export interface ReceiptRecord {
   readonly status: ReceiptStatus;
   /** The expense this receipt proves (FR-EXP-08); null only before it is filed. */
   readonly expenseId: string | null;
+  /**
+   * When its first reading settled; null while it is first read. With createdAt, the time
+   * from capture to read (NFR-PERF-01). Left out where nothing needs it.
+   */
+  readonly settledAt?: Date | null;
   readonly createdAt: Date;
 }
 
@@ -64,6 +69,7 @@ const receiptColumns = {
   sha256: receipts.sha256,
   status: receipts.status,
   expenseId: receipts.expenseId,
+  settledAt: receipts.settledAt,
   createdAt: receipts.createdAt,
 };
 
@@ -325,7 +331,14 @@ export async function settleReceipt(
     )
     .limit(1);
   if (settled) return;
-  await tx.update(receipts).set({ status: outcome.status }).where(eq(receipts.id, receiptId));
+  // The first settlement is kept: capture to read is measured from it (NFR-PERF-01).
+  await tx
+    .update(receipts)
+    .set({
+      status: outcome.status,
+      settledAt: sql`coalesce(${receipts.settledAt}, greatest(now(), ${receipts.createdAt}))`,
+    })
+    .where(eq(receipts.id, receiptId));
   await appendAuditEvent(tx, orgId, {
     actor: { type: 'system', id: 'receipt-workflow' },
     entityType: 'receipt',

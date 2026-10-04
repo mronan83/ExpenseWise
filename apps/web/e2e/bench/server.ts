@@ -309,7 +309,41 @@ async function capture(name: string, source: 'camera' | 'upload', script?: Scrip
   receipts[name] = ticket.receiptId;
 }
 const [haiku, sonnet] = COMPARISON_MODELS;
-await capture('coffee', 'camera', both(reading('Blue Bottle Coffee', '2026-09-30', 'USD', '6.50')));
+/** The line of the receipt each field was read from, as a model asked for them answers (GAP-14). */
+const linesOf = (lines: Partial<Record<string, string>>) => ({
+  sources: {
+    merchant: null,
+    date: null,
+    time: null,
+    address: null,
+    currency: null,
+    total: null,
+    subtotal: null,
+    taxes: null,
+    tip: null,
+    fees: null,
+    cardLastFour: null,
+    ...lines,
+  },
+});
+await capture(
+  'coffee',
+  'camera',
+  both(
+    reading(
+      'Blue Bottle Coffee',
+      '2026-09-30',
+      'USD',
+      '6.50',
+      linesOf({
+        merchant: 'BLUE BOTTLE COFFEE',
+        date: '09/30/2026 08:12 AM',
+        currency: 'USD $',
+        total: 'TOTAL .................. $6.50',
+      }),
+    ),
+  ),
+);
 await capture('folio', 'upload', {
   [haiku]: reading('The Ritz-Carlton, Half Moon Bay', '2026-10-01', 'USD', '1284.37', {
     documentType: 'hotel_folio',
@@ -437,12 +471,33 @@ await capture(
 await capture('processing', 'upload');
 // A ride in Chicago, and a lunch on no trip: a local expense, Ready, given a reason below.
 await capture('chicago', 'camera', both(reading('Lyft', '2026-09-02', 'USD', '24.60')));
+// A garage ticket read alike and Ready, its merchant then corrected with a tap (GAP-14).
+await capture(
+  'parking',
+  'camera',
+  both(
+    reading(
+      'SP+ Parking',
+      '2026-09-29',
+      'USD',
+      '18.00',
+      linesOf({
+        merchant: 'SP+ PARKING / GARAGE 114',
+        date: 'ENTRY 09/29/26 07:58 / EXIT 09/29/26 17:41',
+        total: 'AMOUNT PAID $18.00',
+      }),
+    ),
+  ),
+);
 await capture('lunch', 'camera', both(reading('Zuni Café', '2026-09-27', 'USD', '48.20')));
 
 // A confirmed correction, an expense edited away from its receipt, one put on a trip by hand.
 await call('POST', `/v1/receipts/${receipts.steak}/confirm`, {
   model: sonnet,
   corrections: { tip: '15.00', total: '108.10' },
+});
+await call('POST', `/v1/receipts/${receipts.parking}/corrections`, {
+  corrections: { merchant: 'SP+ Parking — Omaha Civic Center Garage' },
 });
 const expenseOf = async (name: string) =>
   (await call<{ expenseId: string }>('GET', `/v1/receipts/${receipts[name]}`)).expenseId;

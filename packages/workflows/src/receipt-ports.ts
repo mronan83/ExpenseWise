@@ -16,6 +16,7 @@ import {
   type StoredAnthropicKey,
 } from '@expensewise/extraction';
 import type { ObjectStore } from '@expensewise/storage';
+import { featureSwitch } from './features.ts';
 import type { KeyProblem, ReceiptReadingPorts } from './receipts.ts';
 
 /**
@@ -47,6 +48,8 @@ export interface ReceiptReadingDeps {
     orgId: string,
     provider: ModelProvider,
   ) => Promise<StoredAnthropicKey | KeyProblem>;
+  /** FLAG_OVERRIDES, read from the environment when not given. */
+  readonly flagOverrides?: string;
 }
 
 /**
@@ -56,6 +59,12 @@ export interface ReceiptReadingDeps {
  */
 export function receiptReadingPorts(deps: ReceiptReadingDeps): ReceiptReadingPorts {
   const { inOrg } = checkedDatabase(deps.db);
+  const featureOn = featureSwitch(inOrg, deps.flagOverrides ?? process.env.FLAG_OVERRIDES);
+  // Where the organization has switched it on, each field comes with the line it was read
+  // from (GAP-14); elsewhere the request is the one every reading has always sent.
+  const asked = async (orgId: string) => ({
+    fieldSources: await featureOn(orgId, 'receipts.field-sources'),
+  });
 
   return {
     loadReceipt: (orgId, receiptId) => inOrg(orgId, (tx) => getReceipt(tx, receiptId)),
@@ -65,11 +74,11 @@ export function receiptReadingPorts(deps: ReceiptReadingDeps): ReceiptReadingPor
         const key = await deps.providerKey(orgId, 'anthropic');
         if (typeof key === 'string') return key;
         const client = anthropicClient(key, { timeoutMs: 50_000, maxRetries: 0 });
-        return new ClaudeExtractor(client, model);
+        return new ClaudeExtractor(client, model, await asked(orgId));
       }
       const key = await deps.providerKey(orgId, 'openai');
       if (typeof key === 'string') return key;
-      return new OpenAIExtractor(key.key, model, { timeoutMs: 50_000 });
+      return new OpenAIExtractor(key.key, model, { timeoutMs: 50_000, ...(await asked(orgId)) });
     },
     saveRun: (orgId, run) => inOrg(orgId, (tx) => recordExtractionRun(tx, orgId, run)),
     runs: (orgId, receiptId, requestId) =>

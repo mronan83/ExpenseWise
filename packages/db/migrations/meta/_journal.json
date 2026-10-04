@@ -162,6 +162,20 @@
       "when": 1791118492960,
       "tag": "0022_org_features_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1791120269095,
+      "tag": "0023_receipt_settled_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791120272574,
+      "tag": "0024_receipt_settled_at_backfill",
+      "breakpoints": true
     }
   ]
 }

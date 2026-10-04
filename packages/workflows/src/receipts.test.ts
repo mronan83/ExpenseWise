@@ -16,6 +16,7 @@ import {
   readWith,
   receiptReadingFunction,
   sniffMediaType,
+  toStoredRun,
   type KeyProblem,
   type ReceiptReadingPorts,
 } from './receipts.ts';
@@ -343,6 +344,46 @@ describe('readWith', () => {
       'overloaded',
     );
     expect(w.runs).toEqual([]);
+  });
+});
+
+describe('toStoredRun', () => {
+  const run = (over: Partial<ExtractionRun>): ExtractionRun => ({
+    outcome: 'extracted',
+    extraction: reading(),
+    model: 'claude-haiku-4-5',
+    promptVersion: 'extract-v3',
+    latencyMs: 1800,
+    usage: { inputTokens: 1500, outputTokens: 300, cacheReadTokens: 0, cacheWriteTokens: 0 },
+    costNanoUsd: 4_500_400n,
+    ...over,
+  });
+  const uploaded = new Date('2026-09-24T18:00:00Z');
+
+  it('stores the line each field was read from with the reading, under the version asked', () => {
+    const sources = { merchant: 'BLUE BOTTLE COFFEE', total: 'TOTAL 6.50' };
+    const stored = toStoredRun(
+      RECEIPT,
+      REQUEST,
+      run({
+        extraction: { ...reading(), sources } as ReceiptExtraction,
+        promptVersion: 'extract-v4',
+        schemaVersion: 'receipt-v4',
+      }),
+      uploaded,
+    );
+    expect(stored).toMatchObject({
+      promptVersion: 'extract-v4',
+      schemaVersion: 'receipt-v4',
+      outcome: 'confident',
+      output: { sources },
+    });
+  });
+
+  it('stores a reading asked for without them as receipt-v3, as before', () => {
+    const stored = toStoredRun(RECEIPT, REQUEST, run({}), uploaded);
+    expect(stored).toMatchObject({ promptVersion: 'extract-v3', schemaVersion: 'receipt-v3' });
+    expect(stored.output).not.toHaveProperty('sources');
   });
 });
 

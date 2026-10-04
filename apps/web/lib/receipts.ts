@@ -69,7 +69,28 @@ export interface Reading {
   } | null;
   problems: string[];
   checks: ReadingCheck[];
+  /**
+   * The line of the receipt each field was read from, with "Where each field was read" on
+   * (GAP-14); null for a reading made without them, and absent while the feature is off.
+   */
+  sources?: FieldSources | null;
 }
+
+/** The line or lines of the receipt each field was read from, as the model copied them. */
+export type FieldSources = Record<
+  | 'merchant'
+  | 'date'
+  | 'time'
+  | 'address'
+  | 'currency'
+  | 'total'
+  | 'subtotal'
+  | 'taxTotal'
+  | 'tip'
+  | 'fees'
+  | 'cardLastFour',
+  string | null
+>;
 
 /** The fields a person can correct before filing (FR-INT-15). */
 export type CorrectableField = 'merchant' | 'date' | 'currency' | 'total' | 'taxTotal' | 'tip';
@@ -278,6 +299,16 @@ export interface ReceiptList {
   receipts: ReceiptSummary[];
   comparison: { receipts: number; compared: number; agreed: number; models: ModelStats[] };
   readingAvailable: boolean;
+  /** Capture to Ready over the receipts shown, with "Capture-to-Ready time" on (GAP-16). */
+  captureToReady?: CaptureTime;
+}
+
+/** The 95th-percentile time from capture to read, over how many receipts, against the goal. */
+export interface CaptureTime {
+  receipts: number;
+  p95Ms: number | null;
+  sloMs: number;
+  withinSlo: boolean | null;
 }
 
 export const RECEIPT_STATUS: Record<ReceiptSummary['status'], { label: string; tone: string }> = {

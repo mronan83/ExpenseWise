@@ -1,5 +1,6 @@
 export * from './approvals.ts';
 export * from './audit.ts';
+export * from './capture-time.ts';
 export * from './currency.ts';
 export * from './dates.ts';
 export * from './decimal.ts';

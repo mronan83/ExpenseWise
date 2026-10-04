@@ -2,8 +2,13 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import type { ExtractionInput, ExtractionRun, Extractor } from './extractor.ts';
 import { costNanoUsd, MODELS, type ClaudeModelId, type TokenUsage } from './models.ts';
-import { PROMPT_VERSION, SYSTEM_PROMPT } from './prompt.ts';
-import { ReceiptExtractionSchema } from './schema.ts';
+import { EXTRACTION_VARIANTS, variantOf, type ExtractorOptions } from './variant.ts';
+
+/** Each request's structure, made once: the source-line variant only where it is switched on. */
+const FORMATS = {
+  plain: zodOutputFormat(EXTRACTION_VARIANTS.plain.schema),
+  sources: zodOutputFormat(EXTRACTION_VARIANTS.sources.schema),
+};
 
 /**
  * Reads a document with Claude vision and structured outputs. The model gets no tools,
@@ -13,15 +18,18 @@ export class ClaudeExtractor implements Extractor {
   constructor(
     private readonly client: Anthropic,
     readonly model: ClaudeModelId,
+    private readonly options: ExtractorOptions = {},
   ) {}
 
   async extract(input: ExtractionInput): Promise<ExtractionRun> {
     const { effort } = MODELS[this.model];
+    const variant = variantOf(this.options);
+    const format = this.options.fieldSources ? FORMATS.sources : FORMATS.plain;
     const started = performance.now();
     const response = await this.client.messages.parse({
       model: this.model,
       max_tokens: 16000,
-      system: SYSTEM_PROMPT,
+      system: variant.system,
       messages: [
         {
           role: 'user',
@@ -29,7 +37,7 @@ export class ClaudeExtractor implements Extractor {
         },
       ],
       output_config: {
-        format: zodOutputFormat(ReceiptExtractionSchema),
+        format,
         ...(effort ? { effort } : {}),
       },
     });
@@ -52,7 +60,8 @@ export class ClaudeExtractor implements Extractor {
       outcome,
       extraction: outcome === 'extracted' ? response.parsed_output : null,
       model: this.model,
-      promptVersion: PROMPT_VERSION,
+      promptVersion: variant.promptVersion,
+      schemaVersion: variant.schemaVersion,
       latencyMs,
       usage,
       costNanoUsd: costNanoUsd(this.model, usage),

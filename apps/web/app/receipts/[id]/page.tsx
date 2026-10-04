@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { api, ApiProblem } from '../../../lib/api';
+import { useFeatures } from '../../../lib/features';
 import {
   describeChecks,
   describeReadingError,
@@ -17,6 +18,7 @@ import {
   RECEIPT_STATUS,
   type CorrectableField,
   type DuplicateSide,
+  type FieldSources,
   type MergeField,
   type MoneyField,
   type PossibleDuplicate,
@@ -61,6 +63,9 @@ const POLL_LIMIT_MS = 3 * 60 * 1000;
 export default function ReceiptPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const isOn = useFeatures();
+  // Where each field was read, and one tap to correct a Ready receipt (GAP-14).
+  const sources = isOn('receipts.field-sources');
   const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -171,8 +176,16 @@ export default function ReceiptPage() {
                 onConfirmed={(next) => setLoad({ state: 'ready', receipt: next })}
               />
             ) : null}
-            {receipt.confirmation ? <Filed confirmation={receipt.confirmation} /> : null}
-            <Comparison receipt={receipt} />
+            {sources && receipt.status === 'extracted' ? (
+              <Correct
+                key={receipt.readings.map((r) => r.model + r.state).join()}
+                receipt={receipt}
+                onCorrected={(next) => setLoad({ state: 'ready', receipt: next })}
+              />
+            ) : receipt.confirmation ? (
+              <Filed confirmation={receipt.confirmation} />
+            ) : null}
+            <Comparison receipt={receipt} sources={sources} />
             <div className="flex flex-wrap items-center gap-3">
               <button
                 type="button"
@@ -747,6 +760,209 @@ function draftOf(reading: Reading | undefined): Record<CorrectableField, string>
   };
 }
 
+const FILED_FIELDS: CorrectableField[] = [
+  'merchant',
+  'date',
+  'currency',
+  'total',
+  'taxTotal',
+  'tip',
+];
+
+/** How to type each field when correcting it. */
+const FIELD_INPUT: Record<CorrectableField, Record<string, string | number>> = {
+  merchant: { autoComplete: 'off', maxLength: 200 },
+  date: { type: 'date' },
+  currency: { maxLength: 3, autoCapitalize: 'characters', autoComplete: 'off' },
+  total: { inputMode: 'decimal', autoComplete: 'off' },
+  taxTotal: { inputMode: 'decimal', autoComplete: 'off' },
+  tip: { inputMode: 'decimal', autoComplete: 'off' },
+};
+
+/**
+ * What a Ready receipt is filed with, each field beside the line of the receipt it was read
+ * from, and one tap to correct it (GAP-14). The correction changes its expense too, so it waits
+ * for the expense: once that is submitted it is locked, and correcting an approved one is a
+ * reversal, which isn't built yet.
+ */
+function Correct({
+  receipt,
+  onCorrected,
+}: {
+  receipt: ReceiptDetail;
+  onCorrected: (receipt: ReceiptDetail) => void;
+}) {
+  const { confirmation } = receipt;
+  // The reading it is filed with: the one confirmed, else the most capable that read it.
+  const reading = confirmation
+    ? receipt.readings.find((r) => r.model === confirmation.model)
+    : ([...receipt.readings].reverse().find((r) => r.role === 'compared' && r.fields) ??
+      receipt.readings.find((r) => r.fields));
+  const filed: Record<CorrectableField, string> = confirmation
+    ? {
+        merchant: confirmation.values.merchant,
+        date: confirmation.values.date,
+        currency: confirmation.values.currency,
+        total: confirmation.values.total?.decimal ?? '',
+        taxTotal: confirmation.values.taxTotal?.decimal ?? '',
+        tip: confirmation.values.tip?.decimal ?? '',
+      }
+    : draftOf(reading);
+  const [editable, setEditable] = useState<boolean | null>(null);
+  const [editing, setEditing] = useState<CorrectableField | null>(null);
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!receipt.expenseId) return;
+    let live = true;
+    void api<{ editable: boolean }>(`/v1/expenses/${receipt.expenseId}`)
+      .then((expense) => live && setEditable(expense.editable))
+      .catch(() => live && setEditable(null));
+    return () => {
+      live = false;
+    };
+  }, [receipt.expenseId]);
+
+  const shown = (field: CorrectableField) => {
+    const value = filed[field];
+    if (value === '') return null;
+    return MONEY_FIELDS.includes(field)
+      ? formatMoney({ decimal: value, currency: filed.currency })
+      : value;
+  };
+
+  function start(field: CorrectableField) {
+    setEditing(field);
+    setDraft(filed[field]);
+    setError(null);
+  }
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    if (!editing) return;
+    setBusy(true);
+    setError(null);
+    try {
+      onCorrected(
+        await api<ReceiptDetail>(`/v1/receipts/${receipt.id}/corrections`, {
+          method: 'POST',
+          body: JSON.stringify({ corrections: { [editing]: draft.trim() } }),
+        }),
+      );
+      setEditing(null);
+    } catch (e) {
+      setError(describeError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section
+      aria-labelledby="filed-title"
+      className="flex flex-col gap-3 rounded-xl border border-rule bg-sheet p-4 text-sm"
+    >
+      <h2 id="filed-title" className="text-base font-semibold">
+        Filed as
+      </h2>
+      {editable === false ? (
+        <p className="text-xs text-ink-2">
+          Its expense is submitted, so these are locked. Correcting an approved expense is a
+          reversal, which isn’t built yet.
+        </p>
+      ) : (
+        <p className="text-xs text-ink-2">
+          Something read wrong? Correct it with a tap; its expense changes too, and what the model
+          read is kept.
+        </p>
+      )}
+      <dl className="flex flex-col divide-y divide-rule">
+        {FILED_FIELDS.map((field) => {
+          const fix = confirmation?.corrections.find((c) => c.field === field);
+          const source = reading?.sources?.[field] ?? null;
+          const label = FIELD_LABELS[field];
+          return (
+            <div key={field} className="flex flex-col gap-1 py-2">
+              <dt className="text-xs font-medium text-ink-2">{label}</dt>
+              <dd className="flex items-start justify-between gap-3">
+                <div className="flex min-w-0 flex-1 flex-col">
+                  {editing === field ? (
+                    <form onSubmit={(e) => void save(e)} className="flex flex-col gap-2">
+                      <label className="flex flex-col gap-1 text-xs font-medium text-ink-2">
+                        {`${label}, corrected`}
+                        <input
+                          name={field}
+                          value={draft}
+                          onChange={(e) => setDraft(e.target.value)}
+                          required={field !== 'taxTotal' && field !== 'tip'}
+                          className="rounded-lg border border-rule bg-paper px-3 py-2 text-base text-ink"
+                          {...FIELD_INPUT[field]}
+                        />
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="submit"
+                          disabled={busy}
+                          className="rounded-lg bg-carbon px-4 py-2 text-sm font-semibold text-carbon-ink disabled:opacity-60"
+                        >
+                          {busy ? 'Saving…' : 'Save'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditing(null);
+                            setError(null);
+                          }}
+                          disabled={busy}
+                          className="rounded-lg border border-rule px-4 py-2 text-sm font-semibold"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <span className="tabular-nums break-words">{shown(field) ?? '–'}</span>
+                  )}
+                  {source ? <SourceLine line={source} /> : null}
+                  {fix ? (
+                    <span className="text-xs text-ink-2">
+                      {fix.read === null
+                        ? 'entered by hand'
+                        : `corrected; read as ${
+                            MONEY_FIELDS.includes(field)
+                              ? formatMoney({ decimal: fix.read, currency: filed.currency })
+                              : fix.read
+                          }`}
+                    </span>
+                  ) : null}
+                </div>
+                {editable && editing !== field ? (
+                  <button
+                    type="button"
+                    onClick={() => start(field)}
+                    disabled={busy}
+                    aria-label={`Correct the ${label.toLowerCase()}`}
+                    className="min-h-11 shrink-0 rounded-lg border border-rule px-3 text-xs font-semibold"
+                  >
+                    Correct
+                  </button>
+                ) : null}
+              </dd>
+            </div>
+          );
+        })}
+      </dl>
+      {error ? (
+        <p role="alert" className="text-sm text-warn">
+          {error}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
 const REQUIRED: CorrectableField[] = ['merchant', 'date', 'currency', 'total'];
 
 /**
@@ -925,12 +1141,23 @@ function Review({
   );
 }
 
+/** The line a field was read from; the document type has none. */
+const sourceOf = (sources: FieldSources | null | undefined, key: keyof Fields) =>
+  sources && key !== 'documentType' ? sources[key] : null;
+
 const isMoney = (v: unknown): v is MoneyField =>
   typeof v === 'object' && v !== null && 'decimal' in v;
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-function Value({ value }: { value: TextField | MoneyField | string | null | undefined }) {
+function Value({
+  value,
+  source,
+}: {
+  value: TextField | MoneyField | string | null | undefined;
+  /** The line of the receipt it was read from, where that was asked for (GAP-14). */
+  source?: string | null;
+}) {
   if (value === null || value === undefined) return <span className="text-ink-3">–</span>;
   if (typeof value === 'string') return <span>{value.replaceAll('_', ' ')}</span>;
   const text = isMoney(value) ? formatMoney(value) : value.value;
@@ -947,11 +1174,24 @@ function Value({ value }: { value: TextField | MoneyField | string | null | unde
       ) : value.confidence === 'high' ? null : (
         <span className="text-xs text-warn">{value.confidence} confidence</span>
       )}
+      {source ? <SourceLine line={source} /> : null}
     </span>
   );
 }
 
-function Comparison({ receipt }: { receipt: ReceiptDetail }) {
+/**
+ * The line of the receipt a value was read from, as the model copied it. Text, not a mark on
+ * the image: the models say what the line says, not where it is (GAP-14).
+ */
+function SourceLine({ line }: { line: string }) {
+  return (
+    <span className="font-mono text-xs break-words text-ink-2">
+      <span className="sr-only">Read from the line </span>“{line}”
+    </span>
+  );
+}
+
+function Comparison({ receipt, sources }: { receipt: ReceiptDetail; sources: boolean }) {
   const { readings } = receipt;
   const cell = (r: Reading, content: ReactNode) =>
     r.state === 'pending' ? <span className="text-ink-3">…</span> : content;
@@ -1012,7 +1252,13 @@ function Comparison({ receipt }: { receipt: ReceiptDetail }) {
                 </th>
                 {readings.map((r) => (
                   <td key={r.model} className="py-2 pr-2 break-words">
-                    {cell(r, <Value value={r.fields?.[row.key]} />)}
+                    {cell(
+                      r,
+                      <Value
+                        value={r.fields?.[row.key]}
+                        source={sources ? sourceOf(r.sources, row.key) : null}
+                      />,
+                    )}
                   </td>
                 ))}
               </tr>

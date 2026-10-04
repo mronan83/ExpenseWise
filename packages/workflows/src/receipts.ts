@@ -144,7 +144,7 @@ export function toStoredRun(
     extractor: extractorOf(run.model),
     model: run.model,
     promptVersion: run.promptVersion,
-    schemaVersion: SCHEMA_VERSION,
+    schemaVersion: run.schemaVersion ?? SCHEMA_VERSION,
     outcome: normalized ? (isAutoReady(normalized, uploadedAt) ? 'confident' : 'unsure') : 'failed',
     output: run.extraction,
     fieldConfidence: normalized

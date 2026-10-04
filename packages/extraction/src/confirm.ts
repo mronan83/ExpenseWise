@@ -10,6 +10,7 @@ import {
   toDecimal,
   zero,
   type CurrencyCode,
+  type ExpenseEdit,
   type Money,
   type Result,
 } from '@expensewise/domain';
@@ -161,4 +162,94 @@ export function confirmReading(
     }
   }
   return ok({ confirmed, corrections: changed });
+}
+
+/** A field a correction changed on a Ready receipt: what it was filed with, and is now. */
+export interface FieldChange {
+  readonly field: CorrectableField;
+  readonly from: string | null;
+  readonly to: string;
+}
+
+/** Why a correction of a Ready receipt can't be filed. unchanged: it is filed so already. */
+export type CorrectProblem = ConfirmProblem | { readonly kind: 'unchanged' };
+
+/** A filed value as text: amounts as plain decimals, as corrections are typed. */
+function filedText(c: ConfirmedReading, field: CorrectableField): string | null {
+  switch (field) {
+    case 'merchant':
+      return c.merchant;
+    case 'date':
+      return c.date;
+    case 'currency':
+      return c.currency;
+    case 'total':
+      return toDecimal(c.total);
+    case 'taxTotal':
+    case 'tip': {
+      const amount = c[field];
+      return amount ? toDecimal(amount) : null;
+    }
+  }
+}
+
+/**
+ * Corrects fields of a receipt that is already Ready, with one tap (GAP-14): the reading it is
+ * filed with, any corrections made to it before, and the new ones on top. Corrections are kept
+ * against what the model read, as Edit a field keeps them (ADR-0021), so a field corrected
+ * twice is one correction, from what was read to its latest value. A value the same as the
+ * one filed changes nothing.
+ */
+export function correctReading(
+  reading: NormalizedExtraction | null,
+  earlier: Corrections,
+  now: Corrections,
+): Result<
+  { confirmed: ConfirmedReading; corrections: Correction[]; changes: FieldChange[] },
+  CorrectProblem
+> {
+  const before = confirmReading(reading, earlier);
+  const after = confirmReading(reading, { ...earlier, ...now });
+  if (!after.ok) return after;
+  const changes = CORRECTABLE_FIELDS.flatMap((field): FieldChange[] => {
+    if (now[field] === undefined) return [];
+    const from = before.ok ? filedText(before.value.confirmed, field) : null;
+    const to = filedText(after.value.confirmed, field);
+    return to !== null && to !== from ? [{ field, from, to }] : [];
+  });
+  if (changes.length === 0) return err({ kind: 'unchanged' as const });
+  return ok({ ...after.value, changes });
+}
+
+/**
+ * What a correction changes on the receipt's expense: its merchant, date, currency and amount.
+ * Tax and tip are the receipt's alone; the expense doesn't carry them.
+ */
+export function expenseEditOf(
+  confirmed: ConfirmedReading,
+  changes: readonly FieldChange[],
+): ExpenseEdit {
+  const changed = new Set(changes.map((c) => c.field));
+  return {
+    ...(changed.has('merchant') ? { merchant: confirmed.merchant } : {}),
+    ...(changed.has('date') ? { date: confirmed.date } : {}),
+    ...(changed.has('currency') ? { currency: confirmed.currency } : {}),
+    ...(changed.has('total') ? { amount: toDecimal(confirmed.total) } : {}),
+  };
+}
+
+/** The corrections a review kept, as typed values to correct again on top of. */
+export function correctionsOf(kept: unknown): Corrections {
+  if (!Array.isArray(kept)) return {};
+  const out: Corrections = {};
+  for (const c of kept as { field?: unknown; corrected?: unknown }[]) {
+    if (
+      typeof c.field === 'string' &&
+      (CORRECTABLE_FIELDS as readonly string[]).includes(c.field) &&
+      typeof c.corrected === 'string'
+    ) {
+      out[c.field as CorrectableField] = c.corrected;
+    }
+  }
+  return out;
 }
