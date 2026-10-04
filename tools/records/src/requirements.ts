@@ -354,7 +354,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
   },
   {
     id: 'FR-INT-19',
-    text: 'How far apart in time two receipts at the same place may be and still be one purchase is set in Settings: from 0 to 120 minutes, 30 by default. 0 means the same minute only. A change judges pairs from then on; pairs already decided stay decided.',
+    text: 'How far apart in time two receipts at the same place may be and still be one purchase is set in Settings by the organization’s owner, for everyone: from 0 to 120 minutes, 30 by default. 0 means the same minute only. A change judges pairs from then on; pairs already decided stay decided.',
     sources: ['owner 2026-10-04'],
     priority: 'Should',
     phase: 'P1',
@@ -362,7 +362,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
     capabilities: ['Intelligence · Near-duplicate detection'],
     features: ['F-52'],
     backlog: [64],
-    note: 'Your request of Oct 4, after the 30 minutes of ADR-0031 was recorded as Claude’s assumption. Q24 asks whether the organization’s owner sets it for everyone, recommended since catching duplicates is a control, or each person for their own receipts. The bounds are Claude’s proposal: wide enough for a bill and its tip slip, narrow enough that a morning and an afternoon at one café stay apart.',
+    note: 'Your request of Oct 4, after the 30 minutes of ADR-0031 was recorded as Claude’s assumption. Your answer to Q24: the organization’s owner sets it, for everyone, since catching duplicates is a control. The bounds are Claude’s proposal: wide enough for a bill and its tip slip, narrow enough that a morning and an afternoon at one café stay apart.',
   },
   {
     id: 'FR-INT-18',
@@ -575,7 +575,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
   },
   {
     id: 'FR-EXP-13',
-    text: 'Every amount in a report is converted to the currency the person is reimbursed in, keeping the amount as spent beside it. That currency is set in Settings and starts as the organization’s home currency.',
+    text: 'Every amount in a report is converted to the currency the person is reimbursed in, at the purchase date’s reference rate, keeping the amount as spent beside it. That currency is set in Settings and starts as the organization’s home currency.',
     sources: ['owner 2026-10-04'],
     priority: 'Must',
     phase: 'P1',
@@ -583,7 +583,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
     capabilities: ['Expense management · Multi-currency and FX'],
     features: ['F-49'],
     backlog: [62],
-    note: 'Your answer of Oct 4. Each conversion keeps its rate, the rate’s date and its source (NFR-DAT-02), copied on so a later rate never changes it (NFR-DAT-04). Your answer to Q22: cards convert at purchase, so a rate may only be needed where none was applied. Your answer to Q23: in your preferred currency, as set in the app; Q25 asks where the converted figure comes from. Until #62, reports total each currency apart.',
+    note: 'Your answer of Oct 4. Each conversion keeps its rate, the rate’s date and its source (NFR-DAT-02), copied on so a later rate never changes it (NFR-DAT-04). Your answer to Q22: cards convert at purchase, so a rate may only be needed where none was applied. Your answer to Q23: in your preferred currency, as set in the app. Your answer to Q25: at the rate at the time of purchase, the purchase date’s reference rate. Until #62, reports total each currency apart.',
   },
   {
     id: 'FR-EXP-14',
@@ -1725,7 +1725,7 @@ export const NON_FUNCTIONAL: readonly Requirement[] = [
     status: 'Planned',
     features: ['F-53'],
     backlog: [65],
-    note: 'Your request of Oct 4: good, accurate and proper documentation of the detailed requirements, in user story form with acceptance criteria. Q26 asks you to confirm the shape.',
+    note: 'Your request of Oct 4: good, accurate and proper documentation of the detailed requirements, in user story form with acceptance criteria. Your answer to Q26: as proposed, written for the entire build, in these records and on a fifth page.',
   },
   {
     id: 'NFR-DEL-08',
