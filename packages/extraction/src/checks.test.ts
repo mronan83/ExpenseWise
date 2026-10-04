@@ -19,6 +19,8 @@ const base: ReceiptExtraction = {
   taxes: [tax('3.93'), tax('0.50', 'City tax')],
   tip: amount('8.50'),
   cardLastFour: null,
+  time: null,
+  address: null,
   lineItems: [],
 };
 const read = (over: Partial<ReceiptExtraction> = {}) => normalizeExtraction({ ...base, ...over });

@@ -17,6 +17,8 @@ const base: ReceiptExtraction = {
   ],
   tip: { value: '8.50', confidence: 'high' },
   cardLastFour: { value: '4417', confidence: 'high' },
+  time: null,
+  address: null,
   lineItems: [{ description: 'Salmon', quantity: '1', amount: '28.00' }],
 };
 
@@ -92,6 +94,53 @@ describe('normalizeExtraction', () => {
     expect(n.tip).toBeNull();
     expect(n.taxTotal).toBeNull();
     expect(n.cardLastFour).toBeNull();
+  });
+});
+
+describe('time and place (FR-INT-17)', () => {
+  it('reads the time as HH:MM and the address with its city, region and country', () => {
+    const n = normalizeExtraction({
+      ...base,
+      time: { value: '9:05', confidence: 'high' },
+      address: {
+        printed: ' 1615 Howard St, Omaha, NE 68102 ',
+        city: 'Omaha',
+        region: 'NE',
+        country: 'us',
+        confidence: 'medium',
+      },
+    });
+    expect(n.time).toEqual({ value: '09:05', confidence: 'high' });
+    expect(n.place).toEqual({
+      value: {
+        address: '1615 Howard St, Omaha, NE 68102',
+        city: 'Omaha',
+        region: 'NE',
+        country: 'US',
+      },
+      confidence: 'medium',
+    });
+    expect(n.problems).toEqual([]);
+  });
+
+  it('leaves one it can’t read blank, never a reason for review', () => {
+    const n = normalizeExtraction({
+      ...base,
+      time: { value: 'quarter past seven', confidence: 'low' },
+      address: { printed: '  ', city: 'Omaha', region: null, country: 'US', confidence: 'low' },
+    });
+    expect([n.time, n.place, n.problems]).toEqual([null, null, []]);
+    const noCountry = normalizeExtraction({
+      ...base,
+      address: {
+        printed: 'Rue de Rivoli',
+        city: 'Paris',
+        region: null,
+        country: 'France',
+        confidence: 'high',
+      },
+    });
+    expect(noCountry.place?.value.country).toBeNull();
   });
 });
 

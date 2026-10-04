@@ -5,6 +5,7 @@ export * from './dates.ts';
 export * from './decimal.ts';
 export * from './duplicates.ts';
 export * from './errors.ts';
+export * from './expense-details.ts';
 export * from './expense-values.ts';
 export * from './fx.ts';
 export * from './ids.ts';

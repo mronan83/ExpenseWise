@@ -28,6 +28,8 @@ export class OracleExtractor implements Extractor {
         fees: [],
         tip: amount(t.tip),
         cardLastFour: t.cardLastFour ? { value: t.cardLastFour, confidence: high } : null,
+        time: null,
+        address: null,
         lineItems: [],
       },
       model: this.model,

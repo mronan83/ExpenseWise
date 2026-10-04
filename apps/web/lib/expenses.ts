@@ -48,7 +48,60 @@ export interface ExpenseDetail extends ExpenseSummary {
     date: string | null;
     amount: ExpenseAmount | null;
     differences: ExpenseField[];
+    time: string | null;
+    address: string | null;
+    city: string | null;
+    country: string | null;
+    /** Shown, never a reason to reject. */
+    detailDifferences: ('time' | 'address' | 'city' | 'country')[];
   } | null;
+  /** When it was bought, HH:MM local time (FR-INT-17). */
+  time: string | null;
+  /** The IANA time zone of that time, worked out from the place. */
+  timeZone: string | null;
+  address: string | null;
+  city: string | null;
+  region: string | null;
+  /** ISO 3166-1 alpha-2. */
+  country: string | null;
+}
+
+/** The parts of when and where a person can edit. A blank time zone follows the place. */
+export type DetailField = 'time' | 'timeZone' | 'address' | 'city' | 'region' | 'country';
+
+export const DETAIL_LABELS: Record<DetailField, string> = {
+  time: 'Time',
+  timeZone: 'Time zone',
+  address: 'Address',
+  city: 'City',
+  region: 'State or region',
+  country: 'Country',
+};
+
+/** Where it was bought, in a line: the printed address, or else the city, region and country. */
+export function placeOf(p: {
+  address: string | null;
+  city: string | null;
+  region?: string | null;
+  country: string | null;
+}): string | null {
+  if (p.address) return p.address;
+  const parts = [p.city, p.region, p.country].filter((x): x is string => Boolean(x));
+  return parts.length > 0 ? parts.join(', ') : null;
+}
+
+/** Every time zone the browser knows, with the given one kept in even if it doesn't. */
+export function timeZones(keep: string | null): string[] {
+  const known =
+    typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
+  return keep && !known.includes(keep) ? [keep, ...known] : known;
+}
+
+/** A time with its zone named by its city: "18:42, Chicago time". */
+export function timeOf(time: string | null, timeZone: string | null): string | null {
+  if (!time) return null;
+  const city = timeZone?.split('/').at(-1)?.replaceAll('_', ' ');
+  return city ? `${time}, ${city} time` : time;
 }
 
 export const EXPENSE_STATUS: Record<ExpenseStatus, { label: string; tone: string }> = {

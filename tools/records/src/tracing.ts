@@ -544,6 +544,12 @@ export const CHANGE_LOG: readonly ChangeLogEntry[] = [
   {
     date: '2026-10-04',
     change:
+      'Time and place from the receipt (#53; FR-INT-17 and F-46 Verified; ADR-0030). Each reading now captures the time of purchase and the merchant’s address, with city, region and country picked out, each with its confidence; neither ever holds a receipt for a look. The expense carries them and shows them beside its receipt’s; you can edit them, and the time zone is worked out again from the place, offline, so no address leaves ExpenseWise, or you pick one. Receipts read before this have no time or place until read again. The eval set scores time, city and country. #61 can now match duplicates on time and place.',
+    by: 'Claude, at your direction',
+  },
+  {
+    date: '2026-10-04',
+    change:
       'Expense reports (#23; FR-EXP-05, FR-EXP-12, FR-EXP-14, F-17 and F-50 Verified; ADR-0029). A trip goes on your open report 24 hours after you’re back, and an expense on no trip likewise after its date; with no report open, one opens. Close it when nothing needs you, within 28 days, or it closes itself, moving what still needs review to the next report; it warns in its last week. Reopen a closed report until it is submitted; anything that changes on it reopens it too. Move a trip to another report or a new one. A local expense asks why it was for business. Needs you shows a report overdue, closing soon or ready to close, and local expenses needing a reason; Home lists your reports. Totals stay per currency until #62.',
     by: 'Claude, at your direction',
   },

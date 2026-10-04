@@ -8,6 +8,7 @@ import {
   type ReceiptExtraction,
 } from '@expensewise/extraction';
 import { InngestTestEngine, mockCtx } from '@inngest/test';
+import { NO_DETAILS } from '@expensewise/domain';
 import { describe, expect, it } from 'vitest';
 import { createWorkflowClient } from './functions.ts';
 import {
@@ -36,6 +37,8 @@ const reading = (over: Partial<ReceiptExtraction> = {}): ReceiptExtraction => ({
   taxes: [],
   tip: null,
   cardLastFour: null,
+  time: null,
+  address: null,
   lineItems: [],
   ...over,
 });
@@ -178,7 +181,7 @@ describe('reading a receipt with both models', () => {
     const { result } = await run(w);
     expect(result).toEqual({ status: 'needs_review', differences: ['total'] });
     // Its expense starts from the more capable model's reading.
-    expect(w.settled[0]?.values).toEqual(COFFEE);
+    expect(w.settled[0]?.values).toEqual({ ...COFFEE, details: NO_DETAILS });
   });
 
   it('asks for a look when both agree on parts that don’t make the total', async () => {
@@ -249,7 +252,7 @@ describe('the fallback reader', () => {
       outcome: 'confident',
       requestId: REQUEST,
     });
-    expect(w.settled[0]?.values).toEqual(COFFEE);
+    expect(w.settled[0]?.values).toEqual({ ...COFFEE, details: NO_DETAILS });
     expect(w.settled[0]?.detail).toMatchObject({
       fallback: 'gpt-5.6-luna',
       readings: {

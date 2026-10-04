@@ -40,6 +40,8 @@ const reading = (total: string): ReceiptExtraction => ({
   taxes: [],
   tip: null,
   cardLastFour: null,
+  time: null,
+  address: null,
   lineItems: [],
 });
 

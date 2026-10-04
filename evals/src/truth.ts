@@ -27,6 +27,11 @@ export interface GroundTruth {
   readonly taxTotal?: string;
   readonly tip?: string;
   readonly cardLastFour?: string;
+  /** When it was bought, HH:MM on a 24-hour clock (FR-INT-17). */
+  readonly time?: string;
+  /** The merchant's city and ISO 3166-1 alpha-2 country, when the document prints them. */
+  readonly city?: string;
+  readonly country?: string;
 }
 
 export interface Manifest {

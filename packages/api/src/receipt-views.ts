@@ -120,6 +120,10 @@ export function readingView(
               : null,
           fees: moneyView(n.feeTotal),
           cardLastFour: textView(n.cardLastFour),
+          time: textView(n.time),
+          address: n.place
+            ? { value: n.place.value.address, confidence: n.place.confidence }
+            : null,
         }
       : null,
     problems: n ? [...n.problems] : [],
@@ -148,6 +152,30 @@ export function readingsOf(receipt: ReceiptRecord, runs: readonly ExtractionRunR
     ),
     ...(fallback ? [readingView(FALLBACK_MODEL, fallback, pending, receipt.createdAt)] : []),
   ];
+}
+
+/**
+ * The reading a receipt's expense is filed with: the one a member confirmed, else the most
+ * capable compared model's, else the fallback's (ADR-0022). Null while it is read, or when
+ * nothing could read it.
+ */
+export function filedReading(
+  receipt: ReceiptRecord,
+  runs: readonly ExtractionRunRecord[],
+  reviews: readonly ReceiptReviewRecord[] = [],
+): NormalizedExtraction | null {
+  if (receipt.status === 'processing') return null;
+  const latest = latestRuns(receipt.id, runs);
+  const review = currentReview(receipt, runs, reviews);
+  if (review) return normalized(latest.find((r) => r.model === review.model));
+  const compared = [...COMPARISON_MODELS]
+    .reverse()
+    .map((model) => normalized(latest.find((r) => r.model === model)));
+  return (
+    compared.find((n) => n !== null) ??
+    normalized(latest.find((r) => r.model === FALLBACK_MODEL)) ??
+    null
+  );
 }
 
 function differencesOf(receipt: ReceiptRecord, runs: readonly ExtractionRunRecord[]): string[] {

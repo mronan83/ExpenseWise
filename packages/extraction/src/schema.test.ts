@@ -18,6 +18,8 @@ describe('stored readings', () => {
   it('reads a reading made before fees were read as having none', () => {
     expect(ReceiptExtractionSchema.safeParse(before).success).toBe(false);
     expect(StoredReadingSchema.parse(before).fees).toEqual([]);
+    // Readings before receipt-v3 have no time or place either.
+    expect(StoredReadingSchema.parse(before)).toMatchObject({ time: null, address: null });
   });
 
   it('keeps the fees of a reading that has them', () => {

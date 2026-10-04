@@ -1,4 +1,4 @@
-import type { ExpenseValues } from '@expensewise/domain';
+import type { ExpenseDetails, ExpenseValues } from '@expensewise/domain';
 import { createHash } from 'node:crypto';
 import {
   RECEIPT_READ_REQUESTED,
@@ -25,6 +25,7 @@ import {
   SCHEMA_VERSION,
   valuesOfReading,
 } from '@expensewise/extraction';
+import { detailsOf } from '@expensewise/extraction/place';
 import { NonRetriableError, type Inngest } from 'inngest';
 
 /** What the workflow knows about the file it is asked to read. */
@@ -54,8 +55,8 @@ export interface ReceiptReadingPorts {
       status: ReceiptStatus;
       requestId: string;
       detail: Record<string, unknown>;
-      /** What the reading would file the receipt's expense with (ADR-0022). */
-      values: ExpenseValues | null;
+      /** What the reading would file the receipt's expense with, its time and place too. */
+      values: (ExpenseValues & { details?: ExpenseDetails }) | null;
     },
   ): Promise<void>;
 }
@@ -288,7 +289,7 @@ export async function settleReading(
   await ports.settle(orgId, receiptId, {
     status,
     requestId,
-    values: best ? valuesOfReading(best) : null,
+    values: best ? { ...valuesOfReading(best), details: detailsOf(best) } : null,
     detail: {
       differences,
       readings: Object.fromEntries([

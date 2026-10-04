@@ -208,6 +208,9 @@ importers:
       '@expensewise/domain':
         specifier: workspace:*
         version: link:../domain
+      city-timezones:
+        specifier: 1.3.4
+        version: 1.3.4
       zod:
         specifier: ^4.6.5
         version: 4.6.5
@@ -2880,6 +2883,9 @@ packages:
   chalk@4.1.2:
     resolution: {integrity: sha512-oKnbhFyRIXpUuez8iBMmyEa4nbj4IOQyuhc/wy9kY7/WVPcwIO9VA668Pu8RkO7+0G76SLROeyw9CpQ061i4mA==}
     engines: {node: '>=10'}
+
+  city-timezones@1.3.4:
+    resolution: {integrity: sha512-yLmtCxU4y5HLAw9XGIMcGEXO+R2KH1sb595wEQC/E9BxSDpazCD7v9ZQRySO7367IXWsWqt3z2xFVh3OkZdgEQ==}
 
   cjs-module-lexer@1.4.3:
     resolution: {integrity: sha512-9z8TZaGM1pfswYeXrUpzPrkx8UnWYdhJclsiYMm6x/w5+nN+8Tf/LnAgfLGQCm59qAOxU8WwHEq2vNwF6i4j+Q==}
@@ -7325,6 +7331,8 @@ snapshots:
     dependencies:
       ansi-styles: 4.3.0
       supports-color: 7.2.0
+
+  city-timezones@1.3.4: {}
 
   cjs-module-lexer@1.4.3: {}
 

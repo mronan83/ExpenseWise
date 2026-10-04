@@ -1,8 +1,8 @@
-import type { ExpenseSource, ExpenseValues } from '@expensewise/domain';
+import type { ExpenseDetails, ExpenseSource } from '@expensewise/domain';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { appendAuditEvent } from './audit.ts';
 import type { Transaction } from './client.ts';
-import { fileReceiptExpense } from './expenses.ts';
+import { fileReceiptExpense, type ReceiptOffer } from './expenses.ts';
 import { checkForDuplicate } from './duplicates.ts';
 import { enqueueOutbox } from './outbox.ts';
 import type { receiptStatus } from './schema.ts';
@@ -309,7 +309,7 @@ export async function settleReceipt(
     requestId: string;
     detail: Record<string, unknown>;
     /** What the reading would file its expense with; null when nothing was read. */
-    values?: ExpenseValues | null;
+    values?: ReceiptOffer | null;
   },
 ): Promise<void> {
   const [settled] = await tx
@@ -424,6 +424,8 @@ export async function confirmReceipt(
   receiptId: string,
   review: NewReceiptReview,
   actorUserId: string,
+  /** The time and place of the reading confirmed (FR-INT-17). */
+  details?: ExpenseDetails,
 ): Promise<ConfirmReceiptResult> {
   // The lock orders this against a concurrent read-again or a second confirmation.
   const [current] = await tx
@@ -470,6 +472,7 @@ export async function confirmReceipt(
       transactionDate: review.transactionDate,
       currency: review.currency,
       amountMinor: review.totalMinor,
+      ...(details ? { details } : {}),
     },
     { type: 'user', id: actorUserId },
   );

@@ -2,7 +2,9 @@ import {
   assertCurrency,
   DomainError,
   fromDecimal,
+  isCountryCode,
   isIsoDate,
+  readTime,
   sum,
   type CurrencyCode,
   type Money,
@@ -31,9 +33,27 @@ export interface NormalizedExtraction {
   readonly feeLines: number;
   readonly tip: Field<Money> | null;
   readonly cardLastFour: Field<string> | null;
+  /** When it was bought, HH:MM local time. Never a reason for review (FR-INT-17). */
+  readonly time: Field<string> | null;
+  /** Where it was bought. Never a reason for review either. */
+  readonly place: Field<Place> | null;
   /** Fields that could not be read as valid values; each becomes a Needs review reason. */
   readonly problems: readonly string[];
 }
+
+/** The merchant's address as printed, with what the time zone is worked out from. */
+export interface Place {
+  readonly address: string;
+  readonly city: string | null;
+  readonly region: string | null;
+  /** ISO 3166-1 alpha-2, or null when none could be read. */
+  readonly country: string | null;
+}
+
+const text = (value: string | null | undefined): string | null => {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+};
 
 const RANK: Record<ConfidenceLevel, number> = { high: 2, medium: 1, low: 0 };
 const lowest = (levels: readonly ConfidenceLevel[]): ConfidenceLevel =>
@@ -119,6 +139,28 @@ export function normalizeExtraction(
     }
   }
 
+  // Time and place may be blank, and one that doesn't read is blank too: neither is a reason
+  // for review (FR-INT-17), so neither becomes a problem.
+  const timeValue = extraction.time ? readTime(extraction.time.value) : null;
+  const time =
+    extraction.time && timeValue
+      ? { value: timeValue, confidence: extraction.time.confidence }
+      : null;
+  const address = text(extraction.address?.printed);
+  const country = text(extraction.address?.country)?.toUpperCase() ?? null;
+  const place =
+    extraction.address && address
+      ? {
+          value: {
+            address,
+            city: text(extraction.address.city),
+            region: text(extraction.address.region),
+            country: country && isCountryCode(country) ? country : null,
+          },
+          confidence: extraction.address.confidence,
+        }
+      : null;
+
   const merchantName = extraction.merchant?.name.trim();
   return {
     documentType: extraction.documentType,
@@ -136,6 +178,8 @@ export function normalizeExtraction(
     feeLines: extraction.fees.length,
     tip,
     cardLastFour,
+    time,
+    place,
     problems,
   };
 }

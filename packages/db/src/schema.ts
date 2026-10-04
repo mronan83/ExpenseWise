@@ -242,6 +242,18 @@ export const expenses = pgTable(
     fxRate: numeric('fx_rate', { precision: 20, scale: 10 }),
     fxRateDate: date('fx_rate_date', { mode: 'string' }),
     fxSource: text('fx_source'),
+    /**
+     * When it was bought, as local time HH:MM, and the IANA time zone that time is in: read
+     * from its receipt (FR-INT-17), the zone worked out from the place, or set by a person.
+     */
+    transactionTime: text('transaction_time'),
+    timeZone: text('time_zone'),
+    /** Where it was bought: the merchant's address as printed, and what was picked out of it. */
+    merchantAddress: text('merchant_address'),
+    merchantCity: text('merchant_city'),
+    merchantRegion: text('merchant_region'),
+    /** ISO 3166-1 alpha-2. */
+    merchantCountry: char('merchant_country', { length: 2 }),
     notes: text('notes'),
     /**
      * Why a local expense, one on no trip, was for business. Its report can't close without
@@ -283,6 +295,14 @@ export const expenses = pgTable(
       foreignColumns: [reports.orgId, reports.memberId, reports.id],
     }),
     check('expenses_report_only_when_local', sql`${t.reportId} IS NULL OR ${t.tripId} IS NULL`),
+    check(
+      'expenses_time_of_day',
+      sql`${t.transactionTime} IS NULL OR ${t.transactionTime} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'`,
+    ),
+    check(
+      'expenses_country_code',
+      sql`${t.merchantCountry} IS NULL OR ${t.merchantCountry} ~ '^[A-Z]{2}$'`,
+    ),
     foreignKey({
       name: 'expenses_category_fk',
       columns: [t.orgId, t.categoryId],

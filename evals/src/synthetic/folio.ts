@@ -136,6 +136,8 @@ export function hotelFolio(random: Random): SyntheticDocument {
       taxTotal: dollars(taxes),
       ...(printSubtotal ? { subtotal: dollars(total - taxes) } : {}),
       cardLastFour: card,
+      city: place.city.split(',')[0]!,
+      country: 'US',
     },
     html,
     format: random.chance(0.25) ? 'photo' : 'pdf',

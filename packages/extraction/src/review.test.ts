@@ -14,6 +14,8 @@ const reading = (over: Partial<ReceiptExtraction> = {}): ReceiptExtraction => ({
   taxes: [],
   tip: null,
   cardLastFour: null,
+  time: null,
+  address: null,
   lineItems: [],
   ...over,
 });

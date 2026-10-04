@@ -14,6 +14,8 @@ const parsed: ReceiptExtraction = {
   taxes: [],
   tip: null,
   cardLastFour: null,
+  time: null,
+  address: null,
   lineItems: [],
 };
 

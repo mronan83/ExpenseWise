@@ -1,10 +1,17 @@
 import {
+  applyDetailsEdit,
   applyExpenseEdit,
   isComplete,
+  NO_DETAILS,
   NO_VALUES,
+  sameDetails,
   newId,
   receiptExpenseStatus,
+  type DetailChange,
+  type DetailsEdit,
+  type DetailsEditProblem,
   type ExpenseChange,
+  type ExpenseDetails,
   type ExpenseEdit,
   type ExpenseEditProblem,
   type ExpenseSource,
@@ -32,7 +39,7 @@ import { reopenChangedReports, reportsOfExpenses } from './report-touch.ts';
 import { expenses, members, receipts, trips } from './schema.ts';
 import { containing, fileExpenseToTrip } from './trips.ts';
 
-export interface ExpenseRecord extends ExpenseValues {
+export interface ExpenseRecord extends ExpenseValues, ExpenseDetails {
   readonly id: string;
   readonly memberId: string;
   readonly owner: string;
@@ -70,6 +77,12 @@ const expenseColumns = {
   tripId: expenses.tripId,
   tripName: trips.name,
   tripPinned: expenses.tripPinned,
+  time: expenses.transactionTime,
+  timeZone: expenses.timeZone,
+  address: expenses.merchantAddress,
+  city: expenses.merchantCity,
+  region: expenses.merchantRegion,
+  country: expenses.merchantCountry,
   reportId: expenses.reportId,
   tripReportId: trips.reportId,
   justification: expenses.justification,
@@ -198,6 +211,47 @@ export async function getExpense(
   return row;
 }
 
+/** What a reading or a confirmation offers an expense: its values, and its time and place. */
+export interface ReceiptOffer extends ExpenseValues {
+  /** Absent: the time and place stay as they are. */
+  readonly details?: ExpenseDetails;
+}
+
+/** The time and place as columns. */
+const detailColumns = (d: ExpenseDetails) => ({
+  transactionTime: d.time,
+  timeZone: d.timeZone,
+  merchantAddress: d.address,
+  merchantCity: d.city,
+  merchantRegion: d.region,
+  merchantCountry: d.country,
+});
+
+const detailsOf = (row: {
+  transactionTime: string | null;
+  timeZone: string | null;
+  merchantAddress: string | null;
+  merchantCity: string | null;
+  merchantRegion: string | null;
+  merchantCountry: string | null;
+}): ExpenseDetails => ({
+  time: row.transactionTime,
+  timeZone: row.timeZone,
+  address: row.merchantAddress,
+  city: row.merchantCity,
+  region: row.merchantRegion,
+  country: row.merchantCountry,
+});
+
+const detailSelection = {
+  transactionTime: expenses.transactionTime,
+  timeZone: expenses.timeZone,
+  merchantAddress: expenses.merchantAddress,
+  merchantCity: expenses.merchantCity,
+  merchantRegion: expenses.merchantRegion,
+  merchantCountry: expenses.merchantCountry,
+};
+
 const valuesOf = (v: ExpenseValues): ExpenseValues => ({
   merchant: v.merchant,
   transactionDate: v.transactionDate,
@@ -221,7 +275,7 @@ export async function fileReceiptExpense(
   tx: Transaction,
   orgId: string,
   receiptId: string,
-  offered: ExpenseValues | null,
+  offered: ReceiptOffer | null,
   actor: AuditEntry['actor'],
 ): Promise<void> {
   // Before any expense is locked, so filing it to a trip sees every trip settled (ADR-0023).
@@ -248,6 +302,7 @@ export async function fileReceiptExpense(
       status,
       source: receipt.source,
       ...values,
+      ...detailColumns(offered?.details ?? NO_DETAILS),
     });
     await tx.update(receipts).set({ expenseId: id }).where(eq(receipts.id, receiptId));
     await appendAuditEvent(tx, orgId, {
@@ -269,28 +324,33 @@ export async function fileReceiptExpense(
       transactionDate: expenses.transactionDate,
       currency: expenses.currency,
       amountMinor: expenses.amountMinor,
+      ...detailSelection,
     })
     .from(expenses)
     .where(eq(expenses.id, receipt.expenseId))
     .for('update');
   if (!expense) return;
   const current = valuesOf(expense);
-  // A person's edit always wins over a reading.
-  const values = offered && expense.editedAt === null ? valuesOf(offered) : current;
+  const currentDetails = detailsOf(expense);
+  // A person's edit always wins over a reading, its time and place included.
+  const fresh = offered !== null && expense.editedAt === null;
+  const values = fresh ? valuesOf(offered) : current;
+  const details = fresh && offered.details ? offered.details : currentDetails;
   const status = receiptExpenseStatus(expense.status, receipt.status, values);
   if (status === null) return;
   const refreshed = !sameValues(values, current);
-  if (status === expense.status && !refreshed) return;
+  const placed = !sameDetails(details, currentDetails);
+  if (status === expense.status && !refreshed && !placed) return;
   await tx
     .update(expenses)
-    .set({ status, ...values, updatedAt: new Date() })
+    .set({ status, ...values, ...detailColumns(details), updatedAt: new Date() })
     .where(eq(expenses.id, receipt.expenseId));
   await appendAuditEvent(tx, orgId, {
     actor,
     entityType: 'expense',
     entityId: receipt.expenseId,
     action: 'expense.filed',
-    payload: { receiptId, status, previous: expense.status, refreshed },
+    payload: { receiptId, status, previous: expense.status, refreshed, placed },
   });
   await reopenChangedReports(
     tx,
@@ -303,10 +363,14 @@ export async function fileReceiptExpense(
 }
 
 export type EditExpenseResult =
-  | { readonly status: 'edited'; readonly changes: readonly ExpenseChange[] }
+  | {
+      readonly status: 'edited';
+      readonly changes: readonly ExpenseChange[];
+      readonly detailChanges: readonly DetailChange[];
+    }
   /** The values were already those. Nothing changed and nothing was recorded. */
   | { readonly status: 'unchanged' }
-  | { readonly status: 'invalid'; readonly problem: ExpenseEditProblem }
+  | { readonly status: 'invalid'; readonly problem: ExpenseEditProblem | DetailsEditProblem }
   | { readonly status: 'missing' }
   /** Being read, or submitted or later: not open to edits (FR-EXP-09). */
   | { readonly status: 'not_editable'; readonly current: ExpenseStatus };
@@ -320,7 +384,7 @@ export async function editExpense(
   tx: Transaction,
   orgId: string,
   expenseId: string,
-  edit: ExpenseEdit,
+  edit: ExpenseEdit & { readonly details?: DetailsEdit },
   actorUserId: string,
 ): Promise<EditExpenseResult> {
   await lockOrgWrites(tx, orgId);
@@ -331,6 +395,7 @@ export async function editExpense(
       transactionDate: expenses.transactionDate,
       currency: expenses.currency,
       amountMinor: expenses.amountMinor,
+      ...detailSelection,
     })
     .from(expenses)
     .where(eq(expenses.id, expenseId))
@@ -339,10 +404,14 @@ export async function editExpense(
   if (expense.status !== 'needs_review' && expense.status !== 'ready') {
     return { status: 'not_editable', current: expense.status };
   }
-  const result = applyExpenseEdit(valuesOf(expense), edit);
+  const { details: detailsEdit, ...valuesEdit } = edit;
+  const result = applyExpenseEdit(valuesOf(expense), valuesEdit);
   if (!result.ok) return { status: 'invalid', problem: result.error };
+  const placed = applyDetailsEdit(detailsOf(expense), detailsEdit ?? {});
+  if (!placed.ok) return { status: 'invalid', problem: placed.error };
   const { values, changes } = result.value;
-  if (changes.length === 0) return { status: 'unchanged' };
+  const { details, changes: detailChanges } = placed.value;
+  if (changes.length === 0 && detailChanges.length === 0) return { status: 'unchanged' };
 
   const [proof] = await tx
     .select({ id: receipts.id, status: receipts.status })
@@ -356,14 +425,14 @@ export async function editExpense(
   const now = new Date();
   await tx
     .update(expenses)
-    .set({ ...values, status, editedAt: now, updatedAt: now })
+    .set({ ...values, ...detailColumns(details), status, editedAt: now, updatedAt: now })
     .where(eq(expenses.id, expenseId));
   await appendAuditEvent(tx, orgId, {
     actor: { type: 'user', id: actorUserId },
     entityType: 'expense',
     entityId: expenseId,
     action: 'expense.edited',
-    payload: { changes, status, previous: expense.status },
+    payload: { changes, detailChanges, status, previous: expense.status },
   });
   await reopenChangedReports(
     tx,
@@ -375,5 +444,5 @@ export async function editExpense(
   if (changes.some((c) => c.field === 'date')) {
     await fileExpenseToTrip(tx, orgId, expenseId, { type: 'user', id: actorUserId });
   }
-  return { status: 'edited', changes };
+  return { status: 'edited', changes, detailChanges };
 }

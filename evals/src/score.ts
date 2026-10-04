@@ -19,6 +19,9 @@ export const FIELDS = [
   'taxTotal',
   'tip',
   'cardLastFour',
+  'time',
+  'city',
+  'country',
 ] as const;
 export type FieldName = (typeof FIELDS)[number];
 
@@ -88,6 +91,23 @@ export function scoreDocument(truth: GroundTruth, run: Run): DocumentScore {
             ? undefined
             : n.cardLastFour?.value === truth.cardLastFour,
           n.cardLastFour?.confidence ?? null,
+        ],
+        [
+          'time',
+          truth.time === undefined ? undefined : n.time?.value === truth.time,
+          n.time?.confidence ?? null,
+        ],
+        [
+          'city',
+          truth.city === undefined
+            ? undefined
+            : n.place?.value.city?.trim().toLowerCase() === truth.city.toLowerCase(),
+          n.place?.confidence ?? null,
+        ],
+        [
+          'country',
+          truth.country === undefined ? undefined : n.place?.value.country === truth.country,
+          n.place?.confidence ?? null,
         ],
       ]
     : FIELDS.map((f) => [f, isScored(truth, f) ? false : undefined, null]);

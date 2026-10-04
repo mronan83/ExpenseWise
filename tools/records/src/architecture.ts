@@ -117,7 +117,7 @@ export const COMPONENTS: readonly Component[] = [
     name: 'Domain',
     technology: 'TypeScript, no I/O',
     responsibility:
-      'The rules: money, dates, lifecycles, editing an expense, filing to trips, when two receipts look like the same purchase and how two expenses merge, when something joins a report and what day 28 does, approvals. Tested to 90% coverage or more.',
+      'The rules: money, dates, lifecycles, editing an expense and its time and place, filing to trips, when two receipts look like the same purchase and how two expenses merge, when something joins a report and what day 28 does, approvals. Tested to 90% coverage or more.',
     where: ['packages/domain'],
   },
   {
@@ -131,7 +131,7 @@ export const COMPONENTS: readonly Component[] = [
     name: 'Receipt reading',
     technology: 'Anthropic SDK; OpenAI over HTTPS',
     responsibility:
-      'Turns an image or PDF into fields with a confidence each, through one prompt and one schema. Compares two Claude models and falls back to OpenAI; checks that a reading’s sums make its total, counting fees as well as tax and tip, that its date is plausible and that it isn’t a purchase summary before it can be Ready; checks a reading against the expense.',
+      'Turns an image or PDF into fields with a confidence each, through one prompt and one schema, the time of purchase and the merchant’s address among them. Works out a time zone from the city, region and country offline (city-timezones), so no address leaves ExpenseWise. Compares two Claude models and falls back to OpenAI; checks that a reading’s sums make its total, counting fees as well as tax and tip, that its date is plausible and that it isn’t a purchase summary before it can be Ready; checks a reading against the expense.',
     where: ['packages/extraction'],
   },
   {

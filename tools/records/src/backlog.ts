@@ -374,7 +374,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     priority: 'P1',
     effort: 'M',
     severity: 'Medium',
-    blocker: { kind: 'items', items: [53] },
+    blocker: { kind: 'none' },
     source: 'Product owner Oct 4',
     affects: ['FR-INT-18', 'F-48', 'GAP-23'],
   },
@@ -775,6 +775,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none' },
     source: 'Product owner, Oct 3',
     affects: ['FR-INT-17', 'F-46', 'FR-INT-01'],
+    done: { date: '2026-10-04', in: 'PR #53' },
   },
   {
     num: 56,

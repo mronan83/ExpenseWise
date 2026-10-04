@@ -31,7 +31,42 @@ export const DOCUMENT_TYPES = [
 ] as const;
 
 /** Changes whenever ReceiptExtractionSchema changes, and is stored with every reading. */
-export const SCHEMA_VERSION = 'receipt-v2';
+export const SCHEMA_VERSION = 'receipt-v3';
+
+const Time = z
+  .object({
+    value: z
+      .string()
+      .describe(
+        'Time of the purchase as printed, on a 24-hour clock as HH:MM, for example "18:42". ' +
+          'Local time where it was bought; never convert it.',
+      ),
+    confidence: Confidence,
+  })
+  .nullable()
+  .describe('When it was bought, if the document prints a time. Null if it prints none.');
+
+const Address = z
+  .object({
+    printed: z.string().describe("The merchant's address as printed, lines joined with commas."),
+    city: z.string().nullable().describe('The city or town, as printed.'),
+    region: z
+      .string()
+      .nullable()
+      .describe('The state, province or region, as printed, for example "CA" or "Ontario".'),
+    country: z
+      .string()
+      .nullable()
+      .describe(
+        'ISO 3166-1 alpha-2 country code such as US or DE. Infer it from the address, the ' +
+          'phone number or the currency if it is not printed.',
+      ),
+    confidence: Confidence,
+  })
+  .nullable()
+  .describe(
+    "Where it was bought: the merchant's address, if the document prints one. Null if not.",
+  );
 
 export const ReceiptExtractionSchema = z.object({
   documentType: z.enum(DOCUMENT_TYPES),
@@ -78,6 +113,8 @@ export const ReceiptExtractionSchema = z.object({
       confidence: Confidence,
     })
     .nullable(),
+  time: Time,
+  address: Address,
   lineItems: z.array(
     z.object({
       description: z.string(),
@@ -91,8 +128,13 @@ export type ReceiptExtraction = z.infer<typeof ReceiptExtractionSchema>;
 
 /**
  * A stored reading, as the models' output is parsed back. Readings made before fees were read
- * (receipt-v1) have none, which they parse as.
+ * (receipt-v1) have none, and those made before time and place were read (receipt-v2) have
+ * neither, which they parse as.
  */
-export const StoredReadingSchema = ReceiptExtractionSchema.extend({ fees: Fees.default([]) });
+export const StoredReadingSchema = ReceiptExtractionSchema.extend({
+  fees: Fees.default([]),
+  time: Time.default(null),
+  address: Address.default(null),
+});
 export type ConfidenceLevel = z.infer<typeof Confidence>;
 export type DocumentType = (typeof DOCUMENT_TYPES)[number];

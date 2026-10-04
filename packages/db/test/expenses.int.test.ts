@@ -193,6 +193,7 @@ describe('an expense made from a receipt', () => {
     expect(edited).toEqual({
       status: 'edited',
       changes: [{ field: 'amount', from: '6.50', to: '7.25' }],
+      detailChanges: [],
     });
     // The receipt still needs a look, so its expense isn't Ready yet.
     expect(await r.expense()).toMatchObject({ status: 'needs_review', amountMinor: 725 });
