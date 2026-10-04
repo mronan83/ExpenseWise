@@ -353,6 +353,18 @@ export const FUNCTIONAL: readonly Requirement[] = [
     note: 'Your requirement of Oct 3 and your answer to Q9. The time zone is looked up offline from the city, region and country (ADR-0030), so no address leaves ExpenseWise; where the place can’t pin one, it is blank for the person to set. Claude’s assumption, yours to overturn: a different time or address on the expense shows against its receipt, as other fields do, but doesn’t by itself reject it at review, which checks what is claimed (FR-GOV-10).',
   },
   {
+    id: 'FR-INT-19',
+    text: 'How far apart in time two receipts at the same place may be and still be one purchase is set in Settings: from 0 to 120 minutes, 30 by default. 0 means the same minute only. A change judges pairs from then on; pairs already decided stay decided.',
+    sources: ['owner 2026-10-04'],
+    priority: 'Should',
+    phase: 'P1',
+    status: 'Planned',
+    capabilities: ['Intelligence · Near-duplicate detection'],
+    features: ['F-52'],
+    backlog: [64],
+    note: 'Your request of Oct 4, after the 30 minutes of ADR-0031 was recorded as Claude’s assumption. Q24 asks whether the organization’s owner sets it for everyone, recommended since catching duplicates is a control, or each person for their own receipts. The bounds are Claude’s proposal: wide enough for a bill and its tip slip, narrow enough that a morning and an afternoon at one café stay apart.',
+  },
+  {
     id: 'FR-INT-18',
     text: 'A receipt from the same vendor, on the same date, at the same time and place as another of the same person’s is a duplicate when its total matches too, and a possible duplicate when the total differs, as with a tip added or an amended receipt. Either waits in Needs you, never Ready on its own, until the person decides; a possible duplicate may need a merge or a replacement. Delete removes the copy, its expense and its file. Merge: the person chooses which is primary; the other fills the primary’s missing fields, or the person picks which of its fields to take, and is then deleted the same way. Not a duplicate keeps both and never flags the pair again. Each deletion leaves a record in the audit trail; a submitted or approved expense is never deleted.',
     sources: ['owner 2026-10-03', 'owner 2026-10-04'],
@@ -571,7 +583,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
     capabilities: ['Expense management · Multi-currency and FX'],
     features: ['F-49'],
     backlog: [62],
-    note: 'Your answer of Oct 4. Each conversion keeps its rate, the rate’s date and its source (NFR-DAT-02), copied on so a later rate never changes it (NFR-DAT-04). Your answer to Q22: cards convert at purchase, so a rate may only be needed where none was applied; Q23 asks what a receipt in another currency is reimbursed at. Until #62, reports total each currency apart.',
+    note: 'Your answer of Oct 4. Each conversion keeps its rate, the rate’s date and its source (NFR-DAT-02), copied on so a later rate never changes it (NFR-DAT-04). Your answer to Q22: cards convert at purchase, so a rate may only be needed where none was applied. Your answer to Q23: in your preferred currency, as set in the app; Q25 asks where the converted figure comes from. Until #62, reports total each currency apart.',
   },
   {
     id: 'FR-EXP-14',
@@ -1701,6 +1713,19 @@ export const NON_FUNCTIONAL: readonly Requirement[] = [
     status: 'Verified',
     features: ['F-39'],
     checks: ['records/integrity', 'records/render'],
+  },
+  {
+    id: 'NFR-DEL-09',
+    text: 'Every requirement is detailed as user stories with numbered acceptance criteria in Given/When/Then form. Each criterion says who decided it, the product owner or Claude as an assumption to confirm, and is traced to the automated test that proves it or shown as untested. The numbers the rules share are named once, in a register. All of it is published after each successful release.',
+    enforcedBy:
+      'Planned: integrity checks in gate G2 refusing a delivered story whose criteria no test covers',
+    sources: ['owner 2026-10-04'],
+    priority: 'Must',
+    phase: 'P1',
+    status: 'Planned',
+    features: ['F-53'],
+    backlog: [65],
+    note: 'Your request of Oct 4: good, accurate and proper documentation of the detailed requirements, in user story form with acceptance criteria. Q26 asks you to confirm the shape.',
   },
   {
     id: 'NFR-DEL-08',
