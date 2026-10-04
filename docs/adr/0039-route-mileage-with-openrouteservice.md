@@ -60,6 +60,7 @@ Out of scope: a map, kilometres, dropping a point on a map instead of an address
 - **Home addresses go to OpenRouteService on every drive from home** (Q32's choice). Its terms ask that no personal data is sent; names, notes and purposes never are.
 - **A free key's allowance can run out.** A drive then needs a look saying so, and can be measured again later or entered by hand.
 - **The best match can be the wrong place.** The page shows the place each stop was found at, so a person sees it and fixes the stop; there is no choosing among matches yet.
+- **It is tested against a fake, not the live service,** as every external call is. On Oct 4 the requests and answers were checked against OpenRouteService's API reference: a POST to `/v2/directions/driving-car` answers JSON, each leg's distance is in `routes[].segments[]`, coordinates go longitude first, and error 2010 is a point not found. One thing the reference does not state is that the key check's GET takes the key in the Authorization header. The first save proves it: if it doesn't, the save is refused and says so, and nothing is stored.
 - **One more secret is stored,** under the same box, roles, audit and tests as the AI keys; rotating the box's source secret makes it unreadable too, and a drive then needs a look asking for it to be saved again.
 
 ## Exit path / reversibility

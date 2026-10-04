@@ -78,7 +78,6 @@ for (const colorScheme of ['light', 'dark'] as const) {
       '/settings/currency',
       '/settings/mileage',
       '/settings/people',
-      '/settings/mileage',
       '/invite/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
     ]) {
       test(`${path} has no WCAG 2.2 AA violations`, async ({ page }) => {
