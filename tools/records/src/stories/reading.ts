@@ -53,7 +53,8 @@ export const READING_STORIES: readonly Story[] = [
       },
       {
         id: 'AC3',
-        given: 'a value that isn’t valid, such as an amount with more decimals than its currency has or with a thousands separator, an unknown currency, a date in another format, or a card number that isn’t four digits',
+        given:
+          'a value that isn’t valid, such as an amount with more decimals than its currency has or with a thousands separator, an unknown currency, a date in another format, or a card number that isn’t four digits',
         when: 'the reading is stored',
         then: 'that field is left blank and named as a problem, never rounded or guessed, and the reading can’t make the receipt Ready',
         decided: { by: 'claude' },
@@ -110,7 +111,8 @@ export const READING_STORIES: readonly Story[] = [
       },
       {
         id: 'AC2',
-        given: 'both models read the merchant, date, currency and total with high confidence and agree on them, and the reading’s sums and date pass their checks',
+        given:
+          'both models read the merchant, date, currency and total with high confidence and agree on them, and the reading’s sums and date pass their checks',
         when: 'the receipt settles',
         then: 'it is Ready, and its expense is filed with what was read',
         decided: TWO_MODELS,
@@ -133,7 +135,8 @@ export const READING_STORIES: readonly Story[] = [
       },
       {
         id: 'AC4',
-        given: 'two readings of a merchant’s name that differ only in case, punctuation, “&” for “and”, a word such as “Inc”, or one being a shorter form of the other',
+        given:
+          'two readings of a merchant’s name that differ only in case, punctuation, “&” for “and”, a word such as “Inc”, or one being a shorter form of the other',
         when: 'they are compared',
         then: 'they agree, while different businesses never do; a field both models left blank agrees, and one only one of them left blank differs',
         decided: { by: 'claude' },
@@ -146,7 +149,8 @@ export const READING_STORIES: readonly Story[] = [
       },
       {
         id: 'AC5',
-        given: 'either model read the merchant, date, currency or total with medium or low confidence, or not at all',
+        given:
+          'either model read the merchant, date, currency or total with medium or low confidence, or not at all',
         when: 'the receipt settles',
         then: 'it Needs a look',
         decided: TWO_MODELS,
@@ -305,7 +309,8 @@ export const READING_STORIES: readonly Story[] = [
       },
       {
         id: 'AC2',
-        given: 'a receipt whose printed subtotal and the lines that were read don’t reach the total',
+        given:
+          'a receipt whose printed subtotal and the lines that were read don’t reach the total',
         when: 'it is read',
         then: 'nothing is counted as zero, since a line was most likely missed; where the rest add up, only the missing one is',
         decided: OCT2,
@@ -444,7 +449,8 @@ export const READING_STORIES: readonly Story[] = [
     title: 'Correct a field before the receipt is filed',
     as: 'Alex, who travels for work',
     want: 'to correct the merchant, date, currency, total, tax or tip of a reading that needs a look, then file it',
-    soThat: 'a reading that is nearly right becomes Ready in seconds, and what the model got wrong is kept',
+    soThat:
+      'a reading that is nearly right becomes Ready in seconds, and what the model got wrong is kept',
     feature: 'F-40',
     requirements: ['FR-INT-15'],
     status: 'Delivered',
@@ -481,7 +487,8 @@ export const READING_STORIES: readonly Story[] = [
       },
       {
         id: 'AC4',
-        given: 'a value that isn’t valid: an empty merchant, a date that doesn’t exist, a currency ExpenseWise doesn’t support, an amount with too many decimals or a thousands separator, or a negative amount',
+        given:
+          'a value that isn’t valid: an empty merchant, a date that doesn’t exist, a currency ExpenseWise doesn’t support, an amount with too many decimals or a thousands separator, or a negative amount',
         when: 'I tap Save and file',
         then: 'nothing is filed, and the field is named',
         decided: REVIEWS,
@@ -638,14 +645,16 @@ export const READING_STORIES: readonly Story[] = [
     title: 'Have a receipt read even when Claude can’t',
     as: 'Alex, who travels for work',
     want: 'a receipt read by a fallback model when neither Claude model can read it',
-    soThat: 'I check a reading instead of typing the receipt in, even during an outage or with no credit',
+    soThat:
+      'I check a reading instead of typing the receipt in, even during an outage or with no credit',
     feature: 'F-08',
     requirements: ['FR-INT-09'],
     status: 'Delivered',
     criteria: [
       {
         id: 'AC1',
-        given: 'neither Claude model produced a reading, because there is no Anthropic key or credit, the key was rejected, or Anthropic didn’t answer after several tries',
+        given:
+          'neither Claude model produced a reading, because there is no Anthropic key or credit, the key was rejected, or Anthropic didn’t answer after several tries',
         when: 'the receipt is read',
         then: 'a fallback model reads it once, on the organization’s own OpenAI key',
         decided: FALLBACK,
@@ -679,7 +688,9 @@ export const READING_STORIES: readonly Story[] = [
         when: 'neither Claude model could read a receipt',
         then: 'the fallback is skipped, nothing is stored for it, and the receipt is Not read',
         decided: FALLBACK_RULES,
-        checks: ['workflows/receipts › records a missing key as a failed reading, and calls no model'],
+        checks: [
+          'workflows/receipts › records a missing key as a failed reading, and calls no model',
+        ],
       },
       {
         id: 'AC5',
@@ -740,7 +751,8 @@ export const READING_STORIES: readonly Story[] = [
       },
       {
         id: 'AC2',
-        given: 'a receipt that prints no time or address, or one that can’t be read as a time of day or a two-letter country',
+        given:
+          'a receipt that prints no time or address, or one that can’t be read as a time of day or a two-letter country',
         when: 'it is read',
         then: 'that part is blank, and a blank never makes the receipt Need a look',
         decided: OCT3,
@@ -777,7 +789,9 @@ export const READING_STORIES: readonly Story[] = [
         when: 'its expense is filed',
         then: 'the expense carries the time, time zone, address, city, region and country',
         decided: OCT3,
-        checks: ['db/expense-details.int › files them with the expense, and a later reading refreshes them'],
+        checks: [
+          'db/expense-details.int › files them with the expense, and a later reading refreshes them',
+        ],
       },
       {
         id: 'AC6',
@@ -785,7 +799,9 @@ export const READING_STORIES: readonly Story[] = [
         when: 'its receipt is read again',
         then: 'a new time or place replaces the old, and a reading that offers neither leaves them as they are',
         decided: TIME_PLACE,
-        checks: ['db/expense-details.int › files them with the expense, and a later reading refreshes them'],
+        checks: [
+          'db/expense-details.int › files them with the expense, and a later reading refreshes them',
+        ],
       },
       {
         id: 'AC7',
@@ -803,7 +819,8 @@ export const READING_STORIES: readonly Story[] = [
     title: 'Correct when and where on the expense',
     as: 'Alex, who travels for work',
     want: 'to edit the time and place on an expense, and set its time zone where the place doesn’t pin one',
-    soThat: 'an expense says when and where it really happened, even when its receipt is wrong or silent',
+    soThat:
+      'an expense says when and where it really happened, even when its receipt is wrong or silent',
     feature: 'F-46',
     requirements: ['FR-INT-17'],
     status: 'Partial',
@@ -853,7 +870,8 @@ export const READING_STORIES: readonly Story[] = [
       },
       {
         id: 'AC5',
-        given: 'a time that isn’t a time of day, a country that isn’t two letters, a time zone that doesn’t exist, or an address over 300 characters',
+        given:
+          'a time that isn’t a time of day, a country that isn’t two letters, a time zone that doesn’t exist, or an address over 300 characters',
         when: 'I save',
         then: 'nothing is saved and the field is named; the database refuses such a time or country too',
         decided: TIME_PLACE,
@@ -1030,7 +1048,9 @@ export const READING_STORIES: readonly Story[] = [
         when: 'reading starts',
         then: 'no model sees it, and the receipt is Not read, recorded as a changed file',
         decided: TWO_MODELS,
-        checks: ['workflows/receipts › reads nothing when the stored file is not the one described'],
+        checks: [
+          'workflows/receipts › reads nothing when the stored file is not the one described',
+        ],
       },
       {
         id: 'AC2',
@@ -1038,7 +1058,10 @@ export const READING_STORIES: readonly Story[] = [
         when: 'reading starts',
         then: 'no model sees it',
         decided: TWO_MODELS,
-        checks: ['workflows/receipts › recognizes %s', 'workflows/receipts › rejects anything else'],
+        checks: [
+          'workflows/receipts › recognizes %s',
+          'workflows/receipts › rejects anything else',
+        ],
       },
       {
         id: 'AC3',
@@ -1067,7 +1090,9 @@ export const READING_STORIES: readonly Story[] = [
         when: 'filing is saved',
         then: 'the app answers with the receipt Reading, without waiting for it to be read, and hands the reading to the workflow runner; filing the same receipt again is safe',
         decided: { by: 'blueprint', source: 'arch AP3' },
-        checks: ['api/receipts › files the receipt, hands its event to the runner, and is safe to retry'],
+        checks: [
+          'api/receipts › files the receipt, hands its event to the runner, and is safe to retry',
+        ],
       },
       {
         id: 'AC2',
@@ -1082,7 +1107,8 @@ export const READING_STORIES: readonly Story[] = [
       },
       {
         id: 'AC3',
-        given: 'a model call that fails in a way trying again may fix, such as an overloaded or rate-limited provider',
+        given:
+          'a model call that fails in a way trying again may fix, such as an overloaded or rate-limited provider',
         when: 'the step fails',
         then: 'it is retried, and nothing is stored for it until it succeeds or runs out of tries',
         decided: RUNS,
@@ -1146,7 +1172,9 @@ export const READING_STORIES: readonly Story[] = [
         when: 'filing is saved',
         then: 'its reading starts at once, without waiting for the outbox relay',
         decided: RUNS,
-        checks: ['api/receipts › files the receipt, hands its event to the runner, and is safe to retry'],
+        checks: [
+          'api/receipts › files the receipt, hands its event to the runner, and is safe to retry',
+        ],
       },
       {
         id: 'AC2',
@@ -1154,7 +1182,10 @@ export const READING_STORIES: readonly Story[] = [
         when: 'I open it',
         then: 'each model shows as pending until it answers',
         decided: RUNS,
-        checks: ['api/receipts › shows each model pending while the receipt is read', 'e2e/signed-in'],
+        checks: [
+          'api/receipts › shows each model pending while the receipt is read',
+          'e2e/signed-in',
+        ],
       },
       {
         id: 'AC3',
@@ -1242,7 +1273,8 @@ export const READING_STORIES: readonly Story[] = [
     title: 'Switch a model off for every organization at once',
     as: 'the product owner',
     want: 'an operator switch for each AI model that turns it off for every organization at once',
-    soThat: 'I can stop a model during an outage or a bad release, whatever each organization has chosen',
+    soThat:
+      'I can stop a model during an outage or a bad release, whatever each organization has chosen',
     feature: 'F-45',
     requirements: ['FR-INT-16'],
     status: 'Planned',
