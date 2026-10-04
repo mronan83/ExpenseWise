@@ -260,6 +260,42 @@ export const RULES: readonly Rule[] = [
     code: { file: 'packages/domain/src/mileage.ts', constant: 'MILEAGE_DAYS_AHEAD', literal: '1' },
   },
   {
+    id: 'R-ROUTE-STOPS',
+    name: 'Most places one drive by its route goes through',
+    value: '25, its start and end included',
+    decided: { by: 'claude', source: 'ADR-0039' },
+    code: {
+      file: 'packages/domain/src/route-mileage.ts',
+      constant: 'ROUTE_MAX_STOPS',
+      literal: '25',
+    },
+    note: 'OpenRouteService’s free key routes through up to 50 points; 25 leaves room for the way back on a round trip, and keeps one drive’s lookups well inside the key’s 1,000 a day.',
+  },
+  {
+    id: 'R-ROUTE-RETRIES',
+    name: 'How often a busy OpenRouteService is asked again',
+    value: '3 more times, then the drive needs a look',
+    decided: { by: 'claude', source: 'ADR-0039' },
+    code: {
+      file: 'packages/workflows/src/route-mileage.ts',
+      constant: 'ROUTE_MEASURE_RETRIES',
+      literal: '3',
+    },
+    note: 'For a used-up allowance (429) or a failure on its side (5xx). A refused key is not asked again.',
+  },
+  {
+    id: 'R-MILES-REASON-MAX',
+    name: 'Longest reason for claiming other miles than were measured',
+    value: '500 characters',
+    decided: { by: 'claude', source: 'ADR-0039' },
+    code: {
+      file: 'packages/domain/src/route-mileage.ts',
+      constant: 'ROUTE_REASON_MAX',
+      literal: '500',
+    },
+    note: 'Your answer to Q33 asks for a reason; its length is Claude’s, as long as a local expense’s justification.',
+  },
+  {
     id: 'R-RATE-LOOKBACK',
     name: 'How far back a purchase’s reference rate may have been published',
     value: '10 days: on a weekend or holiday, the last rate before it',

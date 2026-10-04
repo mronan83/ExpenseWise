@@ -170,6 +170,50 @@ describe('a report’s export as CSV', () => {
   });
 });
 
+describe('a report with a measured route drive (Q33)', () => {
+  const drives = [
+    expense(),
+    expense({
+      merchant: 'Eppley Airfield',
+      amountMinor: 2973,
+      miles: { measured: '38.4', claimed: '41', reason: 'Road closed at the bridge' },
+    }),
+    expense({
+      merchant: 'Acme HQ',
+      amountMinor: 725,
+      miles: { measured: null, claimed: '10', reason: null },
+    }),
+  ];
+
+  it('shows the miles measured, the miles claimed and why they differ, with where the route came from', () => {
+    const table = reportExportTable(drives);
+    expect(table.columns.map((c) => c.header).slice(9)).toEqual([
+      'Miles measured',
+      'Miles claimed',
+      'Why the miles differ',
+    ]);
+    expect(table.rows.map((r) => r.slice(9))).toEqual([
+      ['', '', ''],
+      ['38.4', '41', 'Road closed at the bridge'],
+      ['', '10', ''],
+    ]);
+    expect(table.notes).toEqual([
+      'Route © openrouteservice.org by HeiGIT · Map data © OpenStreetMap contributors',
+    ]);
+    expect(reportCsv(table).split('\r\n').slice(-3)).toEqual([
+      'Total,,,,,,,85.18,USD,,,',
+      'Route © openrouteservice.org by HeiGIT · Map data © OpenStreetMap contributors',
+      '',
+    ]);
+  });
+
+  it('is exported as it always was when no drive on it was measured', () => {
+    const table = reportExportTable([drives[0]!, drives[2]!]);
+    expect(table.columns.map((c) => c.header).join(',')).toBe(HEADER);
+    expect(table.notes).toBeUndefined();
+  });
+});
+
 describe('which reports can be exported, and by whom', () => {
   it('exports a report once it has closed, and never one still open', () => {
     expect(REPORT_STATUSES.filter(isReportExportable)).toEqual([

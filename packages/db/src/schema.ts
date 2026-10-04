@@ -5,6 +5,8 @@ import {
   MEMBER_ROLES,
   ORGANIZATION_SIZES,
   REPORT_STATUSES,
+  ROUTE_PROVIDERS,
+  ROUTE_STATUSES,
   newId,
 } from '@expensewise/domain';
 import { sql } from 'drizzle-orm';
@@ -57,6 +59,8 @@ export const mileageMethod = pgEnum('mileage_method', ['manual', 'route', 'gps']
 export const actorType = pgEnum('actor_type', ['user', 'system']);
 export const aiProvider = pgEnum('ai_provider', ['anthropic', 'openai']);
 export const aiAuthScheme = pgEnum('ai_auth_scheme', ['api_key', 'bearer']);
+export const routeProvider = pgEnum('route_provider', ROUTE_PROVIDERS);
+export const routeStatus = pgEnum('route_status', ROUTE_STATUSES);
 
 const id = () => uuid('id').primaryKey().$defaultFn(newId);
 const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
@@ -872,6 +876,147 @@ export const mileageLogs = pgTable(
   ],
 );
 
+/**
+ * The route behind a mileage expense logged by its stops (FR-CAP-04, ADR-0039): one per
+ * drive, beside its mileage log, whose distance is the miles claimed. It keeps how the drive
+ * was measured, copied on when it was (NFR-DAT-04), and is never measured again unless the
+ * person changes its stops before it is submitted (Q33).
+ */
+export const mileageRoutes = pgTable(
+  'mileage_routes',
+  {
+    id: id(),
+    orgId: orgId(),
+    expenseId: uuid('expense_id').notNull(),
+    /** It returns to the start after the end. */
+    roundTrip: boolean('round_trip').notNull().default(false),
+    status: routeStatus('status').notNull(),
+    /**
+     * The measuring asked for last: its outbox event's id. A measurement made for an earlier
+     * request, before the stops changed again, is never recorded.
+     */
+    requestId: uuid('request_id').notNull(),
+    /** Why it could not be measured, in plain words, while it is not. */
+    problem: text('problem'),
+    /** Who measured it, how, and when: set together, only once it is measured. */
+    provider: routeProvider('provider'),
+    profile: text('profile'),
+    measuredAt: timestamp('measured_at', { withTimezone: true }),
+    /** The whole route in whole metres: the sum of its legs, the way back included. */
+    distanceMetres: integer('distance_metres'),
+    /** The way back from the end to the start, on a round trip, in whole metres. */
+    returnMetres: integer('return_metres'),
+    /** The metres in hundredths of a mile, rounded half up (ADR-0039). */
+    measuredMiles: numeric('measured_miles', { precision: 10, scale: 2 }),
+    /**
+     * Why the miles claimed differ from those measured, or were entered by hand when it
+     * could not be measured (Q33). Empty when the measured miles are claimed.
+     */
+    milesReason: text('miles_reason'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('mileage_routes_org_id_id_key').on(t.orgId, t.id),
+    unique('mileage_routes_expense_key').on(t.orgId, t.expenseId),
+    foreignKey({
+      name: 'mileage_routes_log_fk',
+      columns: [t.orgId, t.expenseId],
+      foreignColumns: [mileageLogs.orgId, mileageLogs.expenseId],
+    }),
+    check(
+      'mileage_routes_measured_whole',
+      sql`(${t.status} = 'measured') = (${t.provider} IS NOT NULL AND ${t.profile} IS NOT NULL AND ${t.measuredAt} IS NOT NULL AND ${t.distanceMetres} IS NOT NULL AND ${t.measuredMiles} IS NOT NULL)`,
+    ),
+    check(
+      'mileage_routes_problem_when_failed',
+      sql`(${t.status} = 'failed') = (${t.problem} IS NOT NULL)`,
+    ),
+    check(
+      'mileage_routes_distance_nonnegative',
+      sql`${t.distanceMetres} >= 0 AND ${t.returnMetres} >= 0 AND ${t.measuredMiles} >= 0`,
+    ),
+    check(
+      'mileage_routes_reason_length',
+      sql`${t.milesReason} IS NULL OR length(${t.milesReason}) BETWEEN 1 AND 500`,
+    ),
+  ],
+);
+
+/**
+ * A route drive's stops, in order: each address as the person typed it, which is what is
+ * sent to be measured (Q32), and once measured the place it was found at and the leg to it.
+ */
+export const mileageRouteStops = pgTable(
+  'mileage_route_stops',
+  {
+    id: id(),
+    orgId: orgId(),
+    expenseId: uuid('expense_id').notNull(),
+    /** 0 is the start; the highest is the end. */
+    position: integer('position').notNull(),
+    address: text('address').notNull(),
+    /** The place the address was found at, as the routing service names it. */
+    label: text('label'),
+    longitude: numeric('longitude', { precision: 9, scale: 6 }),
+    latitude: numeric('latitude', { precision: 8, scale: 6 }),
+    /** The leg from the stop before this one, in whole metres; none for the start. */
+    legMetres: integer('leg_metres'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('mileage_route_stops_org_id_id_key').on(t.orgId, t.id),
+    unique('mileage_route_stops_position_key').on(t.orgId, t.expenseId, t.position),
+    foreignKey({
+      name: 'mileage_route_stops_route_fk',
+      columns: [t.orgId, t.expenseId],
+      foreignColumns: [mileageRoutes.orgId, mileageRoutes.expenseId],
+    }),
+    check('mileage_route_stops_position_range', sql`${t.position} BETWEEN 0 AND 24`),
+    check('mileage_route_stops_address_length', sql`length(${t.address}) BETWEEN 1 AND 200`),
+    check(
+      'mileage_route_stops_place_whole',
+      sql`(${t.label} IS NULL) = (${t.longitude} IS NULL) AND (${t.label} IS NULL) = (${t.latitude} IS NULL)`,
+    ),
+    check(
+      'mileage_route_stops_coordinates_range',
+      sql`${t.longitude} BETWEEN -180 AND 180 AND ${t.latitude} BETWEEN -90 AND 90`,
+    ),
+    check(
+      'mileage_route_stops_leg',
+      sql`${t.legMetres} >= 0 AND (${t.position} > 0 OR ${t.legMetres} IS NULL)`,
+    ),
+  ],
+);
+
+/**
+ * A place a member keeps to pick for a drive's stops, such as Home or Office. Only its address
+ * is ever used for a drive, copied onto the stop; its name is never sent anywhere (Q32).
+ */
+export const savedPlaces = pgTable(
+  'saved_places',
+  {
+    id: id(),
+    orgId: orgId(),
+    memberId: uuid('member_id').notNull(),
+    name: text('name').notNull(),
+    address: text('address').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('saved_places_org_id_id_key').on(t.orgId, t.id),
+    uniqueIndex('saved_places_member_name_key').on(t.orgId, t.memberId, sql`lower(${t.name})`),
+    foreignKey({
+      name: 'saved_places_member_fk',
+      columns: [t.orgId, t.memberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    check('saved_places_name_length', sql`length(${t.name}) BETWEEN 1 AND 40`),
+    check('saved_places_address_length', sql`length(${t.address}) BETWEEN 1 AND 200`),
+  ],
+);
+
 export const approvalSteps = pgTable(
   'approval_steps',
   {
@@ -977,6 +1122,37 @@ export const aiProviderKeys = pgTable(
       foreignColumns: [members.orgId, members.id],
     }),
     check('ai_provider_keys_hint_short', sql`length(${t.keyHint}) <= 4`),
+  ],
+);
+
+/**
+ * An organization's key for the routing service that measures route drives (Q31, ADR-0039):
+ * ciphertext only, bound to the organization and the provider, with its last four characters
+ * to tell it by. Owners and finance admins set and remove it.
+ */
+export const routeServiceKeys = pgTable(
+  'route_service_keys',
+  {
+    id: id(),
+    orgId: orgId(),
+    provider: routeProvider('provider').notNull(),
+    ciphertext: text('ciphertext').notNull(),
+    keyHint: text('key_hint').notNull(),
+    /** When the routing service last accepted it: on the check made as it was saved. */
+    verifiedAt: timestamp('verified_at', { withTimezone: true }),
+    updatedByMemberId: uuid('updated_by_member_id').notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('route_service_keys_org_id_id_key').on(t.orgId, t.id),
+    unique('route_service_keys_org_provider_key').on(t.orgId, t.provider),
+    foreignKey({
+      name: 'route_service_keys_updated_by_fk',
+      columns: [t.orgId, t.updatedByMemberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    check('route_service_keys_hint_short', sql`length(${t.keyHint}) <= 4`),
   ],
 );
 

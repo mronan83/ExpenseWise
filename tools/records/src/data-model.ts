@@ -18,13 +18,14 @@ export const DOMAINS: readonly Domain[] = [
   {
     name: 'Organizations and people',
     about:
-      'Who is in which organization and what its owner keeps about it, with what role, how they sign in and the links that let someone join, the AI keys an organization brings, the AI models it reads receipts with, and the features its owner has switched on.',
+      'Who is in which organization and what its owner keeps about it, with what role, how they sign in and the links that let someone join, the AI keys and the routing key an organization brings, the AI models it reads receipts with, and the features its owner has switched on.',
     tables: [
       'organizations',
       'members',
       'member_sign_ins',
       'member_invites',
       'ai_provider_keys',
+      'route_service_keys',
       'org_ai_models',
       'org_features',
     ],
@@ -44,7 +45,7 @@ export const DOMAINS: readonly Domain[] = [
   {
     name: 'Expenses and trips',
     about:
-      'The claim: what was spent, on which trip, coded to which category and type, the miles behind it, and what it is in the currency it is reimbursed in.',
+      'The claim: what was spent, on which trip, coded to which category and type, the miles behind it and the route they were measured on, the places a person drives from, and what it is in the currency it is reimbursed in.',
     tables: [
       'expenses',
       'expense_conversions',
@@ -53,6 +54,9 @@ export const DOMAINS: readonly Domain[] = [
       'expense_types',
       'category_types',
       'mileage_logs',
+      'mileage_routes',
+      'mileage_route_stops',
+      'saved_places',
     ],
   },
   {
@@ -94,6 +98,10 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   ai_provider_keys: {
     about:
       'An organization’s own Anthropic or OpenAI key, stored only as ciphertext bound to the organization and provider; only the last four characters are ever shown (ADR-0015, NFR-SEC-04).',
+  },
+  route_service_keys: {
+    about:
+      'An organization’s own key for the routing service that measures route drives, OpenRouteService for now (Q31, ADR-0039): one per provider, stored only as ciphertext sealed as the AI keys are and bound to the organization and provider, with its last four characters and when OpenRouteService accepted it, on the check made as it was saved (NFR-SEC-04). Owners and finance admins set and remove it; each change is in the audit trail, by its last four characters only. A table of its own rather than a third AI provider, so it never lists among the AI keys. The measuring workflow reads it for the system.',
   },
   org_ai_models: {
     about:
@@ -149,7 +157,19 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   mileage_logs: {
     about:
-      'The drive behind a mileage expense, one per expense: how it was logged (manual since PR #58; route and GPS later), its date, destination, business purpose and miles, and the rate copied on when it was logged, or when its date or miles last changed: per mile, currency, the day it took effect and its source, the IRS business rate for now (NFR-DAT-04, ADR-0038). Its expense holds miles × that rate, the destination as its merchant and the purpose as its justification, so trips, reports and totals need nothing of their own for it. Read only through its expense, with the expense’s member named.',
+      'The drive behind a mileage expense, one per expense: how it was logged (manual since PR #58, route since PR #59; GPS later), its date, destination, business purpose and miles, and the rate copied on when it was logged, or when its date or miles last changed: per mile, currency, the day it took effect and its source, the IRS business rate for now (NFR-DAT-04, ADR-0038). Its expense holds miles × that rate, the destination as its merchant and the purpose as its justification, so trips, reports and totals need nothing of their own for it. For a route drive the miles are those claimed, 0 until it is measured or its miles are entered, its origin is its start and its destination its end (ADR-0039). Read only through its expense, with the expense’s member named.',
+  },
+  mileage_routes: {
+    about:
+      'The route behind a drive logged by its stops, one per drive, beside its mileage log (FR-CAP-04, ADR-0039). Whether it is measuring, measured or failed, with the reason in plain words when it failed; whether it is a round trip; and the measuring it waits for, the outbox event’s id, so a measurement made for stops since changed is never recorded. Once measured it keeps, copied on, the distance in whole metres (the sum of its legs, the way back included), the way back alone on a round trip, its miles in hundredths, the provider, the profile and when (NFR-DAT-04); it is never measured again unless its person changes its stops before it is submitted (Q33). The reason the miles claimed differ from those measured, or were entered by hand, is here too. Written by the member’s requests and by the measuring workflow, which acts for the system.',
+  },
+  mileage_route_stops: {
+    about:
+      'A route drive’s stops in order, the start at 0: each address as its person typed it, which is what is sent to be measured (Q32), and once measured the place it was found at, its coordinates to six places and the leg to it from the stop before in whole metres (ADR-0039). Replaced whole when the stops change before submission; the audit trail keeps what they were.',
+  },
+  saved_places: {
+    about:
+      'A place a member keeps to pick for a stop, such as Home or Office: a name, once per member whatever its case, and an address (FR-CAP-04). Picking one copies its address onto the stop; its name is never sent anywhere (Q32). A member’s own under the own-records rules (ADR-0035). The audit trail records its name and that its address changed, never the address.',
   },
   reports: {
     about:
@@ -243,7 +263,7 @@ export const RULES: readonly Rule[] = [
   {
     rule: 'Inside an organization, each member sees and changes only their own records.',
     mechanism:
-      'With a member named for the transaction, a restrictive `own_records` policy shows a member or approver only their own receipts, expenses, trips, reports and emails, and the readings, confirmations, duplicate pairs and mileage that hang off them; owners, finance admins and auditors see everyone’s. An `own_records` trigger refuses any change to another member’s rows, and every change by an auditor, with an error rather than a silent skip. With no member named, the system’s own work sees and changes everything, as before (ADR-0035).',
+      'With a member named for the transaction, a restrictive `own_records` policy shows a member or approver only their own receipts, expenses, trips, reports, emails and saved places, and the readings, confirmations, duplicate pairs, mileage and routes that hang off them; owners, finance admins and auditors see everyone’s. An `own_records` trigger refuses any change to another member’s rows, and every change by an auditor, with an error rather than a silent skip. With no member named, the system’s own work sees and changes everything, as before (ADR-0035).',
     objects: [
       'own_records',
       'app_current_member',
@@ -383,6 +403,58 @@ export const RULES: readonly Rule[] = [
       'mileage_logs_expense_fk',
     ],
     refs: ['NFR-DAT-04', 'FR-CAP-03', 'ADR-0038'],
+  },
+  {
+    rule: 'A route drive’s measurement is whole, kept with its drive, and recorded only for the request it was made for.',
+    mechanism:
+      'One route per organization and drive, pointing at its mileage log by a composite key. Measured exactly when the provider, profile, time, metres and miles are all present; failed exactly when it has a reason; distances never negative, and a reason for other miles 1 to 500 characters. That a measurement is recorded only for the request the route waits for, and that the miles are claimed at the rate on the drive’s date, are the db code’s and the domain’s (`recordRouteMeasurement`, `milesFromMetres`), under the organization’s write lock.',
+    objects: [
+      'mileage_routes_expense_key',
+      'mileage_routes_log_fk',
+      'mileage_routes_measured_whole',
+      'mileage_routes_problem_when_failed',
+      'mileage_routes_distance_nonnegative',
+      'mileage_routes_reason_length',
+    ],
+    refs: ['NFR-DAT-04', 'FR-CAP-04', 'Q33', 'ADR-0039'],
+  },
+  {
+    rule: 'A route drive’s stops are in order, each place once, and a found place is whole.',
+    mechanism:
+      'One stop per drive and position, 0 to 24, pointing at its route by a composite key; an address of 1 to 200 characters; a label and both coordinates together or none, within the globe; no leg before the start, and none negative. How many stops a drive takes, 25, is the domain’s to check (R-ROUTE-STOPS), and the position range holds it in the database too.',
+    objects: [
+      'mileage_route_stops_position_key',
+      'mileage_route_stops_route_fk',
+      'mileage_route_stops_position_range',
+      'mileage_route_stops_address_length',
+      'mileage_route_stops_place_whole',
+      'mileage_route_stops_coordinates_range',
+      'mileage_route_stops_leg',
+    ],
+    refs: ['FR-CAP-04', 'ADR-0039'],
+  },
+  {
+    rule: 'A member keeps a place by a name once, and only their own.',
+    mechanism:
+      'A unique index over the organization, the member and the name in lower case; the place points at its member by a composite key; a name of 1 to 40 characters and an address of 1 to 200. The own-records policy and trigger keep it to its member.',
+    objects: [
+      'saved_places_member_name_key',
+      'saved_places_member_fk',
+      'saved_places_name_length',
+      'saved_places_address_length',
+    ],
+    refs: ['FR-CAP-04', 'ADR-0035'],
+  },
+  {
+    rule: 'An organization has one routing key per provider, and shows only its last four characters.',
+    mechanism:
+      'Unique per organization and provider; the hint is at most four characters; who last set it points at a member of the organization. Who may set it, and that it is checked with OpenRouteService first, are the API’s to check.',
+    objects: [
+      'route_service_keys_org_provider_key',
+      'route_service_keys_hint_short',
+      'route_service_keys_updated_by_fk',
+    ],
+    refs: ['NFR-SEC-04', 'Q31', 'ADR-0039'],
   },
   {
     rule: 'An organization has one key per AI provider, and shows only its last four characters.',

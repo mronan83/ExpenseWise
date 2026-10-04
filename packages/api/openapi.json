@@ -468,6 +468,7 @@
           "receipts.field-sources",
           "receipts.capture-time",
           "expenses.mileage",
+          "expenses.route-mileage",
           "reports.export",
           "governance.audit-trail",
           "team.invites"
@@ -3828,6 +3829,418 @@
             "example": "38.4"
           }
         },
+        "additionalProperties": false
+      },
+      "RouteDrive": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/MileageEntry"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "route": {
+                "$ref": "#/components/schemas/Route"
+              }
+            },
+            "required": [
+              "route"
+            ]
+          }
+        ]
+      },
+      "Route": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "measuring",
+              "measured",
+              "failed"
+            ],
+            "description": "measuring: asked for, not done yet. measured: the distance below. failed: not measured, for the reason in problem; fix a stop and measure it again, or claim miles by hand."
+          },
+          "problem": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why it was not measured."
+          },
+          "roundTrip": {
+            "type": "boolean",
+            "description": "It returns to the start after the end."
+          },
+          "stops": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RouteStop"
+            },
+            "description": "In order: the start first."
+          },
+          "returnMetres": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "The way back from the end to the start, on a round trip."
+          },
+          "measured": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "metres": {
+                "type": "integer",
+                "example": 61800
+              },
+              "miles": {
+                "type": "string",
+                "example": "38.4",
+                "description": "The metres in hundredths of a mile, rounded half up."
+              },
+              "provider": {
+                "type": "string",
+                "enum": [
+                  "openrouteservice"
+                ]
+              },
+              "profile": {
+                "type": "string",
+                "example": "driving-car"
+              },
+              "measuredAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "metres",
+              "miles",
+              "provider",
+              "profile",
+              "measuredAt"
+            ],
+            "description": "How it was measured, copied onto the claim (NFR-DAT-04)."
+          },
+          "claimedMiles": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "41",
+            "description": "The miles claimed and paid; null until measured or entered by hand."
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why the miles claimed differ from those measured, or were entered by hand."
+          },
+          "attribution": {
+            "type": "string",
+            "example": "Route © openrouteservice.org by HeiGIT · Map data © OpenStreetMap contributors",
+            "description": "To show wherever the measured route is."
+          }
+        },
+        "required": [
+          "status",
+          "problem",
+          "roundTrip",
+          "stops",
+          "returnMetres",
+          "measured",
+          "claimedMiles",
+          "reason",
+          "attribution"
+        ]
+      },
+      "RouteStop": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "example": "12 Elm St, Omaha, NE",
+            "description": "As typed: what is sent to be measured (Q32)."
+          },
+          "place": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "label": {
+                "type": "string",
+                "example": "12 Elm Street, Omaha, NE, USA"
+              },
+              "longitude": {
+                "type": "string",
+                "example": "-95.934502"
+              },
+              "latitude": {
+                "type": "string",
+                "example": "41.256537"
+              }
+            },
+            "required": [
+              "label",
+              "longitude",
+              "latitude"
+            ],
+            "description": "Where it was found, once measured."
+          },
+          "legMetres": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "The leg to it from the stop before, in whole metres; null for the start."
+          }
+        },
+        "required": [
+          "address",
+          "place",
+          "legMetres"
+        ]
+      },
+      "LogRouteDrive": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "YYYY-MM-DD: today at the latest, and a day the rate is known for.",
+            "example": "2026-09-29"
+          },
+          "purpose": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Why the drive was for business. Up to 500 characters. Never sent anywhere.",
+            "example": "Client visit at Acme"
+          },
+          "stops": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 1000
+            },
+            "minItems": 1,
+            "maxItems": 50,
+            "description": "The addresses in order, start first and end last: 2 to 25, each up to 200 characters, each sent as typed to be measured.",
+            "example": [
+              "12 Elm St, Omaha, NE",
+              "Acme HQ, 1520 Harney St, Omaha",
+              "Eppley Airfield"
+            ]
+          },
+          "roundTrip": {
+            "type": "boolean",
+            "description": "Back to the start after the end."
+          }
+        },
+        "required": [
+          "date",
+          "purpose",
+          "stops"
+        ],
+        "additionalProperties": false
+      },
+      "ChangeRouteDrive": {
+        "type": "object",
+        "properties": {
+          "date": {
+            "type": "string",
+            "maxLength": 40,
+            "description": "YYYY-MM-DD: today at the latest, and a day the rate is known for.",
+            "example": "2026-09-29"
+          },
+          "purpose": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Why the drive was for business. Up to 500 characters. Never sent anywhere.",
+            "example": "Client visit at Acme"
+          },
+          "stops": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "maxLength": 1000
+            },
+            "minItems": 1,
+            "maxItems": 50,
+            "description": "The addresses in order, start first and end last: 2 to 25, each up to 200 characters, each sent as typed to be measured.",
+            "example": [
+              "12 Elm St, Omaha, NE",
+              "Acme HQ, 1520 Harney St, Omaha",
+              "Eppley Airfield"
+            ]
+          },
+          "roundTrip": {
+            "type": "boolean",
+            "description": "Back to the start after the end."
+          }
+        },
+        "additionalProperties": false
+      },
+      "ClaimRouteMiles": {
+        "type": "object",
+        "properties": {
+          "miles": {
+            "type": "string",
+            "maxLength": 40,
+            "example": "41",
+            "description": "More than 0 and at most 1000, two decimal places at most."
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2000,
+            "description": "Why, up to 500 characters: needed unless these are the miles measured.",
+            "example": "Road closed at the bridge"
+          }
+        },
+        "required": [
+          "miles"
+        ],
+        "additionalProperties": false
+      },
+      "SavedPlaceList": {
+        "type": "object",
+        "properties": {
+          "places": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SavedPlace"
+            }
+          }
+        },
+        "required": [
+          "places"
+        ]
+      },
+      "SavedPlace": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Home"
+          },
+          "address": {
+            "type": "string",
+            "example": "12 Elm St, Omaha, NE"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "address"
+        ]
+      },
+      "SavePlace": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Up to 40 characters, once per person. Never sent anywhere.",
+            "example": "Home"
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Up to 200 characters.",
+            "example": "12 Elm St, Omaha, NE"
+          }
+        },
+        "required": [
+          "name",
+          "address"
+        ],
+        "additionalProperties": false
+      },
+      "ChangePlace": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Up to 40 characters, once per person. Never sent anywhere.",
+            "example": "Home"
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "Up to 200 characters.",
+            "example": "12 Elm St, Omaha, NE"
+          }
+        },
+        "additionalProperties": false
+      },
+      "RouteKeyStatus": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "openrouteservice"
+            ]
+          },
+          "configured": {
+            "type": "boolean"
+          },
+          "keyHint": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Its last four characters."
+          },
+          "verifiedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When OpenRouteService accepted it, as it was saved."
+          },
+          "updatedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "provider",
+          "configured",
+          "keyHint",
+          "verifiedAt",
+          "updatedAt"
+        ]
+      },
+      "SetRouteKey": {
+        "type": "object",
+        "properties": {
+          "apiKey": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "description": "Your OpenRouteService key. It is checked with one short route, then stored encrypted and never returned."
+          }
+        },
+        "required": [
+          "apiKey"
+        ],
         "additionalProperties": false
       },
       "Home": {
@@ -8585,6 +8998,273 @@
             }
           },
           "409": {
+            "description": "It is submitted or later, and an approved drive is corrected by a reversal; or it is a route drive, changed by its stops (route).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not valid; field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/mileage/routes": {
+      "post": {
+        "tags": [
+          "Mileage"
+        ],
+        "summary": "Log a drive by its stops, to be measured",
+        "description": "FR-CAP-04, ADR-0039. A drive of the caller’s on its date, its stops as typed. It is measured after the answer, by the route-measuring workflow, and claims nothing until then: its expense is processing. Each address is sent to OpenRouteService as typed; the purpose never is (Q32).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LogRouteDrive"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The drive, Measuring….",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteDrive"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Route mileage is switched off for this organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not valid, or no rate is known for the date; field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/mileage/{expenseId}/route": {
+      "get": {
+        "tags": [
+          "Mileage"
+        ],
+        "summary": "One of the caller’s route drives, with how it was measured",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The drive and its route.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteDrive"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such route drive of the caller’s, or route mileage is switched off for this organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Mileage"
+        ],
+        "summary": "Change a route drive before it is submitted",
+        "description": "ADR-0039, Q33. New stops, or a round trip switched, measure it again; sending the stops unchanged measures again a drive that could not be measured. A measured drive is never measured again otherwise. A new date prices the miles claimed at that day’s rate.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeRouteDrive"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The drive as it is now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteDrive"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such route drive of the caller’s, or route mileage is switched off for this organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
             "description": "It is submitted or later. An approved drive is corrected by a reversal.",
             "content": {
               "application/problem+json": {
@@ -8596,6 +9276,663 @@
           },
           "422": {
             "description": "A value is not valid; field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/mileage/{expenseId}/route/miles": {
+      "put": {
+        "tags": [
+          "Mileage"
+        ],
+        "summary": "The miles claimed for a route drive",
+        "description": "Q33. The miles measured, or others with a reason, or, when it could not be measured, miles entered by hand with a reason. Priced at the rate in force on its date; the drive is then Ready, and the measured miles stay beside the claimed ones. Audited.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaimRouteMiles"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The drive as it is now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteDrive"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such route drive of the caller’s, or route mileage is switched off for this organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It is still being measured, or it is submitted or later.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The miles are not valid, or a reason is needed; field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/places": {
+      "get": {
+        "tags": [
+          "Mileage"
+        ],
+        "summary": "The caller’s saved places",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "By name.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedPlaceList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Route mileage is switched off for this organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Mileage"
+        ],
+        "summary": "Save a place to pick for a drive’s stops",
+        "description": "Its address is copied onto a stop when picked; its name is never sent (Q32).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SavePlace"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The place.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedPlace"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Route mileage is switched off for this organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The caller keeps a place of that name already (name_taken).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The name or address is not valid; field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/places/{placeId}": {
+      "patch": {
+        "tags": [
+          "Mileage"
+        ],
+        "summary": "Rename a saved place or change its address",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "placeId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePlace"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The place as it is now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedPlace"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such place of the caller’s, or route mileage is switched off for this organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The caller keeps a place of that name already (name_taken).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The name or address is not valid; field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Mileage"
+        ],
+        "summary": "Remove a saved place",
+        "description": "Drives that used its address keep it.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "placeId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed."
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such place of the caller’s, or route mileage is switched off for this organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/settings/mileage/route-key": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Whether the organization has an OpenRouteService key",
+        "description": "Q31. Its last four characters only, never the key. Owners and finance admins.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The key’s status.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteKeyStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No organization yet, or the caller is not an owner or finance admin.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Route mileage is switched off for this organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Check an OpenRouteService key, then store it encrypted",
+        "description": "Q31, ADR-0039. Checked in the request with one short route (about a kilometre) as OpenRouteService’s answer, as AI keys are (ADR-0015); stored only when it works, encrypted and bound to the organization, and never returned. Audited.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRouteKey"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Accepted and stored.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RouteKeyStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No organization yet, or the caller is not an owner or finance admin.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Route mileage is switched off for this organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "OpenRouteService refused the key, or it isn’t one; nothing was stored.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "OpenRouteService is busy, used up or could not be reached; nothing was stored.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Remove the OpenRouteService key",
+        "description": "Drives already measured keep their measurement; new ones can’t be measured.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed."
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No organization yet, or the caller is not an owner or finance admin.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No key is stored, or route mileage is switched off for this organization (feature_off).",
             "content": {
               "application/problem+json": {
                 "schema": {

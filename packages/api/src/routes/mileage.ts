@@ -112,7 +112,9 @@ export const editMileageRoute = createRoute({
     200: entry('The drive as it is now.'),
     ...common,
     404: problem(`No such drive of the caller’s, or ${OFF.toLowerCase()}.`),
-    409: problem('It is submitted or later. An approved drive is corrected by a reversal.'),
+    409: problem(
+      'It is submitted or later, and an approved drive is corrected by a reversal; or it is a route drive, changed by its stops (route).',
+    ),
     422: problem('A value is not valid; field names which.'),
   },
 });

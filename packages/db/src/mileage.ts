@@ -206,7 +206,9 @@ export type EditMileageResult =
   /** No such entry of this member's. */
   | { readonly status: 'missing' }
   /** Submitted or later: an approved entry is corrected by a reversal. */
-  | { readonly status: 'not_editable'; readonly current: ExpenseStatus };
+  | { readonly status: 'not_editable'; readonly current: ExpenseStatus }
+  /** A route drive: it is changed by its stops, and its miles with a reason (ADR-0039). */
+  | { readonly status: 'route' };
 
 /**
  * A member corrects one of their mileage entries before it is submitted, with its audit event.
@@ -228,6 +230,7 @@ export async function editMileage(
   const [row] = await mine(tx, memberId, expenseId).for('update');
   if (!row) return { status: 'missing' };
   if (!isExpenseEditable(row.status)) return { status: 'not_editable', current: row.status };
+  if (row.method === 'route') return { status: 'route' };
   const current = recordOf(row);
   const applied = applyMileageInput(current, input, today, rates);
   if (!applied.ok) return { status: 'invalid', problem: applied.error };

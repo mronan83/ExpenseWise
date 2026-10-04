@@ -11,12 +11,15 @@ import {
   dbPeopleStore,
   dbReportStore,
   dbReceiptStore,
+  dbRouteKeyStore,
+  dbRouteMileageStore,
   dbTripStore,
   dbWorkspaceStore,
   providerKeyVerifier,
   supabaseTokenVerifier,
 } from '@expensewise/api';
 import { createReadinessProbe } from '@expensewise/db';
+import { routeKeyVerifier } from '@expensewise/workflows';
 import * as Sentry from '@sentry/nextjs';
 import { handle } from 'hono/vercel';
 import {
@@ -47,6 +50,8 @@ const handler = handle(
     expenses: db && dbExpenseStore(db),
     trips: db && dbTripStore(db),
     mileage: db && dbMileageStore(db),
+    routeMileage: db && dbRouteMileageStore(db),
+    routeKeys: db && dbRouteKeyStore(db),
     home: db && dbHomeStore(db),
     reports: db && dbReportStore(db),
     audit: db && dbAuditStore(db),
@@ -61,6 +66,8 @@ const handler = handle(
     birdWebhookSecret: process.env.BIRD_WEBHOOK_SECRET || undefined,
     receiveEmail: handOffEmail,
     verifyProviderKey: providerKeyVerifier(),
+    // An OpenRouteService key is checked with one short route as it is saved (ADR-0039).
+    verifyRouteKey: routeKeyVerifier(),
     // Features forced on or off for everyone, beating each owner's switch (the kill switch).
     flagOverrides: process.env.FLAG_OVERRIDES,
     // Unexpected errors go to error tracking (a no-op until NEXT_PUBLIC_SENTRY_DSN is set).

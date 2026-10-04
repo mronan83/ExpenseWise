@@ -26,18 +26,27 @@ import {
   dbReimbursementStore,
   dbPeopleStore,
   dbReportStore,
+  dbRouteKeyStore,
+  dbRouteMileageStore,
   dbTripStore,
   dbWorkspaceStore,
   ORG_FEATURE_KEYS,
 } from '@expensewise/api';
-import { createDatabase, runReportSchedule, setRolePasswords } from '@expensewise/db';
+import {
+  createDatabase,
+  ROUTE_MEASURE_REQUESTED,
+  runReportSchedule,
+  setRolePasswords,
+} from '@expensewise/db';
 import { runMigrations } from '@expensewise/db/migrate';
 import { COMPARISON_MODELS, FALLBACK_MODEL, type ModelId } from '@expensewise/extraction';
 import {
   conversionPorts,
   convertOrganization,
+  measureRoute,
   readWith,
   receiptReadingPorts,
+  routeMeasuringPorts,
   settleReading,
 } from '@expensewise/workflows';
 import { BENCH_PORT, E2E_USER, type Seeded } from './config';
@@ -184,11 +193,61 @@ const both = (r: Record<string, unknown>): Script => ({
   [COMPARISON_MODELS[1]]: r,
 });
 
-/** The real reading workflow, with each model's answer scripted. */
+/**
+ * OpenRouteService as the bench answers it (ADR-0039): the addresses it knows, and each leg's
+ * distance by the stops it joins. The bench never calls the real service.
+ */
+const ROUTE_PLACES: Record<string, [number, number, string]> = {
+  '1520 Harney St, Omaha, NE': [-95.936117, 41.257163, '1520 Harney Street, Omaha, NE, USA'],
+  'Acme HQ, 1200 Dodge St, Omaha, NE': [-95.932468, 41.261511, '1200 Dodge Street, Omaha, NE, USA'],
+  'Eppley Airfield, Omaha, NE': [-95.894069, 41.303166, 'Eppley Airfield, Omaha, NE, USA'],
+};
+const ROUTE_LEGS = [9400.4, 52399.5, 60000];
+const openRouteServiceFake = (input: string | URL | Request, init?: RequestInit) => {
+  const url = new URL(input instanceof Request ? input.url : String(input));
+  const json = (body: unknown) => Promise.resolve(Response.json(body, { status: 200 }));
+  if (url.pathname === '/geocode/search') {
+    const found = ROUTE_PLACES[url.searchParams.get('text') ?? ''];
+    return json({
+      type: 'FeatureCollection',
+      features: found
+        ? [
+            {
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: [found[0], found[1]] },
+              properties: { label: found[2] },
+            },
+          ]
+        : [],
+    });
+  }
+  const { coordinates = [] } = JSON.parse(typeof init?.body === 'string' ? init.body : '{}') as {
+    coordinates?: unknown[];
+  };
+  return json({
+    routes: [
+      { segments: coordinates.slice(1).map((_, i) => ({ distance: ROUTE_LEGS[i] ?? 5000 })) },
+    ],
+  });
+};
+const measuring = routeMeasuringPorts({
+  db,
+  routeKey: () => Promise.resolve({ key: 'ors-bench-key-0000-wxyz' }),
+  service: { fetch: openRouteServiceFake },
+});
+
+/** The real reading and route-measuring workflows, with each answer scripted. */
 async function dispatch(
-  events: readonly { orgId: string; outboxId: string; payload: unknown }[],
+  events: readonly { orgId: string; outboxId: string; topic?: string; payload: unknown }[],
 ): Promise<void> {
   for (const event of events) {
+    if (event.topic === ROUTE_MEASURE_REQUESTED) {
+      const { expenseId } = event.payload as { expenseId: string };
+      const request = { orgId: event.orgId, expenseId, requestId: event.outboxId };
+      const outcome = await measureRoute(measuring, request);
+      if (outcome !== 'stale') await measuring.settle(request, outcome);
+      continue;
+    }
     const { receiptId } = event.payload as { receiptId: string };
     const script = scripts.get(receiptId);
     if (!script) continue; // left reading
@@ -255,6 +314,8 @@ const app = createHttpApp({
   expenses: dbExpenseStore(db),
   trips: dbTripStore(db),
   mileage: dbMileageStore(db),
+  routeMileage: dbRouteMileageStore(db),
+  routeKeys: dbRouteKeyStore(db),
   home: dbHomeStore(db),
   people: dbPeopleStore(db),
   reports: dbReportStore(db),
@@ -266,6 +327,7 @@ const app = createHttpApp({
   dispatch,
   secrets: createSecretBox('bench-only-secret-0123456789'),
   verifyProviderKey: () => Promise.resolve({ ok: true, authScheme: 'api_key' }),
+  verifyRouteKey: () => Promise.resolve({ ok: true }),
 });
 
 /** Calls the API as `user`, whom the bench signs in by name. */
@@ -610,6 +672,38 @@ expenses.mileage = (
     destination: 'Eppley Airfield, Omaha',
     purpose: 'Drive to the airport for the Q4 architect meeting',
     miles: '38.4',
+  })
+).id;
+// Route mileage (FR-CAP-04): the organization's OpenRouteService key, Riley's saved places,
+// a round trip measured and claimed at more miles with a reason (Q33), and a drive with a stop
+// that can't be found, which needs a look.
+await call('PUT', '/v1/settings/mileage/route-key', { apiKey: 'ors-bench-key-0000-wxyz' });
+await call('POST', '/v1/me/places', { name: 'Office', address: '1520 Harney St, Omaha, NE' });
+await call('POST', '/v1/me/places', {
+  name: 'Acme HQ',
+  address: 'Acme HQ, 1200 Dodge St, Omaha, NE',
+});
+expenses.routeMeasured = (
+  await call<{ id: string }>('POST', '/v1/mileage/routes', {
+    date: '2026-09-30',
+    purpose: 'Client visit at Acme, then the airport',
+    stops: [
+      '1520 Harney St, Omaha, NE',
+      'Acme HQ, 1200 Dodge St, Omaha, NE',
+      'Eppley Airfield, Omaha, NE',
+    ],
+    roundTrip: true,
+  })
+).id;
+await call('PUT', `/v1/mileage/${expenses.routeMeasured}/route/miles`, {
+  miles: '78',
+  reason: 'Abbott Drive was closed, so I took the detour by the river',
+});
+expenses.routeNotFound = (
+  await call<{ id: string }>('POST', '/v1/mileage/routes', {
+    date: '2026-09-30',
+    purpose: 'Site visit for the Q4 architect meeting',
+    stops: ['1520 Harney St, Omaha, NE', '9 Nowhere Lane, Omaha, NE'],
   })
 ).id;
 

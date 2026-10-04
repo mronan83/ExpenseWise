@@ -46,6 +46,9 @@ test.describe('sign-in and AI provider settings', () => {
       ['PUT', '/api/v1/settings/duplicate-window'],
       ['GET', '/api/v1/categories'],
       ['GET', '/api/v1/me/reimbursement-currency'],
+      ['GET', '/api/v1/settings/mileage/route-key'],
+      ['PUT', '/api/v1/settings/mileage/route-key'],
+      ['GET', '/api/v1/me/places'],
     ] as const) {
       const res = await request.fetch(path, {
         method,
@@ -71,6 +74,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
       '/settings/categories',
       '/settings/ai-models',
       '/settings/currency',
+      '/settings/mileage',
       '/settings/people',
       '/invite/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',
     ]) {

@@ -2,6 +2,7 @@ import type { MemberRole } from './approvals.ts';
 import { isCurrencyCode } from './currency.ts';
 import type { ReportStatus } from './lifecycle/report.ts';
 import { add, money, toDecimal, type Money } from './money.ts';
+import { ROUTE_ATTRIBUTION } from './route-mileage.ts';
 
 /**
  * An expense as a report's export lists it (FR-SET-01): what it was, where it is filed, why,
@@ -21,6 +22,18 @@ export interface ExportExpense {
   readonly note: string | null;
   readonly amountMinor: number | null;
   readonly currency: string | null;
+  /**
+   * A drive's miles, while route mileage is on (Q33): those measured on its route, if it was
+   * measured, those claimed, and the person's reason when the two differ.
+   */
+  readonly miles?: ExportMiles | null;
+}
+
+/** A drive's miles as the export shows them. */
+export interface ExportMiles {
+  readonly measured: string | null;
+  readonly claimed: string;
+  readonly reason: string | null;
 }
 
 /** A column of the export, as both the CSV and the PDF lay it out. */
@@ -89,6 +102,30 @@ const COLUMNS: readonly ColumnDefinition[] = [
   },
 ];
 
+/**
+ * The columns a report with a measured route adds, after the rest (Q33): the miles measured,
+ * the miles claimed and why they differ. A report with none is exported as it always was.
+ */
+const MILES_COLUMNS: readonly ColumnDefinition[] = [
+  {
+    header: 'Miles measured',
+    text: false,
+    align: 'right',
+    width: 7,
+    cell: (e) => e.miles?.measured ?? '',
+    total: () => '',
+  },
+  {
+    header: 'Miles claimed',
+    text: false,
+    align: 'right',
+    width: 7,
+    cell: (e) => e.miles?.claimed ?? '',
+    total: () => '',
+  },
+  text('Why the miles differ', 14, (e) => e.miles?.reason ?? null),
+];
+
 /** A report’s export as a table: a row per expense, then a row per currency’s total. */
 export interface ReportExportTable {
   readonly columns: readonly ExportColumn[];
@@ -98,6 +135,8 @@ export interface ReportExportTable {
   readonly totalRows: readonly (readonly string[])[];
   /** The first and last dates of its expenses; null when none is dated. */
   readonly dated: { readonly from: string; readonly to: string } | null;
+  /** Lines written after the totals: where a measured route came from (ADR-0039). */
+  readonly notes?: readonly string[];
 }
 
 const amountOf = (e: ExportExpense): Money | null =>
@@ -110,6 +149,8 @@ const amountOf = (e: ExportExpense): Money | null =>
  * the PDF are both written from this table.
  */
 export function reportExportTable(expenses: readonly ExportExpense[]): ReportExportTable {
+  const routed = expenses.some((e) => (e.miles?.measured ?? null) !== null);
+  const columns = routed ? [...COLUMNS, ...MILES_COLUMNS] : COLUMNS;
   const totals = new Map<string, Money>();
   const rows = expenses.map((e) => {
     const amount = amountOf(e);
@@ -117,17 +158,18 @@ export function reportExportTable(expenses: readonly ExportExpense[]): ReportExp
       const sofar = totals.get(amount.currency);
       totals.set(amount.currency, sofar ? add(sofar, amount) : amount);
     }
-    return COLUMNS.map((c) => c.cell(e, amount));
+    return columns.map((c) => c.cell(e, amount));
   });
   const sorted = [...totals.values()].sort((a, b) => a.currency.localeCompare(b.currency));
   const dates = expenses.flatMap((e) => (e.date ? [e.date] : [])).sort();
   const [from] = dates;
   return {
-    columns: COLUMNS.map(({ header, text, align, width }) => ({ header, text, align, width })),
+    columns: columns.map(({ header, text, align, width }) => ({ header, text, align, width })),
     rows,
     totals: sorted,
-    totalRows: sorted.map((t) => COLUMNS.map((c) => c.total(t))),
+    totalRows: sorted.map((t) => columns.map((c) => c.total(t))),
     dated: from ? { from, to: dates[dates.length - 1] ?? from } : null,
+    ...(routed ? { notes: [ROUTE_ATTRIBUTION] } : {}),
   };
 }
 
@@ -148,7 +190,9 @@ export function reportCsv(table: ReportExportTable): string {
   const line = (cells: readonly string[]) =>
     cells.map((cell, i) => csvCell(cell, table.columns[i]?.text ?? true)).join(',');
   const lines = [table.columns.map((c) => c.header), ...table.rows, ...table.totalRows].map(line);
-  return `\uFEFF${lines.join('\r\n')}\r\n`;
+  // A note is a line of its own after the totals, such as where a measured route came from.
+  const notes = (table.notes ?? []).map((n) => csvCell(n, true));
+  return `\uFEFF${[...lines, ...notes].join('\r\n')}\r\n`;
 }
 
 /**

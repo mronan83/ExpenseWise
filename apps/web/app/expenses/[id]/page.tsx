@@ -24,11 +24,13 @@ import {
 } from '../../../lib/expenses';
 import { useFeatures } from '../../../lib/features';
 import { describeRate, distanceOf, MILEAGE_FLAG, type MileageEntry } from '../../../lib/mileage';
+import { ROUTE_MILEAGE_FLAG } from '../../../lib/route-mileage';
 import { formatMoney, RECEIPT_STATUS } from '../../../lib/receipts';
 import { supabase } from '../../../lib/supabase';
 import { tripDates, type TripSummary } from '../../../lib/trips';
 import { HistoryLink } from '../../history-link';
 import { MileageForm } from '../../mileage/mileage-form';
+import { RouteDriveDetails } from '../../mileage/route-drive';
 
 type Load =
   | { state: 'loading' }
@@ -142,7 +144,14 @@ function Verdict({ expense }: { expense: ExpenseDetail }) {
   const status = EXPENSE_STATUS[expense.status];
   const proof = expense.proof;
   let text: string;
-  if (expense.status === 'processing') {
+  let label = status.label;
+  if (expense.source === 'mileage' && expense.status === 'processing') {
+    // A drive by its route, being measured (ADR-0039).
+    label = 'Measuring…';
+    text = 'Its route is being measured. This takes a few seconds.';
+  } else if (expense.source === 'mileage' && expense.status === 'needs_review') {
+    text = 'Its route couldn’t be measured. Fix a stop and measure it again, or enter its miles.';
+  } else if (expense.status === 'processing') {
     text = 'Its receipt is being read. This takes a few seconds.';
   } else if (expense.status === 'needs_review' && proof?.status === 'failed') {
     text = 'No model could read its receipt. Enter the details there, then this expense is Ready.';
@@ -161,7 +170,7 @@ function Verdict({ expense }: { expense: ExpenseDetail }) {
     <p role="status" className="rounded-xl border border-rule bg-sheet px-4 py-3 text-sm">
       {/* "Reading…" already ends the sentence. */}
       <span className={`font-semibold ${status.tone}`}>
-        {status.label.endsWith('…') ? status.label : `${status.label}.`}
+        {label.endsWith('…') ? label : `${label}.`}
       </span>{' '}
       {text}
     </p>
@@ -390,6 +399,11 @@ function Drive({
   }, [expense.id]);
 
   const drive = entry?.mileage;
+  const featureOn = useFeatures();
+  // A drive by its route shows its stops and how it was measured (FR-CAP-04).
+  if (drive?.method === 'route' && featureOn(ROUTE_MILEAGE_FLAG)) {
+    return <RouteDriveDetails expense={expense} onSaved={onSaved} />;
+  }
   return (
     <section
       aria-labelledby="drive-title"
@@ -476,11 +490,15 @@ function Row({ label, value, differs }: { label: string; value: string | null; d
 /** What its receipt shows: the proof, never changed by editing the expense (FR-EXP-08). */
 function Proof({ expense }: { expense: ExpenseDetail }) {
   const proof = expense.proof;
+  // With route mileage on, a drive may be measured rather than logged by hand (ADR-0039).
+  const routes = useFeatures()(ROUTE_MILEAGE_FLAG);
   if (!proof) {
     return (
       <p className="rounded-xl border border-rule bg-sheet px-4 py-3 text-sm text-ink-2">
         {expense.source === 'mileage'
-          ? 'A drive, logged by hand: it needs no receipt.'
+          ? routes
+            ? 'A drive: it needs no receipt.'
+            : 'A drive, logged by hand: it needs no receipt.'
           : 'Typed in by hand, with no receipt.'}
       </p>
     );

@@ -35,6 +35,8 @@ import { registerReimbursementRoutes } from './reimbursement-routes.ts';
 import type { ReimbursementStore } from './reimbursement.ts';
 import { registerReportRoutes } from './report-routes.ts';
 import type { ReportStore } from './reports.ts';
+import type { RouteKeyStore, RouteKeyVerifier, RouteMileageStore } from './route-mileage.ts';
+import { registerRouteMileageRoutes } from './route-mileage-routes.ts';
 import { registerTripRoutes } from './trip-routes.ts';
 import type { TripStore } from './trips.ts';
 import { registerWorkspaceRoutes } from './workspace-routes.ts';
@@ -62,6 +64,12 @@ export interface ApiOptions
   readonly trips?: TripStore;
   /** Drives logged by hand (FR-CAP-03). Without it, those routes answer 503. */
   readonly mileage?: MileageStore;
+  /** Drives logged by their stops, and saved places (FR-CAP-04). Without it, those answer 503. */
+  readonly routeMileage?: RouteMileageStore;
+  /** The organization's OpenRouteService key (Q31). Without it, Settings › Mileage answers 503. */
+  readonly routeKeys?: RouteKeyStore;
+  /** Checks an OpenRouteService key with one short route as it is saved (ADR-0039). */
+  readonly verifyRouteKey?: RouteKeyVerifier;
   /** What Home shows, read at once. Without it, Home answers 503. */
   readonly home?: HomeStore;
   /** Expense reports. Without it, those routes answer 503 and Needs you shows no reports. */
@@ -203,6 +211,7 @@ export function createApi(options: ApiOptions) {
   registerExpenseRoutes(app, routes);
   registerTripRoutes(app, routes);
   registerMileageRoutes(app, routes);
+  registerRouteMileageRoutes(app, routes);
   registerHomeRoutes(app, routes);
   registerReportRoutes(app, routes);
   registerReportExportRoutes(app, routes);

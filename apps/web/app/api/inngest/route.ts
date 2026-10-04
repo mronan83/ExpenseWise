@@ -11,11 +11,14 @@ import {
   relayPorts,
   reportScheduleFunction,
   reportSchedulePorts,
+  routeMeasuringFunction,
+  routeMeasuringPorts,
   type ConversionPorts,
   type EmailReadingPorts,
   type ReceiptReadingPorts,
   type RelayPorts,
   type ReportSchedulePorts,
+  type RouteMeasuringPorts,
 } from '@expensewise/workflows';
 import { serve } from 'inngest/next';
 import {
@@ -23,6 +26,7 @@ import {
   birdApiKey,
   providerKeyReader,
   receiptFiles,
+  routeKeyReader,
   workflowClient,
   workflowsServed,
 } from '../../../lib/server';
@@ -93,6 +97,19 @@ function convertingPorts(): ConversionPorts {
   return converting;
 }
 
+let measuring: RouteMeasuringPorts | undefined;
+function measuringPorts(): RouteMeasuringPorts {
+  if (measuring) return measuring;
+  const db = appDatabase();
+  const routeKey = routeKeyReader();
+  if (!db || !routeKey) {
+    throw new Error('Measuring routes needs DATABASE_URL and SUPABASE_SECRET_KEY');
+  }
+  // Each organization measures with its own OpenRouteService key, kept in Settings (Q31).
+  measuring = routeMeasuringPorts({ db, routeKey, flagOverrides: process.env.FLAG_OVERRIDES });
+  return measuring;
+}
+
 const handler = workflowsServed
   ? serve({
       client: workflowClient,
@@ -103,6 +120,7 @@ const handler = workflowsServed
         reportScheduleFunction(workflowClient, schedulePorts),
         amountConversionFunction(workflowClient, convertingPorts),
         conversionSweepFunction(workflowClient, convertingPorts),
+        routeMeasuringFunction(workflowClient, measuringPorts),
       ],
     })
   : undefined;

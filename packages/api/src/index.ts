@@ -19,6 +19,8 @@ export * from './provider-keys.ts';
 export * from './receipts.ts';
 export * from './reimbursement.ts';
 export * from './reports.ts';
+export * from './route-mileage.ts';
+export * from './route-mileage-schemas.ts';
 export * from './secret-box.ts';
 export * from './trips.ts';
 export * from './workspace.ts';

@@ -116,6 +116,13 @@ export const EXPENSE_STATUS: Record<ExpenseStatus, { label: string; tone: string
   settled: { label: 'Paid', tone: 'text-ok' },
 };
 
+/** How a list shows an expense's state: a drive is measured, not read (ADR-0039). */
+export function statusOf(e: Pick<ExpenseSummary, 'status' | 'source'>) {
+  return e.source === 'mileage' && e.status === 'processing'
+    ? { label: 'Measuring…', tone: EXPENSE_STATUS.processing.tone }
+    : EXPENSE_STATUS[e.status];
+}
+
 export const EXPENSE_FIELD_LABELS: Record<ExpenseField, string> = {
   merchant: 'Merchant',
   date: 'Date',
