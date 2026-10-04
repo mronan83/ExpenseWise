@@ -1825,6 +1825,48 @@
           "type": "timestamp with time zone",
           "nullable": false,
           "default": "now()"
+        },
+        {
+          "name": "country",
+          "type": "character(2)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "locale",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "time_zone",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "address",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "industry",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "size",
+          "type": "organization_size",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "duplicate_window_minutes",
+          "type": "integer",
+          "nullable": true,
+          "default": null
         }
       ],
       "primaryKey": [
@@ -1833,6 +1875,14 @@
       "foreignKeys": [],
       "uniques": [],
       "checks": [
+        {
+          "name": "organizations_country_code",
+          "definition": "CHECK (((country IS NULL) OR (country ~ '^[A-Z]{2}$'::text)))"
+        },
+        {
+          "name": "organizations_duplicate_window_range",
+          "definition": "CHECK (((duplicate_window_minutes IS NULL) OR ((duplicate_window_minutes >= 0) AND (duplicate_window_minutes <= 120))))"
+        },
         {
           "name": "organizations_home_currency_iso",
           "definition": "CHECK ((home_currency ~ '^[A-Z]{3}$'::text))"
@@ -2884,6 +2934,17 @@
         "manual",
         "route",
         "gps"
+      ]
+    },
+    {
+      "name": "organization_size",
+      "values": [
+        "just_me",
+        "2_10",
+        "11_50",
+        "51_200",
+        "201_1000",
+        "over_1000"
       ]
     },
     {

@@ -31,9 +31,15 @@ export const RULES: readonly Rule[] = [
   {
     id: 'R-REPORT-JOIN',
     name: 'When a trip or local expense joins a report',
-    value: '24 hours after its day ends, counted as noon UTC two days after it',
+    value:
+      '24 hours after its day ends: where the organization is, when it keeps a time zone; otherwise at UTC−12, which is noon UTC two days after it',
     decided: { by: 'owner', source: 'owner 2026-10-04' },
-    note: 'Your 24 hours. Counting them from noon UTC on the second day, so no time zone sees a trip join early, is Claude’s (ADR-0029). In practice the wait is 24 to 50 hours after the day ends, about 31 hours in US Central time, plus up to an hour for the schedule; the organization’s time zone (#63) can bring it to 24 hours.',
+    code: {
+      file: 'packages/domain/src/time-zones.ts',
+      constant: 'LAST_TIME_ZONE',
+      literal: "'Etc/GMT+12'",
+    },
+    note: 'Your 24 hours. Counting them at UTC−12, where the day ends last, so no time zone sees a trip join early, is Claude’s (ADR-0029): a wait of 24 to 50 hours after the day ends, about 31 hours in US Central time, plus up to an hour for the schedule. With organization settings on and a time zone kept, they are counted there, so the wait is 24 hours (ADR-0037).',
   },
   {
     id: 'R-REPORT-SCHEDULE',
@@ -56,14 +62,26 @@ export const RULES: readonly Rule[] = [
   {
     id: 'R-DUPLICATE-WINDOW',
     name: 'How far apart two receipts at one place can be and still be one purchase',
-    value: '30 minutes; the same minute for an exact copy',
+    value: '30 minutes until the owner sets another; the same minute for an exact copy',
     decided: { by: 'claude', source: 'ADR-0031' },
     code: {
       file: 'packages/domain/src/duplicates.ts',
       constant: 'DUPLICATE_TIME_WINDOW_MINUTES',
       literal: '30',
     },
-    note: 'Claude’s reading of your “the same time”. It becomes a setting your organization’s owner changes, 0 to 120 minutes (FR-INT-19, #64).',
+    note: 'Claude’s reading of your “the same time”. Since #64 it is the default your organization’s owner can change in Settings, for everyone (FR-INT-19, Q24). An empty setting means this value, so the number lives once.',
+  },
+  {
+    id: 'R-DUPLICATE-WINDOW-MAX',
+    name: 'Widest duplicate time window the owner can set',
+    value: '120 minutes; the narrowest is 0, the same minute only',
+    decided: { by: 'claude' },
+    code: {
+      file: 'packages/domain/src/duplicates.ts',
+      constant: 'DUPLICATE_WINDOW_MAX_MINUTES',
+      literal: '120',
+    },
+    note: 'Claude’s proposal with your request of Oct 4 (FR-INT-19): wide enough for a bill and its tip slip, narrow enough that a morning and an afternoon at one café stay apart. The database holds the column to it too.',
   },
   {
     id: 'R-DUPLICATE-DAYS',

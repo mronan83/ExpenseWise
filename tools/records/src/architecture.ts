@@ -110,21 +110,21 @@ export const COMPONENTS: readonly Component[] = [
     name: 'API',
     technology: 'Hono with zod-openapi; jose for tokens',
     responsibility:
-      'Verifies the sign-in token, finds the caller’s membership, and serves every operation, including Home, read in one transaction: the Needs you inbox, which says why each item needs the person, then their trip, month and recent trips. Takes Bird’s signed email webhook, checked against the exact bytes before anything parses them. Settles possible duplicates as the person decides, removing a deleted receipt’s file only after the deletion commits. Serves expense reports: closing, reopening, moving a trip or local expense, and justifying one; Needs you adds reports to act on and local expenses needing a reason. Generates the OpenAPI contract and answers errors as problem documents.',
+      'Verifies the sign-in token, finds the caller’s membership, and serves every operation, including Home, read in one transaction: the Needs you inbox, which says why each item needs the person, then their trip, month and recent trips. Takes Bird’s signed email webhook, checked against the exact bytes before anything parses them. Settles possible duplicates as the person decides, removing a deleted receipt’s file only after the deletion commits. Serves expense reports: closing, reopening, moving a trip or local expense, and justifying one; Needs you adds reports to act on and local expenses needing a reason. Serves Settings › Organization: the details and the duplicate time window, which every member reads and only the owner changes. Generates the OpenAPI contract and answers errors as problem documents.',
     where: ['packages/api'],
   },
   {
     name: 'Domain',
     technology: 'TypeScript, no I/O',
     responsibility:
-      'The rules: money, dates, lifecycles, editing an expense and its time and place, filing to trips, when two receipts are the same purchase, exactly or possibly, and how two expenses merge, when something joins a report and what day 28 does, approvals. Tested to 90% coverage or more.',
+      'The rules: money, dates, lifecycles, editing an expense and its time and place, filing to trips, when two receipts are the same purchase, exactly or possibly, and how two expenses merge, when something joins a report and what day 28 does, counted in an organization’s time zone or at UTC−12, an organization’s details and the duplicate window’s bounds, approvals. Tested to 90% coverage or more.',
     where: ['packages/domain'],
   },
   {
     name: 'Data access',
     technology: 'Drizzle ORM on node-postgres',
     responsibility:
-      'The schema and migrations, `withOrg()` and every query and write, each with its audit event. Runs migrations and the data steps on release: one takes back anything Supabase’s Data API roles hold, another compares each receipt read before duplicates were looked for, once. Compares each receipt as its reading settles and holds a later copy; deletes a receipt only through `delete_receipt()`. Joins trips and local expenses to reports and closes them on day 28; any change to a closed report reopens it. Holds the restore drill’s database checks.',
+      'The schema and migrations, `withOrg()` and every query and write, each with its audit event. Runs migrations and the data steps on release: one takes back anything Supabase’s Data API roles hold, another compares each receipt read before duplicates were looked for, once. Compares each receipt as its reading settles and holds a later copy; deletes a receipt only through `delete_receipt()`. Joins trips and local expenses to reports and closes them on day 28, by the organization’s days when it keeps a time zone; any change to a closed report reopens it. Keeps the organization’s details and duplicate window, each change audited. Holds the restore drill’s database checks.',
     where: ['packages/db'],
   },
   {
@@ -152,7 +152,7 @@ export const COMPONENTS: readonly Component[] = [
     name: 'Feature flags',
     technology: 'TypeScript, Postgres; PostHog (posthog-node) when configured',
     responsibility:
-      'A registry of flags, each off by default. One gate in the API (`features.ts`) answers whether a feature is on for an organization: the server’s override, then the owner’s switch in `org_features`, then off. A route behind an off feature answers 404 `feature_off`, and screens hide it.',
+      'A registry of flags, each off by default. One gate in the API (`features.ts`) answers whether a feature is on for an organization: the server’s override, then the owner’s switch in `org_features`, then off. A route behind an off feature answers 404 `feature_off`, and screens hide it. Work with no request, such as the report schedule or the duplicate check, asks `featureOn()` in the data access package, which reads the same override first.',
     where: ['packages/flags'],
   },
   {
@@ -615,7 +615,7 @@ export const BACKGROUND: Readonly<Record<string, string>> = {
   'outbox-relay':
     'Every five minutes and on demand, sends committed outbox events that the request didn’t manage to send. The event id is the outbox id, so a duplicate is dropped.',
   'report-schedule':
-    'Hourly, at seven past: asks which organizations have report work due (report_work_due(), ids only), then in each, as the app and in one transaction, puts due trips and local expenses on the open report or a new one, closes reports on day 28 with what is ready, moves the rest on, and drops reports with nothing to claim. Safe to repeat; logs one line of counts (ADR-0029).',
+    'Hourly, at seven past: asks which organizations have report work due (report_work_due(), ids only), then in each, as the app and in one transaction, puts due trips and local expenses on the open report or a new one, closes reports on day 28 with what is ready, moves the rest on, and drops reports with nothing to claim. The days are the organization’s own when organization settings are on and it keeps a time zone, and UTC−12’s otherwise (ADR-0037). Safe to repeat; logs one line of counts (ADR-0029).',
 };
 
 export interface Quality {

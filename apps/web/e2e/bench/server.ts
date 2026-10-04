@@ -18,6 +18,7 @@ import {
   dbExpenseStore,
   dbReceiptStore,
   dbHomeStore,
+  dbOrganizationStore,
   dbReportStore,
   dbTripStore,
   dbWorkspaceStore,
@@ -222,6 +223,7 @@ const app = createHttpApp({
       issuedAt: new Date(),
     }),
   workspace: dbWorkspaceStore(db),
+  organization: dbOrganizationStore(db),
   receipts: dbReceiptStore(db),
   expenses: dbExpenseStore(db),
   trips: dbTripStore(db),
@@ -471,6 +473,19 @@ const open = (
   await call<{ trips: { id: string; reportId: string | null }[] }>('GET', '/v1/trips')
 ).trips.find((t) => t.id === trips.omaha.id)?.reportId;
 if (!open) throw new Error('The schedule put no trip on a report');
+// The organization's details and its duplicate window (#63, #64), set after the reports so
+// they open as they always have.
+await call('PATCH', '/v1/settings/organization', {
+  name: 'Acme Field Services',
+  country: 'US',
+  locale: 'en-US',
+  timeZone: 'America/Chicago',
+  address: '1520 Harney St, Suite 400\nOmaha, NE 68102',
+  industry: 'Professional services',
+  size: '2_10',
+});
+await call('PUT', '/v1/settings/duplicate-window', { minutes: 45 });
+
 const seeded: Seeded = {
   trips: {
     omaha: trips.omaha.id,

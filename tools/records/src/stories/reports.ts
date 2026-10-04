@@ -34,7 +34,7 @@ export const REPORT_STORIES: readonly Story[] = [
       },
       {
         id: 'AC2',
-        given: 'a trip’s return date',
+        given: 'a trip’s return date, in an organization that keeps no time zone of its own',
         when: 'the 24 hours are counted',
         then: 'they run from the end of that day where it ends last (UTC−12), so the trip joins at noon UTC two days after its return date, and never earlier for anyone',
         decided: ADR29,

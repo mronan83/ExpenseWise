@@ -2,7 +2,7 @@
 
 Where both receipts say when and where a purchase happened, those decide whether two receipts are one purchase, whatever their totals. A pair that matches in time and total too is an exact copy, deleted with one tap. One whose total or time differs a little is a possible duplicate: the earlier receipt can be replaced by the later. Receipts that don't both say when and where are still matched on the total.
 
-- **Status:** Accepted (matching on vendor, date, time and place, and exact versus possible, decided by product owner, Oct 4; the 30-minute window and how a pair is shown recommended, no objection yet)
+- **Status:** Accepted (matching on vendor, date, time and place, and exact versus possible, decided by product owner, Oct 4; the 30-minute window and how a pair is shown recommended, no objection yet); point 3 amended by [ADR-0037](0037-organization-settings.md): the owner sets the window, 30 minutes by default
 - **Date:** 2026-10-04
 - **Deciders:** Product owner (what makes a duplicate, Q18, Q19); Claude (principal architect), for the design
 - **Decision register:** D-33. Amends the matching rule of [ADR-0028](0028-possible-duplicates.md); uses the time and place read since [ADR-0030](0030-receipt-time-and-place.md).

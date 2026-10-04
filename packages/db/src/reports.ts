@@ -1,5 +1,6 @@
 import {
   cleanJustification,
+  lastDayToJoin,
   localExpenseReady,
   planAutoClose,
   reopenedClosesAt,
@@ -16,14 +17,15 @@ import {
   inArray,
   isNotNull,
   isNull,
+  lte,
   ne,
   sql,
   type SQL,
-  type SQLWrapper,
 } from 'drizzle-orm';
 import { appendAuditEvent, lockOrgWrites, type AuditEntry } from './audit.ts';
 import { withOrg, type Database, type Transaction } from './client.ts';
 import { listReportExpenses, type ReportExpenseRecord } from './expenses.ts';
+import { organizationTimeZone } from './organizations.ts';
 import { reopenChangedReports, reportsOfExpenses } from './report-touch.ts';
 import { expenses, members, organizations, reports, trips } from './schema.ts';
 import { tallyTrips, tripsWithOwner, type TripRecord, type TripTally } from './trips.ts';
@@ -179,11 +181,17 @@ export async function getReport(
   return contents;
 }
 
-/** "Report from 3 Oct 2026": a name until a person gives it one. */
-const titleFor = (day: Date) =>
-  `Report from ${day.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })}`;
+/**
+ * "Report from 3 Oct 2026": a name until a person gives it one. The date is the organization's
+ * own when it keeps a time zone (ADR-0037), and UTC's otherwise.
+ */
+const titleFor = (day: Date, timeZone: string | null) =>
+  `Report from ${day.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: timeZone ?? 'UTC' })}`;
 
-/** Opens a report for a member, closing itself in 28 days, with its audit event. */
+/**
+ * Opens a report for a member, closing itself in 28 days, with its audit event. Its currency is
+ * the organization's home currency as it is now, and stays so if that changes later.
+ */
 async function openReport(
   tx: Transaction,
   orgId: string,
@@ -197,13 +205,14 @@ async function openReport(
     .from(organizations)
     .where(eq(organizations.id, orgId));
   if (!org) throw new Error('The organization is not visible');
-  const closesAt = reportClosesAt(now);
+  const timeZone = await organizationTimeZone(tx, orgId);
+  const closesAt = reportClosesAt(now, timeZone);
   const [report] = await tx
     .insert(reports)
     .values({
       orgId,
       memberId,
-      title: titleFor(now),
+      title: titleFor(now, timeZone),
       currency: org.currency,
       closesAt,
       createdAt: now,
@@ -247,10 +256,6 @@ async function openReportOf(
   return { id: await openReport(tx, orgId, memberId, now, actor, reason), opened: true };
 }
 
-/** When something dated `column` joins a report: noon UTC two days on (joinsReportAt()). */
-const joinedBy = (column: SQLWrapper, now: Date) =>
-  sql`((${column} + 2)::timestamp + interval '12 hours') at time zone 'UTC' <= ${now.toISOString()}::timestamptz`;
-
 async function addTrip(
   tx: Transaction,
   orgId: string,
@@ -292,9 +297,10 @@ async function addLocalExpense(
 
 /**
  * Puts on a report each trip and local expense whose time has come (FR-EXP-05, FR-EXP-14): a
- * trip with expenses on it 24 hours after its return date, a local expense 24 hours after its
- * own date. Each goes to its member's newest open report, or one opens for it. Call inside
- * withOrg(). Returns how many joined.
+ * trip with expenses on it 24 hours after its return date ends, a local expense 24 hours after
+ * its own date ends, counted in the organization's time zone when it keeps one and at UTC−12
+ * otherwise (lastDayToJoin(), ADR-0037). Each goes to its member's newest open report, or one
+ * opens for it. Call inside withOrg(). Returns how many joined.
  */
 export async function joinDueItems(
   tx: Transaction,
@@ -303,13 +309,15 @@ export async function joinDueItems(
   actor: AuditEntry['actor'] = SCHEDULE,
 ): Promise<{ trips: number; expenses: number; opened: number }> {
   await lockOrgWrites(tx, orgId);
+  const timeZone = await organizationTimeZone(tx, orgId);
+  const lastDay = lastDayToJoin(now, timeZone ?? undefined);
   const dueTrips = await tx
     .select({ id: trips.id, memberId: trips.memberId })
     .from(trips)
     .where(
       and(
         isNull(trips.reportId),
-        joinedBy(trips.endDate, now),
+        lte(trips.endDate, lastDay),
         sql`exists (select 1 from ${expenses} e where e.org_id = ${trips.orgId} and e.trip_id = ${trips.id}
                      and e.status in ('processing', 'needs_review', 'ready'))`,
       ),
@@ -325,7 +333,7 @@ export async function joinDueItems(
         isNull(expenses.reportId),
         isNotNull(expenses.transactionDate),
         inArray(expenses.status, ['needs_review', 'ready']),
-        joinedBy(expenses.transactionDate, now),
+        lte(expenses.transactionDate, lastDay),
       ),
     )
     .orderBy(asc(expenses.transactionDate), asc(expenses.id))

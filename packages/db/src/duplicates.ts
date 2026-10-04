@@ -12,6 +12,7 @@ import { and, asc, eq, inArray, isNull, ne, or, sql, type SQLWrapper } from 'dri
 import { appendAuditEvent, lockOrgWrites, type AuditEntry } from './audit.ts';
 import type { Transaction } from './client.ts';
 import { fileReceiptExpense } from './expenses.ts';
+import { duplicateWindowFor } from './organizations.ts';
 import { reopenChangedReports, reportsOfExpenses } from './report-touch.ts';
 import type { ReceiptStatus } from './receipts.ts';
 import { expenses, receiptDuplicates, receipts, trips } from './schema.ts';
@@ -87,9 +88,9 @@ async function release(
 
 /**
  * Compares a receipt that has just been read with its member's other receipts dated a day
- * either way (FR-INT-18, ADR-0028, ADR-0031). When two are one purchase, exactly or possibly,
- * the later of them is held: it needs a look, whatever its reading settled to, until the
- * person decides. Returns the receipt it matches. A receipt already held stays held,
+ * either way (FR-INT-18, ADR-0028, ADR-0031), within the organization's duplicate time window
+ * (FR-INT-19). When two are one purchase, exactly or possibly, the later of them is held: it
+ * needs a look, whatever its reading settled to, until the person decides. Returns the receipt it matches. A receipt already held stays held,
  * remembering its new reading. A pair the person dismissed is never flagged again.
  * Call after its expense is filed, in the same transaction; it never relies on row-level
  * security, so the release can run it as the schema owner.
@@ -164,8 +165,11 @@ export async function checkForDuplicate(
       ),
     )
     .orderBy(asc(receipts.createdAt), asc(receipts.id));
-  // An exact copy first; otherwise the earliest possible one.
-  const judged = candidates.map((c) => ({ ...c, kind: duplicateKind(self, c) }));
+  if (candidates.length === 0) return undefined;
+  // Judged by the window as it is now (FR-INT-19): pairs flagged or kept under an earlier one
+  // stay as they were. An exact copy first; otherwise the earliest possible one.
+  const windowMinutes = await duplicateWindowFor(tx, orgId);
+  const judged = candidates.map((c) => ({ ...c, kind: duplicateKind(self, c, windowMinutes) }));
   const match = judged.find((c) => c.kind === 'exact') ?? judged.find((c) => c.kind !== null);
   if (!match) return undefined;
 

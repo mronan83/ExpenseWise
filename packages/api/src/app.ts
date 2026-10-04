@@ -14,6 +14,8 @@ import { registerExpenseRoutes } from './expense-routes.ts';
 import type { HomeStore } from './home.ts';
 import { registerHomeRoutes } from './home-routes.ts';
 import { registerInboundRoutes, type InboundRouteOptions } from './inbound-routes.ts';
+import type { OrganizationStore } from './organization.ts';
+import { registerOrganizationRoutes } from './organization-routes.ts';
 import type { ExpenseStore } from './expenses.ts';
 import { registerReceiptRoutes, type ReceiptRouteOptions } from './receipt-routes.ts';
 import { registerReportRoutes } from './report-routes.ts';
@@ -37,6 +39,8 @@ export interface ApiOptions
   readonly reportError?: (error: unknown) => void;
   /** Organizations and AI provider keys. Without it, those routes answer 503. */
   readonly workspace?: WorkspaceStore;
+  /** The organization's details and duplicate window. Without it, those routes answer 503. */
+  readonly organization?: OrganizationStore;
   /** Expenses, each with its receipt as proof. Without it, those routes answer 503. */
   readonly expenses?: ExpenseStore;
   /** Trips and the expenses filed to them. Without it, those routes answer 503. */
@@ -156,6 +160,7 @@ export function createApi(options: ApiOptions) {
   const features: FeatureGate = featureGate(options);
   const routes = { ...options, features };
   registerWorkspaceRoutes(app, routes);
+  registerOrganizationRoutes(app, routes);
   registerReceiptRoutes(app, routes);
   registerExpenseRoutes(app, routes);
   registerTripRoutes(app, routes);

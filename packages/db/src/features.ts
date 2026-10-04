@@ -1,3 +1,4 @@
+import { parseOverrides, type FlagKey } from '@expensewise/flags';
 import { and, eq } from 'drizzle-orm';
 import { appendAuditEvent } from './audit.ts';
 import type { Transaction } from './client.ts';
@@ -29,6 +30,18 @@ export async function orgFeatureOn(tx: Transaction, orgId: string, flag: string)
     .from(orgFeatures)
     .where(and(eq(orgFeatures.orgId, orgId), eq(orgFeatures.flag, flag)));
   return row?.enabled ?? false;
+}
+
+/**
+ * Whether a feature is on for the organization, for work with no request to ask the API's gate,
+ * such as a workflow or the release: FLAG_OVERRIDES wins, as the server's kill switch, then the
+ * organization's switch, then off, the same order as the API's `featureGate`. Never relies on
+ * row-level security, so it also works as the schema owner. Call inside withOrg().
+ */
+export async function featureOn(tx: Transaction, orgId: string, flag: FlagKey): Promise<boolean> {
+  const override = parseOverrides(process.env.FLAG_OVERRIDES)[flag];
+  if (override !== undefined) return override;
+  return orgFeatureOn(tx, orgId, flag);
 }
 
 /**

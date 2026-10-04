@@ -3,6 +3,7 @@ import {
   EXPENSE_SOURCES,
   EXPENSE_STATUSES,
   MEMBER_ROLES,
+  ORGANIZATION_SIZES,
   REPORT_STATUSES,
   newId,
 } from '@expensewise/domain';
@@ -41,6 +42,7 @@ export const expenseStatus = pgEnum('expense_status', EXPENSE_STATUSES);
 export const expenseSource = pgEnum('expense_source', EXPENSE_SOURCES);
 export const reportStatus = pgEnum('report_status', REPORT_STATUSES);
 export const distanceUnit = pgEnum('distance_unit', DISTANCE_UNITS);
+export const organizationSize = pgEnum('organization_size', ORGANIZATION_SIZES);
 export const tripStatus = pgEnum('trip_status', ['planned', 'active', 'closed']);
 export const receiptStatus = pgEnum('receipt_status', [
   'processing',
@@ -65,10 +67,37 @@ export const organizations = pgTable(
   {
     id: id(),
     name: text('name').notNull(),
+    /** Reports opened from now on are in it; a change converts nothing already made (FR-PLT-11). */
     homeCurrency: char('home_currency', { length: 3 }).notNull(),
     createdAt: createdAt(),
+    /** ISO 3166-1 alpha-2. The details below are the owner's to keep, each optional (FR-PLT-11). */
+    country: char('country', { length: 2 }),
+    /** A BCP 47 language tag, such as en-US. */
+    locale: text('locale'),
+    /**
+     * An IANA time zone, checked against Postgres's own list when set. With organization
+     * settings on, it says when the organization's day ends: when trips and local expenses join
+     * a report, and which day is day 28 (ADR-0037).
+     */
+    timeZone: text('time_zone'),
+    /** The postal address, as the owner writes it. */
+    address: text('address'),
+    industry: text('industry'),
+    size: organizationSize('size'),
+    /**
+     * How many minutes apart two receipts at one place can be and still be one purchase, as
+     * the owner set it (FR-INT-19). Empty means the default of 30, which lives in the domain.
+     */
+    duplicateWindowMinutes: integer('duplicate_window_minutes'),
   },
-  (t) => [check('organizations_home_currency_iso', isoCurrency(t.homeCurrency))],
+  (t) => [
+    check('organizations_home_currency_iso', isoCurrency(t.homeCurrency)),
+    check('organizations_country_code', sql`${t.country} IS NULL OR ${t.country} ~ '^[A-Z]{2}$'`),
+    check(
+      'organizations_duplicate_window_range',
+      sql`${t.duplicateWindowMinutes} IS NULL OR ${t.duplicateWindowMinutes} BETWEEN 0 AND 120`,
+    ),
+  ],
 );
 
 const orgId = () =>

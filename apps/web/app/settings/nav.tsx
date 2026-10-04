@@ -3,8 +3,16 @@
 import Link from 'next/link';
 import { useFeatures } from '../../lib/features';
 
-/** Settings pages. One with a flag shows only while that feature is on (Q5). */
-const PAGES: readonly { href: string; label: string; flag?: string }[] = [
+/**
+ * Settings pages. One with a flag shows only while that feature is on (Q5); one with several,
+ * while any of them is.
+ */
+const PAGES: readonly { href: string; label: string; flag?: string | readonly string[] }[] = [
+  {
+    href: '/settings/organization',
+    label: 'Organization',
+    flag: ['settings.organization', 'settings.duplicate-window'],
+  },
   { href: '/settings/ai', label: 'AI providers' },
   { href: '/settings/sign-ins', label: 'Sign-ins' },
   { href: '/settings/features', label: 'Features' },
@@ -13,7 +21,7 @@ const PAGES: readonly { href: string; label: string; flag?: string }[] = [
 /** Moves between the settings pages. */
 export function SettingsNav({ current }: { current: string }) {
   const on = useFeatures();
-  const pages = PAGES.filter((p) => !p.flag || on(p.flag) || p.href === current);
+  const pages = PAGES.filter((p) => !p.flag || [p.flag].flat().some(on) || p.href === current);
   return (
     <nav
       aria-label="Settings"
