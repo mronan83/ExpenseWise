@@ -253,6 +253,20 @@
       "when": 1791137893564,
       "tag": "0035_own_records_conversions",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1791148282869,
+      "tag": "0036_itemized_lines",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1791148291392,
+      "tag": "0037_itemized_lines_rls",
+      "breakpoints": true
     }
   ]
 }

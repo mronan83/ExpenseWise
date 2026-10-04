@@ -190,3 +190,61 @@ describe('which reports can be exported, and by whom', () => {
     expect(canExportReport('auditor', false)).toBe(true);
   });
 });
+
+describe('a report’s export of split expenses and excluded lines (FR-EXP-15, FR-EXP-16)', () => {
+  const folio = expense({
+    date: '2026-10-01',
+    merchant: 'Hotel Lindley',
+    category: 'Travel',
+    type: 'Lodging',
+    amountMinor: 108_276,
+    parts: [
+      { category: 'Travel', type: 'Lodging', amountMinor: 102_995 },
+      { category: 'Meals', type: 'Business meal', amountMinor: 5281 },
+    ],
+    excluded: [
+      { line: 'Minibar', amountMinor: 2124, reason: 'personal', note: null },
+      { line: 'In-room movie', amountMinor: 1499, reason: 'other', note: 'Watched with family' },
+    ],
+  });
+
+  it('writes a row per part, marked as parts of the same expense, and the totals stay the same', () => {
+    const table = reportExportTable([folio, expense()]);
+    expect(table.columns.map((c) => c.header)).toEqual([
+      'Date',
+      'Merchant',
+      'Part',
+      'Category',
+      'Type',
+      'Trip',
+      'Purpose',
+      'Note',
+      'Excluded',
+      'Amount',
+      'Currency',
+    ]);
+    expect(table.rows.map((r) => [r[1], r[2], r[3], r[4], r[9]])).toEqual([
+      ['Hotel Lindley', '1 of 2', 'Travel', 'Lodging', '1029.95'],
+      ['Hotel Lindley', '2 of 2', 'Meals', 'Business meal', '52.81'],
+      ['Lou Malnati’s', '', '', '', '48.20'],
+    ]);
+    expect(table.totals).toEqual([{ amountMinor: 108_276 + 4820, currency: 'USD' }]);
+  });
+
+  it('lists each excluded line with what it took off and why, once per expense', () => {
+    const table = reportExportTable([folio]);
+    expect(table.rows.map((r) => r[8])).toEqual([
+      'Minibar: 21.24, Personal; In-room movie: 14.99, Other (Watched with family)',
+      '',
+    ]);
+    const unsplit = reportExportTable([{ ...folio, parts: [] }]);
+    expect(unsplit.columns.map((c) => c.header)).not.toContain('Part');
+    expect(unsplit.rows).toHaveLength(1);
+    expect(unsplit.rows[0]?.[7]).toMatch(/^Minibar: 21\.24, Personal/);
+  });
+
+  it('exports every other report exactly as before', () => {
+    const table = reportExportTable([expense({ parts: [], excluded: [] })]);
+    expect(table.columns.map((c) => c.header).join(',')).toBe(HEADER);
+  });
+});

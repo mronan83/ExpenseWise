@@ -1,4 +1,5 @@
 import type { ExpenseCategory } from './categories';
+import type { ExpenseSplit, Itemized } from './itemized';
 import type { ReceiptSummary } from './receipts';
 
 export type ExpenseStatus =
@@ -67,6 +68,10 @@ export interface ExpenseDetail extends ExpenseSummary {
   region: string | null;
   /** ISO 3166-1 alpha-2. */
   country: string | null;
+  /** Its receipt's lines, while that feature is on (FR-INT-22). */
+  itemized?: Itemized | null;
+  /** Its parts, while splits are on (FR-EXP-15). */
+  split?: ExpenseSplit | null;
 }
 
 /** The parts of when and where a person can edit. A blank time zone follows the place. */

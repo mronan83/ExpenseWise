@@ -20,6 +20,7 @@ import {
   dbExpenseStore,
   dbReceiptStore,
   dbHomeStore,
+  dbItemizedStore,
   dbOrganizationStore,
   dbMileageStore,
   dbModelSettingsStore,
@@ -260,6 +261,7 @@ const app = createHttpApp({
   reports: dbReportStore(db),
   audit: dbAuditStore(db),
   categories: dbCategoryStore(db),
+  itemized: dbItemizedStore(db),
   modelSettings: dbModelSettingsStore(db),
   reimbursement: dbReimbursementStore(db),
   files: store,
@@ -574,6 +576,41 @@ await capture(
   ),
 );
 await capture('lunch', 'camera', both(reading('Zuni Café', '2026-09-27', 'USD', '48.20')));
+// A hotel folio read line by line (FR-INT-22), on the Omaha trip; and a bistro bill whose lines
+// miss its subtotal, so they can't be left out or split by line (ADR-0041).
+await capture(
+  'folioLines',
+  'upload',
+  both(
+    reading('Hotel Indigo Omaha', '2026-10-01', 'USD', '1129.10', {
+      documentType: 'hotel_folio',
+      subtotal: { value: '985.50', confidence: 'high' },
+      taxes: [{ label: 'Occupancy tax', value: '128.12', confidence: 'high' }],
+      fees: [{ label: 'Resort fee', value: '15.48', confidence: 'high' }],
+      lineItems: [
+        { description: 'Room, 2 nights', quantity: '2', amount: '898.00' },
+        { description: 'Minibar', quantity: null, amount: '18.50' },
+        { description: 'Room service', quantity: null, amount: '46.00' },
+        { description: 'Valet parking', quantity: null, amount: '23.00' },
+      ],
+    }),
+  ),
+);
+await capture(
+  'linesShort',
+  'camera',
+  both(
+    reading('Harney Street Bistro', '2026-09-30', 'USD', '58.43', {
+      subtotal: { value: '45.50', confidence: 'high' },
+      taxes: [{ label: 'Sales tax', value: '4.43', confidence: 'high' }],
+      tip: { value: '8.50', confidence: 'high' },
+      lineItems: [
+        { description: 'Steak frites', quantity: '1', amount: '29.00' },
+        { description: 'Caesar salad', quantity: '1', amount: '13.50' },
+      ],
+    }),
+  ),
+);
 
 // A confirmed correction, an expense edited away from its receipt, one put on a trip by hand.
 await call('POST', `/v1/receipts/${receipts.steak}/confirm`, {
@@ -600,6 +637,24 @@ await call('PUT', `/v1/expenses/${await expenseOf('folio')}/category`, {
   categoryId: catalog.categories.find((c) => c.name === 'Travel')!.id,
   typeId: catalog.types.find((t) => t.name === 'Lodging')!.id,
 });
+// The folio read line by line: lodging, its room service split off to Meals (FR-EXP-15) and
+// its minibar left out as personal (FR-EXP-16).
+const folioLines = await expenseOf('folioLines');
+await call('PUT', `/v1/expenses/${folioLines}/category`, {
+  categoryId: catalog.categories.find((c) => c.name === 'Travel')!.id,
+  typeId: catalog.types.find((t) => t.name === 'Lodging')!.id,
+});
+await call('PUT', `/v1/expenses/${folioLines}/split`, {
+  basis: 'lines',
+  lines: [
+    {
+      position: 3,
+      categoryId: catalog.categories.find((c) => c.name === 'Meals')!.id,
+      typeId: catalog.types.find((t) => t.name === 'Business meal')!.id,
+    },
+  ],
+});
+await call('PUT', `/v1/expenses/${folioLines}/lines/2/exclusion`, { reason: 'personal' });
 
 const expenses: Record<string, string> = {};
 for (const name of Object.keys(receipts)) expenses[name] = await expenseOf(name);

@@ -95,7 +95,23 @@ export function registerReportExportRoutes(
         detail: 'It is still open. Close it first.',
       });
     }
-    return found;
+    return { ...found, expenses: await itemizedRows(who.orgId, found) };
+  };
+
+  /**
+   * Each expense with its parts while splits are on, and its excluded lines while itemized
+   * lines are on (FR-EXP-15, FR-EXP-16); off, the export reads as it always has.
+   */
+  const itemizedRows = async (orgId: string, found: ReportForExport) => {
+    const split =
+      (await features.isOn(orgId, 'expenses.split')) &&
+      (await features.isOn(orgId, 'expenses.categories'));
+    const lines = await features.isOn(orgId, 'expenses.itemized');
+    return found.expenses.map(({ parts, excluded, ...e }) => ({
+      ...e,
+      ...(split && parts ? { parts } : {}),
+      ...(lines && excluded ? { excluded } : {}),
+    }));
   };
 
   const download = (found: ReportForExport, extension: 'csv' | 'pdf', contentType: string) => ({

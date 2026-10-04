@@ -12,6 +12,7 @@ export * from './expense-details.ts';
 export * from './expense-values.ts';
 export * from './fx.ts';
 export * from './ids.ts';
+export * from './itemized.ts';
 export * from './lifecycle/expense.ts';
 export * from './lifecycle/report.ts';
 export * from './mileage.ts';

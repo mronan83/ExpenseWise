@@ -1,4 +1,4 @@
-import type { ExpenseDetails, ExpenseValues } from '@expensewise/domain';
+import type { ExpenseDetails, ExpenseValues, Itemization } from '@expensewise/domain';
 import { createHash } from 'node:crypto';
 import {
   RECEIPT_READ_REQUESTED,
@@ -15,6 +15,7 @@ import {
   type Extractor,
   FALLBACK_MODEL,
   isAutoReady,
+  itemizationOf,
   type ModelId,
   MODELS,
   type NormalizedExtraction,
@@ -61,6 +62,8 @@ export interface ReceiptReadingPorts {
       detail: Record<string, unknown>;
       /** What the reading would file the receipt's expense with, its time and place too. */
       values: (ExpenseValues & { details?: ExpenseDetails }) | null;
+      /** That reading's itemized lines, copied onto its expense; null for none (ADR-0041). */
+      lines?: Itemization | null;
     },
   ): Promise<void>;
 }
@@ -318,12 +321,15 @@ export async function settleReading(
         ? 'extracted'
         : 'needs_review';
   // The expense is filed with the most capable reading there is, else the fallback's (ADR-0022).
-  const best =
-    [...readings].reverse().find(Boolean) ?? (usedFallback ? readingOf(fallbackRun) : null);
+  const bestRun =
+    [...byModel].reverse().find((run) => readingOf(run) !== null) ??
+    (usedFallback ? fallbackRun : undefined);
+  const best = readingOf(bestRun);
   await ports.settle(orgId, receiptId, {
     status,
     requestId,
     values: best ? { ...valuesOfReading(best), details: detailsOf(best) } : null,
+    lines: best && bestRun ? itemizationOf(bestRun.output) : null,
     detail: {
       differences,
       readings: Object.fromEntries([
@@ -373,6 +379,7 @@ async function settleOneReading(
     status,
     requestId,
     values: reading ? { ...valuesOfReading(reading), details: detailsOf(reading) } : null,
+    lines: reading && reader ? itemizationOf(reader.output) : null,
     detail: {
       differences: [],
       readings: Object.fromEntries(tried.map((run) => [run.model, run.outcome])),

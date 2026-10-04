@@ -1,7 +1,10 @@
 import {
   DISTANCE_UNITS,
+  EXCLUSION_NOTE_MAX,
+  EXCLUSION_REASONS,
   EXPENSE_SOURCES,
   EXPENSE_STATUSES,
+  LINE_KINDS,
   MEMBER_ROLES,
   ORGANIZATION_SIZES,
   REPORT_STATUSES,
@@ -601,6 +604,176 @@ export const expenseConversions = pgTable(
       sql`(${t.outcome} = 'converted' AND ${t.convertedMinor} IS NOT NULL AND ${t.rate} IS NOT NULL AND ${t.rate} > 0 AND ${t.rateDate} IS NOT NULL AND ${t.rateDate} <= ${t.purchaseDate}) OR (${t.outcome} = 'unavailable' AND ${t.convertedMinor} IS NULL AND ${t.rate} IS NULL AND ${t.rateDate} IS NULL)`,
     ),
     check('expense_conversions_source_named', sql`length(trim(${t.source})) > 0`),
+  ],
+);
+
+export const lineKind = pgEnum('line_kind', LINE_KINDS);
+export const exclusionReason = pgEnum('exclusion_reason', EXCLUSION_REASONS);
+export const splitBasis = pgEnum('split_basis', ['lines', 'amounts']);
+
+/**
+ * A receipt's itemized lines as its expense keeps them (FR-INT-22, ADR-0041): the currency,
+ * total and subtotal of the reading they were copied from. Copied when the expense is filed,
+ * and again with each new reading, until a person edits the expense, excludes a line or splits
+ * it; from then on they stay as they were, as the expense's values do (ADR-0022). One per
+ * expense; it goes with its expense when that is deleted.
+ */
+export const expenseItemizations = pgTable(
+  'expense_itemizations',
+  {
+    id: id(),
+    orgId: orgId(),
+    expenseId: uuid('expense_id').notNull(),
+    currency: char('currency', { length: 3 }).notNull(),
+    /** The receipt's total and subtotal as read, in `currency`'s minor units; null when unread. */
+    totalMinor: bigint('total_minor', { mode: 'number' }),
+    subtotalMinor: bigint('subtotal_minor', { mode: 'number' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('expense_itemizations_org_id_id_key').on(t.orgId, t.id),
+    unique('expense_itemizations_expense_key').on(t.orgId, t.expenseId),
+    // What each line points at, so its currency is the itemization's.
+    unique('expense_itemizations_expense_currency_key').on(t.orgId, t.expenseId, t.currency),
+    foreignKey({
+      name: 'expense_itemizations_expense_fk',
+      columns: [t.orgId, t.expenseId],
+      foreignColumns: [expenses.orgId, expenses.id],
+    }).onDelete('cascade'),
+    check('expense_itemizations_currency_iso', isoCurrency(t.currency)),
+  ],
+);
+
+/**
+ * One line of an expense's receipt, numbered from 1 as printed: each item (a discount is a
+ * negative item), then each tax, each fee and the tip. An item line can be excluded from the
+ * claim with a reason, and a note that other needs (FR-EXP-16, Q40), and given a category and
+ * type of its own, which makes it a part of the expense (FR-EXP-15, Q38).
+ */
+export const expenseLines = pgTable(
+  'expense_lines',
+  {
+    id: id(),
+    orgId: orgId(),
+    expenseId: uuid('expense_id').notNull(),
+    position: integer('position').notNull(),
+    kind: lineKind('kind').notNull(),
+    /** As printed. */
+    description: text('description').notNull(),
+    quantity: text('quantity'),
+    /** As read, in `currency`'s minor units; negative for a discount. */
+    amountMinor: bigint('amount_minor', { mode: 'number' }).notNull(),
+    currency: char('currency', { length: 3 }).notNull(),
+    /** Why it is left out of the claim, with a note, and when; null while it is claimed. */
+    excludedReason: exclusionReason('excluded_reason'),
+    excludedNote: text('excluded_note'),
+    excludedAt: timestamp('excluded_at', { withTimezone: true }),
+    /** The category and type a person gave it in a split by line; null: the expense's own. */
+    categoryId: uuid('category_id'),
+    typeId: uuid('type_id'),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('expense_lines_org_id_id_key').on(t.orgId, t.id),
+    unique('expense_lines_position_key').on(t.orgId, t.expenseId, t.position),
+    foreignKey({
+      name: 'expense_lines_itemization_fk',
+      columns: [t.orgId, t.expenseId, t.currency],
+      foreignColumns: [
+        expenseItemizations.orgId,
+        expenseItemizations.expenseId,
+        expenseItemizations.currency,
+      ],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'expense_lines_category_fk',
+      columns: [t.orgId, t.categoryId],
+      foreignColumns: [categories.orgId, categories.id],
+    }),
+    foreignKey({
+      name: 'expense_lines_type_fk',
+      columns: [t.orgId, t.typeId],
+      foreignColumns: [expenseTypes.orgId, expenseTypes.id],
+    }),
+    check('expense_lines_position_positive', sql`${t.position} > 0`),
+    check('expense_lines_currency_iso', isoCurrency(t.currency)),
+    // Only an item is excluded or split off; tax, tip and fees go with the items.
+    check(
+      'expense_lines_items_only',
+      sql`${t.kind} = 'item' OR (${t.excludedReason} IS NULL AND ${t.categoryId} IS NULL)`,
+    ),
+    check(
+      'expense_lines_excluded_whole',
+      sql`(${t.excludedReason} IS NULL AND ${t.excludedNote} IS NULL AND ${t.excludedAt} IS NULL) OR (${t.excludedReason} IS NOT NULL AND ${t.excludedAt} IS NOT NULL)`,
+    ),
+    check(
+      'expense_lines_other_needs_note',
+      sql`${t.excludedReason} IS DISTINCT FROM 'other' OR coalesce(length(trim(${t.excludedNote})), 0) > 0`,
+    ),
+    check(
+      'expense_lines_note_length',
+      sql`${t.excludedNote} IS NULL OR char_length(${t.excludedNote}) <= ${sql.raw(String(EXCLUSION_NOTE_MAX))}`,
+    ),
+    check(
+      'expense_lines_split_whole',
+      sql`(${t.categoryId} IS NULL AND ${t.typeId} IS NULL) OR (${t.categoryId} IS NOT NULL AND ${t.typeId} IS NOT NULL)`,
+    ),
+  ],
+);
+
+/**
+ * The parts of a split expense (FR-EXP-15, Q37): one expense with one receipt, each part with
+ * its own category and type and an amount, in the expense's currency, adding up to its claim.
+ * Split by line, the parts are worked out from its lines' categories and types whenever they or
+ * its exclusions change, and a part with no category and type is the lines left with the
+ * expense's own; split by amount, a person typed each one. It goes with its expense.
+ */
+export const expenseParts = pgTable(
+  'expense_parts',
+  {
+    id: id(),
+    orgId: orgId(),
+    expenseId: uuid('expense_id').notNull(),
+    position: integer('position').notNull(),
+    basis: splitBasis('basis').notNull(),
+    categoryId: uuid('category_id'),
+    typeId: uuid('type_id'),
+    amountMinor: bigint('amount_minor', { mode: 'number' }).notNull(),
+    currency: char('currency', { length: 3 }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('expense_parts_org_id_id_key').on(t.orgId, t.id),
+    unique('expense_parts_position_key').on(t.orgId, t.expenseId, t.position),
+    foreignKey({
+      name: 'expense_parts_expense_fk',
+      columns: [t.orgId, t.expenseId],
+      foreignColumns: [expenses.orgId, expenses.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'expense_parts_category_fk',
+      columns: [t.orgId, t.categoryId],
+      foreignColumns: [categories.orgId, categories.id],
+    }),
+    foreignKey({
+      name: 'expense_parts_type_fk',
+      columns: [t.orgId, t.typeId],
+      foreignColumns: [expenseTypes.orgId, expenseTypes.id],
+    }),
+    check('expense_parts_position_positive', sql`${t.position} > 0`),
+    check('expense_parts_currency_iso', isoCurrency(t.currency)),
+    check('expense_parts_amount_positive', sql`${t.amountMinor} > 0`),
+    check(
+      'expense_parts_classified_whole',
+      sql`(${t.categoryId} IS NULL AND ${t.typeId} IS NULL) OR (${t.categoryId} IS NOT NULL AND ${t.typeId} IS NOT NULL)`,
+    ),
+    // A part typed by amount has its own category and type; only lines stay with the expense's.
+    check(
+      'expense_parts_amounts_classified',
+      sql`${t.basis} = 'lines' OR ${t.categoryId} IS NOT NULL`,
+    ),
   ],
 );
 

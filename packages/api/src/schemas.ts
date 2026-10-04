@@ -2,6 +2,7 @@ import { isIsoDate, MERGE_FIELDS, SUPPORTED_CURRENCIES } from '@expensewise/doma
 import { CORRECTABLE_FIELDS, READING_CHECKS } from '@expensewise/extraction';
 import { z } from '@hono/zod-openapi';
 import { ExpenseCategorySchema } from './category-schemas.ts';
+import { ExpenseSplitSchema, ItemizedSchema } from './itemized-schemas.ts';
 import { ORG_FEATURE_KEYS, type OrgFeatureKey } from './features.ts';
 
 /** RFC 9457 problem details. Every error response uses this shape. */
@@ -763,6 +764,10 @@ export const ExpenseDetailSchema = ExpenseSummarySchema.extend({
   city: z.string().nullable(),
   region: z.string().nullable().openapi({ description: 'State, province or region.' }),
   country: z.string().nullable().openapi({ description: 'ISO 3166-1 alpha-2.', example: 'US' }),
+  // Only while itemized lines are switched on (FR-INT-22, FR-EXP-16).
+  itemized: ItemizedSchema.optional(),
+  // Only while splits and categories are switched on (FR-EXP-15).
+  split: ExpenseSplitSchema.optional(),
 }).openapi('ExpenseDetail');
 
 export const ExpenseListSchema = z

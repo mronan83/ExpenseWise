@@ -14,7 +14,14 @@ import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { appendAuditEvent, lockOrgWrites } from './audit.ts';
 import type { Transaction } from './client.ts';
 import { reopenChangedReports, reportsOfExpenses } from './report-touch.ts';
-import { categories, categoryTypes, expenses, expenseTypes } from './schema.ts';
+import {
+  categories,
+  categoryTypes,
+  expenseLines,
+  expenseParts,
+  expenses,
+  expenseTypes,
+} from './schema.ts';
 
 /*
  * Categories and types an organization defines (FR-EXP-11, Q7, ADR-0036), and the category and
@@ -64,10 +71,17 @@ export async function listCatalog(tx: Transaction): Promise<CatalogRecord> {
   const links = await tx
     .select({ categoryId: categoryTypes.categoryId, typeId: categoryTypes.typeId })
     .from(categoryTypes);
-  const used = await tx
-    .selectDistinct({ categoryId: expenses.categoryId, typeId: expenses.typeId })
-    .from(expenses)
-    .where(isNotNull(expenses.typeId));
+  const chosen = (table: typeof expenses | typeof expenseParts | typeof expenseLines) =>
+    tx
+      .selectDistinct({ categoryId: table.categoryId, typeId: table.typeId })
+      .from(table)
+      .where(isNotNull(table.typeId));
+  // An expense's own, and those its parts and lines were given in a split (FR-EXP-15).
+  const used = [
+    ...(await chosen(expenses)),
+    ...(await chosen(expenseParts)),
+    ...(await chosen(expenseLines)),
+  ];
   const usedCategories = new Set(used.map((u) => u.categoryId));
   const usedTypes = new Set(used.map((u) => u.typeId));
   const typeNames = new Map(typeRows.map((t) => [t.id, t.name]));

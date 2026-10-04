@@ -87,6 +87,18 @@ export const FLAGS = {
       'Settings › People: invite someone by link with a role, change their role or revoke it ' +
       '(FR-PLT-07, #29).',
   },
+  'expenses.itemized': {
+    name: 'Itemized lines',
+    description:
+      'A receipt’s lines show under the expense’s total, each with its share of the tax, tip ' +
+      'and fees; leave a line out of the claim with a reason (FR-INT-22, FR-EXP-16, #80, #82).',
+  },
+  'expenses.split': {
+    name: 'Split an expense',
+    description:
+      'Split an expense into parts by category and type, by line or by amount, and total ' +
+      'reports by category and type. Needs categories and types on (FR-EXP-15, #81).',
+  },
   // The operator's switch per AI model (FR-INT-16, US-READ-18). Unlike a feature, it acts
   // only when FLAG_OVERRIDES turns it off: then that model reads no organization's receipts,
   // whatever each has chosen. Unset or on, each organization decides. See modelStopped().

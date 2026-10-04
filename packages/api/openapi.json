@@ -470,7 +470,9 @@
           "expenses.mileage",
           "reports.export",
           "governance.audit-trail",
-          "team.invites"
+          "team.invites",
+          "expenses.itemized",
+          "expenses.split"
         ]
       },
       "SwitchFeature": {
@@ -3251,6 +3253,12 @@
                 ],
                 "description": "ISO 3166-1 alpha-2.",
                 "example": "US"
+              },
+              "itemized": {
+                "$ref": "#/components/schemas/Itemized"
+              },
+              "split": {
+                "$ref": "#/components/schemas/ExpenseSplit"
               }
             },
             "required": [
@@ -3265,6 +3273,367 @@
               "country"
             ]
           }
+        ]
+      },
+      "Itemized": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "currency": {
+            "type": "string"
+          },
+          "total": {
+            "$ref": "#/components/schemas/ItemizedAmount"
+          },
+          "subtotal": {
+            "$ref": "#/components/schemas/ItemizedAmount"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ItemizedLine"
+            }
+          },
+          "addsUp": {
+            "type": "boolean",
+            "description": "The items come to the subtotal, and with tax, tip and fees to the total, within a cent a line (ADR-0041)."
+          },
+          "problem": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "subtotal",
+                  "total",
+                  "no_total",
+                  "not_positive"
+                ]
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "message"
+            ],
+            "description": "Why they don’t add up, said plainly; null when they do."
+          },
+          "claim": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "receipt": {
+                "$ref": "#/components/schemas/ItemizedAmount"
+              },
+              "excluded": {
+                "$ref": "#/components/schemas/ItemizedAmount"
+              },
+              "claimed": {
+                "$ref": "#/components/schemas/ItemizedAmount"
+              }
+            },
+            "required": [
+              "receipt",
+              "excluded",
+              "claimed"
+            ],
+            "description": "The receipt’s total, what its excluded lines take off with their shares, and what is claimed. Null while the lines don’t add up."
+          },
+          "byLine": {
+            "type": "object",
+            "properties": {
+              "usable": {
+                "type": "boolean"
+              },
+              "code": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "lines_dont_add_up",
+                  "other_currency",
+                  "amount_changed",
+                  null
+                ]
+              },
+              "message": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "usable",
+              "code",
+              "message"
+            ],
+            "description": "Whether lines can be excluded and split by line now: they add up, are in the expense’s currency and make up its claim. If not, why. Splitting by amount still works."
+          }
+        },
+        "required": [
+          "currency",
+          "total",
+          "subtotal",
+          "lines",
+          "addsUp",
+          "problem",
+          "claim",
+          "byLine"
+        ]
+      },
+      "ItemizedAmount": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "amountMinor": {
+            "type": "integer",
+            "description": "Integer minor units, e.g. cents."
+          },
+          "currency": {
+            "type": "string",
+            "example": "USD"
+          },
+          "decimal": {
+            "type": "string",
+            "example": "21.24",
+            "description": "The same amount, for display."
+          }
+        },
+        "required": [
+          "amountMinor",
+          "currency",
+          "decimal"
+        ],
+        "description": "The receipt’s total, as read."
+      },
+      "ItemizedLine": {
+        "type": "object",
+        "properties": {
+          "position": {
+            "type": "integer",
+            "description": "Its number on the receipt, from 1."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "item",
+              "tax",
+              "fee",
+              "tip"
+            ],
+            "description": "item: something bought, or a discount as a negative amount. tax, fee and tip are spread across the items in proportion (Q39)."
+          },
+          "description": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "amount": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ItemizedAmount"
+              },
+              {
+                "description": "As read."
+              }
+            ]
+          },
+          "share": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ItemizedAmount"
+              },
+              {
+                "description": "An item’s share of the tax, tip and fees, in proportion to its amount, the largest share taking any cent left over. Null for tax, tip and fee lines, and while the lines don’t add up."
+              }
+            ]
+          },
+          "claimed": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ItemizedAmount"
+              },
+              {
+                "description": "The item and its share: what leaving it out takes off the claim."
+              }
+            ]
+          },
+          "excluded": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "reason": {
+                "type": "string",
+                "enum": [
+                  "personal",
+                  "paid_by_someone_else",
+                  "not_reimbursable",
+                  "other"
+                ],
+                "description": "Why a line is left out of the claim (Q40): personal, paid by someone else, not reimbursable, or other, which needs a note."
+              },
+              "note": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "reason",
+              "note",
+              "at"
+            ],
+            "description": "Why it is left out of the claim; null while it is claimed."
+          },
+          "part": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "categoryId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "typeId": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "required": [
+              "categoryId",
+              "typeId"
+            ],
+            "description": "The category and type it was given in a split by line; null: the expense’s own."
+          }
+        },
+        "required": [
+          "position",
+          "kind",
+          "description",
+          "quantity",
+          "amount",
+          "share",
+          "claimed",
+          "excluded",
+          "part"
+        ]
+      },
+      "ExpenseSplit": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "basis": {
+            "type": "string",
+            "enum": [
+              "lines",
+              "amounts"
+            ]
+          },
+          "parts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ExpensePart"
+            }
+          }
+        },
+        "required": [
+          "basis",
+          "parts"
+        ]
+      },
+      "ExpensePart": {
+        "type": "object",
+        "properties": {
+          "position": {
+            "type": "integer"
+          },
+          "own": {
+            "type": "boolean",
+            "description": "The lines left with the expense’s own category and type, in a split by line."
+          },
+          "category": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          },
+          "type": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          },
+          "amount": {
+            "$ref": "#/components/schemas/ItemizedAmount"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "The positions of the lines it is made of; none by amount."
+          }
+        },
+        "required": [
+          "position",
+          "own",
+          "category",
+          "type",
+          "amount",
+          "lines"
         ]
       },
       "EditExpense": {
@@ -4968,6 +5337,233 @@
         "required": [
           "categoryId",
           "typeId"
+        ]
+      },
+      "ExcludeLine": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "personal",
+              "paid_by_someone_else",
+              "not_reimbursable",
+              "other"
+            ],
+            "description": "Why a line is left out of the claim (Q40): personal, paid by someone else, not reimbursable, or other, which needs a note."
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 200,
+            "description": "Optional, except for other."
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "SplitExpense": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "basis": {
+                "type": "string",
+                "enum": [
+                  "lines"
+                ]
+              },
+              "lines": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "position": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "categoryId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "typeId": {
+                      "type": "string",
+                      "format": "uuid"
+                    }
+                  },
+                  "required": [
+                    "position",
+                    "categoryId",
+                    "typeId"
+                  ]
+                },
+                "minItems": 1,
+                "maxItems": 100,
+                "description": "Lines given a category and type of their own; the lines not named keep the expense’s own."
+              }
+            },
+            "required": [
+              "basis",
+              "lines"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "basis": {
+                "type": "string",
+                "enum": [
+                  "amounts"
+                ]
+              },
+              "parts": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "categoryId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "typeId": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "amount": {
+                      "type": "string",
+                      "maxLength": 30,
+                      "example": "52.81"
+                    }
+                  },
+                  "required": [
+                    "categoryId",
+                    "typeId",
+                    "amount"
+                  ]
+                },
+                "minItems": 1,
+                "maxItems": 21,
+                "description": "At least two parts, adding up to the claim exactly."
+              }
+            },
+            "required": [
+              "basis",
+              "parts"
+            ]
+          }
+        ]
+      },
+      "ReportCategories": {
+        "type": "object",
+        "properties": {
+          "reportId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "currency": {
+            "type": "string",
+            "description": "The report’s reimbursement currency."
+          },
+          "rows": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategoryTotal"
+            }
+          }
+        },
+        "required": [
+          "reportId",
+          "currency",
+          "rows"
+        ]
+      },
+      "CategoryTotal": {
+        "type": "object",
+        "properties": {
+          "category": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          },
+          "type": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          },
+          "totals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ItemizedAmount"
+            },
+            "description": "As spent, a sum per currency."
+          },
+          "reimbursed": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "amountMinor": {
+                "type": "integer",
+                "description": "Integer minor units, e.g. cents."
+              },
+              "currency": {
+                "type": "string",
+                "example": "USD"
+              },
+              "decimal": {
+                "type": "string",
+                "example": "21.24",
+                "description": "The same amount, for display."
+              }
+            },
+            "required": [
+              "amountMinor",
+              "currency",
+              "decimal"
+            ],
+            "description": "While currency conversion is on: what it comes to in the report’s currency so far, each part taking its share of its expense’s conversion."
+          },
+          "converting": {
+            "type": "integer",
+            "description": "How many of its amounts are not in `reimbursed` yet."
+          }
+        },
+        "required": [
+          "category",
+          "type",
+          "totals"
         ]
       },
       "AiModelSettings": {
@@ -10730,6 +11326,509 @@
           },
           "422": {
             "description": "No such category or type, one is retired, or the category doesn’t allow the type.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/expenses/{expenseId}/lines/{position}/exclusion": {
+      "put": {
+        "tags": [
+          "Expenses"
+        ],
+        "summary": "Leave a line out of what the expense claims, with why",
+        "description": "FR-EXP-16, Q40, Q39. Takes a reason, and a note that other needs. The claim drops by the line and its share of the tax, tip and fees; a split by line is worked out again. A line already excluded takes the new reason. Each change is in the audit trail.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "The line’s number, from 1."
+            },
+            "required": true,
+            "description": "The line’s number, from 1.",
+            "name": "position",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExcludeLine"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The expense, as its page shows it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenseDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or it is another member’s expense, which only its member changes (not_yours).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such expense, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It can’t change now: being_read, locked once submitted, not_itemized, lines_dont_add_up, other_currency or amount_changed when its lines don’t make up its claim, split_by_amount, no_claim for an expense with no amount yet, or mileage for a drive.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not valid: a reason, a note other needs, a line that isn’t an item, parts that don’t add up to the claim, or a category and type that can’t be chosen. field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Expenses"
+        ],
+        "summary": "Include an excluded line in the claim again",
+        "description": "FR-EXP-16. Before submission: the claim goes back up by the line and its share.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "The line’s number, from 1."
+            },
+            "required": true,
+            "description": "The line’s number, from 1.",
+            "name": "position",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The expense, as its page shows it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenseDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or it is another member’s expense, which only its member changes (not_yours).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such expense, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It can’t change now: being_read, locked once submitted, not_itemized, lines_dont_add_up, other_currency or amount_changed when its lines don’t make up its claim, split_by_amount, no_claim for an expense with no amount yet, or mileage for a drive.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not valid: a reason, a note other needs, a line that isn’t an item, parts that don’t add up to the claim, or a category and type that can’t be chosen. field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/expenses/{expenseId}/split": {
+      "put": {
+        "tags": [
+          "Expenses"
+        ],
+        "summary": "Split an expense into parts, each with its own category and type",
+        "description": "FR-EXP-15, Q37, Q38. One expense with one receipt. By line, where its lines add up: each line given a category and type is a part, with its share of the tax, tip and fees, and the rest keep the expense’s own. By amount: parts that add up to the claim exactly, or 422 parts_dont_add_up. A new split replaces the one before.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SplitExpense"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The expense, as its page shows it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenseDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or it is another member’s expense, which only its member changes (not_yours).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such expense, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It can’t change now: being_read, locked once submitted, not_itemized, lines_dont_add_up, other_currency or amount_changed when its lines don’t make up its claim, split_by_amount, no_claim for an expense with no amount yet, or mileage for a drive.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not valid: a reason, a note other needs, a line that isn’t an item, parts that don’t add up to the claim, or a category and type that can’t be chosen. field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Expenses"
+        ],
+        "summary": "Take a split away",
+        "description": "FR-EXP-15. The expense is one part again, with its own category and type.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The expense, as its page shows it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenseDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or it is another member’s expense, which only its member changes (not_yours).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such expense, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It can’t change now: being_read, locked once submitted, not_itemized, lines_dont_add_up, other_currency or amount_changed when its lines don’t make up its claim, split_by_amount, no_claim for an expense with no amount yet, or mileage for a drive.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not valid: a reason, a note other needs, a line that isn’t an item, parts that don’t add up to the claim, or a category and type that can’t be chosen. field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reports/{reportId}/categories": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "What a report comes to by category and type",
+        "description": "FR-EXP-15. Each part of a split expense under its own category and type, every other expense under its own; possible duplicates left out. While currency conversion is on, each also in the report’s currency, each part taking its share of the conversion.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "reportId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Its totals by category and type.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportCategories"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such report, or the feature is off (feature_off).",
             "content": {
               "application/problem+json": {
                 "schema": {

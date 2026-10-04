@@ -12,6 +12,7 @@ import { and, asc, eq, inArray, isNull, ne, or, sql, type SQLWrapper } from 'dri
 import { appendAuditEvent, lockOrgWrites, type AuditEntry } from './audit.ts';
 import type { Transaction } from './client.ts';
 import { fileReceiptExpense } from './expenses.ts';
+import { releaseLines } from './itemized.ts';
 import { duplicateWindowFor } from './organizations.ts';
 import { reopenChangedReports, reportsOfExpenses } from './report-touch.ts';
 import type { ReceiptStatus } from './receipts.ts';
@@ -425,7 +426,8 @@ export async function mergeDuplicateReceipt(
           to: shown(merged, field),
         })),
       },
-    });
+    }); // An amount taken from the copy is no longer made of the primary's lines (ADR-0041).
+    if (taken.includes('amount')) await releaseLines(tx, orgId, primary.expenseId, actor);
   }
   const deleted = await deleteDuplicateReceipt(tx, orgId, duplicateId, primaryId, actorUserId, {
     taken,

@@ -25,6 +25,8 @@ import { registerOrganizationRoutes } from './organization-routes.ts';
 import type { ModelSettingsStore } from './model-settings.ts';
 import { registerModelSettingsRoutes } from './model-settings-routes.ts';
 import type { ExpenseStore } from './expenses.ts';
+import type { ItemizedStore } from './itemized.ts';
+import { registerItemizedRoutes } from './itemized-routes.ts';
 import type { MileageStore } from './mileage.ts';
 import { registerMileageRoutes } from './mileage-routes.ts';
 import type { PeopleStore } from './people.ts';
@@ -70,6 +72,8 @@ export interface ApiOptions
   readonly audit?: AuditStore;
   /** Categories and types (FR-EXP-11). Without it, those routes answer 503 and expenses show none. */
   readonly categories?: CategoryStore;
+  /** Receipts' itemized lines and expenses' splits. Without it, those routes answer 503. */
+  readonly itemized?: ItemizedStore;
   /** Which AI models read receipts (FR-INT-16). Without it, Settings › AI models answers 503. */
   readonly modelSettings?: ModelSettingsStore;
   /** The currency each person is reimbursed in. Without it, those routes answer 503. */
@@ -210,6 +214,7 @@ export function createApi(options: ApiOptions) {
   registerInboundRoutes(app, routes);
   registerAuditRoutes(app, routes);
   registerCategoryRoutes(app, routes);
+  registerItemizedRoutes(app, routes);
   registerModelSettingsRoutes(app, routes);
   registerPeopleRoutes(app, routes);
 

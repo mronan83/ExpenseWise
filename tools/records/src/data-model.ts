@@ -44,10 +44,13 @@ export const DOMAINS: readonly Domain[] = [
   {
     name: 'Expenses and trips',
     about:
-      'The claim: what was spent, on which trip, coded to which category and type, the miles behind it, and what it is in the currency it is reimbursed in.',
+      'The claim: what was spent, on which trip, coded to which category and type, the miles behind it, and what it is in the currency it is reimbursed in; the receipt lines it keeps, those left out of it, and the parts it is split into.',
     tables: [
       'expenses',
       'expense_conversions',
+      'expense_itemizations',
+      'expense_lines',
+      'expense_parts',
       'trips',
       'categories',
       'expense_types',
@@ -125,11 +128,23 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   expenses: {
     about:
-      'What is claimed: merchant, date, amount and currency, its status, and the trip it is filed to. It also carries when and where it was bought, as its receipt prints them: a local time with its time zone, worked out offline from the city, region and country, and the address (FR-INT-17, ADR-0030). It follows its receipt until a person edits it (ADR-0022) and files to trips by date until a person chooses (ADR-0023). One with a date and no trip is local: it carries a justification and points at its report itself, while one on a trip goes with the trip’s report (FR-EXP-14, ADR-0029). A drive is an expense with source `mileage` and a mileage log (ADR-0038). Home sums a member’s month through the member-and-date index, so it needs no index of its own. It carries the category and type a person chose, with when, all three together or none (FR-EXP-11); a suggestion is never stored, and suggestions read a member’s past choices through the member-and-chosen-at index (FR-INT-10, ADR-0036). Its Phase 0 columns for one converted amount (`home_amount_minor`, `fx_rate`, `fx_rate_date`, `fx_source`) assume one home currency per organization and stay unused: conversions are kept in `expense_conversions` (ADR-0034).',
+      'What is claimed: merchant, date, amount and currency, its status, and the trip it is filed to. It also carries when and where it was bought, as its receipt prints them: a local time with its time zone, worked out offline from the city, region and country, and the address (FR-INT-17, ADR-0030). It follows its receipt until a person edits it (ADR-0022) and files to trips by date until a person chooses (ADR-0023). One with a date and no trip is local: it carries a justification and points at its report itself, while one on a trip goes with the trip’s report (FR-EXP-14, ADR-0029). A drive is an expense with source `mileage` and a mileage log (ADR-0038). Home sums a member’s month through the member-and-date index, so it needs no index of its own. It carries the category and type a person chose, with when, all three together or none (FR-EXP-11); a suggestion is never stored, and suggestions read a member’s past choices through the member-and-chosen-at index (FR-INT-10, ADR-0036). Its Phase 0 columns for one converted amount (`home_amount_minor`, `fx_rate`, `fx_rate_date`, `fx_source`) assume one home currency per organization and stay unused: conversions are kept in `expense_conversions` (ADR-0034). Its amount is the claim: its receipt’s total less each line left out of it with its share of the tax, tip and fees, so reports, Home and conversion follow an exclusion with nothing of their own (ADR-0041).',
   },
   expense_conversions: {
     about:
       'An expense’s amount converted to the currency its report is reimbursed in (FR-EXP-13, ADR-0034): what was converted (the amount, its currency and purchase date), into which currency, and the ECB reference rate applied, with the day it was published and its source, copied on so a later rate never changes the claim (NFR-DAT-02, NFR-DAT-04). Or that the source publishes no rate for it, so it stays as spent. One per expense: a new conversion, once the amount, currency, date or reimbursement currency changes, replaces it, and every conversion is in the audit trail. A rate already recorded for a currency, date and reimbursement currency is applied to the others alike, so one day’s rate is fetched once. It goes with its expense when that is deleted. Written only while `reports.currency-conversion` is on, by the conversion workflow.',
+  },
+  expense_itemizations: {
+    about:
+      'An expense’s copy of its receipt’s itemized lines: the currency, total and subtotal of the reading they were copied from, one per expense (FR-INT-22, ADR-0041). Copied when the expense is filed and again with each new reading, while the expense follows its receipt: until a person edits it, leaves a line out or splits it, and never once it is submitted, so a submitted claim never changes under a re-read. A reading with no lines takes it away. Each copy is audited. Written whether or not `expenses.itemized` is on, so switching it on shows the lines at once.',
+  },
+  expense_lines: {
+    about:
+      'One line of that copy, numbered from 1 as printed: each item (a discount a negative one), then each tax, each fee and the tip, in the itemization’s currency. An item can be left out of the claim with a reason picked from four and a note, which other needs (FR-EXP-16, Q40), and given a category and type of its own in a split by line (FR-EXP-15, Q38). What a line and its share of the tax, tip and fees take off is the domain’s arithmetic, never stored: the claim is written to the expense’s amount. Read only through its expense, with the expense’s member named.',
+  },
+  expense_parts: {
+    about:
+      'The parts of a split expense (FR-EXP-15, Q37): each with a category and type and an amount in the expense’s currency, together its claim exactly. Split by line, they are worked out from the lines’ categories and types whenever those or an exclusion change, and the part with no category and type is the lines left with the expense’s own; split by amount, a person typed each, at least two. Reports total by them, and the export writes a row each.',
   },
   trips: {
     about:
@@ -207,6 +222,8 @@ export const FUNCTIONS: Readonly<Record<string, string>> = {
     'Which member signs in with an email address, case aside, and that sign-in’s user, for an arriving email that names no organization yet. Runs as its owner and returns ids only, so the app still can’t read sign-ins outside an organization (ADR-0026).',
   seed_starter_catalog:
     'Gives an organization the ready-made categories and types, and which types each allows, unless it has a category or type already, so running it again adds nothing. Runs as its caller: the release ran it for every organization as the owner, and the app runs it inside `withOrg()` as an organization is created, where row-level security keeps it to that one (ADR-0036).',
+  delete_expense_lines:
+    'Fires before an expense is deleted and deletes its lines and parts first, while the expense is still there to say whose they are, so the `own_records` trigger on each lets the member who deleted the receipt delete them too (ADR-0041). The foreign keys’ cascade stays as a backstop.',
   reject_audit_mutation:
     'Fires on any UPDATE, DELETE or TRUNCATE of audit_events and refuses it, whoever asks.',
 };
@@ -243,7 +260,7 @@ export const RULES: readonly Rule[] = [
   {
     rule: 'Inside an organization, each member sees and changes only their own records.',
     mechanism:
-      'With a member named for the transaction, a restrictive `own_records` policy shows a member or approver only their own receipts, expenses, trips, reports and emails, and the readings, confirmations, duplicate pairs and mileage that hang off them; owners, finance admins and auditors see everyone’s. An `own_records` trigger refuses any change to another member’s rows, and every change by an auditor, with an error rather than a silent skip. With no member named, the system’s own work sees and changes everything, as before (ADR-0035).',
+      'With a member named for the transaction, a restrictive `own_records` policy shows a member or approver only their own receipts, expenses, trips, reports and emails, and the readings, confirmations, duplicate pairs, mileage, receipt lines and split parts that hang off them; owners, finance admins and auditors see everyone’s. An `own_records` trigger refuses any change to another member’s rows, and every change by an auditor, with an error rather than a silent skip. With no member named, the system’s own work sees and changes everything, as before (ADR-0035).',
     objects: [
       'own_records',
       'app_current_member',
@@ -285,6 +302,9 @@ export const RULES: readonly Rule[] = [
       'expense_conversions_currency_iso',
       'expense_conversions_into_iso',
       'members_reimbursement_currency_iso',
+      'expense_itemizations_currency_iso',
+      'expense_lines_currency_iso',
+      'expense_parts_currency_iso',
     ],
     refs: ['NFR-DAT-01', 'ADR-0008'],
   },
@@ -324,6 +344,38 @@ export const RULES: readonly Rule[] = [
       'conversion_work_due',
     ],
     refs: ['NFR-DAT-04', 'FR-EXP-13', 'ADR-0034'],
+  },
+  {
+    rule: 'An expense’s receipt lines are in the receipt’s currency, numbered once, and only an item is left out or split off, for a reason.',
+    mechanism:
+      'One itemization per expense, by a composite key and deleted with it; each line points at it by its organization, expense and currency, so every line is in the itemization’s currency, and has its own number. A tax, fee or tip line is never excluded or given a category of its own. An excluded line has a reason and when; other needs a note, and a note is at most 200 characters (R-EXCLUSION-NOTE-MAX). Whether lines add up, each item’s share and what the claim comes to are the domain’s (`checkLines`, `lineClaims`, `claimWithout`), under the organization’s write lock.',
+    objects: [
+      'expense_itemizations_expense_key',
+      'expense_itemizations_expense_fk',
+      'expense_lines_itemization_fk',
+      'expense_lines_position_key',
+      'expense_lines_items_only',
+      'expense_lines_excluded_whole',
+      'expense_lines_other_needs_note',
+      'expense_lines_note_length',
+      'delete_expense_lines',
+    ],
+    refs: ['FR-INT-22', 'FR-EXP-16', 'ADR-0041'],
+  },
+  {
+    rule: 'A split expense’s parts are each more than zero, in its own organization’s categories and types.',
+    mechanism:
+      'Each part points at its expense, category and type by composite keys and is more than zero; a part typed by amount has its own category and type, chosen together, and only a part made of lines may follow the expense’s own. That the parts add up to the claim exactly is the domain’s (`partsByLine`, `partsByAmount`), checked before a split is saved and whenever an exclusion changes the parts.',
+    objects: [
+      'expense_parts_expense_fk',
+      'expense_parts_category_fk',
+      'expense_parts_type_fk',
+      'expense_parts_amount_positive',
+      'expense_parts_classified_whole',
+      'expense_parts_amounts_classified',
+      'expense_lines_split_whole',
+    ],
+    refs: ['FR-EXP-15', 'Q37', 'ADR-0041'],
   },
   {
     rule: 'The audit trail can’t be changed by anyone.',
