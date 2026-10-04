@@ -37,6 +37,7 @@ export function tripSummary(trip: TripRecord, tallies: readonly TripTally[]) {
     totals: [...totals.values()]
       .sort((a, b) => a.currency.localeCompare(b.currency))
       .map((m) => ({ amountMinor: m.amountMinor, currency: m.currency, decimal: toDecimal(m) })),
+    reportId: trip.reportId,
     createdAt: trip.createdAt.toISOString(),
   };
 }

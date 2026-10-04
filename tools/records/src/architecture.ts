@@ -103,28 +103,28 @@ export const COMPONENTS: readonly Component[] = [
     name: 'Web app',
     technology: 'Next.js 16, React 19, Tailwind CSS 4',
     responsibility:
-      'Every screen, as client components that call the API with the person’s token. Hosts the API at `/api` and the workflow endpoint at `/api/inngest`.',
+      'Every screen, as client components that call the API with the person’s token, expense reports among them. Hosts the API at `/api` and the workflow endpoint at `/api/inngest`.',
     where: ['apps/web'],
   },
   {
     name: 'API',
     technology: 'Hono with zod-openapi; jose for tokens',
     responsibility:
-      'Verifies the sign-in token, finds the caller’s membership, and serves every operation, including Home, read in one transaction: the Needs you inbox, which says why each item needs the person, then their trip, month and recent trips. Takes Bird’s signed email webhook, checked against the exact bytes before anything parses them. Settles possible duplicates as the person decides, removing a deleted receipt’s file only after the deletion commits. Generates the OpenAPI contract and answers errors as problem documents.',
+      'Verifies the sign-in token, finds the caller’s membership, and serves every operation, including Home, read in one transaction: the Needs you inbox, which says why each item needs the person, then their trip, month and recent trips. Takes Bird’s signed email webhook, checked against the exact bytes before anything parses them. Settles possible duplicates as the person decides, removing a deleted receipt’s file only after the deletion commits. Serves expense reports: closing, reopening, moving a trip or local expense, and justifying one; Needs you adds reports to act on and local expenses needing a reason. Generates the OpenAPI contract and answers errors as problem documents.',
     where: ['packages/api'],
   },
   {
     name: 'Domain',
     technology: 'TypeScript, no I/O',
     responsibility:
-      'The rules: money, dates, lifecycles, editing an expense, filing to trips, when two receipts look like the same purchase and how two expenses merge, approvals. Tested to 90% coverage or more.',
+      'The rules: money, dates, lifecycles, editing an expense, filing to trips, when two receipts look like the same purchase and how two expenses merge, when something joins a report and what day 28 does, approvals. Tested to 90% coverage or more.',
     where: ['packages/domain'],
   },
   {
     name: 'Data access',
     technology: 'Drizzle ORM on node-postgres',
     responsibility:
-      'The schema and migrations, `withOrg()` and every query and write, each with its audit event. Runs migrations and the data steps on release: one takes back anything Supabase’s Data API roles hold, another compares each receipt read before duplicates were looked for, once. Compares each receipt as its reading settles and holds a later copy; deletes a receipt only through `delete_receipt()`. Holds the restore drill’s database checks.',
+      'The schema and migrations, `withOrg()` and every query and write, each with its audit event. Runs migrations and the data steps on release: one takes back anything Supabase’s Data API roles hold, another compares each receipt read before duplicates were looked for, once. Compares each receipt as its reading settles and holds a later copy; deletes a receipt only through `delete_receipt()`. Joins trips and local expenses to reports and closes them on day 28; any change to a closed report reopens it. Holds the restore drill’s database checks.',
     where: ['packages/db'],
   },
   {
@@ -138,7 +138,7 @@ export const COMPONENTS: readonly Component[] = [
     name: 'Workflows',
     technology: 'Inngest',
     responsibility:
-      'Reads receipts, reads emailed receipts and relays the outbox. An email is fetched as it arrived, its sender proved by a DKIM signature aligned with the From domain (mailauth), its parts read (postal-mime) and its attachments filed like uploads; with nothing attached, its HTML becomes text (html-to-text) laid out as a PDF (pdf-lib) and filed instead. Each step retries on its own; a failed run still settles its receipt.',
+      'Reads receipts, reads emailed receipts, relays the outbox and keeps expense reports on time. An email is fetched as it arrived, its sender proved by a DKIM signature aligned with the From domain (mailauth), its parts read (postal-mime) and its attachments filed like uploads; with nothing attached, its HTML becomes text (html-to-text) laid out as a PDF (pdf-lib) and filed instead. Each step retries on its own; a failed run still settles its receipt.',
     where: ['packages/workflows'],
   },
   {
@@ -331,6 +331,29 @@ export const FLOWS: readonly Flow[] = [
   end
   A-->>W: Which receipt remains`,
     refs: ['FR-INT-18', 'ADR-0028', 'FR-EXP-03'],
+  },
+  {
+    id: 'reports',
+    title: 'A report’s 28 days',
+    about:
+      'Nothing has to be remembered: a trip is on a report a day after the person is back, and the report closes on time. The schedule works inside one organization at a time as the app, so row-level security holds; only the question of which organizations have work runs as the owner, and it answers with ids (ADR-0029).',
+    diagram: `sequenceDiagram
+  actor P as Person
+  participant I as Inngest
+  participant A as API
+  participant DB as Postgres
+  I->>A: report-schedule, hourly (/api/inngest)
+  A->>DB: report_work_due(now): organization ids only
+  loop Each organization, in one transaction as the app
+    A->>DB: Due trips and local expenses join the open report, or a new one
+    A->>DB: Day 28: close with what is ready, move the rest to the next report
+  end
+  P->>A: GET /v1/home, GET /v1/inbox
+  A-->>P: Reports to finish; a report closing soon or ready to close; local expenses needing a reason
+  P->>A: POST /v1/reports/{id}/close
+  A->>DB: Refused while anything needs review or a reason; else closed, with its audit event
+  Note over DB: Any later change to it reopens it, until it is submitted`,
+    refs: ['FR-EXP-05', 'FR-EXP-12', 'FR-EXP-14', 'ADR-0029'],
   },
   {
     id: 'request',
@@ -586,6 +609,8 @@ export const BACKGROUND: Readonly<Record<string, string>> = {
     'Reads an email that arrived at the receipts address: fetches it from Bird as it was received, proves its sender by DKIM, finds the member who signs in with that address, then stores and files each PDF or photo as a receipt, or with none the email’s text as a PDF, and hands their reading on. Mail from anyone else is dropped with nothing kept. Logs one line per email with what came of it (ADR-0026, ADR-0027).',
   'outbox-relay':
     'Every five minutes and on demand, sends committed outbox events that the request didn’t manage to send. The event id is the outbox id, so a duplicate is dropped.',
+  'report-schedule':
+    'Hourly, at seven past: asks which organizations have report work due (report_work_due(), ids only), then in each, as the app and in one transaction, puts due trips and local expenses on the open report or a new one, closes reports on day 28 with what is ready, moves the rest on, and drops reports with nothing to claim. Safe to repeat; logs one line of counts (ADR-0029).',
 };
 
 export interface Quality {

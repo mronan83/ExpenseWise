@@ -6,6 +6,7 @@ import { api, ApiProblem } from '../lib/api';
 import type { ExpenseAmount } from '../lib/expenses';
 import { monthEnd, monthName, tripProgress, tripWhen, type Home } from '../lib/home';
 import { formatMoney } from '../lib/receipts';
+import { reportHolds, reportName, reportProgress, reportWhen } from '../lib/reports';
 import { supabase } from '../lib/supabase';
 import { localToday, tripDates } from '../lib/trips';
 import { NeedsYouList } from './needs-you';
@@ -134,6 +135,36 @@ function Dashboard({ home }: { home: Home }) {
               }
             />
           </div>
+        </Section>
+      ) : null}
+      {home.reports.length > 0 ? (
+        <Section id="reports" title="Reports" more={{ href: '/reports', label: 'All reports' }}>
+          <ul className="flex flex-col divide-y divide-rule rounded-xl border border-rule bg-sheet">
+            {home.reports.map((r) => {
+              const progress = reportProgress(r);
+              return (
+                <li key={r.id}>
+                  <Link
+                    href={`/reports/${r.id}`}
+                    className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 px-4 py-3"
+                  >
+                    <span className="truncate text-sm font-semibold">{reportName(r)}</span>
+                    <span className="text-right font-mono text-sm whitespace-nowrap">
+                      {totals(r.totals)}
+                    </span>
+                    <span className="text-xs text-ink-2">
+                      {reportHolds(r)} · <span className="whitespace-nowrap">{reportWhen(r)}</span>
+                    </span>
+                    <span
+                      className={`justify-self-end text-xs font-semibold whitespace-nowrap ${progress.tone === 'ok' ? 'text-ok' : progress.tone === 'warn' ? 'text-warn' : 'text-ink-2'}`}
+                    >
+                      {progress.text}
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
         </Section>
       ) : null}
       {home.reading > 0 ? (

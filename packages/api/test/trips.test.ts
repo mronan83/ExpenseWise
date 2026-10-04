@@ -37,6 +37,7 @@ const houston: TripRecord = {
   primaryCity: 'Houston',
   startDate: '2026-09-22',
   endDate: '2026-09-25',
+  reportId: null,
   createdAt: NOW,
 };
 
@@ -54,6 +55,9 @@ const hotel: ExpenseRecord = {
   tripId: TRIP,
   tripName: houston.name,
   tripPinned: false,
+  reportId: null,
+  tripReportId: null,
+  justification: null,
   editedAt: null,
   createdAt: NOW,
   updatedAt: NOW,
@@ -160,6 +164,7 @@ describe('trips', () => {
         owner: 'riley',
         expenseCount: 9,
         readyCount: 6,
+        reportId: null,
         needsReviewCount: 2,
         totals: [
           { amountMinor: 1200, currency: 'EUR', decimal: '12.00' },
@@ -255,11 +260,6 @@ describe('trips', () => {
     expect((await call('DELETE', `/v1/trips/${TRIP}`, 'riley')).body.detail).toMatch(
       /^1 of its expenses is/,
     );
-    removals[TRIP] = { status: 'has_report' };
-    expect(await call('DELETE', `/v1/trips/${TRIP}`, 'riley')).toMatchObject({
-      status: 409,
-      body: { code: 'has_report' },
-    });
     delete removals[TRIP];
     expect((await call('DELETE', `/v1/trips/${TRIP}`, 'riley')).status).toBe(204);
     expect(trips).toEqual([]);

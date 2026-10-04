@@ -40,6 +40,9 @@ export function expenseSummary(expense: ExpenseRecord, proof: ReceiptWithReading
     trip: expense.tripId ? { id: expense.tripId, name: expense.tripName ?? '' } : null,
     tripFiledBy: expense.tripPinned ? ('person' as const) : ('date' as const),
     matchesReceipt: shown ? proofDifferences(expense, shown.values).length === 0 : null,
+    local: expense.tripId === null && expense.transactionDate !== null,
+    justification: expense.justification,
+    reportId: expense.reportId ?? expense.tripReportId,
     createdAt: expense.createdAt.toISOString(),
     updatedAt: expense.updatedAt.toISOString(),
   };

@@ -8,7 +8,8 @@ import {
   type Money,
 } from '@expensewise/domain';
 import type { HomeData } from './home.ts';
-import { inboxItem } from './receipt-views.ts';
+import { needsYouItems } from './needs-you-views.ts';
+import { reportSummary } from './report-views.ts';
 import { tripSummary } from './trip-views.ts';
 
 const DONE = new Set(['ready', 'submitted', 'approved', 'settled']);
@@ -52,14 +53,12 @@ function tripView(home: HomeSnapshot, day: string) {
 
 /**
  * Home for one member on one day (FR-INS-01): what needs them first, then the trip under way
- * or next, this month, and the last trips. Built from the same views as the inbox and Trips,
+ * or next, this month, their reports to finish, and the last trips. Built from the same views as the inbox and Trips,
  * so a figure here matches the one there.
  */
-export function homeView(data: HomeData, day: string, shown: number) {
+export function homeView(data: HomeData, day: string, shown: number, now = new Date()) {
   const { home } = data;
-  const items = data.receipts
-    .map((r) => inboxItem(r, data.runs, data.reviews, data.pairs))
-    .filter((item) => item !== null);
+  const items = needsYouItems(data, data.reports, now);
   const month = home.monthExpenses;
   const offTrip = month.filter((r) => !r.onTrip);
   return {
@@ -75,6 +74,8 @@ export function homeView(data: HomeData, day: string, shown: number) {
       notOnTrip: { expenses: count(offTrip), spent: totalsOf(offTrip) },
     },
     reading: home.reading,
+    // Reports to finish: the open and closed ones, newest first (FR-INS-01, Q15).
+    reports: data.reports.reports.map((r) => reportSummary(r, now)),
     recentTrips: home.recentTrips.map((t) => tripSummary(t, home.tallies)),
   };
 }

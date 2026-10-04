@@ -12,8 +12,10 @@ export const inboxRoute = createRoute({
   tags: ['Inbox'],
   summary: 'What needs the person: the Needs you inbox',
   description:
-    'Receipts that need a look or that no model could read, newest first, each with why ' +
-    '(FR-EXP-02). Missing receipts and returned reports join it as they are built.',
+    'What needs the person, each with why (FR-EXP-02): a report overdue or in its last week ' +
+    'with something left; receipts that need a look or that no model could read, newest ' +
+    'first; local expenses needing a justification; and reports ready to close (FR-EXP-12, ' +
+    'FR-EXP-14). Missing receipts and returned reports join it as they are built.',
   security: [{ bearerAuth: [] }],
   responses: {
     200: {

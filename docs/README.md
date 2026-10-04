@@ -56,6 +56,7 @@ ExpenseWise is a receipt-first, automation-first expense, receipt, mileage and t
 | D-28 | Email-in reads a Bird agent mailbox: the webhook verifies and hands off, and a workflow fetches the raw message, checks its DKIM alignment and files its attachments | [ADR-0026](adr/0026-email-in-through-a-bird-mailbox.md) | Accepted (mailbox and allowlist set up by product owner; how it is read and checked recommended, no objection) |
 | D-29 | An emailed receipt with nothing attached is filed as its text laid out as a PDF; readings gain fees and purchase summaries, which are never Ready on their own | [ADR-0027](adr/0027-email-text-as-a-pdf-receipt.md) | Accepted (product owner asked for HTML email bodies first; how recommended, no objection) |
 | D-30 | Two receipts that read as the same purchase are a possible duplicate: the later is held for the person, who keeps both, deletes one or merges one into the other; a receipt is deleted whole, only through one owner-run function | [ADR-0028](adr/0028-possible-duplicates.md) | Accepted (requirement, merge and delete decided by product owner; matching and mechanism recommended, no objection) |
+| D-31 | An expense report holds trips, which join 24 hours after their return date, and local expenses, each justified; it closes within 28 days, by the person or an hourly schedule, and any change to a closed report reopens it | [ADR-0029](adr/0029-expense-reports.md) | Accepted (lifecycle and rules decided by product owner; schedule, timing and mechanism recommended, no objection) |
 
 ## Visual version
 

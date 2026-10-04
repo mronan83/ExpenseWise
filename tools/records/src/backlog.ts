@@ -485,6 +485,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none' },
     source: 'Roadmap increment 3; product owner Oct 4',
     affects: ['FR-EXP-05', 'FR-EXP-12', 'FR-EXP-14', 'F-17', 'F-50', 'FR-INS-01'],
+    done: { date: '2026-10-04', in: 'PR #52' },
   },
   {
     num: 24,
@@ -495,7 +496,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     priority: 'P3',
     effort: 'L',
     severity: 'Medium',
-    blocker: { kind: 'items', items: [23, 8] },
+    blocker: { kind: 'items', items: [8] },
     source: 'Roadmap increment 3',
     affects: [
       'FR-GOV-02',
@@ -516,7 +517,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     priority: 'P3',
     effort: 'M',
     severity: 'Medium',
-    blocker: { kind: 'items', items: [23] },
+    blocker: { kind: 'items', items: [24] },
     source: 'Roadmap increment 3',
     affects: ['FR-SET-01', 'F-19'],
   },

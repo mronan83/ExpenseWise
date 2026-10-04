@@ -27,6 +27,8 @@ import {
 } from 'drizzle-orm';
 import { appendAuditEvent, lockOrgWrites, type AuditEntry } from './audit.ts';
 import type { Transaction } from './client.ts';
+import { heldAsDuplicate } from './duplicates.ts';
+import { reopenChangedReports, reportsOfExpenses } from './report-touch.ts';
 import { expenses, members, receipts, trips } from './schema.ts';
 import { containing, fileExpenseToTrip } from './trips.ts';
 
@@ -43,6 +45,12 @@ export interface ExpenseRecord extends ExpenseValues {
   readonly tripName: string | null;
   /** A person chose its trip, or chose none: filing by date leaves it there (ADR-0023). */
   readonly tripPinned: boolean;
+  /** The report a local expense is on (FR-EXP-14); null on a trip, which has its own. */
+  readonly reportId: string | null;
+  /** The report its trip is on, for an expense on a trip. */
+  readonly tripReportId: string | null;
+  /** Why a local expense was for business; its report can't close without it. */
+  readonly justification: string | null;
   readonly editedAt: Date | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -62,6 +70,9 @@ const expenseColumns = {
   tripId: expenses.tripId,
   tripName: trips.name,
   tripPinned: expenses.tripPinned,
+  reportId: expenses.reportId,
+  tripReportId: trips.reportId,
+  justification: expenses.justification,
   editedAt: expenses.editedAt,
   createdAt: expenses.createdAt,
   updatedAt: expenses.updatedAt,
@@ -128,6 +139,54 @@ export function listTripExpenses(tx: Transaction, tripId: string): Promise<Expen
   return withProof(tx)
     .where(eq(expenses.tripId, tripId))
     .orderBy(sql`${expenses.transactionDate} asc nulls last`, expenses.createdAt, expenses.id);
+}
+
+/** A local expense on a report, and whether it is held as a possible duplicate. */
+export interface ReportExpenseRecord extends ExpenseRecord {
+  /** Held as a possible duplicate: it counts in no total until the person decides. */
+  readonly held: boolean;
+}
+
+/** The local expenses on these reports, in date order. Call inside withOrg(). */
+export async function listReportExpenses(
+  tx: Transaction,
+  reportIds: readonly string[],
+): Promise<ReportExpenseRecord[]> {
+  if (reportIds.length === 0) return [];
+  return tx
+    .select({ ...expenseColumns, held: sql<boolean>`${heldAsDuplicate(expenses.id)}` })
+    .from(expenses)
+    .innerJoin(members, and(eq(members.orgId, expenses.orgId), eq(members.id, expenses.memberId)))
+    .leftJoin(
+      receipts,
+      and(eq(receipts.orgId, expenses.orgId), eq(receipts.expenseId, expenses.id)),
+    )
+    .leftJoin(trips, and(eq(trips.orgId, expenses.orgId), eq(trips.id, expenses.tripId)))
+    .where(inArray(expenses.reportId, [...reportIds]))
+    .orderBy(sql`${expenses.transactionDate} asc nulls last`, expenses.createdAt, expenses.id);
+}
+
+/**
+ * A member's local expenses that say nothing yet of why they were for business, oldest first
+ * (FR-EXP-14). Only Ready ones: one still needing a look is in Needs you for that already.
+ */
+export function listUnjustifiedExpenses(
+  tx: Transaction,
+  memberId: string,
+  limit: number,
+): Promise<ExpenseRecord[]> {
+  return withProof(tx)
+    .where(
+      and(
+        eq(expenses.memberId, memberId),
+        isNull(expenses.tripId),
+        isNotNull(expenses.transactionDate),
+        eq(expenses.status, 'ready'),
+        isNull(expenses.justification),
+      ),
+    )
+    .orderBy(expenses.transactionDate, expenses.id)
+    .limit(limit);
 }
 
 /** One expense, or undefined. Call inside withOrg(). */
@@ -233,6 +292,13 @@ export async function fileReceiptExpense(
     action: 'expense.filed',
     payload: { receiptId, status, previous: expense.status, refreshed },
   });
+  await reopenChangedReports(
+    tx,
+    orgId,
+    await reportsOfExpenses(tx, [receipt.expenseId]),
+    actor,
+    'its receipt changed',
+  );
   if (refreshed) await fileExpenseToTrip(tx, orgId, receipt.expenseId, actor);
 }
 
@@ -299,6 +365,13 @@ export async function editExpense(
     action: 'expense.edited',
     payload: { changes, status, previous: expense.status },
   });
+  await reopenChangedReports(
+    tx,
+    orgId,
+    await reportsOfExpenses(tx, [expenseId]),
+    { type: 'user', id: actorUserId },
+    'an expense on it was edited',
+  );
   if (changes.some((c) => c.field === 'date')) {
     await fileExpenseToTrip(tx, orgId, expenseId, { type: 'user', id: actorUserId });
   }

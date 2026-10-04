@@ -18,10 +18,11 @@ import {
   dbExpenseStore,
   dbReceiptStore,
   dbHomeStore,
+  dbReportStore,
   dbTripStore,
   dbWorkspaceStore,
 } from '@expensewise/api';
-import { createDatabase, setRolePasswords } from '@expensewise/db';
+import { createDatabase, runReportSchedule, setRolePasswords } from '@expensewise/db';
 import { runMigrations } from '@expensewise/db/migrate';
 import { COMPARISON_MODELS, FALLBACK_MODEL } from '@expensewise/extraction';
 import { readWith, receiptReadingPorts, settleReading } from '@expensewise/workflows';
@@ -222,6 +223,7 @@ const app = createHttpApp({
   expenses: dbExpenseStore(db),
   trips: dbTripStore(db),
   home: dbHomeStore(db),
+  reports: dbReportStore(db),
   files: store,
   dispatch,
   secrets: createSecretBox('bench-only-secret-0123456789'),
@@ -243,7 +245,10 @@ async function call<T>(method: string, path: string, body?: unknown): Promise<T>
 }
 
 // The organization, a key, trips, receipts in every state, and expenses changed by hand.
-await call('POST', '/v1/me/organization');
+const { organization } = await call<{ organization: { id: string } }>(
+  'POST',
+  '/v1/me/organization',
+);
 await call('PUT', '/v1/settings/ai-providers/anthropic', { apiKey: 'sk-ant-bench-0000-wxyz' });
 const trip = (body: Record<string, string>) => call<{ id: string }>('POST', '/v1/trips', body);
 const trips = {
@@ -270,6 +275,13 @@ const trips = {
     endDate: '2026-10-23',
   }),
   empty: await trip({ name: 'Frankfurt', startDate: '2026-11-09', endDate: '2026-11-12' }),
+  // Everything on it Ready: it is moved to a report of its own, and closed.
+  chicago: await trip({
+    name: 'Chicago · partner review',
+    primaryCity: 'Chicago',
+    startDate: '2026-09-01',
+    endDate: '2026-09-03',
+  }),
 };
 
 const receipts: Record<string, string> = {};
@@ -373,6 +385,9 @@ await capture(
   both(reading('Amazon.com', '2026-09-29', 'USD', '86.97', { documentType: 'purchase_summary' })),
 );
 await capture('processing', 'upload');
+// A ride in Chicago, and a lunch on no trip: a local expense, Ready, given a reason below.
+await capture('chicago', 'camera', both(reading('Lyft', '2026-09-02', 'USD', '24.60')));
+await capture('lunch', 'camera', both(reading('Zuni Café', '2026-09-27', 'USD', '48.20')));
 
 // A confirmed correction, an expense edited away from its receipt, one put on a trip by hand.
 await call('POST', `/v1/receipts/${receipts.steak}/confirm`, {
@@ -389,6 +404,23 @@ await call('PUT', `/v1/expenses/${await expenseOf('lufthansa')}/trip`, { tripId:
 
 const expenses: Record<string, string> = {};
 for (const name of Object.keys(receipts)) expenses[name] = await expenseOf(name);
+
+// Reports (#23): the hourly schedule puts the trips that have ended, and the local expenses,
+// on one open report; Chicago then moves to a report of its own, which closes.
+await call('PUT', `/v1/expenses/${expenses.lunch}/justification`, {
+  justification: 'Lunch with the Acme architecture team',
+});
+await runReportSchedule(db, organization.id, new Date());
+const { reportId: closed } = await call<{ reportId: string }>(
+  'PUT',
+  `/v1/trips/${trips.chicago.id}/report`,
+  { newReport: true },
+);
+await call('POST', `/v1/reports/${closed}/close`);
+const open = (
+  await call<{ trips: { id: string; reportId: string | null }[] }>('GET', '/v1/trips')
+).trips.find((t) => t.id === trips.omaha.id)?.reportId;
+if (!open) throw new Error('The schedule put no trip on a report');
 const seeded: Seeded = {
   trips: {
     omaha: trips.omaha.id,
@@ -398,6 +430,7 @@ const seeded: Seeded = {
   },
   receipts,
   expenses,
+  reports: { open, closed },
 };
 
 const server = createServer((req, res) => {

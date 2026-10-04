@@ -5,7 +5,7 @@ import { lockOrgWrites } from '../src/audit.ts';
 import { withOrg } from '../src/client.ts';
 import { editExpense, getExpense, listExpenses, listTripExpenses } from '../src/expenses.ts';
 import { fileReceipt, getReceipt, recordExtractionRun, settleReceipt } from '../src/receipts.ts';
-import { auditEvents, expenses, members, reports } from '../src/schema.ts';
+import { auditEvents, expenses, members, reports, trips } from '../src/schema.ts';
 import {
   createTrip,
   deleteTrip,
@@ -399,19 +399,33 @@ describe('deleting a trip', () => {
     const remove = () => w.inOrg((tx) => deleteTrip(tx, w.org.orgId, tripId, w.org.userId));
     expect(await remove()).toEqual({ status: 'has_submitted', count: 1 });
 
+    // A trip on a closed report can go: the report reopens, as for any change to it.
     const other = await w.trip({ name: 'Denver', startDate: '2026-10-05', endDate: '2026-10-07' });
+    const [report] = await w.inOrg((tx) =>
+      tx
+        .insert(reports)
+        .values({
+          orgId: w.org.orgId,
+          memberId: w.org.memberId,
+          title: 'Denver',
+          currency: 'USD',
+          status: 'closed',
+          closesAt: new Date('2026-11-01T12:00:00Z'),
+          closedAt: new Date('2026-10-10T12:00:00Z'),
+        })
+        .returning({ id: reports.id }),
+    );
     await w.inOrg((tx) =>
-      tx.insert(reports).values({
-        orgId: w.org.orgId,
-        memberId: w.org.memberId,
-        tripId: other,
-        title: 'Denver',
-        currency: 'USD',
-      }),
+      tx.update(trips).set({ reportId: report!.id }).where(eq(trips.id, other)),
     );
     expect(await w.inOrg((tx) => deleteTrip(tx, w.org.orgId, other, w.org.userId))).toEqual({
-      status: 'has_report',
+      status: 'deleted',
+      refiled: 0,
     });
+    const [after] = await w.inOrg((tx) =>
+      tx.select({ status: reports.status }).from(reports).where(eq(reports.id, report!.id)),
+    );
+    expect(after?.status).toBe('open');
   });
 });
 

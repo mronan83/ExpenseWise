@@ -12,6 +12,7 @@ import { and, asc, eq, inArray, isNull, ne, or, sql, type SQLWrapper } from 'dri
 import { appendAuditEvent, lockOrgWrites, type AuditEntry } from './audit.ts';
 import type { Transaction } from './client.ts';
 import { fileReceiptExpense } from './expenses.ts';
+import { reopenChangedReports, reportsOfExpenses } from './report-touch.ts';
 import type { ReceiptStatus } from './receipts.ts';
 import { expenses, receiptDuplicates, receipts, trips } from './schema.ts';
 import { fileExpenseToTrip } from './trips.ts';
@@ -304,6 +305,18 @@ export async function deleteDuplicateReceipt(
         ne(receiptDuplicates.id, pair.id),
       ),
     );
+  // Both receipts' reports change: a closed one reopens before the deletion (ADR-0029).
+  const kept = await expenseOfReceipt(tx, orgId, keepId);
+  await reopenChangedReports(
+    tx,
+    orgId,
+    await reportsOfExpenses(
+      tx,
+      [doomed.expenseId, kept?.expenseId ?? null].filter((id) => id !== null),
+    ),
+    actor,
+    merge ? 'a duplicate was merged into an expense on it' : 'a duplicate on it was deleted',
+  );
   const { rows } = await tx.execute<{ storage_key: string }>(
     sql`select storage_key from delete_receipt(${deleteId})`,
   );

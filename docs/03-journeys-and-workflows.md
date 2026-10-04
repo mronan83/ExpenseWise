@@ -106,13 +106,17 @@ stateDiagram-v2
     direction LR
     state "In approval" as InApproval
     [*] --> Open
-    Open --> Submitted: submit / auto
+    Open --> Closed: closed, or day 28
+    Closed --> Open: reopened, or anything on it changed
+    Closed --> Submitted: submit
     Submitted --> InApproval: routed
     Submitted --> Approved: auto-approve rule (P2)
     InApproval --> Approved: all steps done
     InApproval --> Open: returned with comment
     Approved --> Settled: paid · synced
 ```
+
+A report opens when a trip or local expense is due to join one, and closes within 28 days (ADR-0029). Closing never submits it; submitting is the person's own act.
 
 An approved expense is locked. A correction creates a reversing entry and a new version, so the audit trail never loses what was approved.
 
@@ -123,7 +127,7 @@ This is where "automated submission" actually lives. Each rule has a guardrail, 
 | When | ExpenseWise | Guardrail | Phase |
 | --- | --- | --- | --- |
 | A receipt is read with high confidence | Creates a Ready expense and files it to the matching trip | Per-field confidence threshold; arithmetic and date validation must pass; a trip a person chose for it wins ([ADR-0023](adr/0023-expenses-file-to-trips-by-date.md)) | P1 |
-| A trip's end date passes plus 48 h | Assembles a draft report and notifies the traveler | Skips trips with no expenses; traveler can reopen | P1 |
+| A trip's return date passes plus 24 h, or a local expense's date does | Puts it on the open report, opening one if none is open, and tells the person in the app ([ADR-0029](adr/0029-expense-reports.md)) | Skips trips with no expenses; trips move between reports; a report closes within 28 days, moving what still needs review to the next one | P1 |
 | The scheduled submit time arrives (trip end, weekly or monthly) | Submits the report automatically | Only when nothing needs review and no receipt is missing | P2 |
 | A card transaction still has no receipt after 24 h | Nudges by email with a one-tap capture link (push joins in P3) | At most one nudge a day; quiet hours respected | P2 |
 | A report has no exceptions and is under the auto-approve limit | Approves it automatically | 10% random sample goes to finance; never applies to the approver's own reports | P2 |

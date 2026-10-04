@@ -27,6 +27,12 @@ export interface ExpenseSummary {
   tripFiledBy: 'date' | 'person';
   /** Null without a receipt. */
   matchesReceipt: boolean | null;
+  /** On no trip, with a date: it needs a justification before its report can close. */
+  local: boolean;
+  /** Why a local expense was for business. */
+  justification: string | null;
+  /** The report it is on: its trip’s, or its own when local. */
+  reportId: string | null;
   createdAt: string;
   updatedAt: string;
 }

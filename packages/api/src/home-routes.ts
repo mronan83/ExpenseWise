@@ -56,6 +56,6 @@ export function registerHomeRoutes(
     const day =
       c.req.valid('query').day ?? (options.now?.() ?? new Date()).toISOString().slice(0, 10);
     const data = await stores().home.snapshot(who.orgId, who.memberId, day, NEEDS_LIMIT);
-    return c.json(homeView(data, day, NEEDS_SHOWN), 200);
+    return c.json(homeView(data, day, NEEDS_SHOWN, options.now?.() ?? new Date()), 200);
   });
 }
