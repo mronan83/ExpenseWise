@@ -406,7 +406,7 @@ export const FEATURES: readonly Feature[] = [
     group: 'Receipts',
     kind: 'product',
     phase: 'P1',
-    status: 'Verified',
+    status: 'Partial',
     delivered: 'PR #49',
     decisions: ['ADR-0028'],
     code: [
@@ -429,7 +429,17 @@ export const FEATURES: readonly Feature[] = [
       'api/receipts › still deletes when the file can’t be removed, and needs a signed-in member',
       'e2e/signed-in',
     ],
+    shortfalls: ['GAP-23'],
     note: 'On the receipt page of either receipt: the two side by side, then Keep both, Delete one (you choose which) or Merge (you choose the one to keep and tick the fields to take). Each step says what goes before it acts. Deleting goes through one database function, since the app can no longer delete receipts or expenses itself, and the file goes after that commits. Three screens in the signed-in checks: the copy, deleting and merging.',
+  },
+  {
+    id: 'F-49',
+    title: 'Amounts converted to your reimbursement currency',
+    group: 'Expenses, trips and reports',
+    kind: 'product',
+    phase: 'P1',
+    status: 'Planned',
+    backlog: 62,
   },
   {
     id: 'F-43',
@@ -451,7 +461,7 @@ export const FEATURES: readonly Feature[] = [
   },
   {
     id: 'F-17',
-    title: 'Reports drafted 48 hours after a trip ends',
+    title: 'Expense reports: trips join once they end, closed within 28 days',
     group: 'Expenses, trips and reports',
     kind: 'product',
     phase: 'P1',

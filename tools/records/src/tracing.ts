@@ -6,6 +6,16 @@ import type { ChangeLogEntry, Gap, Question } from './model.ts';
  */
 export const GAPS: readonly Gap[] = [
   {
+    id: 'GAP-23',
+    title: 'Duplicates are matched on the total, which a tip or an amended receipt changes.',
+    affects: ['FR-INT-18', 'F-48'],
+    severity: 'Medium',
+    evidence:
+      'Your review of Oct 4: the same purchase with a tip added, or an amended receipt, has another total, so it isn’t flagged. Since PR #49 a match needs the same vendor and total, dated a day apart at most; time and place aren’t read from receipts yet.',
+    fix: 'Match on vendor, date, time and location, the total free to differ, and tell a duplicate (everything the same) from a possible one that may need a merge or a replacement (#61, after #53).',
+    backlog: 61,
+  },
+  {
     id: 'GAP-01',
     title:
       'Real receipts are stored in production, and nothing backs them up. Supabase’s Free plan keeps no backups of its own.',
@@ -458,10 +468,57 @@ export const QUESTIONS: readonly Question[] = [
       text: 'A: your work address is already a sign-in, so sign-in addresses stay the only senders; no forwarding list. I had guessed it wasn’t one without being able to see your sign-ins.',
     },
   },
+  {
+    id: 'Q18',
+    title: 'How duplicates are matched until time and place are read',
+    ask: 'You want duplicates matched on vendor, date, time and location, the total free to differ. The time and address on a receipt aren’t read yet; that is #53. Until it ships: A: keep matching on vendor, date and the same total, as now. B: match on vendor and date alone, whatever the total.',
+    why: 'Without time and place, B flags every two rides with one company on one day: airport to hotel, then hotel to office. Many receipts print no time or address, so even after #53 some will have only vendor, date and total to go on.',
+    recommendation:
+      'A, then your rule once #53 reads time and place. A receipt that prints neither is still matched on vendor, date and total.',
+    affects: ['FR-INT-18', 'GAP-23'],
+  },
+  {
+    id: 'Q19',
+    title: 'Whether an exact duplicate is deleted for you',
+    ask: 'When vendor, date, time, location and total all match, it is a duplicate, not a possible one. A: it is shown as a duplicate and deleted with one tap, Delete the copy. B: it is deleted automatically, and the audit trail says so.',
+    why: 'A deletion can’t be undone, by your answer of Oct 3. A forwarded email matches every time; two real purchases at the same place, minute and amount almost never do. The copy counts in no total while it waits.',
+    recommendation: 'A for now; B once a month of use shows no exact match was a real purchase.',
+    affects: ['FR-INT-18'],
+  },
+  {
+    id: 'Q20',
+    title: 'What happens on day 28 to a report that can’t close',
+    ask: 'A report closes automatically 28 days after it opens, but can’t close while any of its trips has expenses needing review. When both apply: A: it stays open past day 28, marked overdue, and reimbursement of all its trips waits. B: on day 28 the trips still needing review move to the next report, and the rest closes on time.',
+    why: 'A trip that ends a few days before day 28 joins the open report and can hold up every other trip in it. B pays the finished trips on time, using your rule that trips can move between reports. The warning of delayed reimbursement shows before day 28 either way.',
+    recommendation: 'B.',
+    affects: ['FR-EXP-12', 'FR-EXP-05'],
+  },
+  {
+    id: 'Q21',
+    title: 'Where expenses on no trip are claimed',
+    ask: 'A report holds trips, so an expense on no trip, such as a local lunch or a software subscription, has no report to go on. A: the open report also takes expenses on no trip, dated up to the day it closes. B: they aren’t claimed through reports.',
+    why: 'Home shows them as Not on a trip (Q14). Under B they are never reimbursed.',
+    recommendation: 'A.',
+    affects: ['FR-EXP-05', 'FR-INS-01'],
+  },
+  {
+    id: 'Q22',
+    title: 'Which exchange rate converts an amount',
+    ask: 'Every amount is converted to your reimbursement currency. A: the rate on the purchase date, from the European Central Bank’s free daily reference rates, which you can replace with the rate on your card statement. B: the rate on the day the report closes.',
+    why: 'The purchase date’s rate is the usual policy and doesn’t move while a report waits. The card’s own rate, fees included, is what you were really charged; card feeds (FR-CAP-06) could bring it in later. Each conversion keeps its rate, the rate’s date and its source (NFR-DAT-02).',
+    recommendation: 'A.',
+    affects: ['FR-EXP-13', 'NFR-DAT-02'],
+  },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-04',
+    change:
+      'Your answers of Oct 4. Duplicates: match on vendor, date, time and location, since a tip or an amended receipt changes the total, and tell a duplicate from a possible one that may need a merge or a replacement (FR-INT-18 and F-48 now Partial, GAP-23, #61). Time and place are read with #53, moved up to P1 for it. Reports: a report holds one or more trips, which join 24 hours after their return date and can move between reports; you’re told in the app (FR-EXP-05). A report closes within 28 days or closes itself, can’t close while expenses need review, warns before day 28, is submitted only once closed, and can be reopened until submitted (FR-EXP-12). Everything is converted to your reimbursement currency (FR-EXP-13, F-49, #62). Open questions: Q18 to Q22.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-04',
     change:
