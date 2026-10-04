@@ -442,7 +442,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
   },
   {
     id: 'FR-EXP-05',
-    text: 'An expense report holds one or more trips. Twenty-four hours after a trip’s return date it joins the open report or, with none open, a new report opens for it. Trips can be moved from one report to another. The traveler is told in the app, on Home and in Needs you.',
+    text: 'An expense report holds trips and local expenses. Twenty-four hours after a trip’s return date it joins the open report or, with none open, a new report opens for it. Trips can be moved from one report to another. The traveler is told in the app, on Home and in Needs you.',
     sources: ['journeys §4.6', 'roadmap inc 3', 'owner 2026-10-04'],
     priority: 'Must',
     phase: 'P1',
@@ -450,7 +450,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
     capabilities: ['Expense management · Reports'],
     features: ['F-17', 'F-26'],
     backlog: [23],
-    note: 'Your answers of Oct 4 replace a report drafted per trip 48 hours after it ends. Expenses that need review stay on their trip and go with it. Claude’s assumption, yours to overturn: a trip with no expenses joins no report until its first expense arrives. Q20 asks what happens when a report reaches day 28 still needing review; Q21 where expenses on no trip are claimed.',
+    note: 'Your answers of Oct 4 replace a report drafted per trip 48 hours after it ends. Expenses that need review stay on their trip and go with it. Your answer to Q21: local expenses go on reports too (FR-EXP-14). Claude’s assumptions, yours to overturn: a trip with no expenses joins no report until its first expense arrives; a local expense joins the open report the way a trip does, 24 hours after its date; and a report may hold only local expenses, in a month with no travel.',
   },
   {
     id: 'FR-EXP-06',
@@ -535,11 +535,11 @@ export const FUNCTIONAL: readonly Requirement[] = [
     capabilities: ['Expense management · Reports'],
     features: ['F-17'],
     backlog: [23],
-    note: 'Your answers of Oct 4. The two rules meet when a report reaches day 28 with expenses still needing review; Q20 asks which wins.',
+    note: 'Your answers of Oct 4. Closing never submits; submitting is yours alone. Your answer to Q20: on day 28 a trip still needing review moves to the next report, opened for it if need be, and the rest closes; you can also move it yourself. Claude’s assumptions, yours to overturn: a local expense without its justification holds a report open like one needing review; the warning shows from 7 days before day 28; a reopened report closes itself 7 days after reopening at the earliest; and a report with nothing ready on day 28 stays open, overdue, rather than moving everything.',
   },
   {
     id: 'FR-EXP-13',
-    text: 'Every amount in a report is converted to the currency the person is reimbursed in, keeping the amount as spent beside it.',
+    text: 'Every amount in a report is converted to the currency the person is reimbursed in, keeping the amount as spent beside it. That currency is set in Settings and starts as the organization’s home currency.',
     sources: ['owner 2026-10-04'],
     priority: 'Must',
     phase: 'P1',
@@ -547,7 +547,19 @@ export const FUNCTIONAL: readonly Requirement[] = [
     capabilities: ['Expense management · Multi-currency and FX'],
     features: ['F-49'],
     backlog: [62],
-    note: 'Your answer of Oct 4. Each conversion keeps its rate, the rate’s date and its source (NFR-DAT-02), copied on so a later rate never changes it (NFR-DAT-04). Q22 asks which rate. Claude’s assumption, yours to overturn: your reimbursement currency starts as your organization’s home currency and can be changed in Settings.',
+    note: 'Your answer of Oct 4. Each conversion keeps its rate, the rate’s date and its source (NFR-DAT-02), copied on so a later rate never changes it (NFR-DAT-04). Your answer to Q22: cards convert at purchase, so a rate may only be needed where none was applied; Q23 asks what a receipt in another currency is reimbursed at. Until #62, reports total each currency apart.',
+  },
+  {
+    id: 'FR-EXP-14',
+    text: 'An expense on no trip is local. It needs a justification, a reason it was for business, before its report can close, and it goes on a report as local. A receipt from a day no trip covers becomes a local expense.',
+    sources: ['owner 2026-10-04'],
+    priority: 'Must',
+    phase: 'P1',
+    status: 'Planned',
+    capabilities: ['Expense management · Expenses'],
+    features: ['F-50'],
+    backlog: [23],
+    note: 'Your answer to Q21. Whether a trip covers it goes by the expense’s date, as filing to trips does (ADR-0023), so a receipt sent in after a trip, dated during it, still goes on that trip. It replaces your answer to Q14 for these expenses: one without a justification now needs you.',
   },
 
   // Governance
@@ -915,6 +927,18 @@ export const FUNCTIONAL: readonly Requirement[] = [
     phase: 'P4',
     status: 'Deferred',
     capabilities: ['Platform · SCIM, once the identity provider supports it'],
+  },
+  {
+    id: 'FR-PLT-11',
+    text: 'An owner keeps the organization’s details in Settings: its name, home currency, country, locale, time zone, address, industry and size.',
+    sources: ['owner 2026-10-04'],
+    priority: 'Should',
+    phase: 'P1',
+    status: 'Planned',
+    capabilities: ['Platform · Organizations and tenancy'],
+    features: ['F-51'],
+    backlog: [63],
+    note: 'Your requirement of Oct 4: organization details and demographics configurable. Claude’s assumption, yours to overturn: which fields make up the demographics (industry and size); the time zone also tells background work, such as reports opening and closing, what day it is for you.',
   },
 ];
 
