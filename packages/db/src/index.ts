@@ -12,6 +12,7 @@ export * from './members.ts';
 export * from './role-passwords.ts';
 export * from './outbox.ts';
 export * from './readiness.ts';
+export * from './report-export.ts';
 export * from './report-touch.ts';
 export * from './reports.ts';
 export * from './receipts.ts';

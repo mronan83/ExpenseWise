@@ -619,6 +619,14 @@ export const QUESTIONS: readonly Question[] = [
       text: 'A, the user story format as laid out. Go back through the entire build and capture every user story and its acceptance criteria. Asked where they live: in these records (tools/records/src/stories), beside the requirements, and published as a fifth page, User stories & acceptance criteria, after each release; the traceability page links each requirement to its stories.',
     },
   },
+  {
+    id: 'Q32',
+    title: 'Which reports can be exported once approval exists',
+    ask: 'FR-SET-01 says approved reports are exported. You asked for export (#25) before approval (#24), so today a report can be exported once it closes, and at every state after that. Once approval exists: A: keep it so, and a closed report can still be exported before it is submitted or approved. B: only an approved report can be exported.',
+    why: 'A copy of a closed report lets you check it, or send it to whoever reimburses you, before you submit; an approved report is what finance books, and the PDF says which it is. B would take away an export you have today. Posting to accounting (FR-SET-02) takes approved reports only either way.',
+    recommendation: 'A.',
+    affects: ['FR-SET-01', 'F-19', 'US-RPT-24', 'US-RPT-25'],
+  },
 ];
 
 /** What changed in these records, newest first. */

@@ -156,6 +156,7 @@ function setup(state: { report?: ReportContents; unjustified?: ExpenseRecord[] }
       report = { ...report, locals: [lunch({ justification: text.trim() })] };
       return Promise.resolve({ status: 'justified', justification: text.trim() });
     },
+    forExport: () => Promise.resolve(undefined),
   };
   const memberships: Record<string, Membership> = {
     riley: { orgId: ORG, memberId: MEMBER, role: 'owner' },

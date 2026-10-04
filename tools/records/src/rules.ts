@@ -126,6 +126,13 @@ export const RULES: readonly Rule[] = [
     code: { file: 'packages/workflows/src/email-pdf.ts', constant: 'MAX_PDF_PAGES', literal: '5' },
   },
   {
+    id: 'R-PDF-CELL-LINES',
+    name: 'Most lines a cell of a report’s PDF shows',
+    value: '12, the last ending in “…”; the CSV keeps all of it',
+    decided: { by: 'claude' },
+    code: { file: 'packages/api/src/report-pdf.ts', constant: 'MAX_CELL_LINES', literal: '12' },
+  },
+  {
     id: 'R-TRIP-LENGTH',
     name: 'Longest trip',
     value: '366 days',

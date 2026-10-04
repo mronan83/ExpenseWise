@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
-import { api, ApiProblem } from '../../../lib/api';
+import { api, apiDownload, ApiProblem } from '../../../lib/api';
 import { EXPENSE_STATUS } from '../../../lib/expenses';
+import { useFeatures } from '../../../lib/features';
 import { formatMoney } from '../../../lib/receipts';
 import {
   REPORT_STATUS,
@@ -57,14 +58,16 @@ function verdict(report: ReportDetail): string {
 /**
  * One report (FR-EXP-05, FR-EXP-12, FR-EXP-14): its trips and local expenses, what still needs
  * the person, and closing or reopening it. A trip or local expense moves to another open
- * report, or a new one.
+ * report, or a new one. A closed report exports as CSV or PDF, while `reports.export` is on.
  */
 export default function ReportPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [busy, setBusy] = useState(false);
+  const [exporting, setExporting] = useState<'csv' | 'pdf' | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const features = useFeatures();
 
   const refresh = useCallback(async () => {
     const session = (await supabase()?.auth.getSession())?.data.session;
@@ -104,6 +107,19 @@ export default function ReportPage() {
       setMessage(describeError(error));
     } finally {
       setBusy(false);
+    }
+  }
+
+  /** Downloads the closed report as CSV or as a PDF summary (FR-SET-01). */
+  async function download(format: 'csv' | 'pdf') {
+    setExporting(format);
+    setMessage(null);
+    try {
+      await apiDownload(`/v1/reports/${id}/export.${format}`, `expense-report.${format}`);
+    } catch (error) {
+      setMessage(describeError(error));
+    } finally {
+      setExporting(null);
     }
   }
 
@@ -323,6 +339,21 @@ export default function ReportPage() {
                 Opened {new Date(report.openedAt).toLocaleDateString()}
               </span>
             </div>
+            {report.status !== 'open' && features('reports.export') ? (
+              <div className="flex flex-wrap items-center gap-3">
+                {(['csv', 'pdf'] as const).map((format) => (
+                  <button
+                    key={format}
+                    type="button"
+                    onClick={() => void download(format)}
+                    disabled={busy || exporting !== null}
+                    className="rounded-lg border border-rule px-4 py-2 text-sm font-semibold disabled:opacity-60"
+                  >
+                    {exporting === format ? 'Exporting…' : `Export ${format.toUpperCase()}`}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             {message ? (
               <p role="status" className="text-sm">
                 {message}
