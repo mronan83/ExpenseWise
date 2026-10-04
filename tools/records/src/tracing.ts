@@ -477,12 +477,6 @@ export const CHANGE_LOG: readonly ChangeLogEntry[] = [
   {
     date: '2026-10-03',
     change:
-      'Your requirement: possible duplicates are caught in review, then merged, deleted or kept (FR-INT-18, F-48, #60, all Planned). Your answers: no reference copy is kept; a merge keeps the primary you choose, takes the other’s missing or chosen fields, and deletes it; #60 is built before #23. The same Uber receipt, forwarded eight times, was filed eight times: each forward differed slightly, so the file fingerprint didn’t match. Duplicates will be judged on what was read: same person, currency and total, within a day, a similar merchant.',
-    by: 'Claude, at your direction',
-  },
-  {
-    date: '2026-10-03',
-    change:
       'Fix: Bird’s webhook refused an event it should have ignored. Your webhook also sends events email-in doesn’t use, such as email.received, whose message id may be empty or an email’s Message-ID; the webhook checked those ids as if they were mailbox ids and answered 400. It now acknowledges every other event whatever its data, reads the signed body whatever content type it carries, and logs one line per delivery. Your forwarded email itself never raised the mailbox event the app reads, which points to Bird holding it back before the webhook.',
     by: 'Claude',
   },
