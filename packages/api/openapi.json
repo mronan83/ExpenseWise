@@ -6531,6 +6531,203 @@
         }
       }
     },
+    "/v1/reports/{reportId}/export.csv": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "A report as CSV",
+        "description": "A row per expense on it: date, merchant, category, type, trip, purpose, note, and the amount and currency as spent; then a row per currency’s total, never converted. UTF-8 with a byte order mark, lines ending CRLF (FR-SET-01). Only a report that has closed, or gone further; until approval (#24) exists, a closed report. The member whose report it is exports it, as do the organization’s owner, finance admins and auditors. Behind the reports.export feature.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "reportId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The CSV.",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string",
+                  "description": "An attachment, named for the person and the day the report opened.",
+                  "example": "attachment; filename=\"expense-report-riley-2026-10-03.csv\""
+                },
+                "required": true,
+                "description": "An attachment, named for the person and the day the report opened."
+              }
+            },
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such report in this organization, or another member’s that the caller can’t export; or report export is switched off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The report is still open (not_closed): close it first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reports/{reportId}/export.pdf": {
+      "get": {
+        "tags": [
+          "Reports"
+        ],
+        "summary": "A report as a PDF summary",
+        "description": "Who it is for, the organization, its dates and status, the same table as the CSV, and each currency’s total; no receipt images (FR-SET-01). Only a report that has closed, or gone further; until approval (#24) exists, a closed report. The member whose report it is exports it, as do the organization’s owner, finance admins and auditors. Behind the reports.export feature.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "reportId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The PDF.",
+            "headers": {
+              "Content-Disposition": {
+                "schema": {
+                  "type": "string",
+                  "description": "An attachment, named for the person and the day the report opened.",
+                  "example": "attachment; filename=\"expense-report-riley-2026-10-03.csv\""
+                },
+                "required": true,
+                "description": "An attachment, named for the person and the day the report opened."
+              }
+            },
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such report in this organization, or another member’s that the caller can’t export; or report export is switched off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The report is still open (not_closed): close it first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/inbound/bird": {
       "post": {
         "tags": [

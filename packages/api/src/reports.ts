@@ -7,6 +7,7 @@ import {
   listUnjustifiedExpenses,
   moveToReport,
   reopenReport,
+  reportForExport,
   withOrg,
   type CloseReportResult,
   type Database,
@@ -16,6 +17,7 @@ import {
   type ReopenReportResult,
   type ReportChoice,
   type ReportContents,
+  type ReportForExport,
   type Transaction,
 } from '@expensewise/db';
 
@@ -46,6 +48,8 @@ export interface ReportStore {
     text: string,
     actorUserId: string,
   ): Promise<JustifyExpenseResult>;
+  /** A report with every expense on it, for its CSV and PDF (FR-SET-01). */
+  forExport(orgId: string, reportId: string): Promise<ReportForExport | undefined>;
 }
 
 /** A member's open and closed reports, and their unjustified local expenses. */
@@ -85,5 +89,6 @@ export function dbReportStore(db: Database): ReportStore {
       inOrg(orgId, (tx) => moveToReport(tx, orgId, item, choice, actor)),
     justify: (orgId, expenseId, text, actor) =>
       inOrg(orgId, (tx) => justifyExpense(tx, orgId, expenseId, text, actor)),
+    forExport: (orgId, reportId) => inOrg(orgId, (tx) => reportForExport(tx, reportId)),
   };
 }

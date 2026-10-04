@@ -16,6 +16,7 @@ import { registerHomeRoutes } from './home-routes.ts';
 import { registerInboundRoutes, type InboundRouteOptions } from './inbound-routes.ts';
 import type { ExpenseStore } from './expenses.ts';
 import { registerReceiptRoutes, type ReceiptRouteOptions } from './receipt-routes.ts';
+import { registerReportExportRoutes } from './report-export-routes.ts';
 import { registerReportRoutes } from './report-routes.ts';
 import type { ReportStore } from './reports.ts';
 import { registerTripRoutes } from './trip-routes.ts';
@@ -161,6 +162,7 @@ export function createApi(options: ApiOptions) {
   registerTripRoutes(app, routes);
   registerHomeRoutes(app, routes);
   registerReportRoutes(app, routes);
+  registerReportExportRoutes(app, routes);
   registerInboundRoutes(app, routes);
 
   app.doc31('/v1/openapi.json', OPENAPI_INFO);
