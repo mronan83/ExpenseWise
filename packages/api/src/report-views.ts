@@ -28,7 +28,7 @@ function totalsOf(amounts: readonly { amountMinor: number | null; currency: stri
 /**
  * A report as lists and Home show it (FR-EXP-05, FR-EXP-12): what is on it, what holds it
  * open, when it closes, and its totals. warning: open, in its last week, and something still
- * needs review. overdue: open past its day 28, nothing on it ready.
+ * needs review. overdue: open past its day 28 with something still needing attention.
  */
 export function reportSummary(contents: ReportContents, now: Date) {
   const { report, trips, tallies, locals } = contents;
@@ -97,7 +97,7 @@ export function unjustifiedItem(expense: ExpenseRecord) {
 
 /**
  * A report as Needs you shows it, or null when it doesn't need the person. overdue: past day
- * 28 with nothing on it ready. closing_soon: in its last week, something still needing review.
+ * 28 with something still needing attention. closing_soon: in its last week, something still needing review.
  * ready_to_close: nothing left to do but close it.
  */
 export function reportItem(contents: ReportContents, now: Date) {

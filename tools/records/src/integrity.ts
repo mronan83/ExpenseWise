@@ -3,6 +3,7 @@ import { BACKLOG, SEQUENCING } from './backlog.ts';
 import { FEATURES } from './features.ts';
 import type { Feature, FeatureStatus, Requirement, Status } from './model.ts';
 import { pageProblems } from './integrity-pages.ts';
+import { storyProblems } from './integrity-stories.ts';
 import { AREAS, OBJECTIVES } from './objectives.ts';
 import {
   adrs,
@@ -18,6 +19,8 @@ import {
   workflowIds,
 } from './repo.ts';
 import { REQUIREMENTS } from './requirements.ts';
+import { RULES } from './rules.ts';
+import { STORIES } from './stories/index.ts';
 import { CHANGE_LOG, GAPS, QUESTIONS } from './tracing.ts';
 
 /** What a check reference points at, once resolved. */
@@ -93,7 +96,7 @@ const BUILT: readonly FeatureStatus[] = ['Verified', 'Implemented', 'Partial'];
 
 /** Every token in free text that names another record. */
 const INLINE_REF =
-  /\b(?:NFR|FR)-[A-Z]+-\d{2}\b|\bF-\d{2}\b|\bGAP-\d{2}\b|\bBO-\d+\b|\bQ\d+\b|\bADR-\d{4}\b|(?<!PR )#\d+\b/g;
+  /\b(?:NFR|FR)-[A-Z]+-\d{2}\b|\bF-\d{2}\b|\bGAP-\d{2}\b|\bBO-\d+\b|\bQ\d+\b|\bADR-\d{4}\b|\bUS-[A-Z]{2,5}-\d{2}\b|(?<!PR )#\d+\b/g;
 
 /**
  * Every way the records can disagree with themselves or with the repository. Empty means
@@ -116,6 +119,8 @@ export function problems(): string[] {
   FEATURES.forEach((f) => register(f.id, 'feature', /^F-\d{2}$/));
   GAPS.forEach((g) => register(g.id, 'gap', /^GAP-\d{2}$/));
   QUESTIONS.forEach((q) => register(q.id, 'question', /^Q\d+$/));
+  STORIES.forEach((s) => register(s.id, 'story', /^US-[A-Z]{2,5}-\d{2}$/));
+  RULES.forEach((r) => register(r.id, 'rule', /^R-[A-Z]+(-[A-Z]+)*$/));
   const items = new Map(BACKLOG.map((b) => [b.num, b]));
   if (items.size !== BACKLOG.length) fail('backlog', 'a number is used twice');
   const open = (num: number) => items.has(num) && !items.get(num)!.done;
@@ -301,6 +306,9 @@ export function problems(): string[] {
 
   // The architecture and data model pages describe everything there is.
   pageProblems(fail, checkText, known);
+
+  // The user stories cover the whole build, and every criterion is proved or owed (NFR-DEL-09).
+  storyProblems({ fail, checkText, checkSource, checkCheck, open });
 
   return out;
 }

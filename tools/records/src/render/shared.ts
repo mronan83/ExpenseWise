@@ -16,6 +16,7 @@ export interface PageContext {
     readonly backlog?: string;
     readonly architecture?: string;
     readonly dataModel?: string;
+    readonly stories?: string;
   };
   /** Set while the records are still in review: says so on the page. */
   readonly draft?: string;
@@ -26,7 +27,7 @@ export interface PageContext {
   };
 }
 
-export type PageKind = 'traceability' | 'backlog' | 'architecture' | 'data-model';
+export type PageKind = 'traceability' | 'backlog' | 'architecture' | 'data-model' | 'stories';
 
 const ESCAPES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' };
 export const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ESCAPES[c]!);
@@ -50,14 +51,18 @@ export function refLink(ctx: PageContext, page: PageKind, id: string): string {
   }
   const backlog = /^#(\d+)$/.exec(id);
   const anchor = backlog ? `item-${backlog[1]}` : id;
-  const home = backlog ? ('backlog' as const) : ('traceability' as const);
+  const home = backlog
+    ? ('backlog' as const)
+    : /^US-/.test(id)
+      ? ('stories' as const)
+      : ('traceability' as const);
   if (home === page) return `<a class="ref" href="#${anchor}">${esc(id)}</a>`;
   const url = ctx.urls[home];
   return url ? ext(`${url}#${anchor}`, esc(id), 'ref') : `<span class="ref">${esc(id)}</span>`;
 }
 
 const TOKENS =
-  /PR #(\d+)|(?<![&\w])#(\d+)\b|\b((?:NFR|FR)-[A-Z]+-\d{2}|F-\d{2}|GAP-\d{2}|BO-\d+|Q\d+|ADR-\d{4})\b|\*\*([^*]+)\*\*/g;
+  /PR #(\d+)|(?<![&\w])#(\d+)\b|\b((?:NFR|FR)-[A-Z]+-\d{2}|F-\d{2}|GAP-\d{2}|BO-\d+|Q\d+|ADR-\d{4}|US-[A-Z]{2,5}-\d{2})\b|\*\*([^*]+)\*\*/g;
 
 /** Free text to HTML: `code`, **bold**, PR #n, #n and record ids become links. */
 export function inline(ctx: PageContext, page: PageKind, text: string): string {

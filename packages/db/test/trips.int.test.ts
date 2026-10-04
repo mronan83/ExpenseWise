@@ -389,7 +389,7 @@ describe('deleting a trip', () => {
     });
   });
 
-  it('refuses while a submitted expense or a report rests on it', async () => {
+  it('refuses while a submitted expense rests on it, and reopens a closed report it was on', async () => {
     const w = await workspace('acme-trip-delete-refused');
     const tripId = await w.trip(houston);
     const id = await w.expense('2026-09-23');

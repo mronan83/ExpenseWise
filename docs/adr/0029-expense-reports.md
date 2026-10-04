@@ -24,7 +24,7 @@ The schema had a report pointing at one trip (`reports.trip_id`), unused, and a 
 
 1. **A trip points at its report.** `trips.report_id` links a trip to its report, and its expenses go with it. A local expense, one with a date and no trip, points at a report itself through `expenses.report_id`. A check forbids an expense with both a trip and a report of its own. Both links are composite keys that include the member, so a report holds only its member's trips and expenses. `reports.trip_id` is dropped.
 2. **Reports gain a closed state.** The lifecycle is open, then closed, then submitted (#24), then on to approval. A check keeps `closed_at` set exactly when a report isn't open. `closes_at` holds day 28.
-3. **The 24 hours are counted so no one sees a join early.** Something dated D joins at noon UTC on D+2. That is 24 hours after D has ended everywhere, since the day ends last at UTC−12; at UTC+14 it is 26 hours. The organization's time zone (#63) can tighten this later.
+3. **The 24 hours are counted so no one sees a join early.** Something dated D joins at noon UTC on D+2. That is 24 hours after D has ended everywhere, since the day ends last at UTC−12. Where the day ends earlier, the wait is longer: about 31 hours in US Central time and up to 50 hours at UTC+14. (This line said 26 hours until Oct 4, when writing the user stories found the error.) The organization's time zone (#63) can bring it to 24 hours wherever the organization is.
 4. **An hourly schedule does the work.** An Inngest cron at seven minutes past each hour does the scheduled work.
    - It asks the database which organizations have work due. `report_work_due()` runs as its owner and answers with ids only.
    - It then works inside each organization as the app, in one transaction:
@@ -72,7 +72,7 @@ The schema had a report pointing at one trip (`reports.trip_id`), unused, and a 
 
 ### Negative
 
-- **Joining runs up to 26 hours late.** Something can wait up to 26 hours after its day ends, depending on the time zone, and within the hour after that.
+- **Joining runs late outside UTC−12.** Something joins 24 to 50 hours after its day ends, depending on the time zone, and within the hour after that: about 31 hours in US Central time. #63 fixes this with the organization's time zone.
 - **Reopening is automatic.** A closed report reopens when anything on it changes, so a report the person closed can open again. Needs you and Home show it.
 - **Totals are per currency.** Until #62 converts them, a report with euros and dollars shows two totals.
 - **A report can hold only local expenses.** The product owner said a report holds at least one trip. Local expenses (Q21) make a month with no travel possible, so a report of only local expenses is allowed.

@@ -15,7 +15,7 @@ const DAY_MS = 86_400_000;
 /**
  * When something dated `day` joins a report: 24 hours after that day has ended everywhere,
  * which is noon UTC two days later. The day ends last at UTC−12, so no one sees a trip join
- * early; at UTC+14 it joins 26 hours after their day ends. A trip goes by its return date,
+ * early; where it ends earlier the wait is longer, up to 50 hours at UTC+14. A trip goes by its return date,
  * a local expense by its own (FR-EXP-05, FR-EXP-14).
  */
 export function joinsReportAt(day: string): Date {

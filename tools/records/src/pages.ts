@@ -7,11 +7,13 @@ export const PAGE_URLS: {
   readonly backlog?: string;
   readonly architecture?: string;
   readonly dataModel?: string;
+  readonly stories?: string;
 } = {
   traceability: 'https://claude.ai/artifact/8VCWvpqvNVELSKUwQawoyN',
   backlog: 'https://claude.ai/artifact/MfctKLE69dRkcHzpYVt9TD',
   architecture: 'https://claude.ai/artifact/79tEK88Jr5ts2sP7Rqd5N4',
   dataModel: 'https://claude.ai/artifact/8nUFKrKYRNxB128Ems7432',
+  stories: 'https://claude.ai/artifact/3J29rLw3TEa6zZamSZ86z6',
 };
 
 export const REPOSITORY = 'mronan83/ExpenseWise';

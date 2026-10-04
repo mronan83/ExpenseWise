@@ -398,7 +398,7 @@ export const FEATURES: readonly Feature[] = [
       '.github/workflows/ci.yml',
     ],
     checks: ['e2e/signed-in'],
-    note: 'A bench runs the real API on its own database with a test sign-in, seeded through the API and the real reading workflow with scripted answers; its receipt images are drawn, never real. 37 screens and states, desktop Chromium at 1280 px and iPhone WebKit at 375, 393 and 440 px, light and dark. Put back on Oct 3, the date overlap and the contrast failure both failed it.',
+    note: 'A bench runs the real API on its own database with a test sign-in, seeded through the API and the real reading workflow with scripted answers; its receipt images are drawn, never real. Every signed-in screen in each state it can be in (47 on Oct 4), desktop Chromium at 1280 px and iPhone WebKit at 375, 393 and 440 px, light and dark. Put back on Oct 3, the date overlap and the contrast failure both failed it.',
   },
   {
     id: 'F-46',
@@ -921,8 +921,21 @@ export const FEATURES: readonly Feature[] = [
     group: 'Platform and operations',
     kind: 'operations',
     phase: 'P1',
-    status: 'Planned',
-    backlog: 65,
+    status: 'Verified',
+    delivered: 'PR #57',
+    code: [
+      'tools/records/src/stories',
+      'tools/records/src/rules.ts',
+      'tools/records/src/integrity-stories.ts',
+      'tools/records/src/render/stories.ts',
+    ],
+    checks: [
+      'records/integrity › refuses a built requirement or feature that no delivered story covers',
+      'records/integrity › refuses a test that doesn’t exist, and a decision credited to a question that doesn’t',
+      'records/render › says who decided each criterion, and points an untested one at the item that adds its test',
+      'records/render › lists each requirement’s user stories, linked to the stories page',
+    ],
+    note: 'Every built requirement and feature, and every planned requirement from your own words, written as user stories with Given/When/Then acceptance criteria, each saying who decided it and which test proves it; a register of the numbers the rules share, held to the code; a fifth published page, linked from each requirement on the traceability page.',
   },
   {
     id: 'F-44',

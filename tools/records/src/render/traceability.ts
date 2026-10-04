@@ -5,6 +5,7 @@ import type { Area, Feature, FeatureStatus, Requirement, Status } from '../model
 import { AREAS, OBJECTIVES } from '../objectives.ts';
 import { adrs, capabilityMap, DOCS, testFiles } from '../repo.ts';
 import { FUNCTIONAL, NON_FUNCTIONAL, REQUIREMENTS } from '../requirements.ts';
+import { STORIES } from '../stories/index.ts';
 import { CHANGE_LOG, GAPS, QUESTIONS } from '../tracing.ts';
 import {
   esc,
@@ -202,7 +203,8 @@ ${OBJECTIVES.map((o) => `<tr id="${o.id}"><td class="id">${o.id}</td><td class="
     const rows = rs
       .map((r) => {
         const extra = [...(r.shortfalls ?? []), ...(r.backlog ?? []).map((n) => `#${n}`)];
-        const text = `${T(r.text)}${r.note ? `<p class="sub">${T(r.note)}</p>` : ''}`;
+        const stories = STORIES.filter((st) => st.requirements.includes(r.id)).map((st) => st.id);
+        const text = `${T(r.text)}${r.note ? `<p class="sub">${T(r.note)}</p>` : ''}${stories.length ? `<p class="sub">Stories: ${stories.map(L).join(' ')}</p>` : ''}`;
         const priority = `${esc(r.priority)}<div class="sub">${r.phase}</div>`;
         const features = r.features?.length
           ? `<div class="refs">${r.features.map(L).join('')}</div>`

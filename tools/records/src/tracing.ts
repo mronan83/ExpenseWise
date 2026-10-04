@@ -6,6 +6,26 @@ import type { ChangeLogEntry, Gap, Question } from './model.ts';
  */
 export const GAPS: readonly Gap[] = [
   {
+    id: 'GAP-25',
+    title: 'Photos emailed in are stored with their location.',
+    affects: ['NFR-PRV-03'],
+    severity: 'Medium',
+    evidence:
+      'Found writing the user stories (US-PRV-01). The browser redraws a photo before upload, dropping its metadata; email-in stores an attachment’s bytes as they arrived, and an image the browser can’t decode is uploaded unchanged.',
+    fix: 'Strip image metadata on the server before storing, for every source, with a test (#68).',
+    backlog: 68,
+  },
+  {
+    id: 'GAP-26',
+    title: 'Some requirements say more than the build does.',
+    affects: ['FR-CAP-02', 'FR-INT-03', 'FR-EXP-05', 'NFR-DAT-05', 'NFR-DEL-05', 'NFR-SEC-08'],
+    severity: 'Medium',
+    evidence:
+      'Writing a Given/When/Then criterion for every requirement checked each against the code. Nineteen requirements promise something the build does only in part, such as a personal receipts address (FR-CAP-02) or a flag for every capability (NFR-DEL-05). The criteria claim only what is built; the requirements still say more.',
+    fix: 'Bring each requirement’s wording to what is built, or build the rest, item by item as you choose (#69).',
+    backlog: 69,
+  },
+  {
     id: 'GAP-24',
     title: 'Detailed requirements are scattered, with no acceptance criteria you can sign off.',
     affects: ['NFR-DEL-09', 'F-53'],
@@ -14,6 +34,10 @@ export const GAPS: readonly Gap[] = [
       'Your review of Oct 4. Your detailed requirements, such as those for duplicates and expense reports, are recorded, but across requirement texts and their notes, your answers to questions, decision records and the change log; the rules a test proves are written only as test names. No page lists, per requirement, the criteria it is accepted on, who decided each one, and which test proves it.',
     fix: 'User stories with Given/When/Then acceptance criteria in these records, each criterion traced to a test or shown as untested, a register of the rules’ numbers, and a page for them (#65, Q26).',
     backlog: 65,
+    closed: {
+      date: '2026-10-04',
+      note: 'PR #57: 108 user stories with 588 acceptance criteria cover every built requirement and feature and every planned requirement from your words. Each criterion says who decided it and which test proves it; the 82 built criteria no test proves yet are listed against #66. The register holds 18 rules, each held to the code.',
+    },
   },
   {
     id: 'GAP-23',
@@ -202,7 +226,7 @@ export const GAPS: readonly Gap[] = [
     affects: ['NFR-DAT-05'],
     severity: 'Medium',
     evidence:
-      'Migration 0001 grants DELETE on every tenant table to `expensewise_app`; the append-only trigger covers `audit_events` alone.',
+      'Migration 0001 granted DELETE on every tenant table to `expensewise_app`; the append-only trigger covers `audit_events` alone. Since migration 0017 the app can’t delete receipts, readings, confirmations or expenses except through `delete_receipt()` (ADR-0028); it can still delete reports, approval steps and mileage logs.',
     fix: 'Revoke DELETE on financial tables (or add a trigger that refuses it), with a test (#33).',
     backlog: 33,
   },
@@ -595,6 +619,12 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-04',
+    change:
+      'User stories and acceptance criteria for the entire build (#65; NFR-DEL-09 and F-53 Verified; GAP-24 closed). 108 stories with 588 Given/When/Then criteria cover all 97 requirements that are built or planned from your words, and every built feature. Each criterion says who decided it: you (101), the blueprint (206), or Claude (281, listed first on the page for you to confirm). 456 of the 538 built criteria are proved by a test; the other 82 are listed against #66. A register of 18 rules, such as 28 days and 30 minutes, is held to the code. A fifth page publishes them, and each requirement on the traceability page links its stories. Writing them found: photos emailed in keep their location (GAP-25, #68); error reports don’t redact OpenAI keys (#67); nineteen requirements that say more than the build does (GAP-26, #69), among them Q5, which earlier pull requests cited although you never answered it; and a misstatement in ADR-0029, corrected here: a trip joins its report 24 to 50 hours after its return day ends, about 31 hours in US Central time, not at most 26.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-04',
     change:

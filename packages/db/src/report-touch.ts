@@ -35,7 +35,7 @@ export async function reportsOfTrips(
 /**
  * Reopens each of these reports that is closed, because something in it changed (ADR-0029):
  * a closed report had nothing left to review, and a change may undo that. It keeps its day
- * 28, or gets a week if that is sooner. A submitted report is never touched here. Call
+ * 28, or a week from now if that is later. A submitted report is never touched here. Call
  * inside withOrg(), in the transaction that made the change.
  */
 export async function reopenChangedReports(

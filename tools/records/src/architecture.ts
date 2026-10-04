@@ -159,7 +159,7 @@ export const COMPONENTS: readonly Component[] = [
     name: 'Records and pages',
     technology: 'TypeScript',
     responsibility:
-      'Requirements, features, gaps, questions and the backlog, checked against the code in every test run, and the four published pages: traceability, backlog, this architecture and the data model.',
+      'Requirements, features, gaps, questions, the backlog, and the user stories with their acceptance criteria and the register of the numbers the rules share, checked against the code in every test run: every built requirement has a story, every built criterion a test, and every rule the value the code keeps. The five published pages: traceability, backlog, this architecture, the data model, and user stories.',
     where: ['tools/records'],
   },
   {

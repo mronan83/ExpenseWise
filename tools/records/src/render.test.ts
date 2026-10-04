@@ -7,6 +7,9 @@ import { COMPONENTS, SETTINGS } from './architecture.ts';
 import { renderArchitecture } from './render/architecture.ts';
 import { renderBacklog } from './render/backlog.ts';
 import { renderDataModel } from './render/data-model.ts';
+import { renderStories } from './render/stories.ts';
+import { RULES as REGISTER } from './rules.ts';
+import { STORIES } from './stories/index.ts';
 import { inline, type PageContext } from './render/shared.ts';
 import { renderTraceability } from './render/traceability.ts';
 import { REQUIREMENTS } from './requirements.ts';
@@ -30,6 +33,10 @@ describe('the traceability page', () => {
     expect(html).toMatch(/^<title>ExpenseWise Requirements &amp; Traceability<\/title>/);
     expect(html).toContain('<code>aaaaaaa</code>');
     expect(html).toContain('<code>bbbbbbb</code>');
+  });
+
+  it('lists each requirement’s user stories, linked to the stories page', () => {
+    expect(html).toContain('Stories: <span class="ref">US-DUP-01</span>');
   });
 
   it('has a row for every requirement and every feature, by id', () => {
@@ -124,5 +131,34 @@ describe('the data model page', () => {
 
   it('notes a column from the comment above it in the schema', () => {
     expect(html).toContain('A person chose its trip, or chose no trip.');
+  });
+});
+
+describe('the user stories page (NFR-DEL-09)', () => {
+  const html = renderStories(ctx);
+
+  it('names itself, the live commit and the records commit', () => {
+    expect(html).toMatch(/^<title>ExpenseWise User Stories &amp; Acceptance Criteria<\/title>/);
+    expect(html).toContain('<code>aaaaaaa</code>');
+    expect(html).toContain('<code>bbbbbbb</code>');
+  });
+
+  it('shows every story and every acceptance criterion, by id', () => {
+    for (const s of STORIES) {
+      expect(html).toContain(`<article class="story" id="${s.id}"`);
+      for (const a of s.criteria) expect(html).toContain(`<li id="${s.id}-${a.id}">`);
+    }
+  });
+
+  it('says who decided each criterion, and points an untested one at the item that adds its test', () => {
+    expect(html).toContain('Your decision');
+    expect(html).toContain('Claude’s, to confirm');
+    expect(html).toContain('No test yet');
+    expect(html).toContain('https://claude.ai/code/artifact/backlog#item-66');
+  });
+
+  it('lists every rule in the register with the criteria that use it', () => {
+    for (const r of REGISTER) expect(html).toContain(`<tr id="${r.id}">`);
+    expect(html).toContain('href="#US-DUP-01-AC2">US-DUP-01 AC2</a>');
   });
 });

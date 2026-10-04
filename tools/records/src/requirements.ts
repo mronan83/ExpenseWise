@@ -170,7 +170,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
   {
     id: 'FR-INT-04',
     text: 'A reading is Ready only if its arithmetic and dates pass: subtotal, taxes, fees and tip reconcile with the total, and the date is plausible, not in the future.',
-    sources: ['journeys §4.6', 'arch §6.5', 'design §5.3'],
+    sources: ['journeys §4.6', 'arch §6.5', 'design §5.3', 'owner 2026-10-03'],
     priority: 'Must',
     phase: 'P1',
     status: 'Verified',
@@ -1718,14 +1718,19 @@ export const NON_FUNCTIONAL: readonly Requirement[] = [
     id: 'NFR-DEL-09',
     text: 'Every requirement is detailed as user stories with numbered acceptance criteria in Given/When/Then form. Each criterion says who decided it, the product owner or Claude as an assumption to confirm, and is traced to the automated test that proves it or shown as untested. The numbers the rules share are named once, in a register. All of it is published after each successful release.',
     enforcedBy:
-      'Planned: integrity checks in gate G2 refusing a delivered story whose criteria no test covers',
+      'Integrity checks in gate G2 refuse a built requirement or feature with no delivered story, a built criterion with no test that names no open item, a test or source that doesn’t exist, and a rule whose value differs from the code; the stories page is built with the other four',
     sources: ['owner 2026-10-04'],
     priority: 'Must',
     phase: 'P1',
-    status: 'Planned',
+    status: 'Verified',
     features: ['F-53'],
-    backlog: [65],
-    note: 'Your request of Oct 4: good, accurate and proper documentation of the detailed requirements, in user story form with acceptance criteria. Your answer to Q26: as proposed, written for the entire build, in these records and on a fifth page.',
+    checks: [
+      'records/integrity › refuses a built requirement or feature that no delivered story covers',
+      'records/integrity › refuses a built criterion no test proves, unless it names the open item that adds one',
+      'records/integrity › refuses a rule whose value differs from the code',
+      'records/render › shows every story and every acceptance criterion, by id',
+    ],
+    note: 'Your request of Oct 4: good, accurate and proper documentation of the detailed requirements, in user story form with acceptance criteria. Your answer to Q26: as proposed, written for the entire build, in these records and on a fifth page. Written in PR #57: every built requirement and feature, and every planned requirement from your own words, has its stories. Criteria of built stories that no test proves yet are listed against #66.',
   },
   {
     id: 'NFR-DEL-08',
