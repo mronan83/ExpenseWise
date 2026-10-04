@@ -18,6 +18,7 @@ import {
 import { formatMoney, RECEIPT_STATUS } from '../../../lib/receipts';
 import { supabase } from '../../../lib/supabase';
 import { tripDates, type TripSummary } from '../../../lib/trips';
+import { HistoryLink } from '../../history-link';
 
 type Load =
   | { state: 'loading' }
@@ -62,6 +63,7 @@ export default function ExpensePage() {
         <Link href="/expenses" className="tap text-sm font-semibold text-carbon">
           ← Expenses
         </Link>
+        <HistoryLink entityType="expense" entityId={id} />
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <h1 className="text-2xl font-bold">{expense?.merchant ?? 'Expense'}</h1>

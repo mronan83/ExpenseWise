@@ -16,6 +16,7 @@ import {
 } from '../../../lib/reports';
 import { supabase } from '../../../lib/supabase';
 import { tripDates } from '../../../lib/trips';
+import { HistoryLink } from '../../history-link';
 
 type Load =
   | { state: 'loading' }
@@ -138,6 +139,7 @@ export default function ReportPage() {
         <Link href="/reports" className="tap text-sm font-semibold text-carbon">
           ← Reports
         </Link>
+        <HistoryLink entityType="report" entityId={id} />
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <h1 className="text-2xl font-bold">{report ? reportName(report) : 'Report'}</h1>

@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { MEMBER_ROLES } from './approvals.ts';
 import {
   GENESIS_HASH,
+  canReadAuditTrail,
   canonicalJson,
   chainAuditEvent,
+  secretLikeFields,
   verifyAuditChain,
   type AuditEventInput,
   type ChainedAuditEvent,
@@ -90,5 +93,38 @@ describe('audit chain', () => {
       ok: false,
       brokenAt: 0,
     });
+  });
+});
+
+describe('who reads the trail', () => {
+  it('lets owners, finance admins and auditors read it, and no one else', () => {
+    expect(MEMBER_ROLES.filter(canReadAuditTrail)).toEqual(['finance_admin', 'owner', 'auditor']);
+  });
+});
+
+describe('secretLikeFields', () => {
+  it('finds a credential by its field name or its shape, at any depth', () => {
+    expect(secretLikeFields({ apiKey: 'anything' })).toEqual(['apiKey']);
+    expect(secretLikeFields({ nested: { access_token: 'x' } })).toEqual(['nested.access_token']);
+    expect(secretLikeFields({ note: 'sk-ant-api03-0123456789abcdef' })).toEqual(['note']);
+    expect(secretLikeFields({ list: ['ok', 'sk_live_0123456789abcdefgh'] })).toEqual(['list[1]']);
+    expect(
+      secretLikeFields({ jwt: 'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.c2lnbmF0dXJl' }),
+    ).toEqual(['jwt']);
+  });
+
+  it('passes what the trail stores: a key’s last four characters, digests, ids and text', () => {
+    expect(
+      secretLikeFields({
+        keyHint: 'wxyz',
+        authScheme: 'api_key',
+        sha256: 'a'.repeat(64),
+        requestId: '0192f0c8-0000-7000-8000-000000000001',
+        changes: { merchant: { from: 'Uber', to: 'Uber Eats' } },
+        justification: 'Client dinner, skipped the hotel breakfast',
+        token: null,
+        flag: 'governance.audit-trail',
+      }),
+    ).toEqual([]);
   });
 });

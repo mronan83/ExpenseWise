@@ -2,6 +2,8 @@ import { DomainError } from '@expensewise/domain';
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { Hono, type Context, type ErrorHandler, type NotFoundHandler } from 'hono';
 import type { ProviderKeyVerifier } from './ai-providers.ts';
+import type { AuditStore } from './audit.ts';
+import { registerAuditRoutes } from './audit-routes.ts';
 import { featureGate, type FeatureGate } from './features.ts';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
 import { problem, ProblemError } from './problem.ts';
@@ -45,6 +47,8 @@ export interface ApiOptions
   readonly home?: HomeStore;
   /** Expense reports. Without it, those routes answer 503 and Needs you shows no reports. */
   readonly reports?: ReportStore;
+  /** The audit trail and its chain check. Without it, those routes answer 503. */
+  readonly audit?: AuditStore;
   /** Encrypts AI provider keys at rest. Without it, saving or testing a key answers 503. */
   readonly secrets?: SecretBox;
   /** Checks AI provider keys with a free call to the provider. */
@@ -162,6 +166,7 @@ export function createApi(options: ApiOptions) {
   registerHomeRoutes(app, routes);
   registerReportRoutes(app, routes);
   registerInboundRoutes(app, routes);
+  registerAuditRoutes(app, routes);
 
   app.doc31('/v1/openapi.json', OPENAPI_INFO);
 

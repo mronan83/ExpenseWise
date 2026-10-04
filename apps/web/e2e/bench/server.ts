@@ -15,6 +15,7 @@ import { deflateSync } from 'node:zlib';
 import {
   createHttpApp,
   createSecretBox,
+  dbAuditStore,
   dbExpenseStore,
   dbReceiptStore,
   dbHomeStore,
@@ -227,6 +228,7 @@ const app = createHttpApp({
   trips: dbTripStore(db),
   home: dbHomeStore(db),
   reports: dbReportStore(db),
+  audit: dbAuditStore(db),
   files: store,
   dispatch,
   secrets: createSecretBox('bench-only-secret-0123456789'),

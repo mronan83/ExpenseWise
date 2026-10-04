@@ -8,6 +8,7 @@ const PAGES: readonly { href: string; label: string; flag?: string }[] = [
   { href: '/settings/ai', label: 'AI providers' },
   { href: '/settings/sign-ins', label: 'Sign-ins' },
   { href: '/settings/features', label: 'Features' },
+  { href: '/settings/audit', label: 'Audit trail', flag: 'governance.audit-trail' },
 ];
 
 /** Moves between the settings pages. */

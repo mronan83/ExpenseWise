@@ -26,6 +26,7 @@ import {
 } from '../../../lib/receipts';
 import { placeOf } from '../../../lib/expenses';
 import { supabase } from '../../../lib/supabase';
+import { HistoryLink } from '../../history-link';
 
 type Load =
   | { state: 'loading' }
@@ -136,6 +137,7 @@ export default function ReceiptPage() {
         <Link href="/receipts" className="tap text-sm font-semibold text-carbon">
           ← Receipts
         </Link>
+        <HistoryLink entityType="receipt" entityId={id} />
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <h1 className="text-2xl font-bold">{receipt?.merchant ?? 'Receipt'}</h1>

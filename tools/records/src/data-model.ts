@@ -124,7 +124,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   audit_events: {
     about:
-      'Every state change, in order, hash-chained per organization: editing, removing or reordering an event breaks the chain. Written in the same transaction as the change (FR-GOV-05, NFR-DAT-05).',
+      'Every state change, in order, hash-chained per organization: editing, removing or reordering an event breaks the chain. Written in the same transaction as the change (FR-GOV-05, NFR-DAT-05). Owners, finance admins and auditors read it newest first, a page at a time by sequence, in Settings › Audit trail, which recomputes the chain each time it opens (FR-GOV-06).',
   },
   outbox_events: {
     about:
@@ -222,7 +222,7 @@ export const RULES: readonly Rule[] = [
   {
     rule: 'The audit trail can’t be changed by anyone.',
     mechanism:
-      'The app may only insert and read it. Triggers refuse UPDATE, DELETE and TRUNCATE, even from the owner. Each event’s hash covers the previous one, and sequence and hash are unique per organization.',
+      'The app may only insert and read it. Triggers refuse UPDATE, DELETE and TRUNCATE, even from the owner. Each event’s hash covers the previous one, and sequence and hash are unique per organization. The audit trail recomputes the chain on screen, so an event edited with the guard switched off shows.',
     objects: [
       'audit_events_append_only',
       'audit_events_no_truncate',
@@ -230,7 +230,7 @@ export const RULES: readonly Rule[] = [
       'audit_events_org_sequence_key',
       'audit_events_hash_key',
     ],
-    refs: ['FR-GOV-05', 'NFR-DAT-05'],
+    refs: ['FR-GOV-05', 'NFR-DAT-05', 'FR-GOV-06'],
   },
   {
     rule: 'The same file is filed once per organization.',
