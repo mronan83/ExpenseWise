@@ -31,7 +31,7 @@ ${SOURCES_INSTRUCTIONS}`;
 
 /**
  * What asking for journeys and stays adds to the instructions, for an organization that has
- * switched on `receipts.journeys` (FR-INT-20, FR-INT-21, Q41). Its version is added to the
+ * switched on `receipts.journeys` (FR-INT-20, FR-INT-21, Q39). Its version is added to the
  * prompt's, so a stored reading says it was asked; with the switch off nothing is added.
  */
 export const JOURNEYS_INSTRUCTIONS = `- A train or rail ticket, or its receipt, is a rail_ticket.

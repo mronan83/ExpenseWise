@@ -216,6 +216,31 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
     () => '/settings/mileage',
     [(page) => page.getByLabel('The IRS business rate').check()],
   ],
+  [
+    'a hotel folio’s lines, one left out and one split to Meals',
+    (s) => `/expenses/${s.expenses.folioLines}`,
+    [press('Show the receipt’s lines')],
+  ],
+  [
+    'leaving a line out of the claim',
+    (s) => `/expenses/${s.expenses.folioLines}`,
+    [press('Show the receipt’s lines'), press('Exclude Valet parking')],
+  ],
+  [
+    'splitting an expense by line',
+    (s) => `/expenses/${s.expenses.folioLines}`,
+    [press('Split by line')],
+  ],
+  [
+    'a receipt whose lines don’t add up',
+    (s) => `/expenses/${s.expenses.linesShort}`,
+    [press('Show the receipt’s lines')],
+  ],
+  [
+    'splitting an expense by amount',
+    (s) => `/expenses/${s.expenses.linesShort}`,
+    [press('Split by amount')],
+  ],
   ['AI model settings', () => '/settings/ai-models', []],
   ['reimbursement currency settings', () => '/settings/currency', []],
   ['mileage settings, with the route key and saved places', () => '/settings/mileage', []],

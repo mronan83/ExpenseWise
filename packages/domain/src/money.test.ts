@@ -4,6 +4,7 @@ import { SUPPORTED_CURRENCIES, assertCurrency, isCurrencyCode, minorUnits } from
 import {
   add,
   allocate,
+  allocateToLargest,
   compare,
   equals,
   format,
@@ -159,5 +160,57 @@ describe('allocate', () => {
       }),
     );
     expect(() => splitEvenly(usd(1), 0)).toThrow(/positive integer/);
+  });
+});
+
+describe('allocateToLargest (Q37, ADR-0041)', () => {
+  it('spreads across a discount, a negative weight, and still sums exactly', () => {
+    // A 10.00 tax over items of 60.00, 50.00 and a discount of −10.00.
+    expect(allocateToLargest(usd(1000), [6000, 5000, -1000]).map((m) => m.amountMinor)).toEqual([
+      600, 500, -100,
+    ]);
+    expect(allocateToLargest(usd(-90), [2, 1]).map((m) => m.amountMinor)).toEqual([-60, -30]);
+  });
+
+  it('gives every cent left over to the largest share, ties to the earlier', () => {
+    expect(allocateToLargest(usd(100), [1, 1, 1]).map((m) => m.amountMinor)).toEqual([34, 33, 33]);
+    expect(allocateToLargest(usd(7), [10, 1, 1, 1]).map((m) => m.amountMinor)).toEqual([
+      7, 0, 0, 0,
+    ]);
+    expect(allocateToLargest(usd(5), [1, 3, 3]).map((m) => m.amountMinor)).toEqual([0, 3, 2]);
+  });
+
+  it('always sums to the total, the largest share taking what rounding down leaves', () => {
+    fc.assert(
+      fc.property(
+        safeAmount,
+        fc.array(fc.integer({ min: -50_000, max: 500_000 }), { minLength: 1, maxLength: 60 }),
+        (amount, weights) => {
+          const weightSum = weights.reduce((a, b) => a + b, 0);
+          fc.pre(weightSum > 0);
+          const shares = allocateToLargest(usd(amount), weights);
+          expect(sum('USD', shares)).toEqual(usd(amount));
+          const largest = weights.indexOf(Math.max(...weights));
+          const size = BigInt(Math.abs(amount));
+          const sign = amount < 0 ? -1n : 1n;
+          shares.forEach((share, i) => {
+            const w = BigInt(weights[i] ?? 0);
+            // Every other share is its exact value rounded down, toward minus infinity.
+            const below = size * w - BigInt(share.amountMinor) * sign * BigInt(weightSum);
+            if (i !== largest) {
+              expect(below >= 0n && below < BigInt(weightSum)).toBe(true);
+              if (w === 0n) expect(share.amountMinor).toBe(0);
+            } else {
+              expect(below <= 0n).toBe(true);
+              expect(-below < BigInt(weightSum) * BigInt(weights.length)).toBe(true);
+            }
+          });
+        },
+      ),
+    );
+  });
+
+  it.each([[[]], [[0, 0]], [[-2, 1]], [[1.5, 1]]])('refuses weights %j', (weights) => {
+    expect(() => allocateToLargest(usd(100), weights)).toThrow(/weight/i);
   });
 });

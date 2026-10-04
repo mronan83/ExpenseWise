@@ -1,4 +1,9 @@
-import type { ExpenseDetails, ExpenseSource, ExpenseTravel } from '@expensewise/domain';
+import type {
+  ExpenseDetails,
+  ExpenseSource,
+  ExpenseTravel,
+  Itemization,
+} from '@expensewise/domain';
 import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 import { appendAuditEvent } from './audit.ts';
 import type { Transaction } from './client.ts';
@@ -337,6 +342,8 @@ export async function settleReceipt(
     detail: Record<string, unknown>;
     /** What the reading would file its expense with; null when nothing was read. */
     values?: ReceiptOffer | null;
+    /** The reading's itemized lines, null for none (ADR-0041); absent, they stay as they are. */
+    lines?: Itemization | null;
   },
 ): Promise<void> {
   const [settled] = await tx
@@ -367,7 +374,10 @@ export async function settleReceipt(
     action: 'receipt.read',
     payload: { status: outcome.status, requestId: outcome.requestId, ...outcome.detail },
   });
-  await fileReceiptExpense(tx, orgId, receiptId, outcome.values ?? null, {
+  const offered = outcome.values
+    ? { ...outcome.values, ...(outcome.lines !== undefined ? { lines: outcome.lines } : {}) }
+    : null;
+  await fileReceiptExpense(tx, orgId, receiptId, offered, {
     type: 'system',
     id: 'receipt-workflow',
   });

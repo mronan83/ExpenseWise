@@ -1897,7 +1897,7 @@ export const READING_STORIES: readonly Story[] = [
         given: 'an airline or rail ticket',
         when: 'it is read',
         then: 'the expense shows where it went from and to: airports or cities, or stations, as printed, such as “SFO → ORD”; a rail ticket is read as one',
-        decided: { by: 'owner', source: 'Q41' },
+        decided: { by: 'owner', source: 'Q39' },
         checks: [
           'extraction/journeys › keeps a flight’s airports and a train’s stations, and either end alone',
           'extraction/variant › offer a rail ticket as a kind of document only where they are asked for',

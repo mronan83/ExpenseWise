@@ -919,6 +919,595 @@
       }
     },
     {
+      "name": "expense_itemizations",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "expense_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "currency",
+          "type": "character(3)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "total_minor",
+          "type": "bigint",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "subtotal_minor",
+          "type": "bigint",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "expense_itemizations_expense_fk",
+          "columns": [
+            "org_id",
+            "expense_id"
+          ],
+          "table": "expenses",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "expense_itemizations_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "expense_itemizations_expense_currency_key",
+          "columns": [
+            "org_id",
+            "expense_id",
+            "currency"
+          ]
+        },
+        {
+          "name": "expense_itemizations_expense_key",
+          "columns": [
+            "org_id",
+            "expense_id"
+          ]
+        },
+        {
+          "name": "expense_itemizations_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "expense_itemizations_currency_iso",
+          "definition": "CHECK ((currency ~ '^[A-Z]{3}$'::text))"
+        }
+      ],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (EXISTS ( SELECT 1\n   FROM expenses e\n  WHERE ((e.org_id = expense_itemizations.org_id) AND (e.id = expense_itemizations.expense_id)))))",
+          "check": null
+        },
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.expense_itemizations FOR EACH ROW EXECUTE FUNCTION enforce_own_records('expense')"
+        }
+      ],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "expense_lines",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "expense_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "position",
+          "type": "integer",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "kind",
+          "type": "line_kind",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "quantity",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "amount_minor",
+          "type": "bigint",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "currency",
+          "type": "character(3)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "excluded_reason",
+          "type": "exclusion_reason",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "excluded_note",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "excluded_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "category_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "type_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "expense_lines_category_fk",
+          "columns": [
+            "org_id",
+            "category_id"
+          ],
+          "table": "categories",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "expense_lines_itemization_fk",
+          "columns": [
+            "org_id",
+            "expense_id",
+            "currency"
+          ],
+          "table": "expense_itemizations",
+          "references": [
+            "org_id",
+            "expense_id",
+            "currency"
+          ]
+        },
+        {
+          "name": "expense_lines_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "expense_lines_type_fk",
+          "columns": [
+            "org_id",
+            "type_id"
+          ],
+          "table": "expense_types",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "expense_lines_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "expense_lines_position_key",
+          "columns": [
+            "org_id",
+            "expense_id",
+            "position"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "expense_lines_currency_iso",
+          "definition": "CHECK ((currency ~ '^[A-Z]{3}$'::text))"
+        },
+        {
+          "name": "expense_lines_excluded_whole",
+          "definition": "CHECK ((((excluded_reason IS NULL) AND (excluded_note IS NULL) AND (excluded_at IS NULL)) OR ((excluded_reason IS NOT NULL) AND (excluded_at IS NOT NULL))))"
+        },
+        {
+          "name": "expense_lines_items_only",
+          "definition": "CHECK (((kind = 'item'::line_kind) OR ((excluded_reason IS NULL) AND (category_id IS NULL))))"
+        },
+        {
+          "name": "expense_lines_note_length",
+          "definition": "CHECK (((excluded_note IS NULL) OR (char_length(excluded_note) <= 200)))"
+        },
+        {
+          "name": "expense_lines_other_needs_note",
+          "definition": "CHECK (((excluded_reason IS DISTINCT FROM 'other'::exclusion_reason) OR (COALESCE(length(TRIM(BOTH FROM excluded_note)), 0) > 0)))"
+        },
+        {
+          "name": "expense_lines_position_positive",
+          "definition": "CHECK ((\"position\" > 0))"
+        },
+        {
+          "name": "expense_lines_split_whole",
+          "definition": "CHECK ((((category_id IS NULL) AND (type_id IS NULL)) OR ((category_id IS NOT NULL) AND (type_id IS NOT NULL))))"
+        }
+      ],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (EXISTS ( SELECT 1\n   FROM expenses e\n  WHERE ((e.org_id = expense_lines.org_id) AND (e.id = expense_lines.expense_id)))))",
+          "check": null
+        },
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.expense_lines FOR EACH ROW EXECUTE FUNCTION enforce_own_records('expense')"
+        }
+      ],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "expense_parts",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "expense_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "position",
+          "type": "integer",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "basis",
+          "type": "split_basis",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "category_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "type_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "amount_minor",
+          "type": "bigint",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "currency",
+          "type": "character(3)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "expense_parts_category_fk",
+          "columns": [
+            "org_id",
+            "category_id"
+          ],
+          "table": "categories",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "expense_parts_expense_fk",
+          "columns": [
+            "org_id",
+            "expense_id"
+          ],
+          "table": "expenses",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "expense_parts_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "expense_parts_type_fk",
+          "columns": [
+            "org_id",
+            "type_id"
+          ],
+          "table": "expense_types",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "expense_parts_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "expense_parts_position_key",
+          "columns": [
+            "org_id",
+            "expense_id",
+            "position"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "expense_parts_amount_positive",
+          "definition": "CHECK ((amount_minor > 0))"
+        },
+        {
+          "name": "expense_parts_amounts_classified",
+          "definition": "CHECK (((basis = 'lines'::split_basis) OR (category_id IS NOT NULL)))"
+        },
+        {
+          "name": "expense_parts_classified_whole",
+          "definition": "CHECK ((((category_id IS NULL) AND (type_id IS NULL)) OR ((category_id IS NOT NULL) AND (type_id IS NOT NULL))))"
+        },
+        {
+          "name": "expense_parts_currency_iso",
+          "definition": "CHECK ((currency ~ '^[A-Z]{3}$'::text))"
+        },
+        {
+          "name": "expense_parts_position_positive",
+          "definition": "CHECK ((\"position\" > 0))"
+        }
+      ],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (EXISTS ( SELECT 1\n   FROM expenses e\n  WHERE ((e.org_id = expense_parts.org_id) AND (e.id = expense_parts.expense_id)))))",
+          "check": null
+        },
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.expense_parts FOR EACH ROW EXECUTE FUNCTION enforce_own_records('expense')"
+        }
+      ],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
       "name": "expense_types",
       "rls": {
         "enabled": true,
@@ -1468,6 +2057,14 @@
         }
       ],
       "triggers": [
+        {
+          "name": "expense_conversion_first",
+          "definition": "CREATE TRIGGER expense_conversion_first BEFORE DELETE ON public.expenses FOR EACH ROW EXECUTE FUNCTION delete_expense_conversion()"
+        },
+        {
+          "name": "expense_lines_first",
+          "definition": "CREATE TRIGGER expense_lines_first BEFORE DELETE ON public.expenses FOR EACH ROW EXECUTE FUNCTION delete_expense_lines()"
+        },
         {
           "name": "own_records",
           "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.expenses FOR EACH ROW EXECUTE FUNCTION enforce_own_records('member')"
@@ -4772,6 +5369,15 @@
       ]
     },
     {
+      "name": "exclusion_reason",
+      "values": [
+        "personal",
+        "paid_by_someone_else",
+        "not_reimbursable",
+        "other"
+      ]
+    },
+    {
       "name": "expense_source",
       "values": [
         "camera",
@@ -4807,6 +5413,15 @@
         "filed",
         "no_attachments",
         "unverified"
+      ]
+    },
+    {
+      "name": "line_kind",
+      "values": [
+        "item",
+        "tax",
+        "fee",
+        "tip"
       ]
     },
     {
@@ -4870,6 +5485,13 @@
         "measuring",
         "measured",
         "failed"
+      ]
+    },
+    {
+      "name": "split_basis",
+      "values": [
+        "lines",
+        "amounts"
       ]
     },
     {
@@ -4981,6 +5603,22 @@
       "executableBy": [
         "expensewise_app"
       ]
+    },
+    {
+      "name": "delete_expense_conversion",
+      "arguments": "",
+      "returns": "trigger",
+      "security": "invoker",
+      "volatility": "volatile",
+      "executableBy": []
+    },
+    {
+      "name": "delete_expense_lines",
+      "arguments": "",
+      "returns": "trigger",
+      "security": "invoker",
+      "volatility": "volatile",
+      "executableBy": []
     },
     {
       "name": "delete_receipt",

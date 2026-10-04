@@ -288,6 +288,27 @@
       "when": 1791149330240,
       "tag": "0040_expense_journeys_and_stays",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1791150553179,
+      "tag": "0041_itemized_lines",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1791150569947,
+      "tag": "0042_itemized_lines_rls",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1791150791174,
+      "tag": "0043_expense_conversion_first",
+      "breakpoints": true
     }
   ]
 }

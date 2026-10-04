@@ -134,6 +134,38 @@ export function allocate(total: Money, weights: readonly number[]): Money[] {
   return shares.map((share) => money(Number(share * sign), total.currency));
 }
 
+/**
+ * Splits `total` across integer `weights` in proportion, so the shares always sum exactly to
+ * `total`: each share is the total times its weight over the weights’ sum, rounded down, and
+ * the largest share takes every unit left over (Q37), ties to the earlier weight. A weight may
+ * be negative, as a discount line is, and takes a negative share; a zero weight gets zero. The
+ * weights must sum to more than zero. A negative total is split as its size, then negated.
+ */
+export function allocateToLargest(total: Money, weights: readonly number[]): Money[] {
+  if (weights.length === 0) {
+    throw new DomainError('invalid_weights', 'At least one weight is required');
+  }
+  if (weights.some((w) => !Number.isSafeInteger(w))) {
+    throw new DomainError('invalid_weights', 'Weights must be integers');
+  }
+  const divisor = weights.reduce((acc, w) => acc + BigInt(w), 0n);
+  if (divisor <= 0n) {
+    throw new DomainError('invalid_weights', 'Weights must sum to more than zero');
+  }
+  const sign = total.amountMinor < 0 ? -1n : 1n;
+  const magnitude = BigInt(Math.abs(total.amountMinor));
+  // Rounded down, toward minus infinity, so a negative weight's share is rounded down too.
+  const shares = weights.map((w) => {
+    const product = magnitude * BigInt(w);
+    const share = product / divisor;
+    return product % divisor !== 0n && product < 0n ? share - 1n : share;
+  });
+  const leftover = magnitude - shares.reduce((acc, s) => acc + s, 0n);
+  const largest = weights.reduce((best, w, i) => (w > (weights[best] ?? 0) ? i : best), 0);
+  shares[largest] = (shares[largest] ?? 0n) + leftover;
+  return shares.map((share) => money(Number(share * sign), total.currency));
+}
+
 /** Splits `total` into `parts` shares that differ by at most one minor unit. */
 export function splitEvenly(total: Money, parts: number): Money[] {
   if (!Number.isSafeInteger(parts) || parts < 1) {

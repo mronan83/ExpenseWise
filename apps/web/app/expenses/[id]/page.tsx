@@ -36,6 +36,7 @@ import { tripDates, type TripSummary } from '../../../lib/trips';
 import { HistoryLink } from '../../history-link';
 import { MileageForm } from '../../mileage/mileage-form';
 import { RouteDriveDetails } from '../../mileage/route-drive';
+import { ItemizedLines, SplitParts } from './itemized';
 
 type Load =
   | { state: 'loading' }
@@ -118,6 +119,11 @@ export default function ExpensePage() {
                 onSaved={(next) => setLoad({ state: 'ready', expense: next })}
               />
             )}
+            {/* Sent only while each is switched on for the organization (FR-INT-22, FR-EXP-15). */}
+            <ItemizedLines
+              expense={expense}
+              onSaved={(next) => setLoad({ state: 'ready', expense: next })}
+            />
             {/* Sent only while categories are switched on for the organization. */}
             {expense.category ? (
               <CategoryChoice
@@ -127,6 +133,11 @@ export default function ExpensePage() {
                 onSaved={(next) => setLoad({ state: 'ready', expense: next })}
               />
             ) : null}
+            <SplitParts
+              key={`split-${expense.updatedAt}`}
+              expense={expense}
+              onSaved={(next) => setLoad({ state: 'ready', expense: next })}
+            />
             <TripChoice
               expense={expense}
               onSaved={(next) => setLoad({ state: 'ready', expense: next })}

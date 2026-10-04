@@ -336,4 +336,34 @@ export const RULES: readonly Rule[] = [
     },
     note: 'A request to convert normally comes as something changes, within minutes; the sweep catches a failed fetch or a missed request.',
   },
+  {
+    id: 'R-LINES-TOLERANCE',
+    name: 'How far a receipt’s lines may miss its subtotal and total and still be used',
+    value: 'one minor unit (a cent) per line counted',
+    decided: { by: 'claude', source: 'ADR-0041' },
+    code: {
+      file: 'packages/domain/src/itemized.ts',
+      constant: 'LINE_TOLERANCE_MINOR',
+      literal: '1',
+    },
+    note: 'A receipt rounds each line on its own, as R-SUMS-TOLERANCE allows for its tax, fee and tip lines. Using lines only when they add up is Claude’s rule, yours to confirm.',
+  },
+  {
+    id: 'R-EXCLUSION-NOTE-MAX',
+    name: 'Longest note on a line left out of a claim',
+    value: '200 characters',
+    decided: { by: 'claude', source: 'ADR-0041' },
+    code: {
+      file: 'packages/domain/src/itemized.ts',
+      constant: 'EXCLUSION_NOTE_MAX',
+      literal: '200',
+    },
+  },
+  {
+    id: 'R-SPLIT-PARTS-MAX',
+    name: 'Most parts one expense is split into',
+    value: '20; a split by amount has at least 2',
+    decided: { by: 'claude', source: 'ADR-0041' },
+    code: { file: 'packages/domain/src/itemized.ts', constant: 'SPLIT_PARTS_MAX', literal: '20' },
+  },
 ];

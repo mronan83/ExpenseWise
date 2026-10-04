@@ -8,6 +8,8 @@ import { categorize, detailWithCategory } from './category-views.ts';
 import { expenseSummaries } from './expense-views.ts';
 import type { ExpenseStore } from './expenses.ts';
 import { featureGate, type FeatureGate } from './features.ts';
+import type { ItemizedStore } from './itemized.ts';
+import { itemizedSections } from './itemized-routes.ts';
 import { ProblemError } from './problem.ts';
 import { withTravel } from './travel-views.ts';
 import {
@@ -24,6 +26,8 @@ export interface ExpenseRouteOptions {
   readonly expenses?: ExpenseStore;
   /** Categories and types; while they are switched on, each expense shows its own. */
   readonly categories?: CategoryStore;
+  /** Lines and splits; while they are switched on, each expense shows its own. */
+  readonly itemized?: ItemizedStore;
   /** Which features are on. Built from `workspace` when not given. */
   readonly features?: FeatureGate;
 }
@@ -105,15 +109,19 @@ export function registerExpenseRoutes(
     return c.json({ expenses: summaries.map((s) => ({ ...s, category: shown.get(s.id) })) }, 200);
   });
 
+  const sections = itemizedSections(options.itemized, features);
   /**
-   * One expense as its page shows it: its category and type included while they are on, and
-   * its journey and stay while Journeys and stays is (FR-INT-20, FR-INT-21).
+   * One expense as its page shows it: its category and type, lines and split included while
+   * each is on, and its journey and stay while Journeys and stays is (FR-INT-20, FR-INT-21).
    */
   const detail = async (
     orgId: string,
     found: NonNullable<Awaited<ReturnType<ExpenseStore['get']>>>,
   ) => {
-    const shown = await detailWithCategory(await categoriesOn(orgId), orgId, found);
+    const shown = {
+      ...(await detailWithCategory(await categoriesOn(orgId), orgId, found)),
+      ...(await sections(orgId, found)),
+    };
     return (await features.isOn(orgId, 'receipts.journeys')) ? withTravel(shown, found) : shown;
   };
 
@@ -192,6 +200,14 @@ export function registerExpenseRoutes(
       throw new ProblemError(409, 'not-editable', 'This expense can’t be edited here', {
         code: 'mileage',
         detail: `It is a drive, paid at miles × its rate: change it with PATCH /v1/mileage/${expenseId}.`,
+      });
+    }
+    if (result.status === 'itemized') {
+      throw new ProblemError(409, 'not-editable', 'Its amount is made of its lines', {
+        code: 'itemized',
+        detail:
+          'A line is left out of it, or it is split: include the lines again, or take the ' +
+          'split away, to change its amount or currency.',
       });
     }
     if (result.status === 'invalid') {

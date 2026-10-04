@@ -24,6 +24,7 @@ import {
   type TravelChange,
   type TravelEdit,
   type TravelEditProblem,
+  type Itemization,
 } from '@expensewise/domain';
 import {
   and,
@@ -41,6 +42,7 @@ import {
 import { appendAuditEvent, lockOrgWrites, type AuditEntry } from './audit.ts';
 import type { Transaction } from './client.ts';
 import { heldAsDuplicate } from './duplicates.ts';
+import { claimFromLines, copyReadLines } from './itemized.ts';
 import { reopenChangedReports, reportsOfExpenses } from './report-touch.ts';
 import { expenses, members, receipts, trips } from './schema.ts';
 import { containing, fileExpenseToTrip } from './trips.ts';
@@ -261,6 +263,11 @@ export interface ReceiptOffer extends ExpenseValues {
    * stay as they are, as for a reading made before, or with Journeys and stays off.
    */
   readonly travel?: ExpenseTravel;
+  /**
+   * The reading's itemized lines (ADR-0041); null when it prints none. Absent, as from a
+   * confirmation, the lines stay as they are.
+   */
+  readonly lines?: Itemization | null;
 }
 
 /** The time and place as columns. */
@@ -374,6 +381,7 @@ export async function fileReceiptExpense(
       action: 'expense.created',
       payload: { receiptId, status },
     });
+    if (offered?.lines) await copyReadLines(tx, orgId, id, offered.lines, actor);
     await fileExpenseToTrip(tx, orgId, id, actor);
     return;
   }
@@ -404,6 +412,10 @@ export async function fileReceiptExpense(
   const travel = fresh && offered.travel ? offered.travel : currentTravel;
   const status = receiptExpenseStatus(expense.status, receipt.status, values);
   if (status === null) return;
+  // Its lines follow the receipt as its values do, until a person edits it (ADR-0041).
+  if (fresh && offered.lines !== undefined) {
+    await copyReadLines(tx, orgId, receipt.expenseId, offered.lines, actor);
+  }
   const refreshed = !sameValues(values, current);
   const placed = !sameDetails(details, currentDetails);
   const travelled = !sameTravel(travel, currentTravel);
@@ -460,7 +472,12 @@ export type EditExpenseResult =
   /** Being read, or submitted or later: not open to edits (FR-EXP-09). */
   | { readonly status: 'not_editable'; readonly current: ExpenseStatus }
   /** A mileage expense: its amount is miles × its rate, so it is edited as mileage (ADR-0038). */
-  | { readonly status: 'mileage' };
+  | { readonly status: 'mileage' }
+  /**
+   * Its amount is made of its lines or parts: a line is excluded, or it is split. Its amount or
+   * currency changes only once those go (ADR-0041).
+   */
+  | { readonly status: 'itemized' };
 
 /**
  * Applies a person's edit (FR-EXP-09) with its audit event, and sets the status again: a
@@ -506,6 +523,12 @@ export async function editExpense(
   const { travel, changes: travelChanges } = travelled.value;
   if (changes.length === 0 && detailChanges.length === 0 && travelChanges.length === 0) {
     return { status: 'unchanged' };
+  }
+  if (
+    changes.some((c) => c.field === 'amount' || c.field === 'currency') &&
+    (await claimFromLines(tx, expenseId))
+  ) {
+    return { status: 'itemized' };
   }
   // Recorded only when the journey or stay changed, so other edits record what they always did.
   const travelRecord = travelChanges.length > 0 ? { travelChanges } : {};

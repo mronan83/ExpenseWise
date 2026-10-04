@@ -1,4 +1,5 @@
 import type { ExpenseCategory } from './categories';
+import type { ExpenseSplit, Itemized } from './itemized';
 import type { ReceiptSummary } from './receipts';
 
 export type ExpenseStatus =
@@ -75,6 +76,10 @@ export interface ExpenseDetail extends ExpenseSummary {
   journey?: Journey;
   /** A hotel stay and its nights, worked out; only while the feature is on (FR-INT-21). */
   stay?: Stay;
+  /** Its receipt's lines, while that feature is on (FR-INT-22). */
+  itemized?: Itemized | null;
+  /** Its parts, while splits are on (FR-EXP-15). */
+  split?: ExpenseSplit | null;
 }
 
 export interface Journey {

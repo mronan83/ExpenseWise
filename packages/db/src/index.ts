@@ -11,6 +11,7 @@ export * from './expenses.ts';
 export * from './features.ts';
 export * from './home.ts';
 export * from './inbound.ts';
+export * from './itemized.ts';
 export * from './members.ts';
 export * from './organizations.ts';
 export * from './mileage.ts';

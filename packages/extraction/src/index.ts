@@ -3,6 +3,7 @@ export * from './checks.ts';
 export * from './claude.ts';
 export * from './confirm.ts';
 export * from './extractor.ts';
+export * from './lines.ts';
 export * from './model-settings.ts';
 export * from './models.ts';
 export * from './normalize.ts';

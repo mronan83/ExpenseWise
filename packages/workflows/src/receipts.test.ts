@@ -620,3 +620,24 @@ describe('journeys and stays (FR-INT-20, FR-INT-21)', () => {
     });
   });
 });
+
+describe('the lines a reading files its expense with (ADR-0041)', () => {
+  it('hands on the itemized lines of the reading the expense is filed with, and none when it prints none', async () => {
+    const itemized = reading({
+      subtotal: { value: '6.00', confidence: 'high' },
+      taxes: [{ label: 'Sales tax', value: '0.50', confidence: 'high' }],
+      lineItems: [
+        { description: 'Latte', quantity: '1', amount: '4.50' },
+        { description: 'Croissant', quantity: null, amount: '1.50' },
+      ],
+    });
+    const w = world({ 'claude-haiku-4-5': itemized, 'claude-sonnet-5-5': itemized });
+    await run(w);
+    const { lines } = w.settled[0] as { lines?: { lines: { description: string }[] } | null };
+    expect(lines?.lines.map((l) => l.description)).toEqual(['Latte', 'Croissant', 'Sales tax']);
+
+    const plain = world({});
+    await run(plain);
+    expect((plain.settled[0] as { lines?: unknown }).lines).toBeNull();
+  });
+});

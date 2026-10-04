@@ -2,14 +2,14 @@
 
 An organization's reading asks the models for what it has switched on, and nothing more. Each feature that asks for more adds its own instructions, its own structure and its own version, independently of the others. Journeys and stays (`receipts.journeys`) is the second addition, after the line each field was read from (GAP-14). It reads where a ride, flight or train went, and a hotel folio's check-in and check-out. These follow the receipt onto the expense until a person edits them. The nights are worked out from the two dates and never kept.
 
-- **Status:** Accepted (what is read decided by product owner, Oct 4: a ride's pickup and drop-off, a folio's dates and nights, and flights and rail too, Q41; asking only where the feature is on, as Q5 ships every feature; the composition, the versions, the 31 nights and what a doubtful stay does recommended by Claude, no objection yet)
+- **Status:** Accepted (what is read decided by product owner, Oct 4: a ride's pickup and drop-off, a folio's dates and nights, and flights and rail too, Q39; asking only where the feature is on, as Q5 ships every feature; the composition, the versions, the 31 nights and what a doubtful stay does recommended by Claude, no objection yet)
 - **Date:** 2026-10-04
-- **Deciders:** Product owner (FR-INT-20, FR-INT-21, Q41, Q5); Claude (principal architect), for the design
+- **Deciders:** Product owner (FR-INT-20, FR-INT-21, Q39, Q5); Claude (principal architect), for the design
 - **Decision register:** D-42. Extends the reading schema of [ADR-0006](0006-receipt-extraction.md) and follows [ADR-0030](0030-receipt-time-and-place.md) for fields that follow the receipt onto the expense ([ADR-0022](0022-expense-follows-its-receipt.md)).
 
 ## Context
 
-FR-INT-20 asks a transportation receipt for where the journey went from and to. FR-INT-21 asks a hotel folio for its check-in and check-out, and the nights between them. Q41 extended the first from rides to flights and rail.
+FR-INT-20 asks a transportation receipt for where the journey went from and to. FR-INT-21 asks a hotel folio for its check-in and check-out, and the nights between them. Q39 extended the first from rides to flights and rail.
 
 PR #58 made a second request for organizations with Where each field was read switched on (`extract-v4`, `receipt-v4`), and left every other organization's request byte for byte as it was. That was one switch and two requests. A second switch that adds to the request makes four. A third would make eight. Naming each by hand doesn't scale, and a stored reading must still say exactly what it was asked.
 
@@ -71,4 +71,4 @@ The document types had no rail ticket. Adding it to every request would change t
 ## Links
 
 - [ADR-0006: Receipt extraction](0006-receipt-extraction.md), [ADR-0022: An expense follows its receipt](0022-expense-follows-its-receipt.md), [ADR-0030: Time and place](0030-receipt-time-and-place.md), [ADR-0032: Features switched per organization](0032-features-switched-per-organization.md)
-- FR-INT-20, FR-INT-21, Q41, F-54, US-READ-23, US-READ-24, backlog #79, GAP-14
+- FR-INT-20, FR-INT-21, Q39, F-54, US-READ-23, US-READ-24, backlog #79, GAP-14

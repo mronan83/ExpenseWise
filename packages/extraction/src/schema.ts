@@ -45,7 +45,7 @@ export const JOURNEY_DOCUMENT_TYPES = [
   'other',
 ] as const;
 
-/** The documents whose journey is read: where it went from and to (FR-INT-20, Q41). */
+/** The documents whose journey is read: where it went from and to (FR-INT-20, Q39). */
 export const JOURNEY_DOCUMENTS: readonly DocumentType[] = [
   'ride_receipt',
   'airline_ticket',
@@ -191,7 +191,7 @@ const Stay = z
 
 /**
  * What an organization that has switched on Journeys and stays is also asked (FR-INT-20,
- * FR-INT-21, Q41): a rail ticket as a kind of document, where a journey went, and a stay's
+ * FR-INT-21, Q39): a rail ticket as a kind of document, where a journey went, and a stay's
  * dates. Added to whichever schema it is asked with; every other organization's is unchanged.
  */
 export const JOURNEYS_SHAPE = {

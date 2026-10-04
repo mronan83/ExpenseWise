@@ -781,7 +781,7 @@ export const QUESTIONS: readonly Question[] = [
     },
   },
   {
-    id: 'Q37',
+    id: 'Q35',
     title: 'What a split expense is',
     ask: 'You asked to split an expense into categories and types for reporting. A: it stays one expense with one receipt, made of parts, each with a category, type and amount. B: it becomes several expenses on the same receipt, each reviewed and approved on its own.',
     why: 'One expense in parts keeps one claim for approval and one receipt as proof, while reports and exports total by category and type. Several expenses are simpler to store but multiply what is reviewed, and the receipt has to be checked against their sum.',
@@ -790,7 +790,7 @@ export const QUESTIONS: readonly Question[] = [
     answer: { date: '2026-10-04', text: 'A: one expense, in parts.' },
   },
   {
-    id: 'Q38',
+    id: 'Q36',
     title: 'How the parts of a split are made',
     ask: 'A: from itemized lines where the receipt has them, each line given a category and type, or by amounts where it doesn’t. B: from lines only. C: by amounts only.',
     why: 'Folios and itemized bills split naturally by line; card slips and taxi receipts have no lines. Either way the parts add up to the claim.',
@@ -799,7 +799,7 @@ export const QUESTIONS: readonly Question[] = [
     answer: { date: '2026-10-04', text: 'A: by line where itemized, by amount where not.' },
   },
   {
-    id: 'Q39',
+    id: 'Q37',
     title: 'The tax on a line split off or excluded',
     ask: 'A: lines as printed; tax and service charges are lines of their own, split or excluded like any other. B: each tax or service line is spread across the other lines in proportion.',
     why: 'As printed matches the receipt exactly. In proportion is closer to what finance would allocate, so excluding the minibar also takes off its share of the tax, but the amounts no longer match a printed line.',
@@ -811,7 +811,7 @@ export const QUESTIONS: readonly Question[] = [
     },
   },
   {
-    id: 'Q40',
+    id: 'Q38',
     title: 'The reason for an excluded line',
     ask: 'Claiming less than a receipt needs a reason (Q6). A: the excluded line is the reason, with an optional note. B: pick a reason: personal, paid by someone else, not reimbursable, other. C: a typed note for each.',
     why: 'A is one tap; B tells a reviewer why at a glance for one more tap; C is the most explicit and the slowest on a phone.',
@@ -823,7 +823,7 @@ export const QUESTIONS: readonly Question[] = [
     },
   },
   {
-    id: 'Q41',
+    id: 'Q39',
     title: 'Which transportation receipts read a from and to',
     ask: 'You asked for the from and to of a ride. A: rides, airline tickets and rail tickets each read their from and to. B: rides only.',
     why: 'The same reading reads either at a few output tokens more; one rule for every leg of a journey.',
@@ -838,7 +838,13 @@ export const CHANGE_LOG: readonly ChangeLogEntry[] = [
   {
     date: '2026-10-04',
     change:
-      'Your requirements of Oct 4 for receipts, recorded as Planned with their stories: a transportation receipt reads where it went from and to, rides, flights and rail (FR-INT-20, Q41); a hotel folio reads its stay and the nights (FR-INT-21); a receipt’s itemized lines show under the total (FR-INT-22); an expense splits into parts by category and type, by line or by amount, staying one expense (FR-EXP-15, Q37, Q38); a line can be excluded from reimbursement with a reason and an optional note (FR-EXP-16, Q40); tax and service charges spread across lines in proportion (Q39). Features F-54 and F-55; backlog #79 to #82; stories US-READ-23, US-READ-24 and US-EXP-07 to US-EXP-09.',
+      'PR #59, built behind its own switches, each off until you switch it on in Settings › Features. Route mileage (#20, F-14, ADR-0039): a drive by its start, stops and end, with saved places and a round trip, measured by car with OpenRouteService on your organization’s own key, kept in Settings › Mileage, and other miles claimed with a reason (Q31 to Q33). Your own rate a mile from a day, or the IRS rate again (#77, Q28), which route drives are paid at too. An expense without a category and type is listed in Needs you (#71, Q27). Journeys and stays (#79, F-54, ADR-0040): a ride, flight or rail ticket reads its from and to, and a hotel folio its check-in and check-out, with the nights worked out. Itemized lines under the total (#80), a line left out of the claim with its reason (#82), and an expense split into parts by category and type (#81) (F-55, ADR-0041, Q35 to Q38). Fixed on the way: a member can delete a receipt whose expense was converted to their currency, which the own-records rules had refused since PR #58; a possible duplicate’s date in Needs you reads Sep 29, 2026; a rail ticket suggests Ground transport.',
+    by: 'Claude, at your direction',
+  },
+  {
+    date: '2026-10-04',
+    change:
+      'Your requirements of Oct 4 for receipts, recorded as Planned with their stories: a transportation receipt reads where it went from and to, rides, flights and rail (FR-INT-20, Q39); a hotel folio reads its stay and the nights (FR-INT-21); a receipt’s itemized lines show under the total (FR-INT-22); an expense splits into parts by category and type, by line or by amount, staying one expense (FR-EXP-15, Q35, Q36); a line can be excluded from reimbursement with a reason and an optional note (FR-EXP-16, Q38); tax and service charges spread across lines in proportion (Q37). Features F-54 and F-55; backlog #79 to #82; stories US-READ-23, US-READ-24 and US-EXP-07 to US-EXP-09.',
     by: 'Claude, at your direction',
   },
   {
