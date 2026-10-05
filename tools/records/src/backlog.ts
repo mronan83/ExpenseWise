@@ -994,7 +994,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     priority: 'P3',
     effort: 'S',
     severity: 'Low',
-    blocker: { kind: 'owner', ask: 'Your answer to Q45' },
+    blocker: { kind: 'none' },
     source: 'GAP-37, Claude, building #90',
     affects: ['GAP-37', 'FR-PLT-03', 'FR-PLT-04', 'F-11'],
   },
@@ -1325,7 +1325,7 @@ export const BACKLOG: readonly BacklogItem[] = [
 /** How to order the open work, beyond priority. */
 export const SEQUENCING: readonly string[] = [
   'Your batch of Oct 5 is built in PR #60: approval (#24) with the second factor (#8), a submitted claim keeping its names (#70), emails that filed nothing (#59), journeys and stays in the export (#83), business miles on Home (#73) and proof that no tools reach a model (#38), each behind its switch and off until you switch it on.',
-  'With #85, #88 and #90 in PR #60, a session that skipped the code gets nothing for someone with an authenticator, and once a person has one, only an email they let in signs in; their other emails still forward receipts (Q44). #91, which email may be let in first, waits on your answer to Q45.',
+  'With #85, #88 and #90 in PR #60, a session that skipped the code gets nothing for someone with an authenticator, and once a person has one, only an email they let in signs in; their other emails still forward receipts (Q44). #91, letting in first only the email a person first signed in with (your answer to Q45), is next; until then, set up your authenticator soon after release.',
   'Approval in a team needs the second factor switched on too. #87 corrects an approved expense; #89 shows what awaits reimbursement on Home.',
   '#48 needs you, not code: it keeps a leaked key from erasing the backups.',
   '#11–#15 are small, independent and each closes a gap; take them between features.',
