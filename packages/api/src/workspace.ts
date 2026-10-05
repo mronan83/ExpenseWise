@@ -3,7 +3,7 @@ import {
   assertRowSecurityApplies,
   deleteProviderKey,
   ensureOwnerOrganization,
-  findMemberships,
+  findSignedInMember,
   getProviderKey,
   linkSignIn,
   listOrgFeatures,
@@ -14,6 +14,7 @@ import {
   organizations,
   saveProviderKey,
   setOrgFeature,
+  signInHasAuthenticator,
   unlinkSignIn,
   withOrg,
   type AiProvider,
@@ -33,6 +34,15 @@ export interface OrganizationView {
 }
 
 /**
+ * The member a sign-in reaches, and whether that sign-in has a verified second factor in
+ * Supabase Auth, such as an authenticator app, read as the request resolves it (#85, ADR-0044).
+ * A store that can't tell, as a test's in-memory one, leaves `authenticator` out: none.
+ */
+export interface CallerMembership extends Membership {
+  readonly authenticator?: boolean;
+}
+
+/**
  * What the API needs from the database for organizations and provider keys. Every write
  * appends its audit event in the same transaction. Tests use an in-memory fake.
  */
@@ -40,8 +50,8 @@ export interface WorkspaceStore {
   ensureOrganization(owner: {
     userId: string;
     email: string;
-  }): Promise<{ membership: Membership; organization: OrganizationView; created: boolean }>;
-  findMembership(userId: string): Promise<Membership | undefined>;
+  }): Promise<{ membership: CallerMembership; organization: OrganizationView; created: boolean }>;
+  findMembership(userId: string): Promise<CallerMembership | undefined>;
   listKeys(orgId: string): Promise<StoredProviderKey[]>;
   getKey(orgId: string, provider: AiProvider): Promise<StoredProviderKey | undefined>;
   saveKey(orgId: string, key: ProviderKeyWrite, actorUserId: string): Promise<StoredProviderKey>;
@@ -83,21 +93,25 @@ export function dbWorkspaceStore(db: Database): WorkspaceStore {
     async ensureOrganization(owner) {
       await safe();
       const { membership, created } = await ensureOwnerOrganization(db, owner);
-      const [organization] = await withOrg(db, membership.orgId, (tx) =>
-        tx
-          .select({
-            id: organizations.id,
-            name: organizations.name,
-            homeCurrency: organizations.homeCurrency,
-          })
-          .from(organizations),
-      );
+      const { organization, authenticator } = await withOrg(db, membership.orgId, async (tx) => ({
+        organization: (
+          await tx
+            .select({
+              id: organizations.id,
+              name: organizations.name,
+              homeCurrency: organizations.homeCurrency,
+            })
+            .from(organizations)
+        )[0],
+        authenticator: await signInHasAuthenticator(tx, owner.userId),
+      }));
       if (!organization) throw new Error('The organization is not visible to its member');
-      return { membership, organization, created };
+      return { membership: { ...membership, authenticator }, organization, created };
     },
     async findMembership(userId) {
       await safe();
-      return (await findMemberships(db, userId))[0];
+      // Whether their sign-in has a second factor comes in the same query (#85).
+      return findSignedInMember(db, userId);
     },
     async listKeys(orgId) {
       await safe();

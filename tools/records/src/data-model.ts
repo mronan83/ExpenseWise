@@ -272,6 +272,8 @@ export const FUNCTIONS: Readonly<Record<string, string>> = {
     'Which organizations have report work due at a moment: a trip or local expense whose time to join a report has come, an open report on its day 28, or one with nothing to claim that has never been through approval. The 24 hours are counted in the organization’s time zone when it keeps one, and at UTC−12 otherwise; it reads the zone whether or not the feature is on, so it may name an organization a few hours early, never late, and the run inside finds nothing due (ADR-0037). The hourly schedule asks it outside any organization; it runs as its owner and answers with organization ids only (ADR-0029).',
   member_for_sign_in_email:
     'Which member signs in with an email address, case aside, and that sign-in’s user, for an arriving email that names no organization yet. Runs as its owner and returns ids only, so the app still can’t read sign-ins outside an organization (ADR-0026).',
+  sign_in_has_authenticator:
+    'Whether a sign-in, a Supabase Auth user, has a verified second factor such as an authenticator app, read from Supabase Auth’s own `auth.mfa_factors` as it is asked: yes or no, and nothing else of Supabase’s. The API asks it in the query that finds each request’s caller, so the second factor holds every request of someone with one (ADR-0044). Runs as its owner, which can read Supabase’s auth schema, where the app has no right; only the app may call it. No if the id isn’t a UUID, and on plain Postgres, which has no Supabase Auth. Nothing the app writes changes the answer, so removing an authenticator in Supabase takes effect on the next request.',
   seed_starter_catalog:
     'Gives an organization the ready-made categories and types, and which types each allows, unless it has a category or type already, so running it again adds nothing. Runs as its caller: the release ran it for every organization as the owner, and the app runs it inside `withOrg()` as an organization is created, where row-level security keeps it to that one (ADR-0036).',
   delete_expense_conversion:
@@ -662,6 +664,13 @@ export const RULES: readonly Rule[] = [
       'An identity provider subject is unique across all organizations; a person sees their own sign-ins and memberships before choosing an organization.',
     objects: ['member_sign_ins_user_key', 'own_sign_ins', 'own_memberships'],
     refs: ['ADR-0016'],
+  },
+  {
+    rule: 'The app learns whether a sign-in has a second factor, and nothing else of Supabase Auth.',
+    mechanism:
+      'One owner-run function answers yes or no from Supabase Auth’s own record of verified factors, as it is asked; the app holds no right on Supabase’s auth schema, so it can neither read a factor nor change what the answer is, and a session that skipped the code can’t clear it (ADR-0044). The release fails at its migration if the owner can’t read the record, rather than every request.',
+    objects: ['sign_in_has_authenticator'],
+    refs: ['FR-PLT-03', 'ADR-0044', 'ADR-0013'],
   },
   {
     rule: 'An email is kept once, and only for a member.',

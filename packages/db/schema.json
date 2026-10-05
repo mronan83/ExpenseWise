@@ -6042,6 +6042,16 @@
       "executableBy": [
         "expensewise_app"
       ]
+    },
+    {
+      "name": "sign_in_has_authenticator",
+      "arguments": "sign_in_user text",
+      "returns": "boolean",
+      "security": "definer",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
     }
   ],
   "roles": [

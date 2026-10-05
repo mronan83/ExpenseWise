@@ -1,6 +1,9 @@
+import type { MiddlewareHandler } from 'hono';
 import type { Identity } from './auth.ts';
+import { isBeforeTheCode, markBeforeTheCode, requestIdentity, type AdmitCaller } from './caller.ts';
 import type { FeatureGate } from './features.ts';
 import { ProblemError } from './problem.ts';
+import type { CallerMembership } from './workspace.ts';
 
 /** The switch that turns the second factor on for an organization (F-11, #8). */
 export const SECOND_FACTOR_FLAG = 'security.second-factor';
@@ -34,6 +37,69 @@ export async function requireAdminSecondFactor(
 ): Promise<void> {
   if (identity.assuranceLevel === 'aal2') return;
   if (await features.isOn(orgId, SECOND_FACTOR_FLAG)) requireSecondFactor(identity);
+}
+
+/**
+ * Everything, for someone with an authenticator (#85, Q41): while their organization has the
+ * second factor switched on, a session of a person whose sign-in has a verified second factor
+ * and hasn't passed it is refused on every request. Someone with none isn't asked: their
+ * session can't pass a code they don't have, and admin actions still ask them to add one. The
+ * switch is read only for an enrolled person's aal1 session.
+ */
+export async function requireCodeOfTheEnrolled(
+  features: FeatureGate,
+  caller: Pick<CallerMembership, 'orgId' | 'authenticator'>,
+  identity: Pick<Identity, 'assuranceLevel'>,
+): Promise<void> {
+  if (identity.assuranceLevel === 'aal2' || caller.authenticator !== true) return;
+  if (await features.isOn(caller.orgId, SECOND_FACTOR_FLAG)) {
+    requireSecondFactor(
+      identity,
+      'Your organization asks for the code from your authenticator app before anything else. ' +
+        'Enter it, then try again.',
+    );
+  }
+}
+
+/**
+ * The check, run once as every request resolves its caller (`recordingCaller`), before anything
+ * of the organization is read or changed: no route can forget it. A request the code screen
+ * needs (`beforeTheCode`) is let through, and so is a lookup that isn't the token's own person.
+ */
+export function secondFactorEverywhere(features: FeatureGate): AdmitCaller {
+  return async (caller, userId) => {
+    const identity = requestIdentity();
+    if (!identity || identity.userId !== userId || isBeforeTheCode()) return;
+    await requireCodeOfTheEnrolled(features, caller, identity);
+  };
+}
+
+/**
+ * Marks a request the code screen, or the check that sends someone to it, needs to work, so a
+ * session that hasn't passed the code may still make it: only for `method`.
+ */
+export function beforeTheCode(method: string): MiddlewareHandler {
+  return async (c, next) => {
+    if (c.req.method === method.toUpperCase()) markBeforeTheCode();
+    await next();
+  };
+}
+
+/**
+ * Linking another sign-in (FR-PLT-04) is how an account is taken over: someone with an
+ * authenticator links one only from a session that passed the code, whether or not their
+ * organization has the second factor switched on (#85).
+ */
+export function requireCodeToLink(
+  caller: Pick<CallerMembership, 'authenticator'>,
+  identity: Pick<Identity, 'assuranceLevel'>,
+): void {
+  if (caller.authenticator !== true) return;
+  requireSecondFactor(
+    identity,
+    'Linking another sign-in needs the code from your authenticator app, so a password alone ' +
+      'can’t add a way in. Enter it, then link it again.',
+  );
 }
 
 /** How an admin operation's refusal reads in the API contract. */

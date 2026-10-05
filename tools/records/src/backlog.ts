@@ -359,6 +359,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none' },
     source: 'GAP-33, Claude, building #8',
     affects: ['GAP-33', 'FR-PLT-03', 'F-11'],
+    done: { date: '2026-10-05', in: 'PR #60' },
   },
   {
     num: 80,
@@ -956,6 +957,19 @@ export const BACKLOG: readonly BacklogItem[] = [
     source: 'FR-INS-01, US-HOME-04',
     affects: ['FR-INS-01', 'F-22'],
   },
+  {
+    num: 88,
+    title: 'Hold a person’s other emails until each adds its own authenticator',
+    type: 'Security',
+    detail:
+      'GAP-35, found building #85. The second factor holds each email a person signs in with by its own authenticators (ADR-0044), so another email of theirs with none still opens everything on its password. Once a person has an authenticator on any sign-in, hold their others that have none, as #85 holds a session that skipped the code, while the organization has the second factor on; the app says which email needs one and keeps Settings › Sign-ins open to add it. If your answer to Q43 asks for it.',
+    priority: 'P3',
+    effort: 'M',
+    severity: 'Low',
+    blocker: { kind: 'owner', ask: 'Your answer to Q43' },
+    source: 'GAP-35, Claude, building #85',
+    affects: ['GAP-35', 'FR-PLT-03', 'FR-PLT-04', 'F-11'],
+  },
   // Done
   {
     num: 17,
@@ -1283,7 +1297,7 @@ export const BACKLOG: readonly BacklogItem[] = [
 /** How to order the open work, beyond priority. */
 export const SEQUENCING: readonly string[] = [
   'Your batch of Oct 5 is built in PR #60: approval (#24) with the second factor (#8), a submitted claim keeping its names (#70), emails that filed nothing (#59), journeys and stays in the export (#83), business miles on Home (#73) and proof that no tools reach a model (#38), each behind its switch and off until you switch it on.',
-  '#85 is security, not polish: a session that skipped the code still opens everything but admin actions and approval for someone with an authenticator. It waits on your answer to Q41 and should land before you invite anyone through Settings › People (#29).',
+  'With #85 in PR #60, a session that skipped the code gets nothing for someone with an authenticator. A person’s other email with none still opens on its password: answer Q43 before anyone links a second email with the second factor on, and #88 holds it if you choose A.',
   'Approval in a team needs the second factor switched on too. #87 corrects an approved expense; #89 shows what awaits reimbursement on Home.',
   '#48 needs you, not code: it keeps a leaked key from erasing the backups.',
   '#11–#15 are small, independent and each closes a gap; take them between features.',

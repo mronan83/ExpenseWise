@@ -8,8 +8,9 @@ import {
   type Transaction,
 } from '@expensewise/db';
 import type { MiddlewareHandler } from 'hono';
+import type { Identity } from './auth.ts';
 import { ProblemError } from './problem.ts';
-import type { WorkspaceStore } from './workspace.ts';
+import type { CallerMembership, WorkspaceStore } from './workspace.ts';
 
 /*
  * Who a request acts for, inside its organization (GAP-20, ADR-0035). Each request gets a slot;
@@ -20,6 +21,10 @@ import type { WorkspaceStore } from './workspace.ts';
 
 interface CallerSlot {
   member?: Membership;
+  /** Who the verified token says is calling, once `requireIdentity` has checked it. */
+  identity?: Identity;
+  /** A request the code screen needs, which a session that skipped the code may make (#85). */
+  beforeTheCode?: boolean;
 }
 
 const slots = new AsyncLocalStorage<CallerSlot>();
@@ -33,6 +38,34 @@ export function actAs(member: Membership): void {
   if (slot) slot.member = member;
 }
 
+/** Records who the verified token of the current request says is calling. */
+export function recordIdentity(identity: Identity): void {
+  const slot = slots.getStore();
+  if (slot) slot.identity = identity;
+}
+
+/** Who the current request's verified token says is calling, once it has been checked. */
+export function requestIdentity(): Identity | undefined {
+  return slots.getStore()?.identity;
+}
+
+/** Marks the current request as one the code screen needs (#85, ADR-0044). */
+export function markBeforeTheCode(): void {
+  const slot = slots.getStore();
+  if (slot) slot.beforeTheCode = true;
+}
+
+/** Whether the current request is one the code screen needs. */
+export function isBeforeTheCode(): boolean {
+  return slots.getStore()?.beforeTheCode === true;
+}
+
+/**
+ * What runs as a request resolves its caller, before anything of the organization is read or
+ * changed: the second factor's check (#85). Throwing refuses the request.
+ */
+export type AdmitCaller = (caller: CallerMembership, userId: string) => Promise<void>;
+
 /** The member the current request acts for in `orgId`, if it has resolved one there. */
 export function callerIn(orgId: string): MemberScope | undefined {
   const member = slots.getStore()?.member;
@@ -42,17 +75,32 @@ export function callerIn(orgId: string): MemberScope | undefined {
 }
 
 /**
- * The workspace store, with every membership it finds for a caller recorded as who the
- * request acts for. Every route resolves its caller this way, so none can forget to.
+ * The workspace store, with every membership it finds for a caller first admitted, then
+ * recorded as who the request acts for. Every route resolves its caller this way, so none can
+ * forget to, and none reads or changes its organization's data before the caller is admitted.
  */
-export function recordingCaller(workspace: WorkspaceStore): WorkspaceStore {
+export function recordingCaller(
+  workspace: WorkspaceStore,
+  admit: AdmitCaller = () => Promise.resolve(),
+): WorkspaceStore {
   return new Proxy(workspace, {
     get(target, property) {
       if (property === 'findMembership') {
         return async (userId: string) => {
           const membership = await target.findMembership(userId);
-          if (membership) actAs(membership);
+          if (membership) {
+            await admit(membership, userId);
+            actAs(membership);
+          }
           return membership;
+        };
+      }
+      if (property === 'ensureOrganization') {
+        // The organization a sign-in opens with, made on its first: admitted the same way.
+        return async (owner: Parameters<WorkspaceStore['ensureOrganization']>[0]) => {
+          const result = await target.ensureOrganization(owner);
+          await admit(result.membership, owner.userId);
+          return result;
         };
       }
       const value: unknown = Reflect.get(target, property, target);

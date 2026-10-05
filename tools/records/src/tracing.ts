@@ -88,6 +88,10 @@ export const GAPS: readonly Gap[] = [
       'Found building #8 on Oct 5. The app asks for the code before anything else, but the API refuses aal1 only for admin actions and approving (FR-GOV-04), because a token doesn’t say whether its person has an authenticator. A stolen password, used against the API directly, still reads that person’s records (all of them, for an owner or finance admin), changes their own, and can link another sign-in that has no authenticator.',
     fix: 'Refuse aal1 on every request of someone with a verified authenticator while the organization has the second factor on, and require aal2 to link a sign-in (#85, Q41).',
     backlog: 85,
+    closed: {
+      date: '2026-10-05',
+      note: 'ADR-0044: while the second factor is on, a session of someone whose sign-in has a verified authenticator gets nothing from the API until it passes the code, but who they are and the organization’s switches, checked once as each request finds its caller; linking a sign-in needs the code from anyone with an authenticator, whatever the switch. The API reads Supabase Auth’s own record of factors through one function, so removing one takes effect at once. A person’s other email with no authenticator of its own is GAP-35.',
+    },
   },
   {
     id: 'GAP-34',
@@ -98,6 +102,16 @@ export const GAPS: readonly Gap[] = [
       'Found building approval (#24) in PR #60. An approved expense is locked, in the app and in the database, as FR-EXP-03 asks, but nothing makes the reversal and new version that correct one; the expense keeps a version and a reversal link that nothing writes yet.',
     fix: 'Reverse an approved expense with a copy that cancels it, pointing at it, and file a new version for its member to correct and submit, each in the audit trail (#87).',
     backlog: 87,
+  },
+  {
+    id: 'GAP-35',
+    title: 'A person’s other email with no authenticator of its own still opens on its password.',
+    affects: ['FR-PLT-03', 'FR-PLT-04', 'F-11'],
+    severity: 'Low',
+    evidence:
+      'Found building #85 on Oct 5. Each email a person signs in with is its own Supabase Auth user with its own authenticators, and the second factor holds each sign-in by its own (ADR-0044), as the code screen does. Linking one now needs the code from someone with an authenticator, but the email linked, or linked before, has none until its person adds one, and opens everything on its password alone.',
+    fix: 'Once a person has an authenticator on any of their sign-ins, hold every other sign-in of theirs that has none until it adds one and passes it, with the app saying which email needs one (#88, Q43).',
+    backlog: 88,
   },
   {
     id: 'GAP-25',
@@ -918,6 +932,14 @@ export const QUESTIONS: readonly Question[] = [
       text: 'B: keep the routing as built, and let an owner choose each member’s approver in Settings › People now (#86).',
     },
   },
+  {
+    id: 'Q43',
+    title: 'A person’s other email, once they have an authenticator',
+    ask: 'With the second factor on, a session of someone with an authenticator gets nothing until it passes the code (#85). Each email a person signs in with has its own authenticators, so the code is asked of the email that has one; another email of theirs with none still opens on its password, as linked before or since (GAP-35). A: hold that email until it adds its own authenticator and enters its code, the app saying which email needs one (#88). B: keep each email to its own authenticators, as built.',
+    why: 'Linking a second email now needs the code, but the email linked starts with no authenticator, so a stolen password for it still opens the person’s receipts, and an owner’s everyone’s.',
+    recommendation: 'A, before anyone links a second email with the second factor on.',
+    affects: ['FR-PLT-03', 'FR-PLT-04', 'GAP-35', 'F-11'],
+  },
 ];
 
 /** What changed in these records, newest first. */
@@ -931,7 +953,7 @@ export const CHANGE_LOG: readonly ChangeLogEntry[] = [
   {
     date: '2026-10-05',
     change:
-      'PR #60, built behind its own switches, each off until you switch it on in Settings › Features. Single-step approval (#24, F-18, ADR-0043): a closed report is submitted to one approver, never while an expense differs from its receipt without a reason, and approved, or returned with a comment and each rejected expense and why, in Needs you; a one-person organization self-attests, and approving someone else’s spend needs the second factor. A submitted claim keeps its category and type names (#70, GAP-27 closed). The second factor (#8, F-11, ADR-0042): an authenticator app in Settings › Sign-ins, its code at sign-in, and before every admin action, with switching it on refused until your own session has passed it (GAP-03 closed). Emails from your address that filed nothing show in Needs you with why, for 30 days or until dismissed (#59). A report’s export adds From and to, and Stay (#83); Home shows the month’s business miles (#73, GAP-30 closed); a test proves no tools ever reach a model (#38, GAP-15 closed). New: Q41 and Q42 for you; GAP-33 with #85, GAP-34 with #87, and #86 and #89.',
+      'PR #60, built behind its own switches, each off until you switch it on in Settings › Features. Single-step approval (#24, F-18, ADR-0043): a closed report is submitted to one approver, never while an expense differs from its receipt without a reason, and approved, or returned with a comment and each rejected expense and why, in Needs you; a one-person organization self-attests, and approving someone else’s spend needs the second factor. A submitted claim keeps its category and type names (#70, GAP-27 closed). The second factor (#8, F-11, ADR-0042): an authenticator app in Settings › Sign-ins, its code at sign-in, and before every admin action, with switching it on refused until your own session has passed it (GAP-03 closed). Emails from your address that filed nothing show in Needs you with why, for 30 days or until dismissed (#59). A report’s export adds From and to, and Stay (#83); Home shows the month’s business miles (#73, GAP-30 closed); a test proves no tools ever reach a model (#38, GAP-15 closed). At your answers to Q41 and Q42, also in PR #60: while the second factor is on, someone with an authenticator gets nothing from the API until they enter the code, and linking a sign-in always needs it (#85, ADR-0044, GAP-33 closed); an owner chooses each member’s approver in Settings › People (#86). New: Q43 for you, with GAP-35 and #88; GAP-34 with #87; #89.',
     by: 'Claude, at your direction',
   },
   {

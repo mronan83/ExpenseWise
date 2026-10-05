@@ -344,6 +344,13 @@
       "when": 1791164811468,
       "tag": "0048_member_approver",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1791166764467,
+      "tag": "0049_sign_in_has_authenticator",
+      "breakpoints": true
     }
   ]
 }
