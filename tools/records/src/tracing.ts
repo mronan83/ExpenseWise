@@ -125,7 +125,7 @@ export const GAPS: readonly Gap[] = [
     severity: 'Low',
     evidence:
       'Found building #88 on Oct 5. A person’s other email with no authenticator of its own is held until it adds one and enters its code (Q43). Supabase Auth lets an email with no verified factor add one on its password alone, so whoever has that password, the person or someone who stole it, can add an authenticator of their own in Settings › Sign-ins, enter its code, and open everything. The hold stops a password used as it is; it can’t tell the person adding one from someone else.',
-    fix: 'Count a held email’s new authenticator only once the person confirms it from another of their emails whose code they entered, or keep it as built, by your answer to Q44 (#90).',
+    fix: 'By your answer to Q44: once a person has an authenticator, only an email they have let in signs in; their other emails still forward receipts, and one is let in only from an email that passed its code, then adds its own authenticator (#90).',
     backlog: 90,
   },
   {
@@ -961,12 +961,15 @@ export const QUESTIONS: readonly Question[] = [
   },
   {
     id: 'Q44',
-    title: 'A held email’s new authenticator',
-    ask: 'By your answer to Q43, a person’s other email with no authenticator of its own is held until it adds one and enters its code (#88). Supabase Auth lets an email with none add one on its password alone, so whoever has that email’s password can add an authenticator of their own and get in (GAP-36). A: count a held email’s new authenticator only once the person confirms it in Settings › Sign-ins from another of their emails whose code they entered (#90). B: keep it as built: the hold stops a password used as it is, and adding one is that email’s own step.',
-    why: 'The hold stops a stolen password used as it is, through the app or straight against the API. Someone who also adds an authenticator gets past it, and nothing tells the person; confirming from an email that already has the code would stop them, for one more step each time a person adds one to another email.',
-    recommendation:
-      'A before anyone in a team links a second email with the second factor on; B while you are the only one who does.',
+    title: 'How one of a person’s other emails is let in',
+    ask: 'By your answer to Q43, a person’s other email with no authenticator of its own is held until it adds one (#88), but Supabase Auth lets an email with none add one on its password alone, so whoever has that password could add their own and get in (GAP-36). A: a new authenticator on another email counts only once confirmed from an email that already passed its code. B: once a person has an authenticator, only an email with one signs in; their other emails still forward receipts but can’t open the app. C: keep it as built.',
+    why: 'Each email a person links is its own sign-in with its own password, so each is its own way in; the hold stops a password used alone, not one used to add an authenticator.',
+    recommendation: 'A.',
     affects: ['FR-PLT-03', 'FR-PLT-04', 'GAP-36', 'F-11'],
+    answer: {
+      date: '2026-10-05',
+      text: 'B, with the choice to add an authenticator to another email: only an email with an authenticator signs in, the others still forward receipts, and the person may let another email in from one that has passed its code, after which it adds its own authenticator (#90).',
+    },
   },
 ];
 
@@ -981,7 +984,7 @@ export const CHANGE_LOG: readonly ChangeLogEntry[] = [
   {
     date: '2026-10-05',
     change:
-      'PR #60, built behind its own switches, each off until you switch it on in Settings › Features. Single-step approval (#24, F-18, ADR-0043): a closed report is submitted to one approver, never while an expense differs from its receipt without a reason, and approved, or returned with a comment and each rejected expense and why, in Needs you; a one-person organization self-attests, and approving someone else’s spend needs the second factor. A submitted claim keeps its category and type names (#70, GAP-27 closed). The second factor (#8, F-11, ADR-0042): an authenticator app in Settings › Sign-ins, its code at sign-in, and before every admin action, with switching it on refused until your own session has passed it (GAP-03 closed). Emails from your address that filed nothing show in Needs you with why, for 30 days or until dismissed (#59). A report’s export adds From and to, and Stay (#83); Home shows the month’s business miles (#73, GAP-30 closed); a test proves no tools ever reach a model (#38, GAP-15 closed). At your answers to Q41 and Q42, also in PR #60: while the second factor is on, someone with an authenticator gets nothing from the API until they enter the code, and linking a sign-in always needs it (#85, ADR-0044, GAP-33 closed); an owner chooses each member’s approver in Settings › People (#86). Your answer to Q43, also in PR #60: once a person has an authenticator, their other emails are held until each adds its own (#88, GAP-35 closed). New: Q44 for you, with GAP-36 and #90; GAP-34 with #87; #89.',
+      'PR #60, built behind its own switches, each off until you switch it on in Settings › Features. Single-step approval (#24, F-18, ADR-0043): a closed report is submitted to one approver, never while an expense differs from its receipt without a reason, and approved, or returned with a comment and each rejected expense and why, in Needs you; a one-person organization self-attests, and approving someone else’s spend needs the second factor. A submitted claim keeps its category and type names (#70, GAP-27 closed). The second factor (#8, F-11, ADR-0042): an authenticator app in Settings › Sign-ins, its code at sign-in, and before every admin action, with switching it on refused until your own session has passed it (GAP-03 closed). Emails from your address that filed nothing show in Needs you with why, for 30 days or until dismissed (#59). A report’s export adds From and to, and Stay (#83); Home shows the month’s business miles (#73, GAP-30 closed); a test proves no tools ever reach a model (#38, GAP-15 closed). At your answers to Q41 and Q42, also in PR #60: while the second factor is on, someone with an authenticator gets nothing from the API until they enter the code, and linking a sign-in always needs it (#85, ADR-0044, GAP-33 closed); an owner chooses each member’s approver in Settings › People (#86). Your answer to Q43, also in PR #60: once a person has an authenticator, their other emails are held until each adds its own (#88, GAP-35 closed). Your answer to Q44, also in PR #60: once a person has an authenticator, only an email they let in signs in, the others still forward receipts, and another email is let in from one that passed its code (#90, GAP-36). New: GAP-34 with #87; #89.',
     by: 'Claude, at your direction',
   },
   {

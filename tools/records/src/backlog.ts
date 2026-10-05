@@ -973,15 +973,15 @@ export const BACKLOG: readonly BacklogItem[] = [
   },
   {
     num: 90,
-    title: 'Confirm a held email’s new authenticator from one that has the code',
+    title: 'Only an email you let in signs in, once you have an authenticator',
     type: 'Security',
     detail:
-      'GAP-36, found building #88. A held email is let go once it adds its own authenticator, and Supabase Auth lets an email with none add one on its password alone, so someone with that email’s password could add theirs. Proposed: the new authenticator doesn’t count, and the email stays held saying where to confirm it, until the person confirms it in Settings › Sign-ins from another of their emails whose code they entered; the confirmation is kept with the sign-in and audited, and covers only authenticators added before it, so one removed and replaced is confirmed again. If your answer to Q44 asks for it.',
-    priority: 'P3',
+      'GAP-36, found building #88; your answer to Q44. Once a person has an authenticator, only an email of theirs that is let in signs in: the first to pass its code is let in, and their other emails still forward receipts but can’t open the app. From an email that passed its code, the person may let another email in, after which it adds its own authenticator and passes its code; an authenticator added to an email that wasn’t let in doesn’t count. Letting one in is kept with the sign-in and audited.',
+    priority: 'P2',
     effort: 'M',
     severity: 'Low',
-    blocker: { kind: 'owner', ask: 'Your answer to Q44' },
-    source: 'GAP-36, Claude, building #88',
+    blocker: { kind: 'none' },
+    source: 'GAP-36, Q44',
     affects: ['GAP-36', 'FR-PLT-03', 'FR-PLT-04', 'F-11'],
   },
   // Done
@@ -1311,7 +1311,7 @@ export const BACKLOG: readonly BacklogItem[] = [
 /** How to order the open work, beyond priority. */
 export const SEQUENCING: readonly string[] = [
   'Your batch of Oct 5 is built in PR #60: approval (#24) with the second factor (#8), a submitted claim keeping its names (#70), emails that filed nothing (#59), journeys and stays in the export (#83), business miles on Home (#73) and proof that no tools reach a model (#38), each behind its switch and off until you switch it on.',
-  'With #85 and #88 in PR #60, a session that skipped the code gets nothing for someone with an authenticator, and a person’s other email with none is held until it adds its own. Whoever has that email’s password could add one themselves: answer Q44 before anyone in a team links a second email with the second factor on, and #90 makes the person confirm it if you choose A.',
+  'With #85, #88 and #90 in PR #60, a session that skipped the code gets nothing for someone with an authenticator, and once a person has one, only an email they let in signs in; their other emails still forward receipts (Q44).',
   'Approval in a team needs the second factor switched on too. #87 corrects an approved expense; #89 shows what awaits reimbursement on Home.',
   '#48 needs you, not code: it keeps a leaked key from erasing the backups.',
   '#11–#15 are small, independent and each closes a gap; take them between features.',
