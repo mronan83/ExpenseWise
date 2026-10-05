@@ -101,10 +101,10 @@ export function NeedsYouList({
           const action = (
             <Link
               href={card.href}
+              aria-label={`${card.action}: ${card.title}`}
               className="mt-3 inline-flex min-h-11 items-center rounded-lg bg-carbon px-4 text-sm font-semibold text-carbon-ink"
             >
               {card.action}
-              <span className="sr-only">: {card.title}</span>
             </Link>
           );
           return (
@@ -136,10 +136,10 @@ export function NeedsYouList({
                     type="button"
                     onClick={() => dismiss(card.key, dismissPath, card.title)}
                     disabled={busy !== null}
+                    aria-label={`${busy === card.key ? 'Dismissing…' : 'Dismiss'}: ${card.title}`}
                     className="mt-3 min-h-11 rounded-lg px-4 text-sm font-semibold text-carbon"
                   >
                     {busy === card.key ? 'Dismissing…' : 'Dismiss'}
-                    <span className="sr-only">: {card.title}</span>
                   </button>
                 </div>
               ) : (
