@@ -37,6 +37,12 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
   ['Home', () => '/', []],
   ['Home during a trip', () => '/', [], '2026-10-21T12:00:00'],
   ['Home with a trip coming up', () => '/', [], '2026-11-01T12:00:00'],
+  [
+    'Home with October’s business miles',
+    () => '/',
+    [(page) => expect(page.getByText('Business miles', { exact: true })).toBeVisible()],
+    '2026-10-12T12:00:00',
+  ],
   ['Home with everything in Needs you open', () => '/', [press('Show all')]],
   [
     'an expense with no category and type, in Needs you',

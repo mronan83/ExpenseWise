@@ -83,6 +83,10 @@ export async function reportForExport(
       claimedMiles: mileageLogs.distance,
       measuredMiles: mileageRoutes.measuredMiles,
       milesReason: mileageRoutes.milesReason,
+      journeyFrom: expenses.journeyFrom,
+      journeyTo: expenses.journeyTo,
+      checkIn: expenses.checkIn,
+      checkOut: expenses.checkOut,
     })
     .from(expenses)
     .leftJoin(trips, and(eq(trips.orgId, expenses.orgId), eq(trips.id, expenses.tripId)))
@@ -146,6 +150,20 @@ export async function reportForExport(
             }),
         ...(split.length > 0 ? { parts: split } : {}),
         ...(excluded.length > 0 ? { excluded } : {}),
+        // Where a journey went and a stay's dates, once the expense has either (FR-INT-20/21).
+        ...(r.journeyFrom === null &&
+        r.journeyTo === null &&
+        r.checkIn === null &&
+        r.checkOut === null
+          ? {}
+          : {
+              travel: {
+                journeyFrom: r.journeyFrom,
+                journeyTo: r.journeyTo,
+                checkIn: r.checkIn,
+                checkOut: r.checkOut,
+              },
+            }),
       };
     }),
   };

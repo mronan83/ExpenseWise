@@ -74,8 +74,20 @@ export function registerHomeRoutes(
       options.modelSettings !== undefined &&
       (await features.isOn(who.orgId, 'receipts.model-settings'));
     const converting = await showConverted(features, who.orgId, data.reports.reports);
+    // Asked only when there are drives to show: with none, Home reads as it always has.
+    const mileage =
+      (data.home.monthDrives?.length ?? 0) > 0 &&
+      (await features.isOn(who.orgId, 'expenses.mileage'));
     return c.json(
-      homeView(data, day, NEEDS_SHOWN, options.now?.() ?? new Date(), settingsOn, converting),
+      homeView(
+        data,
+        day,
+        NEEDS_SHOWN,
+        options.now?.() ?? new Date(),
+        settingsOn,
+        converting,
+        mileage,
+      ),
       200,
     );
   });

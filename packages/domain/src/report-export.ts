@@ -1,6 +1,7 @@
 import type { MemberRole } from './approvals.ts';
 import { isCurrencyCode } from './currency.ts';
 import { EXCLUSION_REASON_LABELS, type ExclusionReason } from './itemized.ts';
+import { journeyLine, stayLine, type ExpenseTravel } from './journeys.ts';
 import type { ReportStatus } from './lifecycle/report.ts';
 import { add, money, toDecimal, type Money } from './money.ts';
 import { ROUTE_ATTRIBUTION } from './route-mileage.ts';
@@ -32,6 +33,11 @@ export interface ExportExpense {
   readonly parts?: readonly ExportPart[];
   /** The lines of its receipt left out of the claim, with why (FR-EXP-16). */
   readonly excluded?: readonly ExportExclusion[];
+  /**
+   * Where a journey went and when a hotel stay was, while Journeys and stays is on (FR-INT-20,
+   * FR-INT-21): shown as on the expense, “SFO → ORD” and “2 nights, Sep 29 – Oct 1, 2026”.
+   */
+  readonly travel?: ExpenseTravel | null;
 }
 
 /** A drive's miles as the export shows them. */
@@ -104,14 +110,34 @@ const text = (header: string, width: number, value: (row: ExportRow) => string |
 const PART = text('Part', 6, (r) => r.part);
 /** Only when the report has an excluded line: each, with what it took off and why (FR-EXP-16). */
 const EXCLUDED = text('Excluded', 16, (r) => r.excluded);
+/**
+ * Only when the report has a journey: where it went, “SFO → ORD”, as the expense shows it
+ * (FR-INT-20). Text a receipt printed, so the CSV never runs it as a formula.
+ */
+const JOURNEY = text('From and to', 14, (r) =>
+  r.expense.travel ? journeyLine(r.expense.travel) : null,
+);
+/**
+ * Only when the report has a stay: its nights and dates, “2 nights, Sep 29 – Oct 1, 2026”,
+ * worked out from its check-in and check-out as on the expense (FR-INT-21).
+ */
+const STAY = text('Stay', 16, (r) => (r.expense.travel ? stayLine(r.expense.travel) : null));
+
+/** Which of the columns that join only when a report needs them it has. */
+interface OptionalColumns {
+  readonly parts: boolean;
+  readonly excluded: boolean;
+  readonly journeys: boolean;
+  readonly stays: boolean;
+}
 
 /**
  * The export’s columns, in order: one place, so a column such as the amount converted to the
- * reimbursement currency (#62) is one more entry here, in the CSV and the PDF alike. Part and
- * Excluded join them only when a report has a split expense or an excluded line, so every other
- * report exports exactly as before.
+ * reimbursement currency (#62) is one more entry here, in the CSV and the PDF alike. From and
+ * to, Stay, Part and Excluded each join them only when a report has a journey, a stay, a split
+ * expense or an excluded line, so every other report exports exactly as before.
  */
-function columnsFor(parts: boolean, excluded: boolean): readonly ColumnDefinition[] {
+function columnsFor(has: OptionalColumns): readonly ColumnDefinition[] {
   return [
     {
       header: 'Date',
@@ -122,13 +148,15 @@ function columnsFor(parts: boolean, excluded: boolean): readonly ColumnDefinitio
       total: () => 'Total',
     },
     text('Merchant', 17, (r) => r.expense.merchant),
-    ...(parts ? [PART] : []),
+    ...(has.journeys ? [JOURNEY] : []),
+    ...(has.stays ? [STAY] : []),
+    ...(has.parts ? [PART] : []),
     text('Category', 11, (r) => r.category),
     text('Type', 9, (r) => r.type),
     text('Trip', 15, (r) => r.expense.trip),
     text('Purpose', 18, (r) => r.expense.purpose),
     text('Note', 12, (r) => r.expense.note),
-    ...(excluded ? [EXCLUDED] : []),
+    ...(has.excluded ? [EXCLUDED] : []),
     {
       header: 'Amount',
       text: false,
@@ -229,10 +257,12 @@ function rowsOf(e: ExportExpense): ExportRow[] {
  */
 export function reportExportTable(expenses: readonly ExportExpense[]): ReportExportTable {
   const routed = expenses.some((e) => (e.miles?.measured ?? null) !== null);
-  const base = columnsFor(
-    expenses.some((e) => (e.parts?.length ?? 0) > 0),
-    expenses.some((e) => (e.excluded?.length ?? 0) > 0),
-  );
+  const base = columnsFor({
+    parts: expenses.some((e) => (e.parts?.length ?? 0) > 0),
+    excluded: expenses.some((e) => (e.excluded?.length ?? 0) > 0),
+    journeys: expenses.some((e) => (e.travel ? journeyLine(e.travel) : null) !== null),
+    stays: expenses.some((e) => (e.travel ? stayLine(e.travel) : null) !== null),
+  });
   const columns = routed ? [...base, ...MILES_COLUMNS] : base;
   const totals = new Map<string, Money>();
   const rows = expenses.flatMap((e) =>

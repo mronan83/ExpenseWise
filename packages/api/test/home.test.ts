@@ -79,7 +79,7 @@ const snapshot = (over: Partial<HomeSnapshot> = {}): HomeSnapshot => ({
   ...over,
 });
 
-function setup(data: Partial<HomeData> = {}, opts: { home?: boolean } = {}) {
+function setup(data: Partial<HomeData> = {}, opts: { home?: boolean; flags?: string } = {}) {
   const memberships: Record<string, Membership> = {
     riley: { orgId: ORG, memberId: MEMBER, role: 'owner' },
   };
@@ -103,8 +103,10 @@ function setup(data: Partial<HomeData> = {}, opts: { home?: boolean } = {}) {
     verifyToken: (token) => Promise.resolve(identity(token)),
     workspace: {
       findMembership: (userId: string) => Promise.resolve(memberships[userId]),
+      featureOn: () => Promise.resolve(false),
     } as unknown as WorkspaceStore,
     home: opts.home === false ? undefined : home,
+    flagOverrides: opts.flags,
     now: () => NOW,
   });
   const call = async (path: string, who?: string) => {
@@ -196,5 +198,42 @@ describe('Home', () => {
     expect((await setup().call('/v1/home')).status).toBe(401);
     expect((await setup().call('/v1/home', 'mallory')).status).toBe(403);
     expect((await setup({}, { home: false }).call('/v1/home', 'riley')).status).toBe(503);
+  });
+});
+
+describe('business miles on Home (FR-INS-01, #73)', () => {
+  /** A drive logged by hand, and two route drives measured, one claiming other miles. */
+  const DRIVES = ['38.40', '12.00', '29.05'];
+
+  it('adds up this month’s drives exactly while mileage is on', async () => {
+    const s = setup({ home: snapshot({ monthDrives: DRIVES }) }, { flags: 'expenses.mileage=on' });
+    const { body } = await s.call('/v1/home?day=2026-10-03', 'riley');
+    expect(body.month.miles).toEqual({ total: '79.45', drives: 3 });
+    // The rest of the month is as it was.
+    expect(body.month.expenses).toBe(8);
+  });
+
+  it('shows no business miles while mileage is off, as Home always was', async () => {
+    const { body } = await setup({ home: snapshot({ monthDrives: DRIVES }) }).call(
+      '/v1/home?day=2026-10-03',
+      'riley',
+    );
+    expect(body.month).not.toHaveProperty('miles');
+    expect(Object.keys(body.month)).toEqual([
+      'from',
+      'expenses',
+      'ready',
+      'spent',
+      'trips',
+      'notOnTrip',
+    ]);
+  });
+
+  it('shows no business miles with no drive dated this month', async () => {
+    const { body } = await setup(
+      { home: snapshot({ monthDrives: [] }) },
+      { flags: 'expenses.mileage=on' },
+    ).call('/v1/home?day=2026-10-03', 'riley');
+    expect(body.month).not.toHaveProperty('miles');
   });
 });

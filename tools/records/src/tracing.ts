@@ -48,6 +48,10 @@ export const GAPS: readonly Gap[] = [
       'FR-INS-01 asks Home for business miles once mileage exists, and manual mileage was built in PR #58 (#17). Home’s request has no flag check of its own yet, so the figure was left out of that change rather than shown while mileage is switched off. A drive does count in Home’s spend for the month, as any expense does.',
     fix: 'Sum the person’s drives dated this month and show the figure on Home behind the expenses.mileage flag (#73).',
     backlog: 73,
+    closed: {
+      date: '2026-10-05',
+      note: 'Home’s month shows Business miles while mileage is on: the person’s own drives dated this month, by hand and by route once measured, added up exactly, opening the month’s expenses (#73). What awaits reimbursement is #89.',
+    },
   },
   {
     id: 'GAP-31',
@@ -367,6 +371,10 @@ export const GAPS: readonly Gap[] = [
     evidence: 'The Claude extractor passes no tools today, but no test fails if one is added.',
     fix: 'Assert in the extractor tests that no tools are sent (#38).',
     backlog: 38,
+    closed: {
+      date: '2026-10-05',
+      note: 'A test builds every request a reader can send, to each Claude model and to OpenAI, with each addition on, off and left out, for a photo and a PDF, and fails if any carries a tool, a tool choice or a function, or a field beyond those it sends today (#38).',
+    },
   },
   {
     id: 'GAP-16',

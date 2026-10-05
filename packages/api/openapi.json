@@ -467,11 +467,14 @@
           "receipts.model-settings",
           "receipts.field-sources",
           "receipts.capture-time",
+          "receipts.unfiled-emails",
           "receipts.journeys",
           "expenses.mileage",
           "expenses.route-mileage",
           "reports.export",
+          "reports.approval",
           "governance.audit-trail",
+          "security.second-factor",
           "team.invites",
           "expenses.itemized",
           "expenses.split"
@@ -5195,6 +5198,25 @@
                   "expenses",
                   "spent"
                 ]
+              },
+              "miles": {
+                "type": "object",
+                "properties": {
+                  "total": {
+                    "type": "string",
+                    "description": "The miles of the person’s drives dated this month, added up exactly, as a plain decimal: a drive logged by hand, and a route drive once measured.",
+                    "example": "79.4"
+                  },
+                  "drives": {
+                    "type": "integer",
+                    "description": "How many drives claim them."
+                  }
+                },
+                "required": [
+                  "total",
+                  "drives"
+                ],
+                "description": "Business miles (FR-INS-01). Only while expenses.mileage is on, and only when a drive dated this month claims miles."
               }
             },
             "required": [

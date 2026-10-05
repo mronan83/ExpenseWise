@@ -779,6 +779,13 @@ expenses.mileage = (
     miles: '38.4',
   })
 ).id;
+// And the drive home on its last day, Oct 1, so Home shows October's business miles (#73).
+await call('POST', '/v1/mileage', {
+  date: '2026-10-01',
+  destination: '12 Elm St, Omaha',
+  purpose: 'Drive home from the airport after the Q4 architect meeting',
+  miles: '36.15',
+});
 // The organization's own rate a mile from Nov 1, and the IRS rate again from Mar 1 (Q28, #77),
 // set after the drive, which keeps the IRS rate it was logged at.
 await call('PUT', '/v1/settings/mileage-rates/2026-11-01', { perMile: '0.65' });

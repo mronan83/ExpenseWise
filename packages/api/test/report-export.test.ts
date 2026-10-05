@@ -1,10 +1,15 @@
 import type { Membership, ReportForExport } from '@expensewise/db';
-import { reportExportTable, type ExportExpense, type MemberRole } from '@expensewise/domain';
+import {
+  NO_TRAVEL,
+  reportExportTable,
+  type ExportExpense,
+  type MemberRole,
+} from '@expensewise/domain';
 import { PDFDocument } from 'pdf-lib';
 import { describe, expect, it } from 'vitest';
 import { createApi } from '../src/app.ts';
 import type { Identity } from '../src/auth.ts';
-import { reportPdf, reportPdfText, type ReportPdfHeading } from '../src/report-pdf.ts';
+import { fitWidths, reportPdf, reportPdfText, type ReportPdfHeading } from '../src/report-pdf.ts';
 import type { ReportStore } from '../src/reports.ts';
 import type { WorkspaceStore } from '../src/workspace.ts';
 
@@ -54,7 +59,11 @@ const EXPENSES: ExportExpense[] = [
   }),
 ];
 
-const report = (id: string, status: 'open' | 'closed'): ReportForExport => ({
+const report = (
+  id: string,
+  status: 'open' | 'closed',
+  expenses: readonly ExportExpense[] = EXPENSES,
+): ReportForExport => ({
   report: {
     id,
     memberId: RILEY,
@@ -65,15 +74,17 @@ const report = (id: string, status: 'open' | 'closed'): ReportForExport => ({
     openedAt: new Date('2026-09-04T12:00:00.000Z'),
     closedAt: status === 'closed' ? new Date('2026-09-05T08:30:00.000Z') : null,
   },
-  expenses: EXPENSES,
+  expenses,
 });
 
-function setup(options: { flagOverrides?: string; role?: MemberRole } = {}) {
+function setup(
+  options: { flagOverrides?: string; role?: MemberRole; expenses?: ExportExpense[] } = {},
+) {
   const asked: string[] = [];
   const reports = {
     forExport: (_org: string, id: string) => {
       asked.push(id);
-      if (id === CLOSED) return Promise.resolve(report(CLOSED, 'closed'));
+      if (id === CLOSED) return Promise.resolve(report(CLOSED, 'closed', options.expenses));
       if (id === OPEN) return Promise.resolve(report(OPEN, 'open'));
       return Promise.resolve(undefined);
     },
@@ -278,5 +289,98 @@ describe('a report’s PDF summary', () => {
     expect(page).toContain('Nothing is on this report.');
     expect(page).toContain('No dated expenses');
     expect(page).toContain('Status: Open · Opened 4 Sept 2026');
+  });
+});
+
+/** A flight and a hotel stay, as an organization with Journeys and stays keeps them (#83). */
+const TRAVELLED: ExportExpense[] = [
+  expense({
+    merchant: 'United Airlines',
+    amountMinor: 38_940,
+    travel: { ...NO_TRAVEL, journeyFrom: 'SFO', journeyTo: 'ORD' },
+  }),
+  expense({
+    date: '2026-10-01',
+    merchant: 'Hilton Omaha',
+    amountMinor: 41_260,
+    travel: { ...NO_TRAVEL, checkIn: '2026-09-29', checkOut: '2026-10-01' },
+  }),
+];
+
+describe('a journey and a stay in a report’s export (FR-INT-20, FR-INT-21, #83)', () => {
+  it('exports a journey’s from and to and a stay’s nights while Journeys and stays is on', async () => {
+    const { get } = setup({
+      flagOverrides: 'reports.export=on,receipts.journeys=on',
+      expenses: TRAVELLED,
+    });
+    const csv = await get(`/v1/reports/${CLOSED}/export.csv`, 'riley');
+    expect(text(csv.bytes).split('\r\n').slice(0, 3)).toEqual([
+      '\uFEFFDate,Merchant,From and to,Stay,Category,Type,Trip,Purpose,Note,Amount,Currency',
+      '2026-09-01,United Airlines,SFO → ORD,,,,Chicago · partner review,Partner review,,389.40,USD',
+      '2026-10-01,Hilton Omaha,,"2 nights, Sep 29 – Oct 1, 2026",,,Chicago · partner review,Partner review,,412.60,USD',
+    ]);
+    const pdf = await get(`/v1/reports/${CLOSED}/export.pdf`, 'riley');
+    expect(pdf.res.status).toBe(200);
+    expect((await PDFDocument.load(pdf.bytes)).getPageCount()).toBe(1);
+  });
+
+  it('exports a report as it always was while Journeys and stays is off', async () => {
+    const { get } = setup({ expenses: TRAVELLED });
+    const csv = await get(`/v1/reports/${CLOSED}/export.csv`, 'riley');
+    expect(text(csv.bytes).split('\r\n').slice(0, 2)).toEqual([
+      '\uFEFFDate,Merchant,Category,Type,Trip,Purpose,Note,Amount,Currency',
+      '2026-09-01,United Airlines,,,Chicago · partner review,Partner review,,389.40,USD',
+    ]);
+    expect(text(csv.bytes)).not.toContain('SFO');
+    expect(text(csv.bytes)).not.toContain('nights');
+  });
+
+  it('prints them in the PDF, the arrow as "->", every date and amount on one line', async () => {
+    const [page] = await reportPdfText(HEADING, reportExportTable(TRAVELLED));
+    const rest = page?.slice(6) ?? [];
+    expect(rest.slice(0, 5)).toEqual(['Date', 'Merchant', 'From and to', 'Stay', 'Category']);
+    expect(rest).toContain('SFO -> ORD');
+    // The stay on two lines, broken between words.
+    expect(rest).toContain('2 nights, Sep 29 –');
+    expect(rest).toContain('Oct 1, 2026');
+    for (const shown of ['2026-09-01', '2026-10-01', '389.40', '412.60', '802.00']) {
+      expect(rest).toContain(shown);
+    }
+  });
+});
+
+describe('the PDF’s columns', () => {
+  it('keeps a date, an amount and miles on one line however many columns a report adds', async () => {
+    const everything = reportExportTable([
+      expense({
+        date: '2026-09-28',
+        merchant: 'Hilton Omaha',
+        amountMinor: 1_234_567,
+        travel: {
+          journeyFrom: 'Eppley Airfield',
+          journeyTo: 'Hilton Omaha',
+          checkIn: '2026-09-28',
+          checkOut: '2026-10-01',
+        },
+        parts: [
+          { category: 'Travel', type: 'Lodging', amountMinor: 1_200_000 },
+          { category: 'Meals', type: 'Business meal', amountMinor: 34_567 },
+        ],
+        excluded: [{ line: 'Minibar', amountMinor: 2124, reason: 'personal', note: null }],
+        miles: { measured: '138.4', claimed: '141.2', reason: 'Detour' },
+      }),
+    ]);
+    expect(everything.columns).toHaveLength(16);
+    const [page] = await reportPdfText(HEADING, everything);
+    for (const shown of ['2026-09-28', '12000.00', '345.67', '12345.67', '138.4', '141.2']) {
+      expect(page).toContain(shown);
+    }
+    expect(page?.filter((t) => t === 'USD')).toHaveLength(3);
+  });
+
+  it('holds a column at what it needs and shares the rest, or keeps the shares when all fit', () => {
+    expect(fitWidths([1, 1, 2], [0, 0, 0], 400)).toEqual([100, 100, 200]);
+    expect(fitWidths([1, 1, 2], [0, 150, 0], 400)).toEqual([250 / 3, 150, 500 / 3]);
+    expect(fitWidths([1, 3], [50, 0], 100)).toEqual([50, 50]);
   });
 });

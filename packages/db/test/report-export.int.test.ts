@@ -1,4 +1,5 @@
 import { newId } from '@expensewise/domain';
+import { eq } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { withOrg } from '../src/client.ts';
 import { reportForExport } from '../src/report-export.ts';
@@ -198,5 +199,29 @@ describe('a report as its export lists it (FR-SET-01)', () => {
       undefined,
     );
     expect(await r.inOrg((tx) => reportForExport(tx, newId()))).toBe(undefined);
+  });
+
+  it('carries an expense’s journey and stay as kept, and nothing for one with neither', async () => {
+    const r = await closedReport('Export travel');
+    await r.inOrg(async (tx) => {
+      await tx
+        .update(expenses)
+        .set({ checkIn: '2026-09-01', checkOut: '2026-09-03' })
+        .where(eq(expenses.id, r.ids.hotel));
+      await tx
+        .update(expenses)
+        .set({ journeyFrom: 'Hilton Omaha', journeyTo: null })
+        .where(eq(expenses.id, r.ids.ride));
+    });
+    const found = await r.inOrg((tx) => reportForExport(tx, r.reportId));
+    expect(found?.expenses.map((e) => [e.merchant, e.travel])).toEqual([
+      ['Uber', { journeyFrom: 'Hilton Omaha', journeyTo: null, checkIn: null, checkOut: null }],
+      ['Uber', undefined],
+      ['Zuni Café', undefined],
+      [
+        'Hotel Lindley',
+        { journeyFrom: null, journeyTo: null, checkIn: '2026-09-01', checkOut: '2026-09-03' },
+      ],
+    ]);
   });
 });

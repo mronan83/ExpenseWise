@@ -440,7 +440,7 @@ export const SECURITY_STORIES: readonly Story[] = [
     soThat: 'text printed on a receipt can never make the app do something, only be read',
     feature: 'F-06',
     requirements: ['NFR-SEC-07'],
-    status: 'Partial',
+    status: 'Delivered',
     criteria: [
       {
         id: 'AC1',
@@ -459,8 +459,12 @@ export const SECURITY_STORIES: readonly Story[] = [
         when: 'it is sent',
         then: 'it offers the model no tools, so nothing a receipt says can make it act',
         decided: ARCH_65,
-        checks: [],
-        untested: 66,
+        checks: [
+          'extraction/no-tools › offers Claude no tools',
+          'extraction/no-tools › offers OpenAI no tools',
+          'extraction/no-tools › is built for every addition, on, off and left out',
+          'extraction/no-tools › finds a tool wherever one is added, so the checks above can fail',
+        ],
       },
       {
         id: 'AC3',
@@ -474,7 +478,7 @@ export const SECURITY_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'No tools are sent today, but nothing fails if one is ever added (GAP-15, #38).',
+    note: 'Since PR #60 (#38, GAP-15 closed) every request a reader can build is checked as it leaves for Anthropic or OpenAI: every model, with source lines and journeys each on, off and left out, a photo and a PDF. A tool, a tool choice, a function or any new field fails CI, and a new kind of addition fails to compile in the test until it is checked too.',
   },
   {
     id: 'US-SEC-08',
