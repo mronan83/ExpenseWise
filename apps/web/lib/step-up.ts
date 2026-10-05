@@ -48,3 +48,26 @@ export function authenticatorRequired(email: string | null): void {
 /** Whether an answer from our API holds this email until it adds its own authenticator. */
 export const isAuthenticatorRequired = (status: number, code: string | undefined) =>
   status === 403 && code === 'authenticator_required';
+
+/*
+ * An email that isn't let in (#90): once a person has an authenticator, only the emails they let
+ * in open the app, while their organization has the second factor on. It is never asked for a
+ * code or offered an authenticator: `api()` tells the screen that says so, which explains how to
+ * let it in from the email that has the code, and offers signing out.
+ */
+
+let refused: Held | null = null;
+
+/** The screen that says this email isn't let in; null when it goes away. */
+export function onNotLetIn(screen: Held | null): void {
+  refused = screen;
+}
+
+/** Says this email, or the one signed in when the API didn't name it, isn't let in. */
+export function notLetIn(email: string | null): void {
+  refused?.(email);
+}
+
+/** Whether an answer from our API refuses this email as not let in. */
+export const isNotLetIn = (status: number, code: string | undefined) =>
+  status === 403 && code === 'sign_in_not_let_in';

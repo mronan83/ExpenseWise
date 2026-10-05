@@ -2684,6 +2684,126 @@
       }
     },
     {
+      "name": "let_in_sign_ins",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "sign_in_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "let_in_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "passed_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "lapses_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "let_in_sign_ins_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "let_in_sign_ins_sign_in_fk",
+          "columns": [
+            "org_id",
+            "sign_in_id"
+          ],
+          "table": "member_sign_ins",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "let_in_sign_ins_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "let_in_sign_ins_sign_in_key",
+          "columns": [
+            "org_id",
+            "sign_in_id"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "let_in_sign_ins_passed_or_waiting",
+          "definition": "CHECK (((passed_at IS NULL) <> (lapses_at IS NULL)))"
+        }
+      ],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "enforce_let_in",
+          "definition": "CREATE TRIGGER enforce_let_in BEFORE INSERT OR DELETE OR UPDATE ON public.let_in_sign_ins FOR EACH ROW EXECUTE FUNCTION enforce_let_in()"
+        }
+      ],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT"
+        ]
+      }
+    },
+    {
       "name": "member_invites",
       "rls": {
         "enabled": true,
@@ -5972,6 +6092,14 @@
       "executableBy": []
     },
     {
+      "name": "enforce_let_in",
+      "arguments": "",
+      "returns": "trigger",
+      "security": "invoker",
+      "volatility": "volatile",
+      "executableBy": []
+    },
+    {
       "name": "enforce_own_records",
       "arguments": "",
       "returns": "trigger",
@@ -6026,6 +6154,16 @@
       ]
     },
     {
+      "name": "person_let_in",
+      "arguments": "sign_in_user text",
+      "returns": "text",
+      "security": "definer",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
+    },
+    {
       "name": "reject_audit_mutation",
       "arguments": "",
       "returns": "trigger",
@@ -6057,6 +6195,16 @@
       "name": "sign_in_has_authenticator",
       "arguments": "sign_in_user text",
       "returns": "boolean",
+      "security": "definer",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
+    },
+    {
+      "name": "sign_in_let_in",
+      "arguments": "sign_in_user text",
+      "returns": "text",
       "security": "definer",
       "volatility": "stable",
       "executableBy": [

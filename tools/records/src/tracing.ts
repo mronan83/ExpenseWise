@@ -127,6 +127,21 @@ export const GAPS: readonly Gap[] = [
       'Found building #88 on Oct 5. A person’s other email with no authenticator of its own is held until it adds one and enters its code (Q43). Supabase Auth lets an email with no verified factor add one on its password alone, so whoever has that password, the person or someone who stole it, can add an authenticator of their own in Settings › Sign-ins, enter its code, and open everything. The hold stops a password used as it is; it can’t tell the person adding one from someone else.',
     fix: 'By your answer to Q44: once a person has an authenticator, only an email they have let in signs in; their other emails still forward receipts, and one is let in only from an email that passed its code, then adds its own authenticator (#90).',
     backlog: 90,
+    closed: {
+      date: '2026-10-05',
+      note: 'PR #60, at your answer to Q44 (ADR-0044, A person’s emails let in): while the second factor is on and a person has an authenticator, only an email they let in opens the app. The first of their emails to pass its code is let in then; another is refused, with 403 `sign_in_not_let_in` naming it, whatever its session says, its own authenticator included, and the app says it isn’t let in, that its receipts are still filed and how to let it in, never asking for a code. From an email let in that passed its code, Settings › Sign-ins lets another in, for 24 hours, in which it adds its own authenticator and passes its code; then it is let in for good, until withdrawn. Kept in `let_in_sign_ins`, each change audited, and only the person, from a session that passed the code, changes it, in the database too. Email-in files receipts from every address, let in or not. Before the first email passes its code, whoever holds another’s password could be let in first: GAP-37.',
+    },
+  },
+  {
+    id: 'GAP-37',
+    title:
+      'Before any of a person’s emails is let in, whoever has the password of one can add an authenticator to it and be let in first.',
+    affects: ['FR-PLT-03', 'FR-PLT-04', 'F-11'],
+    severity: 'Low',
+    evidence:
+      'Found building #90 on Oct 5. By your answer to Q44, the first of a person’s emails to pass its code is let in. Supabase Auth lets an email with no authenticator add one on its password alone, so until the person’s own email passes its code, for instance before they ever add an authenticator, whoever holds the password of another email linked to them can add theirs to it, pass its code and be let in first. The person’s own email is then refused and says it isn’t let in, which tells them; the owner removes that authenticator in Supabase and resets who is let in (the runbook).',
+    fix: 'If your answer to Q45 asks for it: let in automatically only the email the person first signed in with, which until then may add its own authenticator, and refuse any other until it is let in from it (#91).',
+    backlog: 91,
   },
   {
     id: 'GAP-25',
@@ -970,6 +985,14 @@ export const QUESTIONS: readonly Question[] = [
       date: '2026-10-05',
       text: 'B, with the choice to add an authenticator to another email: only an email with an authenticator signs in, the others still forward receipts, and the person may let another email in from one that has passed its code, after which it adds its own authenticator (#90).',
     },
+  },
+  {
+    id: 'Q45',
+    title: 'Which of a person’s emails is let in first',
+    ask: 'By your answer to Q44, once a person has an authenticator only an email they let in signs in, and the first of their emails to pass its code is let in (#90). Until then, whoever holds the password of another email linked to them could add an authenticator to it and be let in first (GAP-37); the person would find their own email refused, and the owner would reset it as the runbook says. A: let in automatically only the email the person first signed in with, which until then may add its own authenticator; any other is refused until it is let in from it (#91). B: keep the first to pass its code, as built.',
+    why: 'Linking an email needs the passwords of both and, from someone with an authenticator, the code, so the email a person first signed in with is their own; a later one may be the one whose password leaked.',
+    recommendation: 'A, before a second person with two emails joins.',
+    affects: ['FR-PLT-03', 'FR-PLT-04', 'GAP-37', 'F-11'],
   },
 ];
 

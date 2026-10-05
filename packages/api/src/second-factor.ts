@@ -1,3 +1,5 @@
+import type { PassedCode } from '@expensewise/db';
+import { admission, type SignInStanding } from '@expensewise/domain';
 import type { MiddlewareHandler } from 'hono';
 import type { Identity } from './auth.ts';
 import { isBeforeTheCode, markBeforeTheCode, requestIdentity, type AdmitCaller } from './caller.ts';
@@ -39,27 +41,13 @@ export async function requireAdminSecondFactor(
   if (await features.isOn(orgId, SECOND_FACTOR_FLAG)) requireSecondFactor(identity);
 }
 
-/**
- * Everything, for someone with an authenticator (#85, Q41): while their organization has the
- * second factor switched on, a session of a person whose sign-in has a verified second factor
- * and hasn't passed it is refused on every request. Someone with none isn't asked: their
- * session can't pass a code they don't have, and admin actions still ask them to add one. The
- * switch is read only for an enrolled person's aal1 session.
- */
-export async function requireCodeOfTheEnrolled(
-  features: FeatureGate,
-  caller: Pick<CallerMembership, 'orgId' | 'authenticator'>,
-  identity: Pick<Identity, 'assuranceLevel'>,
-): Promise<void> {
-  if (identity.assuranceLevel === 'aal2' || caller.authenticator !== true) return;
-  if (await features.isOn(caller.orgId, SECOND_FACTOR_FLAG)) {
-    requireSecondFactor(
-      identity,
-      'Your organization asks for the code from your authenticator app before anything else. ' +
-        'Enter it, then try again.',
-    );
-  }
-}
+/** The refusal of a session that skipped the code, of an email with an authenticator (#85). */
+const codeBeforeAnythingElse = (identity: Pick<Identity, 'assuranceLevel'>) =>
+  requireSecondFactor(
+    identity,
+    'Your organization asks for the code from your authenticator app before anything else. ' +
+      'Enter it, then try again.',
+  );
 
 /** The refusal of an email that needs its own authenticator, naming that email (#88). */
 export function authenticatorRequired(email: string | null): ProblemError {
@@ -75,38 +63,91 @@ export function authenticatorRequired(email: string | null): ProblemError {
 }
 
 /**
- * A person's other emails (#88, Q43): while their organization has the second factor switched
- * on, a session of an email with no authenticator of its own, of a person who has one on
- * another of their emails, is refused on every request, whatever its session says, until that
- * email adds its own and passes it. It has no code to enter yet, so it is told which email needs
- * one rather than asked for a code. Someone with none on any email isn't asked. The switch is
- * read only for an email held this way.
+ * The refusal of an email that isn't let in, naming that email (#90, Q44). It is never asked
+ * for a code or offered an authenticator: only an email let in, from one with the code, may add
+ * one.
  */
-export async function requireOwnAuthenticator(
+export function signInNotLetIn(email: string | null): ProblemError {
+  const which = email ?? 'The email you signed in with';
+  return new ProblemError(403, 'sign-in-not-let-in', 'This email isn’t let in to sign in', {
+    code: 'sign_in_not_let_in',
+    detail:
+      `${which} isn't let in to sign in. Once you have an authenticator app, only the emails ` +
+      'you let in open ExpenseWise; receipts you send from this one are still filed. To let it ' +
+      'in, sign in with the email that has your authenticator app, enter its code, and let this ' +
+      'one in from Settings › Sign-ins.',
+    ...(email ? { email } : {}),
+  });
+}
+
+/** What the admission step needs to keep the record of who is let in (#90). */
+export type RecordPassedCode = (
+  caller: CallerMembership,
+  actor: { readonly userId: string; readonly assuranceLevel: string },
+) => Promise<PassedCode>;
+
+/** Where a caller's sign-in stands, with what a store that can't tell leaves out read as none. */
+export function standingOf(caller: CallerMembership): SignInStanding {
+  const authenticator = caller.authenticator === true;
+  return {
+    authenticator,
+    personAuthenticator: authenticator || caller.personAuthenticator === true,
+    letIn: caller.letIn ?? 'no',
+    personLetIn: caller.personLetIn ?? 'none',
+  };
+}
+
+/**
+ * How far a session gets (#85, #88, #90, ADR-0044), while its organization has the second factor
+ * switched on, by where its email stands (`admission`): an email that isn't let in is refused
+ * with `sign_in_not_let_in`; one let in with no authenticator of its own, while another let in
+ * has one, with `authenticator_required`; one with an authenticator, at aal1, with
+ * `second_factor_required`. At aal2, the first of a person's emails to pass its code is let in,
+ * and one waiting stays let in, each recorded before the request goes on; if another email
+ * became the first just before, it is refused instead. Someone with no authenticator that counts
+ * isn't asked, and the switch is read only when something would be refused or recorded.
+ */
+export async function admitSignIn(
   features: FeatureGate,
-  caller: Pick<CallerMembership, 'orgId' | 'authenticator' | 'personAuthenticator'>,
-  identity: Pick<Identity, 'email'>,
+  caller: CallerMembership,
+  identity: Pick<Identity, 'userId' | 'email' | 'assuranceLevel'>,
+  recordPassedCode?: RecordPassedCode,
 ): Promise<void> {
-  if (caller.authenticator === true || caller.personAuthenticator !== true) return;
-  if (await features.isOn(caller.orgId, SECOND_FACTOR_FLAG)) {
-    throw authenticatorRequired(identity.email);
+  const step = admission(standingOf(caller), identity.assuranceLevel);
+  if (step === 'open') return;
+  if (!(await features.isOn(caller.orgId, SECOND_FACTOR_FLAG))) return;
+  switch (step) {
+    case 'not_let_in':
+      throw signInNotLetIn(identity.email);
+    case 'own_authenticator':
+      throw authenticatorRequired(identity.email);
+    case 'code':
+      codeBeforeAnythingElse(identity);
+      return;
+    case 'let_in_first':
+    case 'passed': {
+      if (!recordPassedCode) return;
+      const done = await recordPassedCode(caller, identity);
+      if (done === 'not_let_in') throw signInNotLetIn(identity.email);
+      return;
+    }
   }
 }
 
 /**
  * The check, run once as every request resolves its caller (`recordingCaller`), before anything
- * of the organization is read or changed: no route can forget it. An email with no authenticator
- * of a person who has one is held until it adds its own (#88); an email with one, until its
- * session passes the code (#85); each reads the switch only in its own case, so at most once. A
- * request the code screen, or adding an authenticator, needs (`beforeTheCode`) is let through,
- * and so is a lookup that isn't the token's own person.
+ * of the organization is read or changed: no route can forget it (`admitSignIn`). A request the
+ * code screen, or the screens that say an email needs its own authenticator or isn't let in,
+ * need (`beforeTheCode`) is let through, and so is a lookup that isn't the token's own person.
  */
-export function secondFactorEverywhere(features: FeatureGate): AdmitCaller {
+export function secondFactorEverywhere(
+  features: FeatureGate,
+  recordPassedCode?: RecordPassedCode,
+): AdmitCaller {
   return async (caller, userId) => {
     const identity = requestIdentity();
     if (!identity || identity.userId !== userId || isBeforeTheCode()) return;
-    await requireOwnAuthenticator(features, caller, identity);
-    await requireCodeOfTheEnrolled(features, caller, identity);
+    await admitSignIn(features, caller, identity, recordPassedCode);
   };
 }
 

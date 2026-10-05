@@ -64,6 +64,70 @@ export const linkSignInRoute = createRoute({
   },
 });
 
+const signInParam = {
+  params: z.object({
+    signInId: z
+      .string()
+      .uuid()
+      .openapi({ param: { name: 'signInId', in: 'path' } }),
+  }),
+};
+
+export const letInSignInRoute = createRoute({
+  method: 'put',
+  path: '/v1/me/sign-ins/{signInId}/let-in',
+  tags: ['Identity'],
+  summary: 'Let another of the caller’s sign-ins in',
+  description:
+    'Behind security.second-factor (#90, Q44). Once a person has an authenticator, only a ' +
+    'sign-in they let in opens the app; the others still forward receipts. From a sign-in let ' +
+    'in, with an authenticator of its own, whose session passed the code (aal2), this lets ' +
+    'another of theirs in: it may then add its own authenticator, and once it passes its code ' +
+    'it signs in. Until then it waits, for 24 hours, after which letting it in lapses. Audited.',
+  ...secured,
+  request: signInParam,
+  responses: {
+    200: {
+      description: 'The sign-in, let in: waiting until it passes its own code, or let in already.',
+      content: { 'application/json': { schema: SignInSchema } },
+    },
+    401: common[401],
+    403: problem(
+      'The session has not passed the code (second_factor_required), or the caller has no organization.',
+    ),
+    404: problem('The caller has no such sign-in, or the second factor is switched off.'),
+    409: problem(
+      'It is the sign-in making the request, or that sign-in is not let in with an authenticator.',
+    ),
+    503: common[503],
+  },
+});
+
+export const withdrawSignInRoute = createRoute({
+  method: 'delete',
+  path: '/v1/me/sign-ins/{signInId}/let-in',
+  tags: ['Identity'],
+  summary: 'Stop letting one of the caller’s other sign-ins in',
+  description:
+    'Behind security.second-factor (#90). From a sign-in let in, with an authenticator of its ' +
+    'own, whose session passed the code (aal2), withdraws letting another of the person’s ' +
+    'sign-ins in: it is refused again, and still forwards receipts. Audited.',
+  ...secured,
+  request: signInParam,
+  responses: {
+    204: { description: 'The sign-in is not let in.' },
+    401: common[401],
+    403: problem(
+      'The session has not passed the code (second_factor_required), or the caller has no organization.',
+    ),
+    404: problem('The caller has no such sign-in, or the second factor is switched off.'),
+    409: problem(
+      'It is the sign-in making the request, or that sign-in is not let in with an authenticator.',
+    ),
+    503: common[503],
+  },
+});
+
 export const unlinkSignInRoute = createRoute({
   method: 'delete',
   path: '/v1/me/sign-ins/{signInId}',

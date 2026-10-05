@@ -1,7 +1,12 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';
-import { AuthenticatorRequiredScreen, SecondFactorGate, StepUpPrompt } from './second-factor';
+import {
+  AuthenticatorRequiredScreen,
+  NotLetInScreen,
+  SecondFactorGate,
+  StepUpPrompt,
+} from './second-factor';
 import { TabBar } from './tab-bar';
 
 export const metadata: Metadata = {
@@ -29,6 +34,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <TabBar />
         <StepUpPrompt />
         <AuthenticatorRequiredScreen />
+        <NotLetInScreen />
         <SecondFactorGate />
       </body>
     </html>

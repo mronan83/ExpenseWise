@@ -191,6 +191,50 @@ export const memberSignIns = pgTable(
 );
 
 /**
+ * The sign-ins a person has let in (#90, Q44, ADR-0044). While their organization has the
+ * second factor on and they have an authenticator, only an email let in opens the app; the
+ * others still forward receipts. The first of their emails to pass its code is let in then,
+ * having passed it; another is let in from an email let in that passed its code, and waits,
+ * until it passes its own or the time runs out. Removing the sign-in removes it too. Only the
+ * person, from a session that passed the code, changes it (trigger `enforce_let_in`).
+ */
+export const letInSignIns = pgTable(
+  'let_in_sign_ins',
+  {
+    id: id(),
+    orgId: orgId(),
+    /** The sign-in let in. */
+    signInId: uuid('sign_in_id').notNull(),
+    /** When it was let in. */
+    letInAt: timestamp('let_in_at', { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * When it passed its own code while let in: as it was let in for the first, later for one
+     * let in from another email. Empty while it waits.
+     */
+    passedAt: timestamp('passed_at', { withTimezone: true }),
+    /**
+     * When letting it in lapses unless it passes its own code first, 24 hours on
+     * (`LET_IN_HOURS`); empty once it has. A lapsed one counts for nothing.
+     */
+    lapsesAt: timestamp('lapses_at', { withTimezone: true }),
+  },
+  (t) => [
+    unique('let_in_sign_ins_org_id_id_key').on(t.orgId, t.id),
+    unique('let_in_sign_ins_sign_in_key').on(t.orgId, t.signInId),
+    foreignKey({
+      name: 'let_in_sign_ins_sign_in_fk',
+      columns: [t.orgId, t.signInId],
+      foreignColumns: [memberSignIns.orgId, memberSignIns.id],
+    }).onDelete('cascade'),
+    // Passed for good, or waiting until it lapses: one or the other.
+    check(
+      'let_in_sign_ins_passed_or_waiting',
+      sql`(${t.passedAt} IS NULL) <> (${t.lapsesAt} IS NULL)`,
+    ),
+  ],
+);
+
+/**
  * A link that lets one person join the organization with a role (FR-PLT-07, ADR-0035). Only
  * the SHA-256 of its token is kept: the link itself is shown once, to the owner who made it.
  * It works once, until it expires or is revoked; an accepted or revoked invite stays as a

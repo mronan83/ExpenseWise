@@ -403,6 +403,19 @@ export const RULES: readonly Rule[] = [
     note: 'Supabase Auth’s own default limit on a person’s factors. Settings › Sign-ins stops offering another at 10.',
   },
   {
+    id: 'R-LET-IN-HOURS',
+    name: 'How long an email let in from another has to pass its own code',
+    value:
+      '24 hours from being let in; then letting it in lapses, unless it has added its own authenticator and passed its code, after which it stays let in until withdrawn',
+    decided: { by: 'claude', source: 'ADR-0044' },
+    code: {
+      file: 'packages/domain/src/second-factor.ts',
+      constant: 'LET_IN_HOURS',
+      literal: '24',
+    },
+    note: 'Letting an email in opens the one window in which its password alone can add an authenticator (GAP-36), so it is kept short: a day is long enough to sign in with it and add one, and letting it in again is one tap from an email let in. Counted by the database’s clock. Claude’s, yours to confirm.',
+  },
+  {
     id: 'R-APPROVAL-NOTE-MAX',
     name: 'Longest reason for claiming less, comment on a return, or reason for a rejection',
     value: '500 characters each',
