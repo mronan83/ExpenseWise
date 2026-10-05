@@ -1,6 +1,7 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import {
   ChangeRoleSchema,
+  ChooseApproverSchema,
   CreatedInviteSchema,
   CreateInviteSchema,
   InviteAcceptedSchema,
@@ -109,6 +110,35 @@ export const changeRoleRoute = createRoute({
     200: json('The person, with their new role.', PersonSchema),
     ...ownerActing,
     409: problem('They are the last owner: the organization always has one.'),
+  },
+});
+
+export const chooseApproverRoute = createRoute({
+  method: 'put',
+  path: '/v1/settings/people/{memberId}/approver',
+  tags: ['Settings'],
+  summary: 'Choose who approves someone’s reports',
+  description:
+    'Someone else here whose role may approve, or null for Automatic: the longest-standing ' +
+    'approver, then finance admin, then owner (ADR-0043). A report they submit goes to the one ' +
+    'chosen while they can approve it, and otherwise as Automatic finds; one already submitted ' +
+    'keeps the approver it went to. Owners only, behind team.invites and reports.approval; ' +
+    'each change is audited.',
+  ...secured,
+  request: {
+    params: memberParam,
+    body: { content: { 'application/json': { schema: ChooseApproverSchema } }, required: true },
+  },
+  responses: {
+    200: json('The person, with who approves their reports.', PersonSchema),
+    ...ownerActing,
+    404: problem(
+      'Inviting people or approval is not switched on (feature_off), or no such person here.',
+    ),
+    422: problem(
+      'The one chosen is the person themselves (own_approver), or not someone here whose role ' +
+        'may approve (not_an_approver).',
+    ),
   },
 });
 

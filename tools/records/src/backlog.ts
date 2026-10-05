@@ -671,13 +671,14 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Choose who approves each member’s reports',
     type: 'Feature',
     detail:
-      'Found building #24. A report goes to its member’s manager when one is set and can approve it, but nothing sets a manager yet, so every report goes to the longest-standing approver, then finance admin, then owner (ADR-0043). Let an owner choose each member’s approver in Settings › People, if your answer to Q42 asks for it.',
+      'Found building #24. A report goes to its member’s manager when one is set and can approve it, but nothing sets a manager yet, so every report goes to the longest-standing approver, then finance admin, then owner (ADR-0043). Let an owner choose each member’s approver in Settings › People, if your answer to Q42 asks for it. Your answer to Q42: keep the routing as built, and let an owner choose now. Built behind Approval: in People an owner chooses each person’s approver from those who can approve, or Automatic; a report then goes to them while they can approve it, else as Automatic finds, and People says so (US-TEAM-06).',
     priority: 'P3',
     effort: 'S',
     severity: 'Low',
     blocker: { kind: 'none' },
     source: 'Claude, building #24',
     affects: ['FR-GOV-02', 'F-18'],
+    done: { date: '2026-10-05', in: 'PR #60' },
   },
   {
     num: 87,
@@ -1283,7 +1284,7 @@ export const BACKLOG: readonly BacklogItem[] = [
 export const SEQUENCING: readonly string[] = [
   'Your batch of Oct 5 is built in PR #60: approval (#24) with the second factor (#8), a submitted claim keeping its names (#70), emails that filed nothing (#59), journeys and stays in the export (#83), business miles on Home (#73) and proof that no tools reach a model (#38), each behind its switch and off until you switch it on.',
   '#85 is security, not polish: a session that skipped the code still opens everything but admin actions and approval for someone with an authenticator. It waits on your answer to Q41 and should land before you invite anyone through Settings › People (#29).',
-  'Approval in a team needs the second factor switched on too. #86 lets you choose each member’s approver once you answer Q42; #87 corrects an approved expense; #89 shows what awaits reimbursement on Home.',
+  'Approval in a team needs the second factor switched on too. #87 corrects an approved expense; #89 shows what awaits reimbursement on Home.',
   '#48 needs you, not code: it keeps a leaked key from erasing the backups.',
   '#11–#15 are small, independent and each closes a gap; take them between features.',
 ];

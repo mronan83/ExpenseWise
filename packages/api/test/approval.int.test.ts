@@ -94,6 +94,17 @@ interface Body {
     readonly rejection: { readonly reason: string; readonly automatic: boolean } | null;
   }[];
   readonly approver: { readonly name: string } | null;
+  readonly people: {
+    readonly id: string;
+    readonly name: string;
+    readonly approver?: {
+      readonly chosen: { readonly name: string } | null;
+      readonly goesTo: { readonly name: string } | null;
+      readonly passedOver: boolean;
+      readonly choices: readonly { readonly name: string }[];
+    };
+  }[];
+  readonly member: { readonly id: string };
   readonly selfAttests: boolean;
   readonly can: { readonly submit: boolean; readonly approve: boolean; readonly return: boolean };
   readonly why: { readonly code: string } | null;
@@ -489,5 +500,95 @@ describe('a one-person organization (FR-GOV-03)', () => {
     const reportId = await closedReportOf(pair, await drive(pair, '2026-09-17'));
     const refused = await call(pair, 'POST', `/v1/reports/${reportId}/submit`);
     expect(refused).toMatchObject({ status: 409, body: { code: 'no_approver' } });
+  });
+});
+
+describe('choosing who approves a member’s reports in People (#86)', () => {
+  it('sends a member’s report to the approver the owner chose, keeping one already submitted where it went', async () => {
+    const owner = user('owner86');
+    const member = user('member86');
+    const approver = user('approver86');
+    expect((await call(owner, 'POST', '/v1/me/organization')).status).toBe(201);
+    const ids: Record<string, string> = {};
+    for (const [who, role] of [
+      [member, 'member'],
+      [approver, 'approver'],
+    ] as const) {
+      const invite = await call(owner, 'POST', '/v1/settings/people/invites', { role });
+      const joined = await call(who, 'POST', '/v1/invites/accept', { token: invite.body.token });
+      ids[who] = joined.body.member.id;
+    }
+    const approverOf = async (who: string) =>
+      (await call(owner, 'GET', '/v1/settings/people')).body.people.find((p) => p.name === who)
+        ?.approver;
+    expect(await approverOf(member)).toEqual({
+      chosen: null,
+      goesTo: expect.objectContaining({ name: approver }) as unknown,
+      passedOver: false,
+      choices: [
+        expect.objectContaining({ name: owner }) as unknown,
+        expect.objectContaining({ name: approver }) as unknown,
+      ],
+    });
+    const first = await closedReportOf(member, await drive(member, '2026-09-18'));
+    expect((await call(member, 'POST', `/v1/reports/${first}/submit`)).body).toMatchObject({
+      approver: { name: approver },
+    });
+
+    const chosen = await call(owner, 'PUT', `/v1/settings/people/${ids[member]}/approver`, {
+      approverId: (await call(owner, 'GET', '/v1/settings/people')).body.people.find(
+        (p) => p.name === owner,
+      )!.id,
+    });
+    expect(chosen).toMatchObject({
+      status: 200,
+      body: { approver: { chosen: { name: owner }, goesTo: { name: owner }, passedOver: false } },
+    });
+    const second = await closedReportOf(member, await drive(member, '2026-09-19'));
+    expect((await call(member, 'GET', `/v1/reports/${second}/approval`)).body).toMatchObject({
+      approver: { name: owner },
+    });
+    expect((await call(member, 'POST', `/v1/reports/${second}/submit`)).body).toMatchObject({
+      approver: { name: owner },
+    });
+    // The first stays with the approver it went to; the second waits on the owner.
+    expect((await call(approver, 'GET', '/v1/approvals')).body.reports.map((r) => r.id)).toEqual([
+      first,
+    ]);
+    expect((await call(owner, 'GET', `/v1/reports/${second}/approval`)).body).toMatchObject({
+      can: { return: true },
+      steps: [{ decision: 'pending' }],
+    });
+
+    // Chosen, then no longer able to approve: People says so, and the report finds another.
+    await call(owner, 'PUT', `/v1/settings/people/${ids[member]}/approver`, {
+      approverId: ids[approver],
+    });
+    await call(owner, 'PATCH', `/v1/settings/people/${ids[approver]}`, { role: 'member' });
+    expect(await approverOf(member)).toMatchObject({
+      chosen: { name: approver },
+      goesTo: { name: owner },
+      passedOver: true,
+    });
+    const refused = await call(owner, 'PUT', `/v1/settings/people/${ids[member]}/approver`, {
+      approverId: ids[member],
+    });
+    expect(refused).toMatchObject({ status: 422, body: { code: 'own_approver' } });
+    const notOwner = await call(member, 'PUT', `/v1/settings/people/${ids[member]}/approver`, {
+      approverId: null,
+    });
+    expect(notOwner).toMatchObject({ status: 403, body: { code: 'forbidden_role' } });
+
+    // Off, People is as it was, and choosing answers as if it weren't there.
+    const listed = await call(owner, 'GET', '/v1/settings/people', undefined, off);
+    expect(listed.body.people.every((p) => p.approver === undefined)).toBe(true);
+    const gone = await call(
+      owner,
+      'PUT',
+      `/v1/settings/people/${ids[member]}/approver`,
+      { approverId: null },
+      off,
+    );
+    expect(gone).toMatchObject({ status: 404, body: { code: 'feature_off' } });
   });
 });

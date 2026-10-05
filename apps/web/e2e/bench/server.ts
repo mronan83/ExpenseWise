@@ -882,6 +882,24 @@ await callAs('casey', 'POST', `/v1/reports/${returned}/return`, {
   comment: 'Claim client visits only: the office isn’t one',
   rejections: [{ expenseId: officeDrive.id, reason: 'A drive to your own office is commuting' }],
 });
+// Who approves whose reports (#86): Riley chooses Casey for Sam, after Sam's report went to
+// Riley, where it stays. Riley chose Sam for Riley's own while Sam was an approver; Sam is a
+// member again, so Riley's go to Casey, as Automatic finds, and People says so.
+const { people: listed } = await call<{ people: { id: string; name: string; you: boolean }[] }>(
+  'GET',
+  '/v1/settings/people',
+);
+const personId = (found: { id: string } | undefined) => {
+  if (!found) throw new Error('The bench is missing someone in People');
+  return found.id;
+};
+const samId = personId(listed.find((p) => p.name === 'sam'));
+const caseyId = personId(listed.find((p) => p.name === 'casey'));
+const rileyId = personId(listed.find((p) => p.you));
+await call('PUT', `/v1/settings/people/${samId}/approver`, { approverId: caseyId });
+await call('PATCH', `/v1/settings/people/${samId}`, { role: 'approver' });
+await call('PUT', `/v1/settings/people/${rileyId}/approver`, { approverId: samId });
+await call('PATCH', `/v1/settings/people/${samId}`, { role: 'member' });
 
 // The organization's details and its duplicate window (#63, #64), set after the reports so
 // they open as they always have.

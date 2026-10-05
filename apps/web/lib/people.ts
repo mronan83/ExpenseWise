@@ -27,6 +27,23 @@ export const ROLES: readonly { role: Role; name: string; does: string }[] = [
 
 export const roleName = (role: Role) => ROLES.find((r) => r.role === role)?.name ?? role;
 
+export interface PersonRef {
+  id: string;
+  name: string;
+}
+
+/** Who approves someone's reports, while approval is on (#86). */
+export interface PersonApprover {
+  /** The approver an owner chose; null for Automatic. */
+  chosen: PersonRef | null;
+  /** Who a report they submit now goes to; null when no one else can approve it. */
+  goesTo: PersonRef | null;
+  /** The one chosen can't approve now, so Automatic found goesTo. */
+  passedOver: boolean;
+  /** Everyone else here whose role may approve. */
+  choices: PersonRef[];
+}
+
 export interface Person {
   id: string;
   name: string;
@@ -35,6 +52,38 @@ export interface Person {
   joinedAt: string;
   removedAt: string | null;
   you: boolean;
+  /** Absent while approval is off, and for someone removed. */
+  approver?: PersonApprover;
+}
+
+/** "your" for the caller, "Sam’s" for anyone else. */
+export const whose = (person: Pick<Person, 'name' | 'you'>) =>
+  person.you ? 'your' : `${person.name}’s`;
+
+/**
+ * Where someone's reports go now, as People says it under their approver (#86): to whom, and
+ * why when it isn't the one chosen. Null when there is nothing to add.
+ */
+export function approverNote(person: Person): { text: string; warn: boolean } | null {
+  const a = person.approver;
+  if (!a) return null;
+  const their = person.you ? 'your' : 'their';
+  if (!a.goesTo) {
+    return {
+      text: `No one else here can approve ${their} reports yet. Give someone the approver or finance admin role.`,
+      warn: true,
+    };
+  }
+  if (a.passedOver && a.chosen) {
+    return {
+      text: `${a.chosen.name} can’t approve now, so ${their} reports go to ${a.goesTo.name}, as Automatic finds.`,
+      warn: true,
+    };
+  }
+  if (a.goesTo.id === person.id) {
+    return { text: 'You approve your own: no one else is here yet.', warn: false };
+  }
+  return { text: `${person.you ? 'Your' : 'Their'} reports go to ${a.goesTo.name}.`, warn: false };
 }
 
 export interface Invite {

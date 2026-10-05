@@ -1,13 +1,15 @@
-import type { InviteRecord, Membership, PersonRecord } from '@expensewise/db';
+import type { ApproverRouting, InviteRecord, Membership, PersonRecord } from '@expensewise/db';
 import type { OpenAPIHono } from '@hono/zod-openapi';
+import { APPROVAL_FEATURE } from './approval-routes.ts';
 import { requireIdentity, type AuthVariables, type Identity, type TokenVerifier } from './auth.ts';
-import { featureGate, type FeatureGate } from './features.ts';
+import { featureGate, type FeatureGate, type OrgFeatureKey } from './features.ts';
 import type { PeopleStore } from './people.ts';
 import { ProblemError } from './problem.ts';
 import { requireAdminSecondFactor } from './second-factor.ts';
 import {
   acceptInviteRoute,
   changeRoleRoute,
+  chooseApproverRoute,
   createInviteRoute,
   listPeopleRoute,
   lookUpInviteRoute,
@@ -37,6 +39,20 @@ const personView = (p: PersonRecord, caller: Membership) => ({
   you: p.memberId === caller.memberId,
 });
 
+/** Who approves someone's reports (#86), each person named as People lists them. */
+const approverView = (r: ApproverRouting, people: readonly PersonRecord[]) => {
+  const ref = (id: string) => ({
+    id,
+    name: people.find((p) => p.memberId === id)?.displayName ?? '',
+  });
+  return {
+    chosen: r.chosenMemberId === null ? null : ref(r.chosenMemberId),
+    goesTo: r.goesToMemberId === null ? null : ref(r.goesToMemberId),
+    passedOver: r.passedOver,
+    choices: r.choices.map(ref),
+  };
+};
+
 const inviteView = (i: InviteRecord, now: Date) => ({
   id: i.id,
   role: i.role,
@@ -64,6 +80,7 @@ export function registerPeopleRoutes(
       createInviteRoute,
       revokeInviteRoute,
       changeRoleRoute,
+      chooseApproverRoute,
       removePersonRoute,
       lookUpInviteRoute,
       acceptInviteRoute,
@@ -83,8 +100,11 @@ export function registerPeopleRoutes(
     return { workspace: options.workspace, people: options.people };
   };
 
-  /** The caller, when they are an owner and the feature is on in their organization. */
-  const owner = async (userId: string): Promise<Membership> => {
+  /**
+   * The caller, when they are an owner and the feature is on in their organization, with any
+   * other feature the action also needs.
+   */
+  const owner = async (userId: string, also?: OrgFeatureKey): Promise<Membership> => {
     const who = await stores().workspace.findMembership(userId);
     if (!who) {
       throw new ProblemError(
@@ -95,6 +115,7 @@ export function registerPeopleRoutes(
       );
     }
     await features.require(who.orgId, FLAG);
+    if (also) await features.require(who.orgId, also);
     if (who.role !== 'owner') {
       throw new ProblemError(403, 'forbidden', 'Only an owner can manage people', {
         code: 'forbidden_role',
@@ -103,10 +124,30 @@ export function registerPeopleRoutes(
     return who;
   };
   /** An owner changing people or links, past the second factor while it is on (FR-GOV-04). */
-  const ownerActing = async (identity: Identity): Promise<Membership> => {
-    const who = await owner(identity.userId);
+  const ownerActing = async (identity: Identity, also?: OrgFeatureKey): Promise<Membership> => {
+    const who = await owner(identity.userId, also);
     await requireAdminSecondFactor(features, who.orgId, identity);
     return who;
+  };
+  /**
+   * Everyone, as People shows them: while approval is on, with who approves each active
+   * person's reports (#86); off, exactly as before.
+   */
+  const everyone = async (who: Membership) => {
+    const { people } = stores();
+    const listed = await people.list(who.orgId);
+    const routing = (await features.isOn(who.orgId, APPROVAL_FEATURE))
+      ? await people.approvers(who.orgId)
+      : [];
+    return {
+      ...listed,
+      views: listed.people.map((p) => {
+        const route = routing.find((r) => r.memberId === p.memberId);
+        return route
+          ? { ...personView(p, who), approver: approverView(route, listed.people) }
+          : personView(p, who);
+      }),
+    };
   };
   const noSuchPerson = () =>
     new ProblemError(404, 'not-found', 'No such person here', { code: 'not_found' });
@@ -118,15 +159,9 @@ export function registerPeopleRoutes(
 
   app.openapi(listPeopleRoute, async (c) => {
     const who = await owner(c.var.identity.userId);
-    const { people, invites } = await stores().people.list(who.orgId);
+    const { views, invites } = await everyone(who);
     const at = now();
-    return c.json(
-      {
-        people: people.map((p) => personView(p, who)),
-        invites: invites.map((i) => inviteView(i, at)),
-      },
-      200,
-    );
+    return c.json({ people: views, invites: invites.map((i) => inviteView(i, at)) }, 200);
   });
 
   app.openapi(createInviteRoute, async (c) => {
@@ -171,9 +206,37 @@ export function registerPeopleRoutes(
     const result = await people.changeRole(who.orgId, memberId, role, c.var.identity.userId);
     if (result === 'missing') throw noSuchPerson();
     if (result === 'last_owner') throw lastOwner();
-    const person = (await people.list(who.orgId)).people.find((p) => p.memberId === memberId);
+    const person = (await everyone(who)).views.find((p) => p.id === memberId);
     if (!person) throw noSuchPerson();
-    return c.json(personView(person, who), 200);
+    return c.json(person, 200);
+  });
+
+  app.openapi(chooseApproverRoute, async (c) => {
+    const who = await ownerActing(c.var.identity, APPROVAL_FEATURE);
+    const { memberId } = c.req.valid('param');
+    const { approverId } = c.req.valid('json');
+    const result = await stores().people.chooseApprover(
+      who.orgId,
+      memberId,
+      approverId,
+      c.var.identity.userId,
+    );
+    if (result === 'missing') throw noSuchPerson();
+    if (result === 'own_approver') {
+      throw new ProblemError(422, 'own-approver', 'No one approves their own reports', {
+        code: 'own_approver',
+        detail: 'Choose someone else, or Automatic.',
+      });
+    }
+    if (result === 'not_an_approver') {
+      throw new ProblemError(422, 'not-an-approver', 'They can’t approve reports', {
+        code: 'not_an_approver',
+        detail: 'Choose someone here who is an approver, finance admin or owner.',
+      });
+    }
+    const person = (await everyone(who)).views.find((p) => p.id === memberId);
+    if (!person) throw noSuchPerson();
+    return c.json(person, 200);
   });
 
   app.openapi(removePersonRoute, async (c) => {

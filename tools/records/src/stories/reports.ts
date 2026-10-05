@@ -1648,12 +1648,13 @@ export const REPORT_STORIES: readonly Story[] = [
         id: 'AC2',
         given: 'a team',
         when: 'my report is submitted',
-        then: 'it goes to my manager when I have one who can approve it; otherwise to the longest-standing approver, then finance admin, then owner, never to me',
-        decided: { by: 'claude', source: 'ADR-0043' },
+        then: 'it goes to the approver an owner chose for me in People when they can approve it (US-TEAM-06); otherwise to the longest-standing approver, then finance admin, then owner, never to me',
+        decided: { by: 'owner', source: 'Q42' },
         checks: [
           'domain/approvals › sends a report to an approver first, then a finance admin, then the owner, never its own member',
           'domain/approvals › sends it to the member’s manager when they can approve it',
           'domain/approvals › takes the longest-standing among equals',
+          'domain/approvals › sends a report to the approver an owner chose, over the routing as built',
         ],
       },
       {
@@ -1731,7 +1732,7 @@ export const REPORT_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Built in PR #60 behind Approval (#24, ADR-0043). Submitting relates to closing as ADR-0029 has it: only a closed report is submitted, closing never submits, and day 28 closes but never submits. Who a report goes to, AC5 and AC9 are Claude’s, yours to overturn (Q42).',
+    note: 'Built in PR #60 behind Approval (#24, ADR-0043). Submitting relates to closing as ADR-0029 has it: only a closed report is submitted, closing never submits, and day 28 closes but never submits. Who a report goes to is your answer to Q42, with the approver an owner chooses (#86); AC5 and AC9 are Claude’s, yours to overturn.',
   },
   {
     id: 'US-RPT-20',

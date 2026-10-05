@@ -10,6 +10,32 @@ export const MemberRoleSchema = z.enum(MEMBER_ROLES).openapi('MemberRole', {
     'and finance admins take admin actions; only owners manage people.',
 });
 
+export const PersonRefSchema = z
+  .object({ id: z.string().uuid(), name: z.string().openapi({ example: 'casey' }) })
+  .openapi('PersonRef');
+
+export const PersonApproverSchema = z
+  .object({
+    chosen: PersonRefSchema.nullable().openapi({
+      description: 'The approver an owner chose for their reports; null for Automatic.',
+    }),
+    goesTo: PersonRefSchema.nullable().openapi({
+      description:
+        'Who a report they submit now goes to: the one chosen while they can approve it, ' +
+        'otherwise the longest-standing approver, then finance admin, then owner; in a ' +
+        'one-person organization, its owner. Null when no one else can approve it.',
+    }),
+    passedOver: z.boolean().openapi({
+      description:
+        'The approver chosen can’t approve it now (their role changed, or they were removed), ' +
+        'so goesTo is found as Automatic finds it.',
+    }),
+    choices: z.array(PersonRefSchema).openapi({
+      description: 'Whom an owner may choose: everyone else here whose role may approve.',
+    }),
+  })
+  .openapi('PersonApprover');
+
 export const PersonSchema = z
   .object({
     id: z.string().uuid(),
@@ -23,6 +49,11 @@ export const PersonSchema = z
       .nullable()
       .openapi({ description: 'When an owner removed them; their records stay.' }),
     you: z.boolean().openapi({ description: 'Whether this is the caller.' }),
+    approver: PersonApproverSchema.optional().openapi({
+      description:
+        'While approval is on, who approves their reports (#86). Absent for someone removed, ' +
+        'and for everyone while approval is off.',
+    }),
   })
   .openapi('Person');
 
@@ -60,6 +91,20 @@ export const CreatedInviteSchema = z
   .openapi('CreatedInvite');
 
 export const ChangeRoleSchema = z.object({ role: MemberRoleSchema }).openapi('ChangeRole');
+
+export const ChooseApproverSchema = z
+  .object({
+    approverId: z
+      .string()
+      .uuid()
+      .nullable()
+      .openapi({
+        description:
+          'Who approves their reports: someone else here whose role may approve. Null for ' +
+          'Automatic, the routing as built.',
+      }),
+  })
+  .openapi('ChooseApprover');
 
 export const InviteTokenSchema = z
   .object({

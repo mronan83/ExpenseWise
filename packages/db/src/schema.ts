@@ -124,6 +124,11 @@ export const members = pgTable(
     email: text('email').notNull(),
     displayName: text('display_name').notNull(),
     role: memberRole('role').notNull().default('member'),
+    /**
+     * The approver an owner chose for their reports in Settings › People (#86): someone else
+     * in the organization. Empty means Automatic. While this person can't approve, routing
+     * passes them over and finds one as built (ADR-0043).
+     */
     managerMemberId: uuid('manager_member_id'),
     /**
      * The currency the member is reimbursed in, chosen in Settings (FR-EXP-13, Q23). Null until
@@ -148,6 +153,10 @@ export const members = pgTable(
     check(
       'members_reimbursement_currency_iso',
       sql`${t.reimbursementCurrency} IS NULL OR ${isoCurrency(t.reimbursementCurrency)}`,
+    ),
+    check(
+      'members_manager_not_self',
+      sql`${t.managerMemberId} IS NULL OR ${t.managerMemberId} <> ${t.id}`,
     ),
   ],
 );

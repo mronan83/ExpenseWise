@@ -2,9 +2,9 @@
 
 A person submits their own closed report. It goes in one step to one approver, who approves it or returns it with a comment, rejecting expenses with why; an expense that differs from its receipt is rejected on its own, and any rejection returns the whole report. A one-person organization's owner self-attests. Approving someone else's spend needs the second factor. Submitting copies each expense's category and type names onto it. The database shows an approver what is routed to them, lets whoever decides change only the report's and its expenses' status, and locks an approved expense.
 
-- **Status:** Accepted (one step, approve or return with a comment, self-attestation alone and separation of duties in a team from the blueprint, journeys §4.4 and ADR-0001; matching the receipt, one rejection returning the report and rejections surfaced decided by product owner, Oct 3 and Q6; export of submitted and approved reports decided by product owner, Q29; the second factor with approval decided by product owner, Q40; who a report goes to, deciding in an approver's place, the week a returned report gets, not asking for the second factor to return one, and the database rules recommended, no objection yet, Q42)
+- **Status:** Accepted (one step, approve or return with a comment, self-attestation alone and separation of duties in a team from the blueprint, journeys §4.4 and ADR-0001; matching the receipt, one rejection returning the report and rejections surfaced decided by product owner, Oct 3 and Q6; export of submitted and approved reports decided by product owner, Q29; the second factor with approval decided by product owner, Q40; who a report goes to, kept as built, and an owner choosing each member's approver in Settings › People decided by product owner, Q42 (#86); deciding in an approver's place, the week a returned report gets, not asking for the second factor to return one, a submitted report keeping the approver it went to, and the database rules recommended, no objection yet)
 - **Date:** 2026-10-05
-- **Deciders:** Product owner (Oct 3, Q6, Q29, Q40); Claude (principal architect), for the design
+- **Deciders:** Product owner (Oct 3, Q6, Q29, Q40, Q42); Claude (principal architect), for the design
 - **Decision register:** D-45. Builds on [ADR-0029](0029-expense-reports.md), whose submission it adds, and [ADR-0035](0035-own-records-and-invite-links.md), whose point 4 it completes; closes GAP-27 (#70).
 
 ## Context
@@ -27,10 +27,13 @@ ADR-0035 lets a member change only their own records, and an approver see only t
    - It is refused while an expense on it differs from its receipt without a reason, naming each. Merchant (loosely), date and currency must be the receipt's; the amount the receipt's, or lower with a reason: the person's own words, up to 500 characters (R-APPROVAL-NOTE-MAX), or lines left out, each with its reason (FR-EXP-16). A drive, or an expense typed in, has nothing to differ from. A split is one expense with one receipt (Q35), its parts adding up to its claim. With approval on, an edit above the receipt's total is refused, and the expense says how it holds up as soon as it is saved.
    - Each expense on it is submitted, and its category's and type's names, and its parts', are copied onto it (#70). Reports and exports read those while it is submitted; returned, it reads the names as they are until it goes again.
    - A trip on a submitted report takes no more expenses: a late one dated in it files as local, for the next report.
-2. **Who it goes to.** One step, to one approver chosen at submission:
+2. **Who it goes to.** One step, to one approver chosen at submission (`routeReport`):
    - in a one-person organization, its owner, who self-attests;
-   - in a team, the member's manager when one is set and can approve it; otherwise the longest-standing approver, then finance admin, then owner; never the member;
+   - in a team, the approver an owner chose for the member in Settings › People while they can approve it; otherwise, or on Automatic, the longest-standing approver, then finance admin, then owner; never the member;
    - when no one else can approve it, submitting is refused, and it stays closed.
+   - **Choosing** (#86, Q42, behind approval). Only an owner chooses, from everyone else active whose role may approve (`mayChooseApprover`), or Automatic; it is an admin action, so it needs the second factor while that is on, and each change is audited (`member.approver_chosen`, from and to). The choice is kept in `members.manager_member_id`, a member of the same organization by a composite key and never the member themselves (`members_manager_not_self`).
+   - **When the one chosen can't approve.** Their role changed, or they were removed: the choice stays, routing passes over them and finds one as Automatic does, and People says so; given an approving role again, they are the one again.
+   - **Already submitted.** A report keeps the approver its step names; a new choice routes only reports submitted afterwards.
 3. **Deciding.**
    - The approver it went to decides, or an owner or finance admin in their place, so a report never waits on someone who left; always within `canApprove`. The step records who decided.
    - Approving someone else's needs the second factor (`requireSecondFactor`); self-attesting doesn't, and returning doesn't, since it pays nothing.
@@ -52,7 +55,8 @@ ADR-0035 lets a member change only their own records, and an approver see only t
 | --- | --- |
 | Write a decision as the system, after checking it in code | One forgotten check would let anyone change anyone's claim; ADR-0035 put the rule in the database so no route can forget it. |
 | Let approvers' role see every report | An approver would see colleagues' spending they never approve. |
-| Route to the owner first | The approver role exists to approve; in a team with one, the owner would approve everything. Q42 asks. |
+| Route to the owner first | The approver role exists to approve; in a team with one, the owner would approve everything. Q42 kept routing by role. |
+| Clear a member's chosen approver when that person can no longer approve | The owner would lose the choice to a role change made for another reason, and People could not say what happened; passing them over keeps both. |
 | Only the approver it went to decides | A report would wait forever on someone removed, or routed while the organization was one person. |
 | Return to closed rather than open | Its expenses need changing, which reopens a closed report anyway (ADR-0029). |
 | Ask for the second factor to return a report | Returning pays nothing; asking would stop an approver without a factor from sending a claim back to be fixed. |
@@ -75,7 +79,7 @@ ADR-0035 lets a member change only their own records, and an approver see only t
 
 ## Exit path / reversibility
 
-- **Routing** is one domain function, `chooseApprover`; choosing per member (#86) replaces its first rule.
+- **Routing** is one domain function, `routeReport`, whose first rule is the approver chosen per member (#86); dropping the choice is clearing one column.
 - **Several steps** (Phase 2): the steps are numbered, and the lifecycle already counts remaining steps.
 - **The database rules** are one migration's functions and policies, replaced together.
 

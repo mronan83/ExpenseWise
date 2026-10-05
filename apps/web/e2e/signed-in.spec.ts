@@ -350,6 +350,15 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
   ['mileage settings, with the route key and saved places', () => '/settings/mileage', []],
   ['people settings, with a member and a link not used yet', () => '/settings/people', []],
   ['removing someone', () => '/settings/people', [press('Remove sam')]],
+  [
+    'people settings, with who approves each person’s reports, one chosen who can’t approve now',
+    () => '/settings/people',
+    [
+      (page) =>
+        expect(page.getByText(/^sam can’t approve now, so your reports go to casey/)).toBeVisible(),
+      (page) => expect(page.getByLabel('Who approves sam’s reports')).toHaveValue(/.+/),
+    ],
+  ],
   ['an invite link this account can’t use', (s) => `/invite/${s.invites.join}`, []],
   ['a revoked invite link', (s) => `/invite/${s.invites.revoked}`, []],
 ];

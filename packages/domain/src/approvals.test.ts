@@ -4,8 +4,10 @@ import {
   canApprove,
   chooseApprover,
   cleanApprovalNote,
+  mayChooseApprover,
   mayDecide,
   needsSecondFactor,
+  routeReport,
   type MemberRole,
 } from './approvals.ts';
 
@@ -106,6 +108,80 @@ describe('chooseApprover', () => {
     expect(chooseApprover({ memberId: 'sam', managerMemberId: null }, [later, casey, sam])).toBe(
       'casey',
     );
+  });
+});
+
+describe('choosing a member’s approver (#86)', () => {
+  const joined = (day: number) => new Date(Date.UTC(2026, 8, day));
+  const riley = { memberId: 'riley', role: 'owner' as const, joinedAt: joined(1) };
+  const sam = { memberId: 'sam', role: 'member' as const, joinedAt: joined(2) };
+  const casey = { memberId: 'casey', role: 'approver' as const, joinedAt: joined(3) };
+  const fin = { memberId: 'fin', role: 'finance_admin' as const, joinedAt: joined(4) };
+  const audrey = { memberId: 'audrey', role: 'auditor' as const, joinedAt: joined(5) };
+  const team = [riley, sam, casey, fin, audrey];
+
+  it('offers anyone else who can approve, never the member themselves', () => {
+    expect(team.filter((c) => mayChooseApprover(c, 'sam')).map((c) => c.memberId)).toEqual([
+      'riley',
+      'casey',
+      'fin',
+    ]);
+    expect(team.filter((c) => mayChooseApprover(c, 'casey')).map((c) => c.memberId)).toEqual([
+      'riley',
+      'fin',
+    ]);
+    // Alone, the owner has no one to choose: they self-attest.
+    expect(mayChooseApprover(riley, 'riley')).toBe(false);
+  });
+
+  it('sends a report to the approver an owner chose, over the routing as built', () => {
+    expect(routeReport({ memberId: 'sam', managerMemberId: 'fin' }, team)).toEqual({
+      goesTo: 'fin',
+      passedOver: false,
+    });
+    expect(routeReport({ memberId: 'casey', managerMemberId: 'riley' }, team)).toEqual({
+      goesTo: 'riley',
+      passedOver: false,
+    });
+    // Automatic: the routing as built.
+    expect(routeReport({ memberId: 'sam', managerMemberId: null }, team)).toEqual({
+      goesTo: 'casey',
+      passedOver: false,
+    });
+  });
+
+  it('passes over a chosen approver whose role changed, finding one as built', () => {
+    const demoted = { ...fin, role: 'member' as const };
+    expect(
+      routeReport({ memberId: 'sam', managerMemberId: 'fin' }, [riley, sam, casey, demoted]),
+    ).toEqual({ goesTo: 'casey', passedOver: true });
+    const auditor = { ...casey, role: 'auditor' as const };
+    expect(
+      routeReport({ memberId: 'sam', managerMemberId: 'casey' }, [riley, sam, auditor]),
+    ).toEqual({ goesTo: 'riley', passedOver: true });
+  });
+
+  it('passes over a chosen approver who was removed, finding one as built', () => {
+    expect(routeReport({ memberId: 'sam', managerMemberId: 'fin' }, [riley, sam, casey])).toEqual({
+      goesTo: 'casey',
+      passedOver: true,
+    });
+  });
+
+  it('never sends a member’s report to themselves, even if chosen, and finds no one when no one else can', () => {
+    expect(routeReport({ memberId: 'casey', managerMemberId: 'casey' }, team)).toEqual({
+      goesTo: 'fin',
+      passedOver: true,
+    });
+    expect(routeReport({ memberId: 'riley', managerMemberId: 'sam' }, [riley, sam])).toEqual({
+      goesTo: null,
+      passedOver: true,
+    });
+    // A team that shrank to one: its owner self-attests, whoever was chosen before.
+    expect(routeReport({ memberId: 'riley', managerMemberId: 'casey' }, [riley])).toEqual({
+      goesTo: 'riley',
+      passedOver: true,
+    });
   });
 });
 

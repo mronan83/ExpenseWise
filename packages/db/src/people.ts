@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import {
   inviteState,
   leavesNoOwner,
+  mayChooseApprover,
   newId,
   type InviteState,
   type MemberRole,
@@ -208,6 +209,57 @@ export async function changeMemberRole(
     entityId: memberId,
     action: 'member.role_changed',
     payload: { from: person.role, to: role },
+  });
+  return 'changed';
+}
+
+export type ChooseApproverResult =
+  | 'changed'
+  | 'unchanged'
+  | 'missing'
+  /** No one approves their own reports (FR-GOV-03). */
+  | 'own_approver'
+  /** The person chosen isn't active here with a role that may approve (canApprove). */
+  | 'not_an_approver';
+
+/**
+ * Chooses who approves a member's reports (#86), or Automatic with null, with its audit event.
+ * Only someone else active here who can approve is chosen; a report already submitted keeps
+ * the approver it went to. Call inside withOrg().
+ */
+export async function chooseMemberApprover(
+  tx: Transaction,
+  orgId: string,
+  memberId: string,
+  approverMemberId: string | null,
+  actorUserId: string,
+): Promise<ChooseApproverResult> {
+  await lockOrgWrites(tx, orgId);
+  const [person] = await tx
+    .select({ managerMemberId: members.managerMemberId })
+    .from(members)
+    .where(and(eq(members.id, memberId), isNull(members.deactivatedAt)))
+    .for('update');
+  if (!person) return 'missing';
+  if (approverMemberId === memberId) return 'own_approver';
+  if (approverMemberId !== null) {
+    const [approver] = await tx
+      .select({ memberId: members.id, role: members.role })
+      .from(members)
+      .where(and(eq(members.id, approverMemberId), isNull(members.deactivatedAt)));
+    if (!approver || !mayChooseApprover(approver, memberId)) return 'not_an_approver';
+  }
+  if (person.managerMemberId === approverMemberId) return 'unchanged';
+  await tx
+    .update(members)
+    .set({ managerMemberId: approverMemberId })
+    .where(eq(members.id, memberId));
+  await appendAuditEvent(tx, orgId, {
+    actor: { type: 'user', id: actorUserId },
+    entityType: 'member',
+    entityId: memberId,
+    action: 'member.approver_chosen',
+    payload: { from: person.managerMemberId, to: approverMemberId },
   });
   return 'changed';
 }

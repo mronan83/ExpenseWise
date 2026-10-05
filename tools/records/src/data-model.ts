@@ -90,7 +90,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   members: {
     about:
-      'A person in an organization, with their role, for approval routing their manager (FR-GOV-01), and the currency they are reimbursed in, once they choose one in Settings; until then, their organization’s home currency (FR-EXP-13, Q23). An owner can change the role or remove them; a removed member keeps their row, their records and their history, signs in here no more, and comes back as the same member if invited again (FR-PLT-07, ADR-0035). The role also decides whose records they see: their own, or everyone’s for owners, finance admins and auditors.',
+      'A person in an organization, with their role, the approver an owner chose for their reports in Settings › People, empty for Automatic (FR-GOV-01, FR-GOV-02, #86), and the currency they are reimbursed in, once they choose one in Settings; until then, their organization’s home currency (FR-EXP-13, Q23). An owner can change the role or remove them; a removed member keeps their row, their records and their history, signs in here no more, and comes back as the same member if invited again (FR-PLT-07, ADR-0035). The role also decides whose records they see: their own, or everyone’s for owners, finance admins and auditors.',
   },
   member_sign_ins: {
     about:
@@ -490,6 +490,13 @@ export const RULES: readonly Rule[] = [
       'delete_expense_rejections',
     ],
     refs: ['FR-GOV-02', 'FR-GOV-12', 'FR-EXP-10', 'ADR-0043'],
+  },
+  {
+    rule: 'A member’s chosen approver is someone else in their own organization.',
+    mechanism:
+      'The approver is a member of the same organization by a composite key, and never the member themselves (`members_manager_not_self`). That they hold a role that may approve, and are still active, is checked when an owner chooses them (`mayChooseApprover`) and again at every submission, where routing passes over one who can’t approve now and finds one as Automatic does (`routeReport`), under the organization’s write lock. A report already submitted keeps the approver its step names.',
+    objects: ['members_manager_fk', 'members_manager_not_self', 'members_org_id_id_key'],
+    refs: ['FR-GOV-02', 'FR-GOV-03', 'ADR-0043'],
   },
   {
     rule: 'Only whoever may decide a report decides it, and changes nothing of its member’s but its state.',

@@ -70,15 +70,38 @@ export interface ApproverCandidate {
 const ROUTING_ORDER: readonly MemberRole[] = ['approver', 'finance_admin', 'owner'];
 
 /**
- * Who a report goes to, in one step (FR-GOV-02). A one-person organization's report goes to
- * its owner, who self-attests (FR-GOV-03). In a team: the submitter's manager when they can
- * approve it; otherwise the longest-standing approver, then finance admin, then owner, never
- * the submitter. Null when no one else in the team can approve it.
+ * Whether an owner may choose `candidate` to approve `memberId`'s reports (#86): someone else,
+ * active, with a role that may approve a teammate's spend (canApprove). No one approves their
+ * own: a one-person organization has no one to choose, and its owner self-attests.
  */
-export function chooseApprover(
+export function mayChooseApprover(
+  candidate: { readonly memberId: string; readonly role: MemberRole },
+  memberId: string,
+): boolean {
+  return candidate.memberId !== memberId && APPROVING_ROLES.has(candidate.role);
+}
+
+/** Who a member's reports go to now, and whether the approver chosen for them is passed over. */
+export interface ApproverRoute {
+  /** The approver a report submitted now goes to; null when no one else can approve it. */
+  readonly goesTo: string | null;
+  /**
+   * An owner chose an approver for them who can't approve it now (their role changed, or they
+   * were removed), so the routing as built finds someone else (#86).
+   */
+  readonly passedOver: boolean;
+}
+
+/**
+ * Who a report goes to, in one step (FR-GOV-02). A one-person organization's report goes to
+ * its owner, who self-attests (FR-GOV-03). In a team: the approver an owner chose for the
+ * submitter (their manager, #86) while they can approve it; otherwise the longest-standing
+ * approver, then finance admin, then owner, never the submitter.
+ */
+export function routeReport(
   submitter: { readonly memberId: string; readonly managerMemberId: string | null },
   active: readonly ApproverCandidate[],
-): string | null {
+): ApproverRoute {
   const count = active.length;
   const allowed = (c: ApproverCandidate) =>
     canApprove({
@@ -88,8 +111,8 @@ export function chooseApprover(
       organizationMemberCount: count,
     }).ok;
   const manager = active.find((c) => c.memberId === submitter.managerMemberId);
-  if (manager && manager.memberId !== submitter.memberId && allowed(manager)) {
-    return manager.memberId;
+  if (manager && mayChooseApprover(manager, submitter.memberId) && allowed(manager)) {
+    return { goesTo: manager.memberId, passedOver: false };
   }
   const ranked = [...active].sort(
     (a, b) =>
@@ -97,7 +120,18 @@ export function chooseApprover(
       a.joinedAt.getTime() - b.joinedAt.getTime() ||
       a.memberId.localeCompare(b.memberId),
   );
-  return ranked.find((c) => ROUTING_ORDER.includes(c.role) && allowed(c))?.memberId ?? null;
+  return {
+    goesTo: ranked.find((c) => ROUTING_ORDER.includes(c.role) && allowed(c))?.memberId ?? null,
+    passedOver: submitter.managerMemberId !== null,
+  };
+}
+
+/** Who a report goes to (routeReport()); null when no one else in the team can approve it. */
+export function chooseApprover(
+  submitter: { readonly memberId: string; readonly managerMemberId: string | null },
+  active: readonly ApproverCandidate[],
+): string | null {
+  return routeReport(submitter, active).goesTo;
 }
 
 /** Roles that may decide a report routed to someone else: those who see every member's. */

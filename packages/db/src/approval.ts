@@ -2,10 +2,12 @@ import {
   cleanApprovalNote,
   chooseApprover,
   holdsUp,
+  mayChooseApprover,
   mayDecide,
   needsSecondFactor,
   receiptDifferenceText,
   reopenedClosesAt,
+  routeReport,
   transitionExpense,
   transitionReport,
   type ApprovalBasis,
@@ -187,6 +189,37 @@ export async function wouldGoTo(
     { memberId: submitterMemberId, managerMemberId: submitter?.managerMemberId ?? null },
     active,
   );
+}
+
+/** Who approves an active member's reports, as Settings › People shows it (#86). */
+export interface ApproverRouting {
+  readonly memberId: string;
+  /** The approver an owner chose for them; null for Automatic. */
+  readonly chosenMemberId: string | null;
+  /** Who a report they submit now goes to; null when no one else can approve it. */
+  readonly goesToMemberId: string | null;
+  /** Their chosen approver can't approve it now, so routing finds one as built. */
+  readonly passedOver: boolean;
+  /** Whom an owner may choose for them: everyone else active who can approve. */
+  readonly choices: readonly string[];
+}
+
+/**
+ * Each active member's approver: the one chosen for them, who their reports go to now, and
+ * whom an owner may choose instead, in the order they joined. Call inside withOrg().
+ */
+export async function approverRouting(tx: Transaction): Promise<ApproverRouting[]> {
+  const active = await activeMembers(tx);
+  return active.map((m) => {
+    const route = routeReport(m, active);
+    return {
+      memberId: m.memberId,
+      chosenMemberId: m.managerMemberId,
+      goesToMemberId: route.goesTo,
+      passedOver: route.passedOver,
+      choices: active.filter((c) => mayChooseApprover(c, m.memberId)).map((c) => c.memberId),
+    };
+  });
 }
 
 /** How many people are in the organization now, as separation of duties counts them. */

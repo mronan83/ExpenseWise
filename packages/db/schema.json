@@ -3107,6 +3107,10 @@
       ],
       "checks": [
         {
+          "name": "members_manager_not_self",
+          "definition": "CHECK (((manager_member_id IS NULL) OR (manager_member_id <> id)))"
+        },
+        {
           "name": "members_reimbursement_currency_iso",
           "definition": "CHECK (((reimbursement_currency IS NULL) OR (reimbursement_currency ~ '^[A-Z]{3}$'::text)))"
         }
