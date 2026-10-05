@@ -1,9 +1,18 @@
-import { daysBetween, subtract, sum, type Money } from '@expensewise/domain';
+import {
+  add,
+  daysBetween,
+  linesMakeTotal,
+  subtract,
+  sum,
+  zero,
+  type Money,
+} from '@expensewise/domain';
 import type { NormalizedExtraction } from './normalize.ts';
 
 /**
  * What makes a confident reading implausible (FR-INT-04, journeys §4.6). sums: the subtotal,
- * taxes and tip don't come to the total. future_date: dated after the day it was uploaded.
+ * taxes and tip don't come to the total, or, with no subtotal printed, the item lines with
+ * them don't (#92). future_date: dated after the day it was uploaded.
  * old_date: dated more than a year before that day. summary: a purchase summary, which shows
  * what was ordered but not what was charged (FR-CAP-02, Q10). stay: a folio's check-out is
  * before its check-in, or its stay is longer than the most nights worked out (FR-INT-21), so
@@ -20,13 +29,17 @@ const DAYS_AHEAD = 1;
  * Whether the parts that were read come to the total: the subtotal, taxes, fees and tip. Each
  * tax, fee and tip line may be a minor unit out, because each is rounded on its own. Prices
  * that include their tax, as VAT receipts print them, add up too: then the subtotal, fees and
- * tip alone make the total. Null when there is nothing to add up, because the receipt prints
- * no subtotal or no total was read.
+ * tip alone make the total. With no subtotal printed, as a hotel folio rarely prints one, the
+ * item lines stand in for it, credits taking off, each a minor unit out too: the rule the lines
+ * an expense keeps are held to (`linesMakeTotal`, R-LINES-TOLERANCE, #92). Null when there is
+ * nothing to add up: no total was read, or the receipt prints neither a subtotal nor an item
+ * line that can be read exactly.
  */
 export function addsUp(n: NormalizedExtraction): boolean | null {
   const total = n.total?.value;
+  if (!total) return null;
   const subtotal = n.subtotal?.value;
-  if (!total || !subtotal) return null;
+  if (!subtotal) return n.itemTotal ? itemsAddUp(n, n.itemTotal, total) : null;
   const tax = n.taxTotal?.value;
   const fees = n.feeTotal?.value;
   const tip = n.tip?.value;
@@ -40,6 +53,31 @@ export function addsUp(n: NormalizedExtraction): boolean | null {
     comesTo([subtotal, tax, fees, tip], n.taxLines + slack) ||
     (tax !== undefined && comesTo([subtotal, fees, tip], slack))
   );
+}
+
+/**
+ * Whether the item lines, with the taxes, fees and tip read, make the total. Lines in another
+ * currency than the total's never do.
+ */
+function itemsAddUp(n: NormalizedExtraction, items: Money, total: Money): boolean {
+  const none = zero(total.currency);
+  const tax = n.taxTotal?.value;
+  const fees = n.feeTotal?.value;
+  const tip = n.tip?.value;
+  const parts = [items, tax, fees, tip].filter((m): m is Money => m !== undefined);
+  if (parts.some((m) => m.currency !== total.currency)) return false;
+  const made = linesMakeTotal(
+    {
+      items,
+      itemLines: n.itemLines,
+      taxes: tax ?? none,
+      taxLines: tax ? n.taxLines : 0,
+      others: add(fees ?? none, tip ?? none),
+      otherLines: (fees ? n.feeLines : 0) + (tip ? 1 : 0),
+    },
+    total,
+  );
+  return made !== null;
 }
 
 /** The same day a year earlier, as an ISO date. Feb 29 compares as the day after Feb 28. */

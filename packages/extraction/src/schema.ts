@@ -9,11 +9,21 @@ export const Confidence = z
   .enum(['high', 'medium', 'low'])
   .describe('high: printed clearly and unambiguous. medium: readable but inferred. low: a guess.');
 
-const amount = z
+const DECIMAL =
+  'Decimal amount with "." as the decimal separator, no thousands separators and no currency ' +
+  'symbol, for example "1234.56". Convert local formats: Indonesian "60.000" is "60000".';
+
+const amount = z.string().describe(DECIMAL);
+
+/**
+ * A line's amount as printed, which a credit makes negative (#92). Its own description, so the
+ * other amounts' stay as they were.
+ */
+const lineAmount = z
   .string()
   .describe(
-    'Decimal amount with "." as the decimal separator, no thousands separators and no currency ' +
-      'symbol, for example "1234.56". Convert local formats: Indonesian "60.000" is "60000".',
+    `${DECIMAL} The line's amount as printed: for a quantity, the line's amount, not the ` +
+      'price of one. A discount, credit, refund or reversal is negative, for example "-68.00".',
   );
 
 const Amount = z.object({ value: amount, confidence: Confidence });
@@ -55,8 +65,12 @@ export const JOURNEY_DOCUMENTS: readonly DocumentType[] = [
 /** The document whose stay is read: its check-in and check-out (FR-INT-21). */
 export const STAY_DOCUMENTS: readonly DocumentType[] = ['hotel_folio'];
 
-/** Changes whenever ReceiptExtractionSchema changes, and is stored with every reading. */
-export const SCHEMA_VERSION = 'receipt-v3';
+/**
+ * Changes whenever ReceiptExtractionSchema changes, and is stored with every reading. receipt-v5
+ * asks for every line each time it is printed, a credit as a negative line, and a folio's total
+ * as what was charged (#92); a reading made before keeps receipt-v3.
+ */
+export const SCHEMA_VERSION = 'receipt-v5';
 
 const Time = z
   .object({
@@ -122,14 +136,23 @@ export const ReceiptExtractionSchema = z.object({
       confidence: Confidence,
     })
     .nullable(),
-  total: Amount.nullable().describe('The amount actually charged, including taxes, fees and tip.'),
+  total: Amount.nullable().describe(
+    'The amount actually charged, including taxes, fees and tip, after any credits. For a hotel ' +
+      'folio, the payment to the card where one is printed, never the balance left after it, ' +
+      'which is often 0.00.',
+  ),
   subtotal: Amount.nullable().describe('The amount before taxes, fees and tip, when printed.'),
   taxes: z
     .array(z.object({ label: z.string(), value: amount, confidence: Confidence }))
-    .describe('Each tax line, such as sales tax, VAT or a city tax. Exclude tips and fees.'),
+    .describe(
+      'Each tax line, such as sales tax, VAT or a city tax, each time it is printed: a tax ' +
+        'charged for each night is a line for each night. Never merge them, and never add a ' +
+        'total the document prints of them, such as "Total taxes", as another line. A credit of ' +
+        'a tax is negative. Exclude tips and fees.',
+    ),
   fees: Fees.describe(
     'Each fee or surcharge the total includes that is neither a tax nor a tip, such as a ' +
-      'booking, service, delivery or airport fee.',
+      'booking, service, delivery or airport fee, each time it is printed.',
   ),
   tip: Amount.nullable(),
   cardLastFour: z
@@ -140,13 +163,21 @@ export const ReceiptExtractionSchema = z.object({
     .nullable(),
   time: Time,
   address: Address,
-  lineItems: z.array(
-    z.object({
-      description: z.string(),
-      quantity: z.string().nullable(),
-      amount,
-    }),
-  ),
+  lineItems: z
+    .array(
+      z.object({
+        description: z.string().describe('As printed.'),
+        quantity: z.string().nullable(),
+        amount: lineAmount,
+      }),
+    )
+    .describe(
+      'Every item line the document charges or credits, in the order printed, each time it is ' +
+        "printed: a hotel folio's room charge for each night is a line of its own. A credit, " +
+        'refund, reversal, adjustment or discount is a line of its own with a negative amount, ' +
+        'never netted into the charge it reverses. Not taxes, fees, the tip, a total of other ' +
+        'lines, or a payment.',
+    ),
 });
 
 const JourneyEnd = (where: string) =>
@@ -242,13 +273,13 @@ export type FieldSources = z.infer<typeof FieldSourcesSchema>;
 
 /**
  * The schema for an organization that has switched on where each field was read: every field
- * of receipt-v3, and the line each was read from. receipt-v3 stays what every other
- * organization's readings are asked for, unchanged.
+ * of receipt-v5, and the line each was read from, as receipt-v4 was receipt-v3's. receipt-v5
+ * stays what every other organization's readings are asked for, with nothing added.
  */
 export const ReceiptExtractionWithSourcesSchema = ReceiptExtractionSchema.extend({
   sources: FieldSourcesSchema,
 });
-export const SOURCES_SCHEMA_VERSION = 'receipt-v4';
+export const SOURCES_SCHEMA_VERSION = 'receipt-v6';
 
 /** The line each field of a stored reading was read from; null for a reading without them. */
 export function sourcesOf(output: unknown): FieldSources | null {

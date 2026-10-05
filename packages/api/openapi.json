@@ -3864,7 +3864,7 @@
               "fee",
               "tip"
             ],
-            "description": "item: something bought, or a discount as a negative amount. tax, fee and tip are spread across the items in proportion (Q37)."
+            "description": "item: something bought, or a discount or a credit, refund or reversal as a negative amount, as printed. tax, fee and tip are spread across the items in proportion (Q37)."
           },
           "description": {
             "type": "string"

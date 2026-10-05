@@ -32,8 +32,8 @@ export const ItemizedLineSchema = z
     position: z.number().int().openapi({ description: 'Its number on the receipt, from 1.' }),
     kind: z.enum(LINE_KINDS).openapi({
       description:
-        'item: something bought, or a discount as a negative amount. tax, fee and tip are ' +
-        'spread across the items in proportion (Q37).',
+        'item: something bought, or a discount or a credit, refund or reversal as a negative ' +
+        'amount, as printed. tax, fee and tip are spread across the items in proportion (Q37).',
     }),
     description: z.string(),
     quantity: z.string().nullable(),

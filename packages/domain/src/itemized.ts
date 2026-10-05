@@ -21,7 +21,10 @@ import { err, ok, type Result } from './result.ts';
  */
 
 export const LINE_KINDS = ['item', 'tax', 'fee', 'tip'] as const;
-/** item: something bought, or a discount as a negative item. The rest are spread across items. */
+/**
+ * item: something bought, or a discount or a credit, refund or reversal as a negative item, as
+ * printed and never netted into what it takes off (#92). The rest are spread across items.
+ */
 export type LineKind = (typeof LINE_KINDS)[number];
 
 /** One line of a receipt, as it was read. */
@@ -79,6 +82,39 @@ export type LinesCheck =
 const ofKind = (it: Itemization, kind: LineKind) =>
   it.lines.filter((l) => l.kind === kind).map((l) => l.amount);
 
+/** Whether `a` is within a minor unit a line of `b` (R-LINES-TOLERANCE). */
+const near = (a: Money, b: Money, lines: number) =>
+  Math.abs(subtract(a, b).amountMinor) <= lines * LINE_TOLERANCE_MINOR;
+
+/**
+ * What a receipt's lines come to, by kind, and how many of each were counted: the items, a
+ * discount or credit taking off, the taxes, and the tip and fees together. All in one currency.
+ */
+export interface LineSums {
+  readonly items: Money;
+  readonly itemLines: number;
+  readonly taxes: Money;
+  readonly taxLines: number;
+  /** The tip and fees. */
+  readonly others: Money;
+  readonly otherLines: number;
+}
+
+/**
+ * How lines make a total, each within a minor unit a line (R-LINES-TOLERANCE): with their taxes
+ * added (`added`), or with prices that include their tax, as VAT receipts print them, the
+ * items, tip and fees alone (`included`). Null when they make it neither way. One rule, for the
+ * lines an expense keeps (ADR-0041) and for a reading's sums when it prints no subtotal (#92).
+ */
+export function linesMakeTotal(lines: LineSums, total: Money): 'added' | 'included' | null {
+  const counted = lines.itemLines + lines.taxLines + lines.otherLines;
+  const withTax = add(add(lines.items, lines.taxes), lines.others);
+  if (near(withTax, total, counted)) return 'added';
+  if (lines.taxLines > 0 && near(add(lines.items, lines.others), total, counted - lines.taxLines))
+    return 'included';
+  return null;
+}
+
 /**
  * Whether a receipt's lines add up (ADR-0041, Claude’s rule): the items to the subtotal where
  * one is printed, and with the taxes, tip and fees to the total, each within a cent per line.
@@ -86,29 +122,31 @@ const ofKind = (it: Itemization, kind: LineKind) =>
  * the subtotal may be printed before or after its tax.
  */
 export function checkLines(it: Itemization): LinesCheck {
-  const items = sum(it.currency, ofKind(it, 'item'));
-  const taxes = sum(it.currency, ofKind(it, 'tax'));
-  const others = sum(it.currency, [...ofKind(it, 'fee'), ...ofKind(it, 'tip')]);
   const count = (kind: LineKind) => it.lines.filter((l) => l.kind === kind).length;
-  const near = (a: Money, b: Money, lines: number) =>
-    Math.abs(subtract(a, b).amountMinor) <= lines * LINE_TOLERANCE_MINOR;
-  const withTax = add(add(items, taxes), others);
-  const taxLines = count('tax');
+  const sums: LineSums = {
+    items: sum(it.currency, ofKind(it, 'item')),
+    itemLines: count('item'),
+    taxes: sum(it.currency, ofKind(it, 'tax')),
+    taxLines: count('tax'),
+    others: sum(it.currency, [...ofKind(it, 'fee'), ...ofKind(it, 'tip')]),
+    otherLines: count('fee') + count('tip'),
+  };
+  const { items, taxes, taxLines } = sums;
+  const withTax = add(add(items, taxes), sums.others);
 
   if (
     it.subtotal &&
-    !near(items, it.subtotal, count('item')) &&
-    !(taxLines > 0 && near(items, add(it.subtotal, taxes), count('item') + taxLines))
+    !near(items, it.subtotal, sums.itemLines) &&
+    !(taxLines > 0 && near(items, add(it.subtotal, taxes), sums.itemLines + taxLines))
   ) {
     return { addsUp: false, problem: 'subtotal', comesTo: items, against: it.subtotal };
   }
   if (!it.total) return { addsUp: false, problem: 'no_total', comesTo: withTax, against: null };
-  const added = near(withTax, it.total, it.lines.length);
-  const included =
-    !added && taxLines > 0 && near(add(items, others), it.total, it.lines.length - taxLines);
-  if (!added && !included) {
+  const made = linesMakeTotal(sums, it.total);
+  if (!made) {
     return { addsUp: false, problem: 'total', comesTo: withTax, against: it.total };
   }
+  const included = made === 'included';
   if (items.amountMinor <= 0) {
     return { addsUp: false, problem: 'not_positive', comesTo: items, against: null };
   }
@@ -146,8 +184,9 @@ export interface LineClaim {
  * Each item line with its share of the tax, tip and fees (Q37): what the total has beyond the
  * items, spread across them in proportion to their amounts, in whole minor units, the largest
  * share taking any unit left over, so every line and its share add up to the receipt’s total
- * exactly. A discount, a negative line, takes a negative share. Null when the lines don't
- * add up: then nothing is spread.
+ * exactly. A discount or a credit, a negative line, takes a negative share, so a credit and the
+ * charges it reverses take shares that cancel, within a minor unit of rounding down. Null when
+ * the lines don't add up: then nothing is spread.
  */
 export function lineClaims(it: Itemization): LineClaim[] | null {
   const check = checkLines(it);
@@ -222,8 +261,8 @@ export interface ItemizedClaim {
 /**
  * Why lines can't be used as asked. lines_dont_add_up: they don't add up, so nothing is spread.
  * no_such_line, not_an_item: only a receipt's item lines are left out or split; tax, tip and
- * fees go with them. takes_off: a discount lowers what was paid, so it can't be left out.
- * below_zero: what is left would claim less than nothing.
+ * fees go with them. takes_off: a discount or a credit lowers what was paid, so it can't be left
+ * out. below_zero: what is left would claim less than nothing.
  */
 export type LineProblem =
   'lines_dont_add_up' | 'no_such_line' | 'not_an_item' | 'takes_off' | 'below_zero';

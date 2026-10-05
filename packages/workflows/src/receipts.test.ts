@@ -529,9 +529,9 @@ describe('toStoredRun', () => {
     });
   });
 
-  it('stores a reading asked for without them as receipt-v3, as before', () => {
-    const stored = toStoredRun(RECEIPT, REQUEST, run({}), uploaded);
-    expect(stored).toMatchObject({ promptVersion: 'extract-v3', schemaVersion: 'receipt-v3' });
+  it('stores a reading asked for without them as receipt-v5, every organization’s since #92', () => {
+    const stored = toStoredRun(RECEIPT, REQUEST, run({ promptVersion: 'extract-v5' }), uploaded);
+    expect(stored).toMatchObject({ promptVersion: 'extract-v5', schemaVersion: 'receipt-v5' });
     expect(stored.output).not.toHaveProperty('sources');
   });
 });

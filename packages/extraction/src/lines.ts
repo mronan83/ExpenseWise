@@ -10,8 +10,9 @@ import { StoredReadingSchema } from './schema.ts';
 
 /**
  * A reading’s itemized lines, as its expense keeps them (FR-INT-22, ADR-0041): each item as
- * printed, a discount as a negative item, then each tax, each fee and the tip, with the total
- * and subtotal read, all in integer minor units. Null when the reading prints no item lines, or
+ * printed, each time it is printed, a discount or a credit as a negative item of its own (#92),
+ * then each tax, each fee and the tip, with the total and subtotal read, all in integer minor
+ * units. Null when the reading prints no item lines, or
  * when any line, the total or the subtotal can’t be read exactly in the reading’s currency:
  * lines that can’t all be read are never shown as if they were.
  */

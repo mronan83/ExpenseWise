@@ -729,8 +729,8 @@ export const expenseItemizations = pgTable(
 );
 
 /**
- * One line of an expense's receipt, numbered from 1 as printed: each item (a discount is a
- * negative item), then each tax, each fee and the tip. An item line can be excluded from the
+ * One line of an expense's receipt, numbered from 1 as printed: each item (a discount or a
+ * credit is a negative item, #92), then each tax, each fee and the tip. An item line can be excluded from the
  * claim with a reason, and a note that other needs (FR-EXP-16, Q38), and given a category and
  * type of its own, which makes it a part of the expense (FR-EXP-15, Q36).
  */
@@ -745,7 +745,7 @@ export const expenseLines = pgTable(
     /** As printed. */
     description: text('description').notNull(),
     quantity: text('quantity'),
-    /** As read, in `currency`'s minor units; negative for a discount. */
+    /** As read, in `currency`'s minor units; negative for a discount or a credit. */
     amountMinor: bigint('amount_minor', { mode: 'number' }).notNull(),
     currency: char('currency', { length: 3 }).notNull(),
     /** Why it is left out of the claim, with a note, and when; null while it is claimed. */
