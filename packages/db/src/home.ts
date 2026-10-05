@@ -1,8 +1,8 @@
 import type { ExpenseStatus } from '@expensewise/domain';
-import { and, asc, count, desc, eq, gt, gte, lt, lte, not, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, gte, isNull, lt, lte, ne, not, or, sql } from 'drizzle-orm';
 import type { Transaction } from './client.ts';
 import { heldAsDuplicate } from './duplicates.ts';
-import { expenses, receipts, trips } from './schema.ts';
+import { expenses, mileageLogs, mileageRoutes, receipts, trips } from './schema.ts';
 import { safeMinor, tallyTrips, tripsWithOwner, type TripRecord, type TripTally } from './trips.ts';
 
 /** This month's expenses, counted and summed by status, currency and whether on a trip. */
@@ -32,6 +32,13 @@ export interface HomeSnapshot {
   readonly monthTrips: number;
   /** The member's receipts still being read. */
   readonly reading: number;
+  /**
+   * The miles each of the member's drives dated this month claims, as plain decimals
+   * (FR-INS-01): a drive logged by hand, and a route drive once it is measured. A route drive
+   * still being measured, or one not measured and not yet claimed by hand, claims none.
+   * Absent only from a snapshot made without them, such as a test's.
+   */
+  readonly monthDrives?: readonly string[];
 }
 
 /** The first day of the month `day` falls in, and of the month after. */
@@ -103,6 +110,29 @@ export async function homeSnapshot(
     .select({ n: count() })
     .from(receipts)
     .where(and(eq(receipts.memberId, memberId), eq(receipts.status, 'processing')));
+  const drives = await tx
+    .select({ miles: mileageLogs.distance })
+    .from(mileageLogs)
+    .innerJoin(
+      expenses,
+      and(eq(expenses.orgId, mileageLogs.orgId), eq(expenses.id, mileageLogs.expenseId)),
+    )
+    .leftJoin(
+      mileageRoutes,
+      and(eq(mileageRoutes.orgId, mileageLogs.orgId), eq(mileageRoutes.expenseId, expenses.id)),
+    )
+    .where(
+      and(
+        eq(expenses.memberId, memberId),
+        gte(expenses.transactionDate, month.from),
+        lt(expenses.transactionDate, month.until),
+        eq(mileageLogs.unit, 'mi'),
+        // A route drive claims its miles once measured; until then its log holds none.
+        or(isNull(mileageRoutes.status), ne(mileageRoutes.status, 'measuring')),
+        gt(mileageLogs.distance, '0'),
+      ),
+    )
+    .orderBy(expenses.transactionDate, expenses.id);
 
   return {
     tripNow: tripNow ?? null,
@@ -119,5 +149,6 @@ export async function homeSnapshot(
     })),
     monthTrips: trip?.n ?? 0,
     reading: read?.n ?? 0,
+    monthDrives: drives.map((d) => d.miles),
   };
 }

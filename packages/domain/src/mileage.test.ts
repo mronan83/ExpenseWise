@@ -13,6 +13,7 @@ import {
   rateOn,
   reimburse,
   selectRate,
+  sumMiles,
   type MileagePolicy,
   type MileageValues,
   type OwnMileageRate,
@@ -287,5 +288,19 @@ describe('the organization’s own rate a mile (Q28, #77)', () => {
     const change = ownMileageRate({ effectiveFrom: from, perMile }, 'USD');
     expect(change.ok).toBe(false);
     if (!change.ok) expect(change.error).toMatchObject({ field, message });
+  });
+});
+
+describe('business miles added up (FR-INS-01, #73)', () => {
+  it('adds miles exactly, never through a float, and shows them plain', () => {
+    expect(sumMiles(['38.40', '12', '0.25'])).toBe('50.65');
+    // 0.1 + 0.2 is 0.30000000000000004 in floating point; miles are exact.
+    expect(sumMiles(['0.1', '0.2'])).toBe('0.3');
+    expect(sumMiles(['999.99', '999.99', '0.02'])).toBe('2000');
+    expect(sumMiles(['41.00'])).toBe('41');
+  });
+
+  it('is 0 for no drives', () => {
+    expect(sumMiles([])).toBe('0');
   });
 });

@@ -987,15 +987,20 @@ export const EXPENSE_STORIES: readonly Story[] = [
     soThat: 'the month’s figures are whole without a separate log or a spreadsheet',
     feature: 'F-22',
     requirements: ['FR-INS-01'],
-    status: 'Planned',
+    status: 'Partial',
     criteria: [
       {
         id: 'AC1',
-        given: 'business miles I logged this month',
+        given: 'business miles I logged this month, with mileage switched on',
         when: 'I open Home',
-        then: 'this month so far shows my business miles',
+        then: 'this month so far shows my business miles: every drive of mine dated this month, logged by hand or by its route, added up exactly, with how many drives',
         decided: { by: 'blueprint', source: 'design §5.3' },
-        checks: [],
+        checks: [
+          'db/home.int › lists the miles of the member’s drives this month, a route drive’s once measured',
+          'api/home › adds up this month’s drives exactly while mileage is on',
+          'domain/mileage › adds miles exactly, never through a float, and shows them plain',
+          'e2e/signed-in',
+        ],
       },
       {
         id: 'AC2',
@@ -1004,9 +1009,56 @@ export const EXPENSE_STORIES: readonly Story[] = [
         then: 'it shows what awaits reimbursement',
         decided: { by: 'blueprint', source: 'design §5.3' },
         checks: [],
+        untested: 89,
+      },
+      {
+        id: 'AC3',
+        given:
+          'a route drive still being measured, or one that couldn’t be measured and whose miles I haven’t entered yet',
+        when: 'I open Home',
+        then: 'it adds no miles until it is measured or I enter them; then it adds the miles it claims, mine where I claimed other miles than those measured',
+        decided: { by: 'claude' },
+        checks: [
+          'db/home.int › lists the miles of the member’s drives this month, a route drive’s once measured',
+        ],
+      },
+      {
+        id: 'AC4',
+        given: 'drives of another member of my organization, or mine dated in another month',
+        when: 'I open Home',
+        then: 'none of them is in this month’s business miles',
+        decided: OCT3,
+        checks: [
+          'db/home.int › lists the miles of the member’s drives this month, a route drive’s once measured',
+        ],
+      },
+      {
+        id: 'AC5',
+        given: 'mileage switched off for my organization',
+        when: 'I open Home',
+        then: 'no business miles show, and Home is exactly as it was before, even with drives logged',
+        decided: { by: 'owner', source: 'Q5' },
+        checks: ['api/home › shows no business miles while mileage is off, as Home always was'],
+      },
+      {
+        id: 'AC6',
+        given: 'mileage switched on and no drive of mine dated this month that claims miles',
+        when: 'I open Home',
+        then: 'the business miles are left out rather than shown as 0',
+        decided: { by: 'claude' },
+        checks: ['api/home › shows no business miles with no drive dated this month'],
+      },
+      {
+        id: 'AC7',
+        given: 'my business miles on Home',
+        when: 'I tap them',
+        then: 'Expenses opens on this month, each drive marked Mileage; it has no filter for drives alone',
+        decided: { by: 'claude' },
+        checks: [],
+        untested: 66,
       },
     ],
-    note: 'Mileage is built (#17), and business miles join Home with #73; what awaits reimbursement once payouts exist.',
+    note: 'Business miles are on Home since PR #60, while mileage is on (#73): a drive also counts in the month’s spend, as any expense does. What awaits reimbursement is #89, once approval (#24) exists. Counting a route drive at the miles claimed rather than those measured, leaving the figure out when there are none, and opening this month’s expenses are Claude’s, for you to confirm.',
   },
   // Category suggestions (FR-INT-10, ADR-0036)
   {

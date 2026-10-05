@@ -2,6 +2,12 @@ import { newId, type ExpenseStatus } from '@expensewise/domain';
 import { afterAll, describe, expect, it } from 'vitest';
 import { withOrg } from '../src/client.ts';
 import { homeSnapshot, monthOf } from '../src/home.ts';
+import { logMileage } from '../src/mileage.ts';
+import {
+  claimMilesForRoute,
+  logRouteMileage,
+  recordRouteMeasurement,
+} from '../src/mileage-routes.ts';
 import { fileReceipt } from '../src/receipts.ts';
 import { expenses, members } from '../src/schema.ts';
 import { createTrip, fileExpenseToTrip } from '../src/trips.ts';
@@ -171,5 +177,62 @@ describe('what Home shows', () => {
     expect(mine.monthExpenses).toEqual([]);
     expect(mine.monthTrips).toBe(0);
     expect((await w.snapshot('2026-10-03', casey)).tripNow).not.toBeNull();
+  });
+
+  it('lists the miles of the member’s drives this month, a route drive’s once measured', async () => {
+    const w = await workspace('home-miles');
+    const casey = await w.colleague();
+    const today = '2026-10-20';
+    const { orgId, userId } = w.org;
+    const byHand = (date: string, miles: string, memberId = w.org.memberId) =>
+      w.inOrg(async (tx) => {
+        const input = { date, destination: 'Acme HQ', purpose: 'Client visit', miles };
+        const logged = await logMileage(tx, orgId, memberId, input, userId, today);
+        if (logged.status !== 'logged') throw new Error(`expected a drive, got ${logged.status}`);
+      });
+    const byRoute = async (date: string, measured: boolean) => {
+      const stops = ['12 Elm St, Omaha', 'Acme HQ, 1520 Harney St, Omaha'];
+      const input = { date, purpose: 'Client visit', stops };
+      const logged = await w.inOrg((tx) =>
+        logRouteMileage(tx, orgId, w.org.memberId, input, userId, today),
+      );
+      if (logged.status !== 'logged') throw new Error(`expected a drive, got ${logged.status}`);
+      if (measured) {
+        await w.inOrg((tx) =>
+          recordRouteMeasurement(tx, orgId, logged.expenseId, logged.event.outboxId, {
+            kind: 'measured',
+            provider: 'openrouteservice',
+            profile: 'driving-car',
+            places: stops.map((label) => ({ label, longitude: '-95.9', latitude: '41.2' })),
+            legs: [61_800],
+            measuredAt: new Date('2026-10-20T12:00:00Z'),
+          }),
+        );
+      }
+      return logged.expenseId;
+    };
+    await byHand('2026-10-02', '38.4');
+    await byHand('2026-10-14', '12');
+    await byHand('2026-09-30', '99'); // last month
+    await byHand('2026-10-03', '50', casey); // a colleague's
+    await byRoute('2026-10-05', true); // measured: 61,800 m is 38.40 miles
+    const claimed = await byRoute('2026-10-06', true);
+    await w.inOrg((tx) =>
+      claimMilesForRoute(
+        tx,
+        orgId,
+        w.org.memberId,
+        claimed,
+        { miles: '41', reason: 'Road closed at the bridge' },
+        userId,
+        today,
+      ),
+    );
+    await byRoute('2026-10-07', false); // still being measured: no miles yet
+
+    const home = await w.snapshot('2026-10-15');
+    expect(home.monthDrives).toEqual(['38.40', '38.40', '41.00', '12.00']);
+    expect((await w.snapshot('2026-10-15', casey)).monthDrives).toEqual(['50.00']);
+    expect((await w.snapshot('2026-09-15')).monthDrives).toEqual(['99.00']);
   });
 });

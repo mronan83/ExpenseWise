@@ -1452,6 +1452,22 @@ export const HomeSchema = z
         expenses: z.number().int(),
         spent: z.array(TripTotalSchema),
       }),
+      miles: z
+        .object({
+          total: z.string().openapi({
+            description:
+              'The miles of the person’s drives dated this month, added up exactly, as a plain ' +
+              'decimal: a drive logged by hand, and a route drive once measured.',
+            example: '79.4',
+          }),
+          drives: z.number().int().openapi({ description: 'How many drives claim them.' }),
+        })
+        .optional()
+        .openapi({
+          description:
+            'Business miles (FR-INS-01). Only while expenses.mileage is on, and only when a ' +
+            'drive dated this month claims miles.',
+        }),
     }),
     reading: z.number().int().openapi({ description: 'Receipts still being read.' }),
     reports: z.array(ReportSummarySchema).openapi({

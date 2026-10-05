@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { NO_TRAVEL, type ExpenseTravel } from './journeys.ts';
 import { REPORT_STATUSES } from './lifecycle/report.ts';
 import {
   canExportReport,
@@ -313,5 +314,114 @@ describe('a report’s export of split expenses and excluded lines (FR-EXP-15, F
     ]);
     expect(table.totals).toEqual([{ amountMinor: 108_276 + 2973, currency: 'USD' }]);
     expect(table.notes).toHaveLength(1);
+  });
+});
+
+describe('a report with a journey or a stay (FR-INT-20, FR-INT-21, #83)', () => {
+  const travel = (over: Partial<ExpenseTravel>): ExpenseTravel => ({ ...NO_TRAVEL, ...over });
+  const flight = expense({
+    merchant: 'United Airlines',
+    amountMinor: 38_940,
+    travel: travel({ journeyFrom: 'SFO', journeyTo: 'ORD' }),
+  });
+  const hotel = expense({
+    date: '2026-10-01',
+    merchant: 'Hilton Omaha',
+    amountMinor: 41_260,
+    travel: travel({ checkIn: '2026-09-29', checkOut: '2026-10-01' }),
+  });
+
+  it('adds From and to, and Stay, after the merchant, each as the expense shows it', () => {
+    const table = reportExportTable([flight, hotel, expense()]);
+    expect(table.columns.map((c) => c.header)).toEqual([
+      'Date',
+      'Merchant',
+      'From and to',
+      'Stay',
+      'Category',
+      'Type',
+      'Trip',
+      'Purpose',
+      'Note',
+      'Amount',
+      'Currency',
+    ]);
+    expect(table.rows.map((r) => r.slice(1, 4))).toEqual([
+      ['United Airlines', 'SFO → ORD', ''],
+      ['Hilton Omaha', '', '2 nights, Sep 29 – Oct 1, 2026'],
+      ['Lou Malnati’s', '', ''],
+    ]);
+    expect(table.totals).toEqual([{ amountMinor: 38_940 + 41_260 + 4820, currency: 'USD' }]);
+    expect(reportCsv(table).split('\r\n')[1]).toBe(
+      '2026-09-02,United Airlines,SFO → ORD,,,,Chicago · partner review,Partner review,,389.40,USD',
+    );
+  });
+
+  it('adds only the column the report has: a journey alone, or a stay alone', () => {
+    const journeys = reportExportTable([flight, expense()]);
+    expect(journeys.columns.map((c) => c.header).slice(1, 4)).toEqual([
+      'Merchant',
+      'From and to',
+      'Category',
+    ]);
+    const stays = reportExportTable([hotel]);
+    expect(stays.columns.map((c) => c.header).slice(1, 4)).toEqual([
+      'Merchant',
+      'Stay',
+      'Category',
+    ]);
+    // One end alone, one date alone, and nights not sure read as the expense reads them.
+    const partial = reportExportTable([
+      expense({ travel: travel({ journeyTo: 'Union Station' }) }),
+      expense({ travel: travel({ checkIn: '2026-09-29' }) }),
+      expense({ travel: travel({ checkIn: '2026-10-01', checkOut: '2026-09-29' }) }),
+    ]);
+    expect(partial.rows.map((r) => r.slice(2, 4))).toEqual([
+      ['To Union Station', ''],
+      ['', 'Check-in Sep 29, 2026'],
+      ['', 'Nights not sure: check-out Sep 29, 2026 is before check-in Oct 1, 2026'],
+    ]);
+  });
+
+  it('writes a journey that starts like a formula as plain text', () => {
+    const table = reportExportTable([
+      expense({ travel: travel({ journeyFrom: '=HYPERLINK("x")', journeyTo: 'ORD' }) }),
+    ]);
+    expect(reportCsv(table).split('\r\n')[1]).toContain(',"\'=HYPERLINK(""x"") → ORD",');
+  });
+
+  it('is exported as it always was with no journey or stay, or none known', () => {
+    for (const expenses of [
+      [expense()],
+      [expense({ travel: null })],
+      [expense({ travel: NO_TRAVEL })],
+    ]) {
+      const table = reportExportTable(expenses);
+      expect(table.columns.map((c) => c.header).join(',')).toBe(HEADER);
+    }
+  });
+
+  it('carries the journey and the stay on each part of a split expense, before Part', () => {
+    const table = reportExportTable([
+      {
+        ...hotel,
+        category: 'Travel',
+        type: 'Lodging',
+        parts: [
+          { category: 'Travel', type: 'Lodging', amountMinor: 36_000 },
+          { category: 'Meals', type: 'Business meal', amountMinor: 5260 },
+        ],
+      },
+    ]);
+    expect(table.columns.map((c) => c.header).slice(1, 5)).toEqual([
+      'Merchant',
+      'Stay',
+      'Part',
+      'Category',
+    ]);
+    expect(table.rows.map((r) => r.slice(2, 4))).toEqual([
+      ['2 nights, Sep 29 – Oct 1, 2026', '1 of 2'],
+      ['2 nights, Sep 29 – Oct 1, 2026', '2 of 2'],
+    ]);
   });
 });

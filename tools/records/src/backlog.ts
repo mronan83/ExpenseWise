@@ -331,6 +331,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none' },
     source: 'Claude, building #79',
     affects: ['FR-INT-20', 'FR-INT-21', 'FR-SET-01', 'F-54'],
+    done: { date: '2026-10-05', in: 'PR #60' },
   },
   {
     num: 84,
@@ -464,6 +465,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none' },
     source: 'GAP-30',
     affects: ['GAP-30', 'FR-INS-01', 'F-22'],
+    done: { date: '2026-10-05', in: 'PR #60' },
   },
   {
     num: 19,
@@ -786,6 +788,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none' },
     source: 'GAP-15',
     affects: ['GAP-15', 'NFR-SEC-07'],
+    done: { date: '2026-10-05', in: 'PR #60' },
   },
   {
     num: 39,
@@ -895,6 +898,19 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'items', items: [30] },
     source: 'NFR-REL-03',
     affects: ['NFR-REL-03'],
+  },
+  {
+    num: 89,
+    title: 'What awaits reimbursement on Home',
+    type: 'Feature',
+    detail:
+      'Home’s month shows business miles since #73; the last figure FR-INS-01 asks for is the money approved and not yet paid to the person, which first exists with approval (#24). Total the person’s approved expenses not yet paid, per currency and never converted, opening their approved reports, and leave it out when there is none.',
+    priority: 'P3',
+    effort: 'S',
+    severity: 'Low',
+    blocker: { kind: 'none', note: 'Builds on approval (#24)' },
+    source: 'FR-INS-01, US-HOME-04',
+    affects: ['FR-INS-01', 'F-22'],
   },
   // Done
   {

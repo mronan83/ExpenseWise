@@ -4,6 +4,7 @@ import {
   daysBetween,
   isCurrencyCode,
   money,
+  sumMiles,
   toDecimal,
   type Money,
 } from '@expensewise/domain';
@@ -53,8 +54,8 @@ function tripView(home: HomeSnapshot, day: string) {
 
 /**
  * Home for one member on one day (FR-INS-01): what needs them first, then the trip under way
- * or next, this month, their reports to finish, and the last trips. Built from the same views as the inbox and Trips,
- * so a figure here matches the one there.
+ * or next, this month with its business miles, their reports to finish, and the last trips.
+ * Built from the same views as the inbox and Trips, so a figure here matches the one there.
  */
 export function homeView(
   data: HomeData,
@@ -64,6 +65,8 @@ export function homeView(
   /** Whether the organization reads under its AI model settings (receipts.model-settings). */
   settingsOn = false,
   converting = false,
+  /** Whether mileage is on (expenses.mileage), so the month shows the business miles. */
+  mileage = false,
 ) {
   const { home } = data;
   const items = needsYouItems(data, data.reports, now, settingsOn, converting);
@@ -80,6 +83,10 @@ export function homeView(
       spent: totalsOf(month),
       trips: home.monthTrips,
       notOnTrip: { expenses: count(offTrip), spent: totalsOf(offTrip) },
+      // Business miles: the person's drives dated this month, while mileage is on (#73).
+      ...(mileage && home.monthDrives && home.monthDrives.length > 0
+        ? { miles: { total: sumMiles(home.monthDrives), drives: home.monthDrives.length } }
+        : {}),
     },
     reading: home.reading,
     // Reports to finish: the open and closed ones, newest first (FR-INS-01, Q15).

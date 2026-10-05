@@ -13,7 +13,7 @@ export interface ReportPdfHeading {
   readonly exportedAt: Date;
 }
 
-/** US Letter, landscape, so the table’s nine columns have room. */
+/** US Letter, landscape, so the table’s nine columns, and any a report adds, have room. */
 const PAGE = { width: 792, height: 612, margin: 36 };
 const SIZE = 8.5;
 const LEADING = 11;
@@ -42,6 +42,9 @@ const CURRENCY_SIGNS: Record<string, string> = {
   '₴': 'UAH ',
 };
 
+/** Other signs the export writes that the standard fonts lack: a journey’s arrow (FR-INT-20). */
+const OTHER_SIGNS: Record<string, string> = { '→': '->' };
+
 interface Placed {
   readonly text: string;
   readonly x: number;
@@ -67,6 +70,28 @@ const day = (at: Date) =>
 const isoDay = (date: string) => day(new Date(`${date}T00:00:00Z`));
 
 /**
+ * Each column’s width: its share of `usable`, except that one whose share would fall short of
+ * what it needs is held at that, and the others share what is left. A report whose columns all
+ * fit is laid out by its shares alone, as it always was.
+ */
+export function fitWidths(
+  shares: readonly number[],
+  needs: readonly number[],
+  usable: number,
+): number[] {
+  const held = new Set<number>();
+  for (;;) {
+    const room = usable - [...held].reduce((sum, i) => sum + (needs[i] ?? 0), 0);
+    const share = shares.reduce((sum, s, i) => (held.has(i) ? sum : sum + s), 0);
+    const short = shares.findIndex((s, i) => !held.has(i) && (room * s) / share < (needs[i] ?? 0));
+    if (short === -1) {
+      return shares.map((s, i) => (held.has(i) ? (needs[i] ?? 0) : (room * s) / share));
+    }
+    held.add(short);
+  }
+}
+
+/**
  * Lays the report out: its heading, the export’s table, its totals per currency and a footer
  * on each page. A row never splits across pages, and the table’s headings repeat on each.
  */
@@ -79,7 +104,12 @@ async function layOut(heading: ReportPdfHeading, table: ReportExportTable): Prom
   /** The text in characters the font has: currency signs as codes, anything else as "?". */
   const printable = (text: string, font: PDFFont) =>
     [...text.normalize('NFKC').replace(/\s+/g, ' ')]
-      .map((c) => CURRENCY_SIGNS[c] ?? (known.get(font)?.has(c.codePointAt(0) ?? 0) ? c : '?'))
+      .map(
+        (c) =>
+          CURRENCY_SIGNS[c] ??
+          OTHER_SIGNS[c] ??
+          (known.get(font)?.has(c.codePointAt(0) ?? 0) ? c : '?'),
+      )
       .join('');
   const fits = (text: string, font: PDFFont, width: number) =>
     font.widthOfTextAtSize(text, SIZE) <= width;
@@ -116,13 +146,43 @@ async function layOut(heading: ReportPdfHeading, table: ReportExportTable): Prom
     return [...lines.slice(0, MAX_CELL_LINES - 1), `${last}…`];
   };
 
-  const usable = PAGE.width - 2 * PAGE.margin;
-  const share = table.columns.reduce((sum, c) => sum + c.width, 0);
+  /**
+   * No column is narrower than its heading’s longest word, and a column of figures (a date,
+   * an amount, a currency, miles) than its widest value, so however many columns a report
+   * adds, such as From and to or Stay, a heading’s word or a figure is never broken across
+   * lines; text wraps instead.
+   */
+  const widest = (texts: readonly string[], font: PDFFont) =>
+    Math.max(0, ...texts.map((t) => font.widthOfTextAtSize(printable(t, font), SIZE)));
+  const needs = table.columns.map(
+    (c, i) =>
+      2 * PAD +
+      Math.max(
+        widest(c.header.split(' '), bold),
+        ...(c.text
+          ? []
+          : [
+              widest(
+                table.rows.map((r) => r[i] ?? ''),
+                regular,
+              ),
+              widest(
+                table.totalRows.map((r) => r[i] ?? ''),
+                bold,
+              ),
+            ]),
+      ),
+  );
+  const widths = fitWidths(
+    table.columns.map((c) => c.width),
+    needs,
+    PAGE.width - 2 * PAGE.margin,
+  );
   const columns = table.columns.reduce<{ left: number; width: number; right: boolean }[]>(
-    (placed, c) => {
+    (placed, c, i) => {
       const prior = placed[placed.length - 1];
       const left = prior ? prior.left + prior.width : PAGE.margin;
-      return [...placed, { left, width: (usable * c.width) / share, right: c.align === 'right' }];
+      return [...placed, { left, width: widths[i] ?? 0, right: c.align === 'right' }];
     },
     [],
   );
