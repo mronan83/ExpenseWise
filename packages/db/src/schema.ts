@@ -119,7 +119,12 @@ export const members = pgTable(
   {
     id: id(),
     orgId: orgId(),
-    /** The member's first sign-in (identity provider subject). Access uses member_sign_ins. */
+    /**
+     * The member's first sign-in (identity provider subject): the one they were made with, on
+     * their first sign-in or by accepting their invite. Access uses member_sign_ins. While none of
+     * their emails is let in, only this one is let in on its own (#91, Q45); the app never
+     * changes it (trigger `keep_first_sign_in`), only the schema owner, by the runbook.
+     */
     userId: text('user_id').notNull(),
     email: text('email').notNull(),
     displayName: text('display_name').notNull(),
@@ -193,10 +198,10 @@ export const memberSignIns = pgTable(
 /**
  * The sign-ins a person has let in (#90, Q44, ADR-0044). While their organization has the
  * second factor on and they have an authenticator, only an email let in opens the app; the
- * others still forward receipts. The first of their emails to pass its code is let in then,
- * having passed it; another is let in from an email let in that passed its code, and waits,
- * until it passes its own or the time runs out. Removing the sign-in removes it too. Only the
- * person, from a session that passed the code, changes it (trigger `enforce_let_in`).
+ * others still forward receipts. The email they first signed in with is let in once it passes
+ * its code, having passed it (#91); another is let in from an email let in that passed its code,
+ * and waits, until it passes its own or the time runs out. Removing the sign-in removes it too.
+ * Only the person, from a session that passed the code, changes it (trigger `enforce_let_in`).
  */
 export const letInSignIns = pgTable(
   'let_in_sign_ins',
@@ -729,8 +734,8 @@ export const expenseItemizations = pgTable(
 );
 
 /**
- * One line of an expense's receipt, numbered from 1 as printed: each item (a discount is a
- * negative item), then each tax, each fee and the tip. An item line can be excluded from the
+ * One line of an expense's receipt, numbered from 1 as printed: each item (a discount or a
+ * credit is a negative item, #92), then each tax, each fee and the tip. An item line can be excluded from the
  * claim with a reason, and a note that other needs (FR-EXP-16, Q38), and given a category and
  * type of its own, which makes it a part of the expense (FR-EXP-15, Q36).
  */
@@ -745,7 +750,7 @@ export const expenseLines = pgTable(
     /** As printed. */
     description: text('description').notNull(),
     quantity: text('quantity'),
-    /** As read, in `currency`'s minor units; negative for a discount. */
+    /** As read, in `currency`'s minor units; negative for a discount or a credit. */
     amountMinor: bigint('amount_minor', { mode: 'number' }).notNull(),
     currency: char('currency', { length: 3 }).notNull(),
     /** Why it is left out of the claim, with a note, and when; null while it is claimed. */

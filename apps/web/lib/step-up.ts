@@ -31,7 +31,12 @@ export const isStepUp = (status: number, code: string | undefined) =>
  * screen that says so, which sends them to Settings › Sign-ins to add one.
  */
 
-type Held = (email: string | null) => void;
+/**
+ * Says an email, or the one signed in when the API didn't name it, is held or refused; and
+ * whether none of the person's emails is let in yet, so only the one they first signed in with
+ * is let in on its own (#91): then a held email is that one, and a refused one isn't.
+ */
+type Held = (email: string | null, noneLetIn: boolean) => void;
 
 let held: Held | null = null;
 
@@ -41,8 +46,8 @@ export function onAuthenticatorRequired(screen: Held | null): void {
 }
 
 /** Says this email, or the one signed in when the API didn't name it, needs its own. */
-export function authenticatorRequired(email: string | null): void {
-  held?.(email);
+export function authenticatorRequired(email: string | null, noneLetIn = false): void {
+  held?.(email, noneLetIn);
 }
 
 /** Whether an answer from our API holds this email until it adds its own authenticator. */
@@ -64,8 +69,8 @@ export function onNotLetIn(screen: Held | null): void {
 }
 
 /** Says this email, or the one signed in when the API didn't name it, isn't let in. */
-export function notLetIn(email: string | null): void {
-  refused?.(email);
+export function notLetIn(email: string | null, noneLetIn = false): void {
+  refused?.(email, noneLetIn);
 }
 
 /** Whether an answer from our API refuses this email as not let in. */

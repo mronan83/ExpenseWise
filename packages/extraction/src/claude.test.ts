@@ -132,11 +132,11 @@ describe('ClaudeExtractor', () => {
     expect(request).not.toHaveProperty('tools');
   });
 
-  it('sends exactly the prompt and schema of receipt-v3 when source lines are not asked for', async () => {
+  it('sends exactly the prompt and schema of receipt-v5 when source lines are not asked for', async () => {
     const { client, parse } = stubClient({ stop_reason: 'end_turn', parsed_output: parsed });
     const run = await new ClaudeExtractor(client, 'claude-sonnet-5-5').extract(jpeg);
     expect(run).toMatchObject({ promptVersion: PROMPT_VERSION, schemaVersion: SCHEMA_VERSION });
-    expect([PROMPT_VERSION, SCHEMA_VERSION]).toEqual(['extract-v3', 'receipt-v3']);
+    expect([PROMPT_VERSION, SCHEMA_VERSION]).toEqual(['extract-v5', 'receipt-v5']);
     const request = parse.mock.calls[0]?.[0] as {
       system: string;
       max_tokens: number;

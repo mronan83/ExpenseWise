@@ -16,8 +16,8 @@ import type { CallerMembership, WorkspaceStore } from '../src/workspace.ts';
  * code), for a person whose sign-in has a verified authenticator and one whose hasn't, with the
  * organization's switch on and off, across every operation in the API contract. A person's other
  * email let in, with none of its own while another of theirs has one, held until it adds its own
- * (#88, Q43); and, once a person has an authenticator, an email they haven't let in refused
- * (#90, Q44).
+ * (#88, Q43); once a person has an authenticator, an email they haven't let in refused (#90,
+ * Q44); and only the email they first signed in with let in on its own (#91, Q45).
  */
 
 const PROJECT = 'https://test-project.supabase.co';
@@ -28,8 +28,8 @@ const FLAG = 'security.second-factor';
 
 /**
  * Who signs in, by the token's subject, whether their sign-in has an authenticator, whether
- * any of the person's sign-ins has one (#88), and whether it, and any of theirs, is let in
- * (#90).
+ * any of the person's sign-ins has one (#88), whether it, and any of theirs, is let in (#90),
+ * and whether it is the email they first signed in with (#91).
  */
 const PEOPLE: Record<
   string,
@@ -39,6 +39,7 @@ const PEOPLE: Record<
     personAuthenticator: boolean;
     letIn: LetIn;
     personLetIn: PersonLetIn;
+    firstSignIn?: boolean;
     member: string;
   }
 > = {
@@ -87,15 +88,36 @@ const PEOPLE: Record<
     personLetIn: 'with_authenticator',
     member: '0192f7a0-0000-7000-8000-0000000000b1',
   },
-  // Someone with an authenticator, none of whose emails is let in yet: the first to pass its
-  // code is (#90).
+  // Someone with an authenticator, none of whose emails is let in yet, by the email they first
+  // signed in with: it is let in once it passes its code (#90, #91).
   'u-first': {
     role: 'owner',
     authenticator: true,
     personAuthenticator: true,
     letIn: 'no',
     personLetIn: 'none',
+    firstSignIn: true,
     member: '0192f7a0-0000-7000-8000-0000000000b3',
+  },
+  // Another person, none of whose emails is let in yet: by another email, which added an
+  // authenticator of its own and waits to be let in from the first (#91); and by the email they
+  // first signed in with, which has none of its own yet and may add one.
+  'u-not-first': {
+    role: 'owner',
+    authenticator: true,
+    personAuthenticator: true,
+    letIn: 'no',
+    personLetIn: 'none',
+    member: '0192f7a0-0000-7000-8000-0000000000b4',
+  },
+  'u-first-held': {
+    role: 'owner',
+    authenticator: false,
+    personAuthenticator: true,
+    letIn: 'no',
+    personLetIn: 'none',
+    firstSignIn: true,
+    member: '0192f7a0-0000-7000-8000-0000000000b4',
   },
   // An email let in from another, that added its own authenticator and waits to pass its code.
   'u-waiting': {
@@ -140,6 +162,7 @@ const membershipOf = (userId: string): CallerMembership | undefined => {
         personAuthenticator: person.personAuthenticator,
         letIn: person.letIn,
         personLetIn: person.personLetIn,
+        firstSignIn: person.firstSignIn === true,
       }
     : undefined;
 };
@@ -241,7 +264,12 @@ function setup(switchedOn: readonly string[], flagOverrides = '', passed: Passed
       }
       return {
         status: res.status,
-        body: parsed as { code?: string; detail?: string; email?: string } | null,
+        body: parsed as {
+          code?: string;
+          detail?: string;
+          email?: string;
+          noneLetIn?: boolean;
+        } | null,
       };
     },
   };
@@ -707,7 +735,7 @@ describe('an email not let in, once a person has an authenticator (#90)', () => 
 });
 
 describe('the first email to pass its code, and one let in passing its own (#90)', () => {
-  it('lets in the first of a person’s emails to pass its own code while none is let in, then lets it through', async () => {
+  it('lets in the email a person first signed in with once it passes its own code while none is let in, then lets it through', async () => {
     const s = setup([FLAG], '', 'let_in_first');
     const before = await s.call('u-first', 'aal1', 'GET', '/v1/reports');
     expect(before.body?.code).toBe('second_factor_required');
@@ -717,7 +745,7 @@ describe('the first email to pass its code, and one let in passing its own (#90)
     expect(s.recorded).toEqual(['u-first']);
   });
 
-  it('refuses it after all when another of the person’s emails became the first just before', async () => {
+  it('refuses it after all when the database finds it isn’t the first just then', async () => {
     const s = setup([FLAG], '', 'not_let_in');
     const res = await s.call('u-first', 'aal2', 'GET', '/v1/reports');
     expect(res).toMatchObject({ status: 403, body: { code: 'sign_in_not_let_in' } });
@@ -752,6 +780,7 @@ describe('the first email to pass its code, and one let in passing its own (#90)
       personAuthenticator: true,
       letIn: 'no' as const,
       personLetIn: 'none' as const,
+      firstSignIn: true,
     };
     const record = () => Promise.resolve('let_in_first' as const);
     await admitSignIn(on.gate, { ...member, letIn: 'no' as const }, session('aal2'), record);
@@ -765,5 +794,95 @@ describe('the first email to pass its code, and one let in passing its own (#90)
       return record();
     });
     expect(recorded).toBe(0);
+  });
+});
+
+/* Only the email a person first signed in with is let in on its own (#91, Q45). */
+
+const SWITCH_ON = ['PUT', `/v1/settings/features/${FLAG}`, { enabled: true }] as const;
+
+describe('only the email a person first signed in with is let in on its own (#91)', () => {
+  it.each(HELD.map((o) => [o.name, o] as const))(
+    'refuses every request of another email while none is let in, even once it passes a code of its own, records nothing and reaches nothing: %s',
+    async (_name, op) => {
+      const s = setup([FLAG], '', 'let_in_first');
+      for (const aal of ['aal1', 'aal2'] as const) {
+        const res = await s.call('u-not-first', aal, op.method, op.url, op.body);
+        expect(res, `${aal}: ${res.body?.detail}`).toMatchObject({
+          status: 403,
+          body: { code: 'sign_in_not_let_in', email: 'u-not-first@example.com', noneLetIn: true },
+        });
+      }
+      expect(s.reached).toEqual([]);
+      expect(s.recorded).toEqual([]);
+    },
+  );
+
+  it('tells another email, while none is let in, to let it in from the one first signed in with, and says nothing of it once one is let in', async () => {
+    const s = setup([FLAG]);
+    const before = await s.call('u-not-first', 'aal2', 'GET', '/v1/reports');
+    expect(before.body?.detail).toMatch(/only the one you first signed in with is let in/);
+    expect(before.body?.detail).toMatch(/sign in with the email you first signed in with/);
+    expect(before.body?.detail).toMatch(/receipts you send from this one are still filed/);
+    const after = await s.call('u-not-let-in-own', 'aal2', 'GET', '/v1/reports');
+    expect(after.body).not.toHaveProperty('noneLetIn');
+    expect(after.body?.detail).toMatch(/sign in with the email that has your authenticator app/);
+  });
+
+  it('asks the email first signed in with to add its own authenticator while another has one and none is let in, never refusing it as not let in', async () => {
+    const s = setup([FLAG]);
+    for (const aal of ['aal1', 'aal2'] as const) {
+      const res = await s.call('u-first-held', aal, 'GET', '/v1/reports');
+      expect(res).toMatchObject({
+        status: 403,
+        body: {
+          code: 'authenticator_required',
+          email: 'u-first-held@example.com',
+          noneLetIn: true,
+        },
+      });
+      expect(res.body?.detail).toMatch(/It is the email you first signed in with, so it is let in/);
+    }
+    // What adding one in Settings › Sign-ins reads still answers.
+    expect((await s.call('u-first-held', 'aal1', 'GET', '/v1/features')).status).toBe(200);
+    // One let in, waiting for its own, is held as before, saying nothing of the first.
+    const waiting = await s.call(OTHER, 'aal1', 'GET', '/v1/reports');
+    expect(waiting.body?.code).toBe('authenticator_required');
+    expect(waiting.body).not.toHaveProperty('noneLetIn');
+    expect(s.reached).toEqual([]);
+    expect(s.recorded).toEqual([]);
+  });
+
+  it('changes nothing for another email, or the first, while the second factor is off', async () => {
+    for (const s of [setup([]), setup([FLAG], `${FLAG}=off`)]) {
+      for (const user of ['u-not-first', 'u-first-held']) {
+        const res = await s.call(user, 'aal2', 'GET', '/v1/reports');
+        expect(res.body?.code, user).toBe('reached_store');
+      }
+      expect(s.recorded).toEqual([]);
+    }
+  });
+
+  it('refuses switching the second factor on from an email it would then refuse, and switches nothing', async () => {
+    const s = setup([]);
+    const [method, path, body] = SWITCH_ON;
+    const notFirst = await s.call('u-not-first', 'aal2', method, path, body);
+    expect(notFirst).toMatchObject({
+      status: 409,
+      body: { code: 'second_factor_would_refuse_you' },
+    });
+    expect(notFirst.body?.detail).toMatch(/only the email you first signed in with is let in/);
+    const notLetIn = await s.call('u-not-let-in-own', 'aal2', method, path, body);
+    expect(notLetIn).toMatchObject({
+      status: 409,
+      body: { code: 'second_factor_would_refuse_you' },
+    });
+    expect(notLetIn.body?.detail).toMatch(/Switch it on from an email you let in/);
+    expect(s.reached).toEqual([]);
+    // From the email first signed in with, or one let in, it switches.
+    for (const user of ['u-first', 'u-enrolled']) {
+      await s.call(user, 'aal2', method, path, body);
+    }
+    expect(s.reached).toEqual(['switchFeature', 'switchFeature']);
   });
 });

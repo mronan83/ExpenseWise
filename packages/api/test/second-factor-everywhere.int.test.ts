@@ -5,8 +5,9 @@
  * this stands in for its auth.mfa_factors in this run's database, and leaves it there: the
  * other tests' users aren't Supabase users and have no factor. A bearer token signs in as the
  * user it names; one ending in "@aal2" is a session that passed the code. Once a person has an
- * authenticator, only an email they let in signs in (#90); one let in with no authenticator of
- * its own is held until it adds its own (#88). Run with `pnpm test:integration`.
+ * authenticator, only an email they let in signs in (#90), the one they first signed in with let
+ * in on its own (#91); one let in with no authenticator of its own is held until it adds its own
+ * (#88). Run with `pnpm test:integration`.
  */
 import { randomUUID } from 'node:crypto';
 import { createDatabase } from '@expensewise/db';
@@ -70,6 +71,7 @@ const call = async (
     body: (text ? JSON.parse(text) : null) as {
       code?: string;
       email?: string;
+      noneLetIn?: boolean;
       signIns?: { id: string; current: boolean; letIn?: string }[];
       canLetIn?: boolean;
     } | null,
@@ -258,7 +260,7 @@ describe('only an email let in signs in, on a real database (#90)', () => {
   it('refuses an email not let in, whatever its session says, its own authenticator included, until it is let in from one that passed its code', async () => {
     const { first, second } = await twoEmails();
     await addFactor(first);
-    // The first to pass its code is let in.
+    // The email first signed in with is let in once it passes its code.
     const listed = await call(on, `${first}${AAL2}`, 'GET', '/v1/me/sign-ins');
     expect(listed.body).toMatchObject({
       signIns: [
@@ -310,14 +312,67 @@ describe('only an email let in signs in, on a real database (#90)', () => {
     );
   });
 
-  it('lets in only the first of a person’s emails to pass its code', async () => {
+  it('lets in first only the email a person first signed in with, never another that passes its code first', async () => {
     const { first, second } = await twoEmails();
     await addFactor(first);
     await addFactor(second);
-    expect((await call(on, `${second}${AAL2}`, 'GET', '/v1/me/sign-ins')).status).toBe(200);
-    expect((await call(on, `${first}${AAL2}`, 'GET', '/v1/me/sign-ins')).body?.code).toBe(
+    // Before #91 the other email, passing its code first, was let in, and this one refused.
+    expect(await call(on, `${second}${AAL2}`, 'GET', '/v1/me/sign-ins')).toMatchObject({
+      status: 403,
+      body: { code: 'sign_in_not_let_in', email: `${second}@example.com`, noneLetIn: true },
+    });
+    expect(await call(on, `${first}${AAL2}`, 'GET', '/v1/me/sign-ins')).toMatchObject({
+      status: 200,
+      body: { signIns: [{ current: true, letIn: 'yes' }, { letIn: 'no' }] },
+    });
+    // Once one is let in, the other is refused as before, saying nothing of the first.
+    const refused = await call(on, `${second}${AAL2}`, 'GET', '/v1/me/sign-ins');
+    expect(refused.body?.code).toBe('sign_in_not_let_in');
+    expect(refused.body).not.toHaveProperty('noneLetIn');
+  });
+
+  it('asks the email first signed in with to add its own authenticator while only another has one, then lets it in first (#91)', async () => {
+    const { first, second } = await twoEmails();
+    await addFactor(second);
+    for (const token of [first, `${first}${AAL2}`]) {
+      expect(await call(on, token, 'GET', '/v1/me/sign-ins')).toMatchObject({
+        status: 403,
+        body: { code: 'authenticator_required', email: `${first}@example.com`, noneLetIn: true },
+      });
+    }
+    expect((await call(on, first, 'GET', '/v1/features')).status).toBe(200);
+    expect((await call(on, `${second}${AAL2}`, 'GET', '/v1/me/sign-ins')).body?.code).toBe(
       'sign_in_not_let_in',
     );
+    // It adds its own and passes its code: let in, the first; it lets the other in from there.
+    await addFactor(first);
+    expect((await call(on, first, 'GET', '/v1/me/sign-ins')).body?.code).toBe(
+      'second_factor_required',
+    );
+    const secondId = await otherSignIn(on, `${first}${AAL2}`);
+    expect((await letIn(`${first}${AAL2}`, secondId)).status).toBe(200);
+    expect((await call(on, `${second}${AAL2}`, 'GET', '/v1/me/sign-ins')).body).toMatchObject({
+      signIns: [
+        { current: false, letIn: 'yes' },
+        { current: true, letIn: 'yes' },
+      ],
+    });
+  });
+
+  it('refuses switching the second factor on from an email it would then refuse (#91)', async () => {
+    const { first, second } = await twoEmails();
+    await addFactor(first);
+    await addFactor(second);
+    const switchOn = (token: string) =>
+      call(off, token, 'PUT', '/v1/settings/features/security.second-factor', { enabled: true });
+    expect(await switchOn(`${second}${AAL2}`)).toMatchObject({
+      status: 409,
+      body: { code: 'second_factor_would_refuse_you' },
+    });
+    expect(await switchOn(`${first}${AAL2}`)).toMatchObject({
+      status: 200,
+      body: { enabled: true },
+    });
   });
 
   it('leaves who is let in alone while the second factor is off, and answers feature_off', async () => {
@@ -328,7 +383,7 @@ describe('only an email let in signs in, on a real database (#90)', () => {
     const secondId = listed.body!.signIns!.find((s) => !s.current)!.id;
     const res = await call(off, `${first}${AAL2}`, 'PUT', `/v1/me/sign-ins/${secondId}/let-in`);
     expect(res).toMatchObject({ status: 404, body: { code: 'feature_off' } });
-    // Nothing was recorded while off: switched on, the first to pass its code is let in then.
+    // Nothing was recorded while off: switched on, the email first signed in with is let in then.
     expect((await call(on, `${first}${AAL2}`, 'GET', '/v1/me/sign-ins')).body).toMatchObject({
       signIns: [{ current: true, letIn: 'yes' }, { letIn: 'no' }],
     });

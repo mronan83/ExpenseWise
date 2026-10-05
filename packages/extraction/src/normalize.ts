@@ -34,6 +34,14 @@ export interface NormalizedExtraction {
   readonly currency: Field<CurrencyCode> | null;
   readonly total: Field<Money> | null;
   readonly subtotal: Field<Money> | null;
+  /**
+   * What the item lines come to, a discount or credit taking off: null when none were read, or
+   * when any can't be read exactly. Never a problem on its own; the sums check uses it when no
+   * subtotal is printed (checks.ts, #92).
+   */
+  readonly itemTotal: Money | null;
+  /** How many item lines were read, each rounded on its own. */
+  readonly itemLines: number;
   readonly taxTotal: Field<Money> | null;
   /** How many tax lines were read, each rounded on its own (checks.ts allows for that). */
   readonly taxLines: number;
@@ -154,6 +162,7 @@ export function normalizeExtraction(
   };
   const taxTotal = lines('taxes', extraction.taxes);
   const feeTotal = lines('fees', extraction.fees);
+  const itemTotal = itemsOf(extraction.lineItems, code);
 
   let date: Field<string> | null = null;
   if (extraction.date) {
@@ -208,6 +217,8 @@ export function normalizeExtraction(
     currency,
     total,
     subtotal,
+    itemTotal,
+    itemLines: extraction.lineItems.length,
     taxTotal,
     taxLines: extraction.taxes.length,
     feeTotal,
@@ -224,6 +235,28 @@ export function normalizeExtraction(
       : {}),
     problems,
   };
+}
+
+/**
+ * What the item lines come to, as printed: a discount or credit is a negative line and takes
+ * off. Null with none, or when any can't be read exactly. Item lines have no confidence of
+ * their own and never decide filing, so one that doesn't read is no problem; its receipt then
+ * shows no lines (lines.ts) and has none to check, as before.
+ */
+function itemsOf(
+  items: ReceiptExtraction['lineItems'],
+  code: CurrencyCode | undefined,
+): Money | null {
+  if (!code || items.length === 0) return null;
+  try {
+    return sum(
+      code,
+      items.map((item) => fromDecimal(item.amount.trim(), code)),
+    );
+  } catch (error) {
+    if (error instanceof DomainError) return null;
+    throw error;
+  }
 }
 
 type Read = { readonly value: string; readonly confidence: ConfidenceLevel } | null | undefined;

@@ -230,19 +230,21 @@ const ADD_AN_AUTHENTICATOR = '/settings/sign-ins';
  * another email they sign in with, signed in with one that has none, while their organization
  * has the second factor on. The API refuses its every read, and there is no code to enter yet,
  * so this says so in plain words, naming the email, and sends them to Settings › Sign-ins,
- * where adding one works; never the code prompt. Like the prompt it is the only thing on screen
- * (globals.css). It belongs to the screen whose reads were refused: moving on clears it, and the
- * next screen's refused reads bring it back. Settings › Sign-ins and the sign-in screens never
- * show it.
+ * where adding one works; never the code prompt. While none of the person's emails is let in, it
+ * is the one they first signed in with, the only one let in on its own (#91, Q45): it says so,
+ * and that the email with the authenticator waits to be let in from this one. Like the prompt it
+ * is the only thing on screen (globals.css). It belongs to the screen whose reads were refused:
+ * moving on clears it, and the next screen's refused reads bring it back. Settings › Sign-ins
+ * and the sign-in screens never show it.
  */
 export function AuthenticatorRequiredScreen() {
   const path = usePathname();
   const router = useRouter();
-  const [held, setHeld] = useState<{ email: string | null } | null>(null);
+  const [held, setHeld] = useState<{ email: string | null; noneLetIn: boolean } | null>(null);
   const [heldOn, setHeldOn] = useState(path);
 
   useEffect(() => {
-    onAuthenticatorRequired((email) => setHeld({ email }));
+    onAuthenticatorRequired((email, noneLetIn) => setHeld({ email, noneLetIn }));
     return () => onAuthenticatorRequired(null);
   }, []);
 
@@ -285,10 +287,18 @@ export function AuthenticatorRequiredScreen() {
             of your emails for its own before anything else. This one hasn&apos;t got one yet, so
             there is no code to enter.
           </p>
-          <p className="text-sm text-ink-2">
-            Add an authenticator app to this email and enter its code; then everything opens as
-            before. Or sign out, and sign in with the email that has yours.
-          </p>
+          {held.noneLetIn ? (
+            <p className="text-sm text-ink-2">
+              This is the email you first signed in with, the one let in first. Add an authenticator
+              app to it and enter its code; then everything opens as before, and you let your other
+              emails in from Settings › Sign-ins here.
+            </p>
+          ) : (
+            <p className="text-sm text-ink-2">
+              Add an authenticator app to this email and enter its code; then everything opens as
+              before. Or sign out, and sign in with the email that has yours.
+            </p>
+          )}
           <div>
             <Link
               href={ADD_AN_AUTHENTICATOR}
@@ -308,20 +318,22 @@ export function AuthenticatorRequiredScreen() {
  * let in open ExpenseWise while their organization has the second factor on; the others still
  * forward receipts. The API refuses this email's every read, so this says so in plain words,
  * naming it: that receipts sent from it are still filed, and how to let it in, from the email
- * that has the code. It offers signing out and nothing else: never the code prompt, and never
- * adding an authenticator, which only an email let in may do. Like the prompt it is the only
- * thing on screen (globals.css), Settings › Sign-ins included. It belongs to the screen whose
- * reads were refused: moving on clears it, and the next screen's refused reads bring it back.
- * The sign-in screens never show it.
+ * that has the code; or, while none of the person's emails is let in, from the email they first
+ * signed in with, the only one let in on its own, even if this one has an authenticator and
+ * passed its code (#91, Q45). It offers signing out and nothing else: never the code prompt, and
+ * never adding an authenticator, which only an email let in may do. Like the prompt it is the
+ * only thing on screen (globals.css), Settings › Sign-ins included. It belongs to the screen
+ * whose reads were refused: moving on clears it, and the next screen's refused reads bring it
+ * back. The sign-in screens never show it.
  */
 export function NotLetInScreen() {
   const path = usePathname();
   const router = useRouter();
-  const [refused, setRefused] = useState<{ email: string | null } | null>(null);
+  const [refused, setRefused] = useState<{ email: string | null; noneLetIn: boolean } | null>(null);
   const [refusedOn, setRefusedOn] = useState(path);
 
   useEffect(() => {
-    onNotLetIn((email) => setRefused({ email }));
+    onNotLetIn((email, noneLetIn) => setRefused({ email, noneLetIn }));
     return () => onNotLetIn(null);
   }, []);
 
@@ -356,22 +368,46 @@ export function NotLetInScreen() {
           <h2 id="not-let-in-title" className="font-semibold break-all">
             {refused.email ?? 'The email you signed in with'}
           </h2>
-          <p className="text-sm text-ink-2">
-            An email you sign in with has an authenticator app, and your organization asks for it
-            before anything else, so only the emails you let in open ExpenseWise. This one
-            isn&apos;t let in.
-          </p>
-          <p className="text-sm">Receipts you send from this email are still filed.</p>
-          <p className="text-sm text-ink-2">
-            To let it in, sign in with the email that has your authenticator app and enter its code.
-            In Settings › Sign-ins there, choose Let in beside this email. Then sign in with this
-            one again within {LET_IN_HOURS} hours, add an authenticator app to it, and enter its
-            code.
-          </p>
-          <p className="text-sm text-ink-2">
-            If you never added an authenticator app to another of your emails, someone else may
-            have: tell your organization&apos;s owner.
-          </p>
+          {refused.noneLetIn ? (
+            <>
+              <p className="text-sm text-ink-2">
+                An email you sign in with has an authenticator app, and your organization asks for
+                it before anything else, so only the emails you let in open ExpenseWise. None is let
+                in yet, and only the email you first signed in with is let in on its own; this
+                isn&apos;t it, even with an authenticator app of its own.
+              </p>
+              <p className="text-sm">Receipts you send from this email are still filed.</p>
+              <p className="text-sm text-ink-2">
+                To let it in, sign in with the email you first signed in with, add an authenticator
+                app to it if it has none, and enter its code. In Settings › Sign-ins there, choose
+                Let in beside this email. Then sign in with this one again within {LET_IN_HOURS}{' '}
+                hours, add an authenticator app to it if it has none, and enter its code.
+              </p>
+              <p className="text-sm text-ink-2">
+                If you can no longer sign in with the email you first signed in with, or never added
+                an authenticator app to any of your emails, tell your organization&apos;s owner.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-ink-2">
+                An email you sign in with has an authenticator app, and your organization asks for
+                it before anything else, so only the emails you let in open ExpenseWise. This one
+                isn&apos;t let in.
+              </p>
+              <p className="text-sm">Receipts you send from this email are still filed.</p>
+              <p className="text-sm text-ink-2">
+                To let it in, sign in with the email that has your authenticator app and enter its
+                code. In Settings › Sign-ins there, choose Let in beside this email. Then sign in
+                with this one again within {LET_IN_HOURS} hours, add an authenticator app to it, and
+                enter its code.
+              </p>
+              <p className="text-sm text-ink-2">
+                If you never added an authenticator app to another of your emails, someone else may
+                have: tell your organization&apos;s owner.
+              </p>
+            </>
+          )}
           <div>
             <button
               type="button"

@@ -733,6 +733,29 @@ await capture(
     }),
   ),
 );
+// A folio on the Omaha trip read as printed (#92): each night's room and taxes, and two nights'
+// parking with the one credit that reversed them, a line of its own that can't be left out.
+const nightsTaxes = [
+  { label: 'State occupancy tax', value: '13.23', confidence: 'high' },
+  { label: 'City tax', value: '10.40', confidence: 'high' },
+];
+await capture(
+  'folioCredit',
+  'upload',
+  both(
+    reading('Hilton Garden Inn Omaha Downtown', '2026-10-01', 'USD', '425.26', {
+      documentType: 'hotel_folio',
+      taxes: [...nightsTaxes, ...nightsTaxes],
+      lineItems: [
+        { description: 'Guest room', quantity: null, amount: '189.00' },
+        { description: 'Overnight parking', quantity: null, amount: '34.00' },
+        { description: 'Guest room', quantity: null, amount: '189.00' },
+        { description: 'Overnight parking', quantity: null, amount: '34.00' },
+        { description: 'Parking credit', quantity: null, amount: '-68.00' },
+      ],
+    }),
+  ),
+);
 
 // A confirmed correction, an expense edited away from its receipt, one put on a trip by hand.
 await call('POST', `/v1/receipts/${receipts.steak}/confirm`, {

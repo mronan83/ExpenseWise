@@ -142,6 +142,24 @@ export const GAPS: readonly Gap[] = [
       'Found building #90 on Oct 5. By your answer to Q44, the first of a person’s emails to pass its code is let in. Supabase Auth lets an email with no authenticator add one on its password alone, so until the person’s own email passes its code, for instance before they ever add an authenticator, whoever holds the password of another email linked to them can add theirs to it, pass its code and be let in first. The person’s own email is then refused and says it isn’t let in, which tells them; the owner removes that authenticator in Supabase and resets who is let in (the runbook).',
     fix: 'If your answer to Q45 asks for it: let in automatically only the email the person first signed in with, which until then may add its own authenticator, and refuse any other until it is let in from it (#91).',
     backlog: 91,
+    closed: {
+      date: '2026-10-05',
+      note: 'PR #61, at your answer to Q45 (ADR-0044, Which email is let in first): while the second factor is on and none of a person’s emails is let in, only the one they first signed in with is let in on its own, once it passes its code; with no authenticator of its own while another of theirs has one, it is asked to add its own, never refused. Any other is refused with 403 `sign_in_not_let_in`, its own authenticator and code included, nothing recorded, and waits to be let in from the first; the app says so. The first is the sign-in the person’s membership was made with, on their first sign-in or by accepting their invite (`members.user_id`): never one linked later, and no other when it is unlinked, until the owner names another (the runbook). The app never changes it, in the database too, and switching the second factor on from an email it would refuse is refused. Emails let in before this release stay let in.',
+    },
+  },
+  {
+    id: 'GAP-38',
+    title: 'A hotel folio’s credits and per-night taxes are read wrongly, and nothing says so.',
+    affects: ['FR-INT-22', 'FR-INT-04', 'F-55'],
+    severity: 'Medium',
+    evidence:
+      'Your report of Oct 5, from a Hilton folio: two overnight parking charges of $34 were reversed by one credit of $68, and the reading didn’t show it as the credit it was; the folio charges its taxes per night, and the itemized tax lines held only one night’s, half the tax total. The reading’s instructions say nothing of credits, reversals or a line printed once a night, and the check that a reading adds up runs only when a subtotal is printed, which a folio rarely prints, so the reading wasn’t held for a look.',
+    fix: 'Read a credit, refund or reversal as its own negative line, and each line every time it is printed, never merged; check the lines against the total when no subtotal is printed (#92).',
+    backlog: 92,
+    closed: {
+      date: '2026-10-05',
+      note: 'PR #61 (#92), for every organization: each reading is asked for every line each time it is printed, a credit as a negative line of its own, never netted into what it reverses, and a folio’s total as what was charged after credits (`extract-v5`, `receipt-v5`). A reading whose item lines, with its taxes, fees and tip, don’t make its total within a cent a line is held for a look even with no subtotal printed. A credit can’t be left out of a claim. A receipt read before keeps its reading and status; Read again reads it the new way.',
+    },
   },
   {
     id: 'GAP-25',
@@ -1002,6 +1020,18 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-05',
+    change:
+      'PR #61. Your folio report fixed for every organization (#92, GAP-38 closed): a credit, refund or reversal is read as its own negative line, so a hotel’s $68 credit and the two $34 parking charges it reverses both show and net out; each line is read every time it is printed, so each night’s taxes are all there; a folio’s total is the payment to the card after credits; and a reading whose lines don’t add up to its total is held for a look even when no subtotal is printed. A receipt read before needs Read again. By your answer to Q45, while the second factor is on, only the email a person first signed in with is let in on its own; any other waits to be let in from it (#91, GAP-37 closed), and switching the second factor on from an email it would refuse is refused.',
+    by: 'Claude, at your direction',
+  },
+  {
+    date: '2026-10-05',
+    change:
+      'Your report of Oct 5, after the release of PR #60: a Hilton folio’s $68 credit for two $34 parking charges, and its per-night taxes read as one night’s, so its lines didn’t add up to the tax it printed. Recorded as GAP-38 with #92, to fix with #91 in the next pull request.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-05',
     change:

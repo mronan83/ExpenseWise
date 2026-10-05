@@ -136,7 +136,10 @@ export function ItemizedLines({ expense, onSaved }: { expense: ExpenseDetail; on
                   </p>
                 ) : null}
                 <PartOf line={line} split={expense.split} />
-                {canChange && line.kind === 'item' && excluding !== line.position ? (
+                {canChange &&
+                line.kind === 'item' &&
+                (line.excluded || line.amount.amountMinor >= 0) &&
+                excluding !== line.position ? (
                   <div>
                     {line.excluded ? (
                       <button

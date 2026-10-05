@@ -72,6 +72,15 @@ const letInOf = (userId: string) => sql<string>`sign_in_let_in(${userId})`;
  */
 const personLetInOf = (userId: string) => sql<string>`person_let_in(${userId})`;
 
+/**
+ * Whether a sign-in is the one its member was made with, `members.user_id`: the email the person
+ * first signed in with, the only one let in on its own (#91, Q45, ADR-0044). Set as the member is
+ * made, on their first sign-in or as they accept their invite, and never changed by the app
+ * (trigger `keep_first_sign_in`); linking another email, or unlinking this one, moves it to none
+ * of the others. Read with the sign-in's own member row, which a user sees for their own sign-in.
+ */
+const FIRST_SIGN_IN = sql<boolean>`${members.userId} = ${memberSignIns.userId}`;
+
 const LET_IN: readonly string[] = ['no', 'waiting', 'yes'] satisfies LetIn[];
 const PERSON_LET_IN: readonly string[] = [
   'none',
@@ -81,17 +90,18 @@ const PERSON_LET_IN: readonly string[] = [
 
 /**
  * A member a sign-in reaches, and where that sign-in stands for the second factor: whether it,
- * and its person, have one, and whether it, and any email of the person's, is let in (#85, #88,
- * #90).
+ * and its person, have one, whether it, and any email of the person's, is let in, and whether it
+ * is the email they first signed in with (#85, #88, #90, #91).
  */
 export interface SignedInMember extends Membership, SignInStanding {}
 
-/** The four answers as the functions give them, read strictly. */
+/** The five answers as the database gives them, read strictly. */
 function standingOf(row: {
   authenticator?: unknown;
   personAuthenticator?: unknown;
   letIn?: unknown;
   personLetIn?: unknown;
+  firstSignIn?: unknown;
 }): SignInStanding {
   return {
     authenticator: row.authenticator === true,
@@ -100,6 +110,7 @@ function standingOf(row: {
     personLetIn: PERSON_LET_IN.includes(row.personLetIn as string)
       ? (row.personLetIn as PersonLetIn)
       : 'none',
+    firstSignIn: row.firstSignIn === true,
   };
 }
 
@@ -114,7 +125,7 @@ const standingQuestions = (userId: string) => ({
 /**
  * The signed-in user's first membership, as `findMemberships` finds it, and where their sign-in
  * stands for the second factor, in one query: how the API learns who is calling, and how far
- * their session may act for them (#85, #88, #90).
+ * their session may act for them (#85, #88, #90, #91).
  */
 export async function findSignedInMember(
   db: Database,
@@ -122,7 +133,7 @@ export async function findSignedInMember(
 ): Promise<SignedInMember | undefined> {
   return withUser(db, userId, async (tx) => {
     const [found] = await tx
-      .select({ ...MEMBERSHIP, ...standingQuestions(userId) })
+      .select({ ...MEMBERSHIP, ...standingQuestions(userId), firstSignIn: FIRST_SIGN_IN })
       .from(memberSignIns)
       .innerJoin(members, SIGN_IN_MEMBER)
       .where(activeSignInsOf(userId))
@@ -143,8 +154,9 @@ export async function signInHasAuthenticator(tx: Transaction, userId: string): P
 }
 
 /**
- * Where a sign-in stands for the second factor, as `findSignedInMember` reads it (#88, #90).
- * Call inside a transaction.
+ * Where a sign-in stands for the second factor, as `findSignedInMember` reads it (#88, #90,
+ * #91). Call inside a transaction that sees the sign-in and its member: the user's own
+ * (`withUser`) or their organization's (`withOrg`); otherwise it isn't the first.
  */
 export async function signInStanding(tx: Transaction, userId: string): Promise<SignInStanding> {
   const q = standingQuestions(userId);
@@ -153,9 +165,12 @@ export async function signInStanding(tx: Transaction, userId: string): Promise<S
     personAuthenticator: unknown;
     letIn: unknown;
     personLetIn: unknown;
+    firstSignIn: unknown;
   }>(
     sql`select ${q.authenticator} as "authenticator", ${q.personAuthenticator} as "personAuthenticator",
-               ${q.letIn} as "letIn", ${q.personLetIn} as "personLetIn"`,
+               ${q.letIn} as "letIn", ${q.personLetIn} as "personLetIn",
+               exists (select 1 from ${memberSignIns} join ${members} on ${SIGN_IN_MEMBER}
+                        where ${memberSignIns.userId} = ${userId} and ${FIRST_SIGN_IN}) as "firstSignIn"`,
   );
   return standingOf(rows[0] ?? {});
 }

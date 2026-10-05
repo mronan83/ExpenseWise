@@ -91,7 +91,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   members: {
     about:
-      'A person in an organization, with their role, the approver an owner chose for their reports in Settings › People, empty for Automatic (FR-GOV-01, FR-GOV-02, #86), and the currency they are reimbursed in, once they choose one in Settings; until then, their organization’s home currency (FR-EXP-13, Q23). An owner can change the role or remove them; a removed member keeps their row, their records and their history, signs in here no more, and comes back as the same member if invited again (FR-PLT-07, ADR-0035). The role also decides whose records they see: their own, or everyone’s for owners, finance admins and auditors.',
+      'A person in an organization, with their role, the approver an owner chose for their reports in Settings › People, empty for Automatic (FR-GOV-01, FR-GOV-02, #86), and the currency they are reimbursed in, once they choose one in Settings; until then, their organization’s home currency (FR-EXP-13, Q23). An owner can change the role or remove them; a removed member keeps their row, their records and their history, signs in here no more, and comes back as the same member if invited again (FR-PLT-07, ADR-0035). The role also decides whose records they see: their own, or everyone’s for owners, finance admins and auditors. It keeps the sign-in it was made with, the email the person first signed in with, on their first sign-in or by accepting their invite: while the second factor is on and none of their emails is let in, only that one is let in on its own (#91, Q45). The app never changes it (`keep_first_sign_in`); the owner names another, outside the app, for an email that can no longer be used (the runbook).',
   },
   member_sign_ins: {
     about:
@@ -99,7 +99,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   let_in_sign_ins: {
     about:
-      'The sign-ins a person has let in (#90, Q44, ADR-0044). While their organization has the second factor on and they have an authenticator, only an email let in opens the app; the others still forward receipts. The first of their emails to pass its code is let in then, having passed it. Another is let in from an email let in that passed its code, and waits, with when it lapses, 24 hours on (`LET_IN_HOURS`), until it adds its own authenticator and passes its code; then it is let in for good, with when it passed. A lapsed one counts for nothing and stays until it is let in again. Withdrawing one deletes it, and removing its sign-in removes it too. Only the person, from a session of an email with its own authenticator that passed the code, changes it (`enforce_let_in`); each change is in the audit trail.',
+      'The sign-ins a person has let in (#90, Q44, ADR-0044). While their organization has the second factor on and they have an authenticator, only an email let in opens the app; the others still forward receipts. The email they first signed in with (`members.user_id`) is let in once it passes its code, having passed it, while none of theirs is (#91); no other lets itself in. Another is let in from an email let in that passed its code, and waits, with when it lapses, 24 hours on (`LET_IN_HOURS`), until it adds its own authenticator and passes its code; then it is let in for good, with when it passed. A lapsed one counts for nothing and stays until it is let in again. Withdrawing one deletes it, and removing its sign-in removes it too. Only the person, from a session of an email with its own authenticator that passed the code, changes it (`enforce_let_in`); each change is in the audit trail.',
   },
   member_invites: {
     about:
@@ -155,7 +155,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   expense_lines: {
     about:
-      'One line of that copy, numbered from 1 as printed: each item (a discount a negative one), then each tax, each fee and the tip, in the itemization’s currency. An item can be left out of the claim with a reason picked from four and a note, which other needs (FR-EXP-16, Q38), and given a category and type of its own in a split by line (FR-EXP-15, Q36). What a line and its share of the tax, tip and fees take off is the domain’s arithmetic, never stored: the claim is written to the expense’s amount. Read only through its expense, with the expense’s member named.',
+      'One line of that copy, numbered from 1 as printed: each item, each time it is printed (a discount or a credit, refund or reversal a negative one of its own, #92), then each tax, each fee and the tip, in the itemization’s currency. An item can be left out of the claim with a reason picked from four and a note, which other needs (FR-EXP-16, Q38), and given a category and type of its own in a split by line (FR-EXP-15, Q36). What a line and its share of the tax, tip and fees take off is the domain’s arithmetic, never stored: the claim is written to the expense’s amount. Read only through its expense, with the expense’s member named.',
   },
   expense_parts: {
     about:
@@ -286,7 +286,9 @@ export const FUNCTIONS: Readonly<Record<string, string>> = {
   person_let_in:
     'The emails the person a sign-in belongs to has let in (#90, ADR-0044): `none`; `without_authenticator`, some, none of which has a verified factor now; `with_authenticator`. With the other three answers it decides how far a session gets: once one let in has an authenticator, an email not let in is refused. Reads Supabase Auth only through `sign_in_has_authenticator`, so removing every authenticator of the emails let in frees all the person’s emails on the next request. Nothing else: not which email, how many, or any email. Runs as its owner, as `person_has_authenticator` does; only the app may call it. `none` for a sign-in no member has.',
   enforce_let_in:
-    'Fires before every insert, update and delete of `let_in_sign_ins` by the app, and refuses, with an error, a change that isn’t the person’s own, from a session of an email with an authenticator of its own that passed the code (`app.assurance_level` aal2, set by the API from the verified token for that transaction only): the first of their emails lets itself in, past its code, only while none of theirs counts as let in; an email let in that passed its code lets another in, to wait, or withdraws one, never itself; an email waiting marks only itself passed, before it lapses; a lapsed one may be cleared. One change to a person’s emails at a time, by an advisory lock, so two can’t each be the first. The schema owner, as for the runbook’s reset, and the cascade when a sign-in is removed are not held to it (#90).',
+    'Fires before every insert, update and delete of `let_in_sign_ins` by the app, and refuses, with an error, a change that isn’t the person’s own, from a session of an email with an authenticator of its own that passed the code (`app.assurance_level` aal2, set by the API from the verified token for that transaction only): the email they first signed in with (`members.user_id`) lets itself in, past its code, only while none of theirs counts as let in, and no other ever lets itself in (#91); an email let in that passed its code lets another in, to wait, or withdraws one, never itself; an email waiting marks only itself passed, before it lapses; a lapsed one may be cleared. One change to a person’s emails at a time, by an advisory lock. The schema owner, as for the runbook’s reset, and the cascade when a sign-in is removed are not held to it (#90, #91).',
+  keep_first_sign_in:
+    'Fires before the app changes which sign-in a member was made with (`members.user_id`), the email the person first signed in with, and refuses it with an error, whatever its session, so no session can make another email the one let in first (#91, ADR-0044). Anything else of a member the app changes as before. The schema owner, as the runbook does when that email can no longer be used, is not held to it.',
   seed_starter_catalog:
     'Gives an organization the ready-made categories and types, and which types each allows, unless it has a category or type already, so running it again adds nothing. Runs as its caller: the release ran it for every organization as the owner, and the app runs it inside `withOrg()` as an organization is created, where row-level security keeps it to that one (ADR-0036).',
   delete_expense_conversion:
@@ -695,12 +697,13 @@ export const RULES: readonly Rule[] = [
   {
     rule: 'Only the person, from a session that passed the code, changes which of their emails are let in.',
     mechanism:
-      'A sign-in is let in once, by a composite key to its sign-in in the same organization, which takes it away when the sign-in goes; it has passed its code or waits until it lapses, one or the other. A trigger refuses any change by the app that isn’t the person’s own, from an email with an authenticator of its own whose session passed the code: the first lets itself in only while none of theirs is, another is let in, or withdrawn, only from an email let in that passed its code, and one waiting marks only itself passed. Each change is audited in the same transaction (#90, ADR-0044).',
+      'A sign-in is let in once, by a composite key to its sign-in in the same organization, which takes it away when the sign-in goes; it has passed its code or waits until it lapses, one or the other. A trigger refuses any change by the app that isn’t the person’s own, from an email with an authenticator of its own whose session passed the code: only the email the person first signed in with lets itself in, and only while none of theirs is, another is let in, or withdrawn, only from an email let in that passed its code, and one waiting marks only itself passed. Which email they first signed in with is the member’s own sign-in, which another trigger keeps the app from changing. Each change is audited in the same transaction (#90, #91, ADR-0044).',
     objects: [
       'let_in_sign_ins_sign_in_fk',
       'let_in_sign_ins_sign_in_key',
       'let_in_sign_ins_passed_or_waiting',
       'enforce_let_in',
+      'keep_first_sign_in',
     ],
     refs: ['FR-PLT-03', 'FR-PLT-04', 'ADR-0044'],
   },

@@ -241,11 +241,14 @@ export const READING_STORIES: readonly Story[] = [
       },
       {
         id: 'AC5',
-        given: 'a receipt that prints no subtotal',
+        given: 'a receipt that prints neither a subtotal nor an item line',
         when: 'it is checked',
-        then: 'there is nothing to add up, so the sums never hold it',
+        then: 'there is nothing to add up, so the sums never hold it; where it prints item lines and no subtotal, as a hotel folio does, the lines stand in for the subtotal (US-READ-25)',
         decided: { by: 'claude' },
-        checks: ['extraction/checks › has nothing to add up without a subtotal or a total'],
+        checks: [
+          'extraction/checks › has nothing to add up without a subtotal or a total',
+          'extraction/folio › has nothing to add up with neither a subtotal nor an item line that reads, as before',
+        ],
       },
       {
         id: 'AC6',
@@ -1565,7 +1568,7 @@ export const READING_STORIES: readonly Story[] = [
         id: 'AC2',
         given: 'a reading asked for its lines',
         when: 'it is stored',
-        then: 'the lines are kept with the reading, under their own prompt and schema versions, `extract-v4` and `receipt-v4`, so every stored reading says what it was asked',
+        then: 'the lines are kept with the reading, under their own prompt and schema versions, `extract-v6` and `receipt-v6` since #92 (`extract-v4` and `receipt-v4` before it), so every stored reading says what it was asked',
         decided: { by: 'claude', source: 'ADR-0006' },
         checks: [
           'workflows/receipts › stores the line each field was read from with the reading, under the version asked',
@@ -1576,14 +1579,14 @@ export const READING_STORIES: readonly Story[] = [
         id: 'AC3',
         given: 'the feature is off for my organization, or the server’s override turns it off',
         when: 'a receipt is read',
-        then: 'the prompt, the structure asked for, and so the cost of the reading, are exactly as before: `extract-v3` and `receipt-v3`',
+        then: 'the prompt, the structure asked for, and so the cost of the reading, are exactly what every other organization is asked: `extract-v5` and `receipt-v5` since #92 (`extract-v3` and `receipt-v3` before it)',
         decided: { by: 'owner', source: 'Q5' },
         checks: [
-          'extraction/claude › sends exactly the prompt and schema of receipt-v3 when source lines are not asked for',
-          'extraction/openai › sends the receipt-v3 prompt and schema unchanged when source lines are not asked for',
+          'extraction/claude › sends exactly the prompt and schema of receipt-v5 when source lines are not asked for',
+          'extraction/openai › sends the receipt-v5 prompt and schema unchanged when source lines are not asked for',
           'workflows/features › follows the organization’s own switch when the server forces nothing',
           'workflows/features › lets FLAG_OVERRIDES win, either way, without asking the organization',
-          'workflows/receipts › stores a reading asked for without them as receipt-v3, as before',
+          'workflows/receipts › stores a reading asked for without them as receipt-v5, every organization’s since #92',
         ],
       },
       {
@@ -1924,7 +1927,7 @@ export const READING_STORIES: readonly Story[] = [
         decided: { by: 'owner', source: 'Q5' },
         checks: [
           'extraction/variant › is byte for byte the request sent before, to Claude and to OpenAI',
-          'extraction/variant › is unchanged with only source lines asked for, still receipt-v4',
+          'extraction/variant › is unchanged with only source lines asked for, still receipt-v6',
           'workflows/receipt-ports › asks for nothing more with neither switch on, as every reading always has',
         ],
       },
@@ -2116,5 +2119,126 @@ export const READING_STORIES: readonly Story[] = [
       },
     ],
     note: 'The 31 nights, refusing a longer stay as typed, and 0 nights for a check-out on the day of check-in are Claude’s, for you to confirm. The report export carries the stay since PR #60 (#83), worded as on the expense; the column’s name and place are Claude’s.',
+  },
+  {
+    id: 'US-READ-25',
+    title: 'Have a folio’s credits and each night’s charges read as printed',
+    as: 'Alex, who travels for work',
+    want: 'a hotel folio’s credits, and its room and taxes for each night, read line by line as the folio prints them',
+    soThat:
+      'its lines add up to what I was charged, a credit shows beside what it reversed, and a reading that misses a night is never filed as Ready',
+    feature: 'F-06',
+    requirements: ['FR-INT-22', 'FR-INT-04'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'a folio with two overnight parking charges of $34, reversed by one credit of $68',
+        when: 'it is read',
+        then: 'both charges and the credit are lines of their own, the credit negative and described as printed, never netted into the charges or left out, and together they come to nothing',
+        decided: { by: 'owner', source: 'owner 2026-10-05' },
+        checks: [
+          'extraction/folio › keeps each night’s room and both parking charges, and the credit as a negative line of its own',
+          'extraction/folio › asks for every line each time it is printed, a credit as a negative line, and a folio’s total as what was charged',
+          'domain/itemized › adds up with no subtotal, and gives the credit a negative share that offsets its charges’',
+          'e2e/signed-in › a folio’s credit and each night’s charges, read as printed',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'a folio that charges its room and its taxes once for each night',
+        when: 'it is read',
+        then: 'each night’s room charge and each night’s taxes are lines of their own, never merged or totalled, so the tax lines add up to the tax the folio prints; a total the folio prints of them, such as “Total taxes”, is not another line',
+        decided: { by: 'owner', source: 'owner 2026-10-05' },
+        checks: [
+          'extraction/folio › adds each night’s taxes up to the tax the folio prints, and makes the total with them',
+          'extraction/folio › asks for every line each time it is printed, a credit as a negative line, and a folio’s total as what was charged',
+          'e2e/signed-in › a folio’s credit and each night’s charges, read as printed',
+        ],
+      },
+      {
+        id: 'AC3',
+        given: 'a folio paid by card, whose balance after the payment is 0.00',
+        when: 'its total is read',
+        then: 'the total is what was charged, the payment to the card after any credits, never the balance; amounts are still copied as printed, never worked out',
+        decided: { by: 'claude' },
+        checks: [
+          'extraction/folio › asks for every line each time it is printed, a credit as a negative line, and a folio’s total as what was charged',
+          'extraction/folio › holds a reading that drops the credit, lists the printed total of the taxes as a tax, or takes the balance as the total',
+        ],
+      },
+      {
+        id: 'AC4',
+        given:
+          'a reading whose item lines, with its taxes, fees and tip, don’t make its total, such as one with one night’s taxes of two, on a folio that prints no subtotal',
+        when: 'the receipt settles',
+        then: 'it Needs a look and says its parts don’t come to its total, however confident the reading; the lines may miss by a cent a line, and prices that include their tax add up too',
+        decided: { by: 'claude', source: 'ADR-0041' },
+        rules: ['R-LINES-TOLERANCE'],
+        checks: [
+          'extraction/folio › holds a reading with one night’s taxes for a look, though the folio prints no subtotal',
+          'extraction/folio › holds a reading that drops the credit, lists the printed total of the taxes as a tax, or takes the balance as the total',
+          'extraction/folio › allows a cent a line with no subtotal, and no more, as the expense’s lines are held',
+          'extraction/folio › adds up item lines whose prices include their tax, as VAT receipts print them',
+        ],
+      },
+      {
+        id: 'AC5',
+        given:
+          'a receipt that prints neither a subtotal nor an item line, or whose lines can’t all be read exactly',
+        when: 'it is checked',
+        then: 'there is nothing to add up, as before, so the sums don’t hold it',
+        decided: { by: 'claude' },
+        checks: [
+          'extraction/folio › has nothing to add up with neither a subtotal nor an item line that reads, as before',
+        ],
+      },
+      {
+        id: 'AC6',
+        given: 'a folio’s expense with a credit among its lines',
+        when: 'I leave a line out of the claim',
+        then: 'the credit can’t be left out, since it lowers what was paid; a charge it reversed can be, with its share; and the claim never goes below zero',
+        decided: { by: 'claude', source: 'ADR-0041' },
+        checks: [
+          'domain/itemized › never leaves the credit out, may leave out a charge it reversed, and never claims below zero',
+        ],
+      },
+      {
+        id: 'AC7',
+        given: 'a folio’s expense with a credit among its lines',
+        when: 'I split it by line',
+        then: 'the credit goes in a part only with lines that come to more than it; alone, or with only the charges it reversed, the part would come to nothing or less and is refused',
+        decided: { by: 'claude', source: 'ADR-0041' },
+        checks: [
+          'domain/itemized › splits the credit off only with lines that come to more than it',
+        ],
+      },
+      {
+        id: 'AC8',
+        given: 'a receipt read before this change',
+        when: 'I open it, or Read again',
+        then: 'it keeps its reading, its status and the versions it was read with; Read again reads it the new way, and its expense takes the new lines while it still follows its receipt',
+        decided: { by: 'claude', source: 'ADR-0006' },
+        checks: [
+          'api/receipts › reads a receipt again on request',
+          'api/receipts › starts over when the receipt is read again',
+          'workflows/receipts › stores a reading asked for without them as receipt-v5, every organization’s since #92',
+          'db/itemized.int › copies a reading’s lines onto its expense, and a new reading replaces them',
+        ],
+      },
+      {
+        id: 'AC9',
+        given: 'any organization, whatever it has switched on',
+        when: 'a receipt is read',
+        then: 'it is asked the new way, under new versions, `extract-v5` and `receipt-v5` (with source lines `extract-v6` and `receipt-v6`), so every reading says what it was asked; an addition switched off adds nothing, and no request offers a tool',
+        decided: { by: 'claude', source: 'ADR-0006' },
+        checks: [
+          'extraction/variant › is byte for byte the request sent before, to Claude and to OpenAI',
+          'extraction/variant › is unchanged with only source lines asked for, still receipt-v6',
+          'extraction/no-tools',
+        ],
+      },
+    ],
+    note: 'Your report of Oct 5 (GAP-38, #92), built in PR #61 for every organization, as a fix. A credit is an item, as a discount already was, so it takes a negative share of the tax that offsets its charges’ (Q37). Holding a reading whose lines don’t add up, even with no subtotal printed, may move some receipts from Ready to Needs a look, such as one whose model left lines out; that is Claude’s rule, yours to confirm, and so is the folio’s total as the payment after credits.',
   },
 ];

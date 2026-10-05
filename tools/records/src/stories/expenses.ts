@@ -1492,12 +1492,13 @@ export const EXPENSE_STORIES: readonly Story[] = [
       {
         id: 'AC8',
         given:
-          'a tax, tip or fee line, a discount, or lines whose exclusion would claim less than nothing',
+          'a tax, tip or fee line, a discount or credit, or lines whose exclusion would claim less than nothing',
         when: 'I try to exclude it',
-        then: 'it is refused: only an item is left out, a discount lowers what was paid, and a claim is never below zero',
+        then: 'it is refused: only an item is left out, a discount or credit lowers what was paid, and a claim is never below zero',
         decided: { by: 'claude', source: 'ADR-0041' },
         checks: [
           'domain/itemized › excludes only item lines, never a discount, and never claims less than nothing',
+          'domain/itemized › never leaves the credit out, may leave out a charge it reversed, and never claims below zero',
         ],
       },
       {

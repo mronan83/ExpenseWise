@@ -5,7 +5,7 @@ import {
   type SignIn,
   type StoredProviderKey,
 } from '@expensewise/db';
-import { mayLetIn, type MemberRole } from '@expensewise/domain';
+import { admission, mayLetIn, type MemberRole } from '@expensewise/domain';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import {
   isPlausibleKey,
@@ -28,6 +28,7 @@ import {
   requireCodeToLink,
   requireSecondFactor,
   SECOND_FACTOR_FLAG,
+  standingOf,
 } from './second-factor.ts';
 import {
   deleteAiKeyRoute,
@@ -133,6 +134,29 @@ const notLetInYourself = () =>
       'Sign in with the email that has your authenticator app and enter its code, then let ' +
       'this one in, or withdraw it, from Settings › Sign-ins there.',
   });
+
+/**
+ * A refusal to switch the second factor on from an email it would then refuse (#91): one not let
+ * in, while another of the person's is, or, while none is, one other than the email they first
+ * signed in with.
+ */
+const switchingOnRefusesYou = (noneLetIn: boolean) =>
+  new ProblemError(
+    409,
+    'second-factor-would-refuse-you',
+    'Switching it on would refuse the email you are using',
+    {
+      code: 'second_factor_would_refuse_you',
+      detail: noneLetIn
+        ? 'Once it is on, only the emails you let in open ExpenseWise, and only the email you ' +
+          'first signed in with is let in on its own; this isn’t it. Sign in with that one, add ' +
+          'an authenticator app to it if it has none, enter its code and switch it on there, ' +
+          'then let this one in from Settings › Sign-ins.'
+        : 'Once it is on, only the emails you let in open ExpenseWise, and this one isn’t. ' +
+          'Switch it on from an email you let in, then let this one in from Settings › Sign-ins ' +
+          'there.',
+    },
+  );
 
 const theSignInYouUse = (doing: string) =>
   new ProblemError(409, 'current-sign-in', `You cannot ${doing} the sign-in you are using`, {
@@ -562,6 +586,12 @@ export function registerWorkspaceRoutes(
         'Switching the second factor on needs your own first, so no one is locked out: add an ' +
           'authenticator app in Settings › Sign-ins and enter its code, then switch it on.',
       );
+      // Nor the email switching it on (#91): once on, it would be refused if it isn't let in, as
+      // any email but the one first signed in with is while none of the person's is.
+      const standing = standingOf(who);
+      if (admission(standing, caller.assuranceLevel) === 'not_let_in') {
+        throw switchingOnRefusesYou(standing.personLetIn === 'none');
+      }
     }
     await store().switchFeature(who, { flag: key, enabled }, caller.userId);
     const switched = (await store().listFeatures(who.orgId)).find((f) => f.flag === key);

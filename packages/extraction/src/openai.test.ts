@@ -235,7 +235,7 @@ describe('strictJsonSchema', () => {
     expect(body).not.toHaveProperty('tools');
   });
 
-  it('sends the receipt-v3 prompt and schema unchanged when source lines are not asked for', async () => {
+  it('sends the receipt-v5 prompt and schema unchanged when source lines are not asked for', async () => {
     const fetch = stubFetch(200, message({ type: 'output_text', text: JSON.stringify(parsed) }));
     const run = await new OpenAIExtractor(KEY, 'gpt-5.6-luna', { fetch }).extract(jpeg);
     expect(run).toMatchObject({ promptVersion: PROMPT_VERSION, schemaVersion: SCHEMA_VERSION });
