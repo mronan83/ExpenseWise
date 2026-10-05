@@ -274,6 +274,8 @@ export const FUNCTIONS: Readonly<Record<string, string>> = {
     'Which member signs in with an email address, case aside, and that sign-in’s user, for an arriving email that names no organization yet. Runs as its owner and returns ids only, so the app still can’t read sign-ins outside an organization (ADR-0026).',
   sign_in_has_authenticator:
     'Whether a sign-in, a Supabase Auth user, has a verified second factor such as an authenticator app, read from Supabase Auth’s own `auth.mfa_factors` as it is asked: yes or no, and nothing else of Supabase’s. The API asks it in the query that finds each request’s caller, so the second factor holds every request of someone with one (ADR-0044). Runs as its owner, which can read Supabase’s auth schema, where the app has no right; only the app may call it. No if the id isn’t a UUID, and on plain Postgres, which has no Supabase Auth. Nothing the app writes changes the answer, so removing an authenticator in Supabase takes effect on the next request.',
+  person_has_authenticator:
+    'Whether the person a sign-in belongs to has a verified second factor on any email they sign in with: this sign-in, or another linked to the same member. Asked beside `sign_in_has_authenticator` in the query that finds each request’s caller, it tells the API that one of a person’s emails still needs its own, so that email is held until it adds one (#88, ADR-0044). Yes or no, and nothing else: not which email has one, or any email. It reads Supabase Auth only through `sign_in_has_authenticator`, and runs as its owner because, before an organization is chosen, the app sees only its own sign-in; only the app may call it. No for a sign-in no member has, and on plain Postgres. Removing a person’s only authenticator in Supabase frees their other emails on the next request.',
   seed_starter_catalog:
     'Gives an organization the ready-made categories and types, and which types each allows, unless it has a category or type already, so running it again adds nothing. Runs as its caller: the release ran it for every organization as the owner, and the app runs it inside `withOrg()` as an organization is created, where row-level security keeps it to that one (ADR-0036).',
   delete_expense_conversion:
@@ -671,6 +673,13 @@ export const RULES: readonly Rule[] = [
       'One owner-run function answers yes or no from Supabase Auth’s own record of verified factors, as it is asked; the app holds no right on Supabase’s auth schema, so it can neither read a factor nor change what the answer is, and a session that skipped the code can’t clear it (ADR-0044). The release fails at its migration if the owner can’t read the record, rather than every request.',
     objects: ['sign_in_has_authenticator'],
     refs: ['FR-PLT-03', 'ADR-0044', 'ADR-0013'],
+  },
+  {
+    rule: 'The app learns whether a person has a second factor on any of their emails, and none of their other emails.',
+    mechanism:
+      'A second owner-run function asks the first of every sign-in of the member a sign-in belongs to and answers yes or no, so an email with none of its own, of a person with one, is held until it adds its own (#88). It adds no right on Supabase’s auth schema, and the app, before an organization is chosen, still sees only its own sign-in (ADR-0044).',
+    objects: ['person_has_authenticator', 'own_sign_ins'],
+    refs: ['FR-PLT-03', 'FR-PLT-04', 'ADR-0044', 'ADR-0016'],
   },
   {
     rule: 'An email is kept once, and only for a member.',

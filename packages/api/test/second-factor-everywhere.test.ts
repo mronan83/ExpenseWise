@@ -6,7 +6,7 @@ import { BEFORE_THE_CODE, createApi, openApiDocument, type ApiOptions } from '..
 import { supabaseTokenVerifier, type TokenVerifier } from '../src/auth.ts';
 import { featureGate } from '../src/features.ts';
 import { ProblemError } from '../src/problem.ts';
-import { requireCodeOfTheEnrolled } from '../src/second-factor.ts';
+import { requireCodeOfTheEnrolled, requireOwnAuthenticator } from '../src/second-factor.ts';
 import { createSecretBox } from '../src/secret-box.ts';
 import type { CallerMembership, WorkspaceStore } from '../src/workspace.ts';
 
@@ -14,7 +14,9 @@ import type { CallerMembership, WorkspaceStore } from '../src/workspace.ts';
  * The second factor locks everything for someone with an authenticator (#85, Q41, ADR-0044):
  * with tokens signed as Supabase Auth signs them, aal1 (password alone) and aal2 (passed the
  * code), for a person whose sign-in has a verified authenticator and one whose hasn't, with the
- * organization's switch on and off, across every operation in the API contract.
+ * organization's switch on and off, across every operation in the API contract. And a person's
+ * other email, with none of its own while another of theirs has one, held until it adds its own
+ * (#88, Q43).
  */
 
 const PROJECT = 'https://test-project.supabase.co';
@@ -23,17 +25,32 @@ const ID = '0192f7a0-0000-7000-8000-0000000000c1';
 const NOW = new Date('2026-10-05T12:00:00.000Z');
 const FLAG = 'security.second-factor';
 
-/** Who signs in, by the token's subject, and whether their sign-in has an authenticator. */
-const PEOPLE: Record<string, { role: MemberRole; authenticator: boolean; member: string }> = {
+/**
+ * Who signs in, by the token's subject, whether their sign-in has an authenticator, and whether
+ * any of the person's sign-ins has one (#88).
+ */
+const PEOPLE: Record<
+  string,
+  { role: MemberRole; authenticator: boolean; personAuthenticator: boolean; member: string }
+> = {
   'u-enrolled': {
     role: 'owner',
     authenticator: true,
+    personAuthenticator: true,
     member: '0192f7a0-0000-7000-8000-0000000000b1',
   },
   'u-plain': {
     role: 'member',
     authenticator: false,
+    personAuthenticator: false,
     member: '0192f7a0-0000-7000-8000-0000000000b2',
+  },
+  // The same person as u-enrolled, by another email that has no authenticator of its own.
+  'u-other-email': {
+    role: 'owner',
+    authenticator: false,
+    personAuthenticator: true,
+    member: '0192f7a0-0000-7000-8000-0000000000b1',
   },
 };
 
@@ -66,6 +83,7 @@ const membershipOf = (userId: string): CallerMembership | undefined => {
         memberId: person.member,
         role: person.role,
         authenticator: person.authenticator,
+        personAuthenticator: person.personAuthenticator,
       }
     : undefined;
 };
@@ -160,7 +178,7 @@ function setup(switchedOn: readonly string[], flagOverrides = '') {
       }
       return {
         status: res.status,
-        body: parsed as { code?: string; detail?: string } | null,
+        body: parsed as { code?: string; detail?: string; email?: string } | null,
       };
     },
   };
@@ -422,5 +440,134 @@ describe('requireCodeOfTheEnrolled', () => {
     await expect(
       requireCodeOfTheEnrolled(off.gate, enrolled, { assuranceLevel: 'aal1' }),
     ).resolves.toBe(undefined);
+  });
+});
+
+/* A person's other emails (#88, Q43). */
+
+const OTHER = 'u-other-email';
+const held = (res: { status: number; body: { code?: string } | null }) =>
+  res.status === 403 && res.body?.code === 'authenticator_required';
+
+describe('a person’s other email, until it adds its own authenticator (#88)', () => {
+  it.each(HELD.map((o) => [o.name, o] as const))(
+    'holds every request of an email with none of its own, of a person with one on another, while it is on, whatever its session says, and reaches nothing: %s',
+    async (_name, op) => {
+      const s = setup([FLAG]);
+      for (const aal of ['aal1', 'aal2'] as const) {
+        const res = await s.call(OTHER, aal, op.method, op.url, op.body);
+        expect(res, `${aal}: ${res.body?.detail}`).toMatchObject({
+          status: 403,
+          body: { code: 'authenticator_required', email: `${OTHER}@example.com` },
+        });
+      }
+      expect(s.reached).toEqual([]);
+    },
+  );
+
+  it('names the email that needs one, and never asks it for a code it can’t have', async () => {
+    const s = setup([FLAG]);
+    const res = await s.call(OTHER, 'aal1', 'GET', '/v1/reports');
+    expect(res.body?.code).toBe('authenticator_required');
+    expect(res.body?.detail).toMatch(
+      /^u-other-email@example\.com has no authenticator app of its own/,
+    );
+    expect(res.body?.detail).toMatch(/Settings › Sign-ins/);
+  });
+
+  it('still answers who is signed in, and the organization’s switches, which adding one in Settings › Sign-ins reads', async () => {
+    const s = setup([FLAG]);
+    expect(await s.call(OTHER, 'aal1', 'GET', '/v1/me')).toMatchObject({
+      status: 200,
+      body: { userId: OTHER },
+    });
+    const features = await s.call(OTHER, 'aal1', 'GET', '/v1/features');
+    expect(features.status).toBe(200);
+    const listed = (features.body as unknown as { features: { key: string; enabled: boolean }[] })
+      .features;
+    expect(listed.find((f) => f.key === FLAG)?.enabled).toBe(true);
+    expect(s.reached).toEqual([]);
+  });
+
+  it('asks the email with the authenticator for its code, not for another, and lets it through once passed', async () => {
+    const s = setup([FLAG]);
+    for (const op of HELD) {
+      const before = await s.call('u-enrolled', 'aal1', op.method, op.url, op.body);
+      expect(before.body?.code, op.name).toBe('second_factor_required');
+      const after = await s.call('u-enrolled', 'aal2', op.method, op.url, op.body);
+      expect(held(after) || refused(after), op.name).toBe(false);
+    }
+  });
+
+  it.each(SIGNED_IN.map((o) => [o.name, o] as const))(
+    'asks nothing more of a person with no authenticator on any email: %s',
+    async (_name, op) => {
+      const s = setup([FLAG]);
+      const res = await s.call('u-plain', 'aal1', op.method, op.url, op.body);
+      expect(held(res) || refused(res)).toBe(false);
+    },
+  );
+
+  it.each(SIGNED_IN.map((o) => [o.name, o] as const))(
+    'changes nothing for the other email while the second factor is switched off: %s',
+    async (_name, op) => {
+      const s = setup([]);
+      const res = await s.call(OTHER, 'aal1', op.method, op.url, op.body);
+      expect(held(res) || refused(res)).toBe(false);
+    },
+  );
+
+  it('changes nothing for the other email while the server’s override has it off, whatever the switch says', async () => {
+    const s = setup([FLAG], `${FLAG}=off`);
+    for (const op of SIGNED_IN) {
+      const res = await s.call(OTHER, 'aal1', op.method, op.url, op.body);
+      expect(held(res) || refused(res), op.name).toBe(false);
+    }
+  });
+});
+
+describe('requireOwnAuthenticator', () => {
+  const counting = (on: boolean) => {
+    let reads = 0;
+    const workspace = {
+      featureOn: () => {
+        reads += 1;
+        return Promise.resolve(on);
+      },
+    } as unknown as WorkspaceStore;
+    return { gate: featureGate({ workspace }), reads: () => reads };
+  };
+  const email = { email: 'work@example.com' };
+
+  it('reads the switch only for an email with none of its own, of a person with one', async () => {
+    const on = counting(true);
+    await requireOwnAuthenticator(on.gate, { orgId: ORG }, email);
+    await requireOwnAuthenticator(on.gate, { orgId: ORG, personAuthenticator: false }, email);
+    await requireOwnAuthenticator(
+      on.gate,
+      { orgId: ORG, authenticator: true, personAuthenticator: true },
+      email,
+    );
+    expect(on.reads()).toBe(0);
+    await expect(
+      requireOwnAuthenticator(on.gate, { orgId: ORG, personAuthenticator: true }, email),
+    ).rejects.toMatchObject({
+      status: 403,
+      extra: { code: 'authenticator_required', email: 'work@example.com' },
+    });
+    expect(on.reads()).toBe(1);
+    const off = counting(false);
+    await expect(
+      requireOwnAuthenticator(off.gate, { orgId: ORG, personAuthenticator: true }, email),
+    ).resolves.toBe(undefined);
+  });
+
+  it('says which email when the token names none', async () => {
+    const on = counting(true);
+    await expect(
+      requireOwnAuthenticator(on.gate, { orgId: ORG, personAuthenticator: true }, { email: null }),
+    ).rejects.toMatchObject({
+      extra: { code: 'authenticator_required', detail: /^The email you signed in with has no/ },
+    });
   });
 });

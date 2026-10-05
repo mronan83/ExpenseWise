@@ -3,7 +3,7 @@
   "info": {
     "title": "ExpenseWise API",
     "version": "1.0.0",
-    "description": "The API behind the ExpenseWise web and iOS apps. Money is always integer minor units plus an ISO 4217 code. Errors are RFC 9457 problem documents. While an organization has the second factor switched on, every request of a person whose sign-in has a verified authenticator, from a session that has not passed it (aal1), is refused with 403 second_factor_required, except GET /v1/me and GET /v1/features."
+    "description": "The API behind the ExpenseWise web and iOS apps. Money is always integer minor units plus an ISO 4217 code. Errors are RFC 9457 problem documents. While an organization has the second factor switched on, every request of a person whose sign-in has a verified authenticator, from a session that has not passed it (aal1), is refused with 403 second_factor_required, except GET /v1/me and GET /v1/features. Of a person with an authenticator on one of their sign-ins, a session of another that has none of its own is refused the same way with 403 authenticator_required, naming its email, until it adds one and passes it."
   },
   "servers": [
     {

@@ -14,7 +14,7 @@ import {
   organizations,
   saveProviderKey,
   setOrgFeature,
-  signInHasAuthenticator,
+  signInAuthenticators,
   unlinkSignIn,
   withOrg,
   type AiProvider,
@@ -40,6 +40,12 @@ export interface OrganizationView {
  */
 export interface CallerMembership extends Membership {
   readonly authenticator?: boolean;
+  /**
+   * Whether any email the person signs in with, this one or another linked to their
+   * membership, has one (#88, Q43): when it does and this one hasn't, this email is held until
+   * it adds its own. Left out: none.
+   */
+  readonly personAuthenticator?: boolean;
 }
 
 /**
@@ -93,7 +99,7 @@ export function dbWorkspaceStore(db: Database): WorkspaceStore {
     async ensureOrganization(owner) {
       await safe();
       const { membership, created } = await ensureOwnerOrganization(db, owner);
-      const { organization, authenticator } = await withOrg(db, membership.orgId, async (tx) => ({
+      const { organization, authenticators } = await withOrg(db, membership.orgId, async (tx) => ({
         organization: (
           await tx
             .select({
@@ -103,14 +109,15 @@ export function dbWorkspaceStore(db: Database): WorkspaceStore {
             })
             .from(organizations)
         )[0],
-        authenticator: await signInHasAuthenticator(tx, owner.userId),
+        authenticators: await signInAuthenticators(tx, owner.userId),
       }));
       if (!organization) throw new Error('The organization is not visible to its member');
-      return { membership: { ...membership, authenticator }, organization, created };
+      return { membership: { ...membership, ...authenticators }, organization, created };
     },
     async findMembership(userId) {
       await safe();
-      // Whether their sign-in has a second factor comes in the same query (#85).
+      // Whether their sign-in, and any other of theirs, has a second factor comes in the same
+      // query (#85, #88).
       return findSignedInMember(db, userId);
     },
     async listKeys(orgId) {

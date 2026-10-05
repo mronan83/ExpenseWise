@@ -37,9 +37,10 @@ const explain = (error: unknown) =>
  * Authenticator apps (F-11): add one by its QR code or key and its first code, see each with
  * when it was added, and remove one. Through Supabase Auth's MFA API in the browser; nothing of
  * the organization's data goes that way (ADR-0013). Offered while the organization has the
- * second factor on, and to its owner before switching it on.
+ * second factor on, and to its owner before switching it on. `onAdded` runs once one is added
+ * and its code is in, as for an email that needed its own (#88).
  */
-export function Authenticators() {
+export function Authenticators({ onAdded }: { onAdded?: () => void } = {}) {
   const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [adding, setAdding] = useState<(Enrollment & { name: string }) | null>(null);
   const [message, setMessage] = useState<Message>(null);
@@ -108,6 +109,7 @@ export function Authenticators() {
     void run(async () => {
       await passCode(adding.factorId, code);
       setAdding(null);
+      onAdded?.();
       return (
         `${adding.name || 'Your authenticator app'} is added. ` +
         (load.switchedOn

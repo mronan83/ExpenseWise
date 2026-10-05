@@ -20,7 +20,9 @@ type Load =
   | { state: 'loading' }
   | { state: 'signed-out' }
   | { state: 'error'; message: string }
-  | { state: 'ready'; signIns: SignIn[] };
+  | { state: 'ready'; signIns: SignIn[] }
+  /** This email needs its own authenticator before anything else (#88). */
+  | { state: 'held'; email: string | null };
 
 type Message = { tone: 'ok' | 'warn'; text: string } | null;
 
@@ -35,7 +37,10 @@ const describeError = (error: unknown) => {
 
 /**
  * The emails one person signs in with (ADR-0016), each reaching the same receipts, and their
- * authenticator apps for the second factor (F-11).
+ * authenticator apps for the second factor (F-11). An email that needs its own authenticator
+ * (#88), held from everything else, is told so here and adds one, through Supabase Auth in the
+ * browser and the organization's switches, the only things it may read; once its code is in,
+ * the rest opens.
  */
 export default function SignInsPage() {
   const [load, setLoad] = useState<Load>({ state: 'loading' });
@@ -53,6 +58,14 @@ export default function SignInsPage() {
       const { signIns } = await api<{ signIns: SignIn[] }>('/v1/me/sign-ins');
       setLoad({ state: 'ready', signIns });
     } catch (error) {
+      if (error instanceof ApiProblem && error.code === 'authenticator_required') {
+        const named = error.extra.email;
+        setLoad({
+          state: 'held',
+          email: typeof named === 'string' ? named : (session.user.email ?? null),
+        });
+        return;
+      }
       setLoad({ state: 'error', message: describeError(error) });
     }
   }, []);
@@ -109,7 +122,7 @@ export default function SignInsPage() {
         <Link href="/" className="tap font-mono text-xs tracking-widest text-ink-2 uppercase">
           ExpenseWise
         </Link>
-        {load.state === 'ready' || load.state === 'error' ? (
+        {load.state === 'ready' || load.state === 'error' || load.state === 'held' ? (
           <button type="button" onClick={() => void signOut()} className="tap text-sm text-carbon">
             Sign out
           </button>
@@ -135,6 +148,27 @@ export default function SignInsPage() {
           <p role="alert" className="text-sm text-warn">
             {load.message}
           </p>
+        ) : null}
+        {load.state === 'held' ? (
+          <section
+            aria-labelledby="held-title"
+            className="flex flex-col gap-3 rounded-xl border border-rule bg-sheet p-5"
+          >
+            <h2 id="held-title" className="font-semibold">
+              This email needs its own authenticator
+            </h2>
+            <p className="text-sm">
+              <span className="font-semibold break-all">
+                {load.email ?? 'The email you signed in with'}
+              </span>{' '}
+              has no authenticator app of its own, and another email you sign in with has one. Your
+              organization asks each of your emails for its own before anything else.
+            </p>
+            <p className="text-sm text-ink-2">
+              Add one below and enter its code; then your sign-ins, receipts and everything else
+              open as before.
+            </p>
+          </section>
         ) : null}
         {load.state === 'ready' ? (
           <>
@@ -210,8 +244,11 @@ export default function SignInsPage() {
                 </button>
               </form>
             </section>
-            <Authenticators />
           </>
+        ) : null}
+        {/* In one place for both, so it keeps its message once a held email adds one (#88). */}
+        {load.state === 'ready' || load.state === 'held' ? (
+          <Authenticators onAdded={() => void refresh()} />
         ) : null}
         <p
           role="status"

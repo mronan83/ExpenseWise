@@ -112,6 +112,21 @@ export const GAPS: readonly Gap[] = [
       'Found building #85 on Oct 5. Each email a person signs in with is its own Supabase Auth user with its own authenticators, and the second factor holds each sign-in by its own (ADR-0044), as the code screen does. Linking one now needs the code from someone with an authenticator, but the email linked, or linked before, has none until its person adds one, and opens everything on its password alone.',
     fix: 'Once a person has an authenticator on any of their sign-ins, hold every other sign-in of theirs that has none until it adds one and passes it, with the app saying which email needs one (#88, Q43).',
     backlog: 88,
+    closed: {
+      date: '2026-10-05',
+      note: 'ADR-0044, at your answer to Q43: while the second factor is on, a session of an email with no authenticator of its own, of a person with one on another of their emails, gets nothing from the API but who they are and the switches, whatever its session says: 403 `authenticator_required`, naming the email, until it adds its own and enters its code. The app says which email needs one, never asks it for a code, and sends it to Settings › Sign-ins, where adding one works. The API asks `person_has_authenticator`, one owner-run function over the person’s sign-ins that reads Supabase Auth only through `sign_in_has_authenticator`, so removing a person’s only authenticator frees their other emails at once. Whoever has a held email’s password can still add an authenticator to it: GAP-36.',
+    },
+  },
+  {
+    id: 'GAP-36',
+    title:
+      'Whoever has the password of a person’s held email can add an authenticator to it and get in.',
+    affects: ['FR-PLT-03', 'FR-PLT-04', 'F-11'],
+    severity: 'Low',
+    evidence:
+      'Found building #88 on Oct 5. A person’s other email with no authenticator of its own is held until it adds one and enters its code (Q43). Supabase Auth lets an email with no verified factor add one on its password alone, so whoever has that password, the person or someone who stole it, can add an authenticator of their own in Settings › Sign-ins, enter its code, and open everything. The hold stops a password used as it is; it can’t tell the person adding one from someone else.',
+    fix: 'Count a held email’s new authenticator only once the person confirms it from another of their emails whose code they entered, or keep it as built, by your answer to Q44 (#90).',
+    backlog: 90,
   },
   {
     id: 'GAP-25',
@@ -943,6 +958,15 @@ export const QUESTIONS: readonly Question[] = [
       date: '2026-10-05',
       text: 'A: hold a person’s other email until it adds its own authenticator and enters its code, the app saying which email needs one (#88).',
     },
+  },
+  {
+    id: 'Q44',
+    title: 'A held email’s new authenticator',
+    ask: 'By your answer to Q43, a person’s other email with no authenticator of its own is held until it adds one and enters its code (#88). Supabase Auth lets an email with none add one on its password alone, so whoever has that email’s password can add an authenticator of their own and get in (GAP-36). A: count a held email’s new authenticator only once the person confirms it in Settings › Sign-ins from another of their emails whose code they entered (#90). B: keep it as built: the hold stops a password used as it is, and adding one is that email’s own step.',
+    why: 'The hold stops a stolen password used as it is, through the app or straight against the API. Someone who also adds an authenticator gets past it, and nothing tells the person; confirming from an email that already has the code would stop them, for one more step each time a person adds one to another email.',
+    recommendation:
+      'A before anyone in a team links a second email with the second factor on; B while you are the only one who does.',
+    affects: ['FR-PLT-03', 'FR-PLT-04', 'GAP-36', 'F-11'],
   },
 ];
 

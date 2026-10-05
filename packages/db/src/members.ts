@@ -46,15 +46,28 @@ export async function findMemberships(db: Database, userId: string): Promise<Mem
  */
 const authenticatorOf = (userId: string) => sql<boolean>`sign_in_has_authenticator(${userId})`;
 
-/** A member a sign-in reaches, and whether that sign-in has a verified second factor. */
-export interface SignedInMember extends Membership {
+/**
+ * Whether the person a sign-in belongs to has a verified second factor on any email they sign
+ * in with, this one or another linked to the same member (#88, Q43, ADR-0044): read through
+ * `sign_in_has_authenticator`, so it answers as that does. False for a sign-in no member has.
+ */
+const personAuthenticatorOf = (userId: string) => sql<boolean>`person_has_authenticator(${userId})`;
+
+/** Whether a sign-in, and the person it belongs to, have a verified second factor. */
+export interface SignInAuthenticators {
+  /** This sign-in has one of its own (#85). */
   readonly authenticator: boolean;
+  /** A sign-in of the person's has one, this one or another (#88). */
+  readonly personAuthenticator: boolean;
 }
+
+/** A member a sign-in reaches, and whether that sign-in, and its person, have a second factor. */
+export interface SignedInMember extends Membership, SignInAuthenticators {}
 
 /**
  * The signed-in user's first membership, as `findMemberships` finds it, and whether their
- * sign-in has a verified second factor, in one query: how the API learns who is calling, and
- * whether their password alone may act for them (#85).
+ * sign-in, and any other of theirs, has a verified second factor, in one query: how the API
+ * learns who is calling, and whether their password alone may act for them (#85, #88).
  */
 export async function findSignedInMember(
   db: Database,
@@ -62,13 +75,23 @@ export async function findSignedInMember(
 ): Promise<SignedInMember | undefined> {
   return withUser(db, userId, async (tx) => {
     const [found] = await tx
-      .select({ ...MEMBERSHIP, authenticator: authenticatorOf(userId) })
+      .select({
+        ...MEMBERSHIP,
+        authenticator: authenticatorOf(userId),
+        personAuthenticator: personAuthenticatorOf(userId),
+      })
       .from(memberSignIns)
       .innerJoin(members, SIGN_IN_MEMBER)
       .where(activeSignInsOf(userId))
       .orderBy(asc(memberSignIns.createdAt))
       .limit(1);
-    return found && { ...found, authenticator: found.authenticator === true };
+    return (
+      found && {
+        ...found,
+        authenticator: found.authenticator === true,
+        personAuthenticator: found.personAuthenticator === true,
+      }
+    );
   });
 }
 
@@ -78,6 +101,20 @@ export async function signInHasAuthenticator(tx: Transaction, userId: string): P
     sql`select sign_in_has_authenticator(${userId}) as has`,
   );
   return rows[0]?.has === true;
+}
+
+/**
+ * Whether a sign-in, and the person it belongs to, have a verified second factor, as
+ * `findSignedInMember` reads them (#88). Call inside a transaction.
+ */
+export async function signInAuthenticators(
+  tx: Transaction,
+  userId: string,
+): Promise<SignInAuthenticators> {
+  const { rows } = await tx.execute<{ own: boolean; person: boolean }>(
+    sql`select ${authenticatorOf(userId)} as own, ${personAuthenticatorOf(userId)} as person`,
+  );
+  return { authenticator: rows[0]?.own === true, personAuthenticator: rows[0]?.person === true };
 }
 
 /** Serializes everything that decides which member a sign-in belongs to. */

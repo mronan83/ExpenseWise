@@ -1399,7 +1399,7 @@ export const ACCESS_STORIES: readonly Story[] = [
         untested: 66,
       },
     ],
-    note: 'Your answer of Oct 5 (Q41). Which two requests stay open before the code, that linking needs it while the switch is off too, and that the API asks Supabase Auth’s own record rather than keeping one of its own are Claude’s (ADR-0044), yours to confirm. Each email is held by its own authenticators, as Supabase Auth keeps them; whether a person’s other email with none should add its own first is Q43 (GAP-35, #88). No test talks to Supabase itself: the tests stand in for its record of factors, and the prompt carrying a refused read on is owed to #66.',
+    note: 'Your answer of Oct 5 (Q41). Which two requests stay open before the code, that linking needs it while the switch is off too, and that the API asks Supabase Auth’s own record rather than keeping one of its own are Claude’s (ADR-0044), yours to confirm. Each email is asked for the code of its own authenticators, as Supabase Auth keeps them; since #88, by your answer to Q43, a person’s other email with none is held until it adds its own (US-ACC-14). No test talks to Supabase itself: the tests stand in for its record of factors, and the prompt carrying a refused read on is owed to #66.',
   },
   {
     id: 'US-TEAM-06',
@@ -1520,5 +1520,129 @@ export const ACCESS_STORIES: readonly Story[] = [
       },
     ],
     note: 'Your answer to Q42 (Oct 5): keep the routing as built, and let an owner choose each member’s approver now (#86). The choice is kept while the one chosen can’t approve, and used again once they can. That a report already submitted keeps its approver, what People says then, and that only an owner chooses, as an admin action, are Claude’s, yours to confirm.',
+  },
+  {
+    id: 'US-ACC-14',
+    title: 'Each email I sign in with needs its own authenticator',
+    as: 'Alex, who signs in with a personal and a work email',
+    want: 'my other email to open nothing until it has an authenticator app of its own, once one of my emails has one and my organization has the second factor on, and the app to tell me which email needs one',
+    soThat:
+      'a stolen password for the email I protect less can’t open my receipts, or everyone’s if I am an owner or finance admin',
+    feature: 'F-11',
+    requirements: ['FR-PLT-03', 'FR-PLT-04'],
+    status: 'Partial',
+    criteria: [
+      {
+        id: 'AC1',
+        given:
+          'one email I sign in with has an authenticator app, another has none of its own, and my organization has the second factor switched on',
+        when: 'a session of the email with none asks for anything, a read or a change, from the app or straight with its token',
+        then: 'it is refused as needing that email’s own authenticator, naming the email, before anything is read or changed',
+        decided: { by: 'owner', source: 'Q43' },
+        checks: [
+          'api/second-factor-everywhere › holds every request of an email with none of its own, of a person with one on another, while it is on, whatever its session says, and reaches nothing',
+          'api/second-factor-everywhere › names the email that needs one, and never asks it for a code it can’t have',
+          'api/second-factor-everywhere.int › holds the email with no authenticator of its own until it adds one and passes it, while it is on',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'the same',
+        when: 'that email’s session says it passed a code, as one can for a while after its own last authenticator is removed',
+        then: 'it is held all the same: what counts is whether the email has an authenticator of its own now',
+        decided: { by: 'claude', source: 'ADR-0044' },
+        checks: [
+          'api/second-factor-everywhere › holds every request of an email with none of its own, of a person with one on another, while it is on, whatever its session says, and reaches nothing',
+          'api/second-factor-everywhere.int › holds the email with no authenticator of its own until it adds one and passes it, while it is on',
+        ],
+      },
+      {
+        id: 'AC3',
+        given: 'that email is held',
+        when: 'it asks who is signed in, or which features my organization has switched on, or adds an authenticator app in Settings › Sign-ins',
+        then: 'those work, so it can add its own there: the same two requests as before the code (US-ACC-13), and adding one goes to Supabase Auth from the browser; nothing else of the organization answers',
+        decided: { by: 'claude', source: 'ADR-0044' },
+        checks: [
+          'api/second-factor-everywhere › still answers who is signed in, and the organization’s switches, which adding one in Settings › Sign-ins reads',
+          'api/second-factor-everywhere › names only who is signed in and the organization’s switches as asked before the code',
+          'api/second-factor-everywhere.int › holds the email with no authenticator of its own until it adds one and passes it, while it is on',
+        ],
+      },
+      {
+        id: 'AC4',
+        given: 'that email is held',
+        when: 'it adds its own authenticator and enters its code',
+        then: 'everything answers it; from then on it is asked for its own code before anything else, like the email that had one, which is still asked for its own',
+        decided: { by: 'owner', source: 'Q43' },
+        checks: [
+          'api/second-factor-everywhere.int › holds the email with no authenticator of its own until it adds one and passes it, while it is on',
+          'api/second-factor-everywhere › asks the email with the authenticator for its code, not for another, and lets it through once passed',
+        ],
+      },
+      {
+        id: 'AC5',
+        given: 'a screen whose reads were refused because this email needs its own authenticator',
+        when: 'it hears so',
+        then: 'the app says in plain words, on a screen of its own, that this email, named, needs its own authenticator, with a button to Settings › Sign-ins and a way to sign out; it never asks for a code, as there is none to enter yet',
+        decided: { by: 'owner', source: 'Q43' },
+        checks: ['e2e/signed-in › an email that needs its own authenticator, held before a read'],
+      },
+      {
+        id: 'AC6',
+        given: 'that email is held',
+        when: 'I open Settings › Sign-ins with it',
+        then: 'it says this email needs its own authenticator and offers adding one, without listing my other emails',
+        decided: { by: 'claude', source: 'ADR-0044' },
+        checks: [
+          'e2e/signed-in › an email that needs its own authenticator, adding one in Settings › Sign-ins',
+        ],
+      },
+      {
+        id: 'AC7',
+        given: 'that email adding its own in Settings › Sign-ins',
+        when: 'its code is in',
+        then: 'the page opens my sign-ins and the rest where I am, keeping the message that it is added',
+        decided: { by: 'claude', source: 'ADR-0044' },
+        checks: [],
+        untested: 66,
+      },
+      {
+        id: 'AC8',
+        given: 'one email of mine has an authenticator and another is held',
+        when: 'my only authenticator is removed, by me or by the owner in Supabase for a lost phone, or the held email is unlinked',
+        then: 'my other emails open on their passwords again at once: nothing of ExpenseWise’s needs clearing, and a held email can always add its own with its password alone, so no one is locked out',
+        decided: { by: 'claude', source: 'ADR-0044' },
+        checks: [
+          'api/second-factor-everywhere.int › frees the other emails at once when the person’s only authenticator is removed',
+          'db/authenticators.int › frees a person’s other emails on the next question once their only authenticator is removed, or the email is unlinked',
+        ],
+      },
+      {
+        id: 'AC9',
+        given:
+          'no email of mine has an authenticator, or my organization has the second factor switched off, or the server’s override has it off',
+        when: 'I use any of my emails with a password alone',
+        then: 'nothing more is asked of me than before',
+        decided: { by: 'owner', source: 'Q5' },
+        checks: [
+          'api/second-factor-everywhere › asks nothing more of a person with no authenticator on any email',
+          'api/second-factor-everywhere › changes nothing for the other email while the second factor is switched off',
+          'api/second-factor-everywhere › changes nothing for the other email while the server’s override has it off, whatever the switch says',
+        ],
+      },
+      {
+        id: 'AC10',
+        given: 'what says my person has an authenticator',
+        when: 'ExpenseWise’s database role asks',
+        then: 'it is told yes or no for the person a sign-in belongs to, from a verified factor on any of my emails and no one else’s, and sees none of my other emails; Supabase Auth’s record is read only through the one function that answers for a sign-in',
+        decided: { by: 'claude', source: 'ADR-0044' },
+        checks: [
+          'db/authenticators.int › knows a person has an authenticator from a verified factor on any email they sign in with, and only theirs',
+          'db/authenticators.int › gives the app one answer about the person and no sight of their other emails',
+          'db/authenticators.int › knows no person with an authenticator either, however many emails they sign in with',
+        ],
+      },
+    ],
+    note: 'Your answer of Oct 5 (Q43). That a held email’s session is held whatever it says it passed, that it may read only what the code screen may, what Settings › Sign-ins shows it, and that the API asks one function over the person’s sign-ins are Claude’s (ADR-0044), yours to confirm. Supabase Auth lets an email with no authenticator add one on its password alone, so whoever has that password can add their own and get past the hold: GAP-36, asked as Q44. No test talks to Supabase itself: the tests stand in for its record of factors, and the screens stand in for the API’s refusal; the page opening once a held email’s code is in is owed to #66.',
   },
 ];

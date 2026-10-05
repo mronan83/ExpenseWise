@@ -12,7 +12,8 @@ import {
   SecondFactorError,
   type Authenticator,
 } from '../lib/second-factor';
-import { onStepUp } from '../lib/step-up';
+import { onAuthenticatorRequired, onStepUp } from '../lib/step-up';
+import { supabase } from '../lib/supabase';
 
 const explain = (error: unknown) =>
   error instanceof SecondFactorError ? error.message : 'Something went wrong. Try again.';
@@ -215,6 +216,87 @@ export function StepUpPrompt() {
               <div>{cancel}</div>
             </>
           ) : null}
+        </section>
+      </main>
+    </div>
+  );
+}
+
+/** Where an email that needs its own authenticator adds one, and says so itself (#88). */
+const ADD_AN_AUTHENTICATOR = '/settings/sign-ins';
+
+/**
+ * An email that needs its own authenticator (#88, Q43): a person with an authenticator on
+ * another email they sign in with, signed in with one that has none, while their organization
+ * has the second factor on. The API refuses its every read, and there is no code to enter yet,
+ * so this says so in plain words, naming the email, and sends them to Settings › Sign-ins,
+ * where adding one works; never the code prompt. Like the prompt it is the only thing on screen
+ * (globals.css). It belongs to the screen whose reads were refused: moving on clears it, and the
+ * next screen's refused reads bring it back. Settings › Sign-ins and the sign-in screens never
+ * show it.
+ */
+export function AuthenticatorRequiredScreen() {
+  const path = usePathname();
+  const router = useRouter();
+  const [held, setHeld] = useState<{ email: string | null } | null>(null);
+  const [heldOn, setHeldOn] = useState(path);
+
+  useEffect(() => {
+    onAuthenticatorRequired((email) => setHeld({ email }));
+    return () => onAuthenticatorRequired(null);
+  }, []);
+
+  // Another screen: whatever it reads says afresh whether this email is still held.
+  if (heldOn !== path) {
+    setHeldOn(path);
+    setHeld(null);
+  }
+
+  if (!held || path === ADD_AN_AUTHENTICATOR || beforeTheCode(path)) return null;
+
+  async function signOut() {
+    await supabase()?.auth.signOut();
+    setHeld(null);
+    router.replace('/sign-in');
+  }
+
+  return (
+    <div
+      data-step-up
+      className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]"
+    >
+      <header className="flex items-baseline justify-between py-3">
+        <span className="font-mono text-xs tracking-widest text-ink-2 uppercase">ExpenseWise</span>
+        <button type="button" onClick={() => void signOut()} className="tap text-sm text-carbon">
+          Sign out
+        </button>
+      </header>
+      <main className="flex flex-1 flex-col gap-4 pb-8">
+        <h1 className="text-2xl font-bold">This email needs its own authenticator</h1>
+        <section
+          aria-labelledby="held-email-title"
+          className="flex flex-col gap-3 rounded-xl border border-rule bg-sheet p-5"
+        >
+          <h2 id="held-email-title" className="font-semibold break-all">
+            {held.email ?? 'The email you signed in with'}
+          </h2>
+          <p className="text-sm text-ink-2">
+            Another email you sign in with has an authenticator app, and your organization asks each
+            of your emails for its own before anything else. This one hasn&apos;t got one yet, so
+            there is no code to enter.
+          </p>
+          <p className="text-sm text-ink-2">
+            Add an authenticator app to this email and enter its code; then everything opens as
+            before. Or sign out, and sign in with the email that has yours.
+          </p>
+          <div>
+            <Link
+              href={ADD_AN_AUTHENTICATOR}
+              className="inline-block rounded-lg bg-carbon px-4 py-2 text-sm font-semibold text-carbon-ink"
+            >
+              Add one in Settings › Sign-ins
+            </Link>
+          </div>
         </section>
       </main>
     </div>
