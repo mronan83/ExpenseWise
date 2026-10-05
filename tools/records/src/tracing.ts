@@ -144,6 +144,16 @@ export const GAPS: readonly Gap[] = [
     backlog: 91,
   },
   {
+    id: 'GAP-38',
+    title: 'A hotel folio’s credits and per-night taxes are read wrongly, and nothing says so.',
+    affects: ['FR-INT-22', 'FR-INT-04', 'F-55'],
+    severity: 'Medium',
+    evidence:
+      'Your report of Oct 5, from a Hilton folio: two overnight parking charges of $34 were reversed by one credit of $68, and the reading didn’t show it as the credit it was; the folio charges its taxes per night, and the itemized tax lines held only one night’s, half the tax total. The reading’s instructions say nothing of credits, reversals or a line printed once a night, and the check that a reading adds up runs only when a subtotal is printed, which a folio rarely prints, so the reading wasn’t held for a look.',
+    fix: 'Read a credit, refund or reversal as its own negative line, and each line every time it is printed, never merged; check the lines against the total when no subtotal is printed (#92).',
+    backlog: 92,
+  },
+  {
     id: 'GAP-25',
     title: 'Photos emailed in are stored with their location.',
     affects: ['NFR-PRV-03'],
@@ -1002,6 +1012,12 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-05',
+    change:
+      'Your report of Oct 5, after the release of PR #60: a Hilton folio’s $68 credit for two $34 parking charges, and its per-night taxes read as one night’s, so its lines didn’t add up to the tax it printed. Recorded as GAP-38 with #92, to fix with #91 in the next pull request.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-05',
     change:

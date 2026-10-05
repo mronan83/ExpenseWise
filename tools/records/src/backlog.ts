@@ -998,6 +998,19 @@ export const BACKLOG: readonly BacklogItem[] = [
     source: 'GAP-37, Claude, building #90',
     affects: ['GAP-37', 'FR-PLT-03', 'FR-PLT-04', 'F-11'],
   },
+  {
+    num: 92,
+    title: 'Read a folio’s credits and per-night charges as printed',
+    type: 'Gap',
+    detail:
+      'Your report of Oct 5 (GAP-38). A credit, refund or reversal, such as a hotel’s $68 credit for two $34 parking charges, is read as its own line with a negative amount, so the charges and the credit both show and net out; every line is read each time it is printed, so a folio’s taxes for each night are all there and add up to the tax it prints; and a reading whose lines don’t add up to its total is held for a look even when no subtotal is printed. A receipt read before needs Read again.',
+    priority: 'P1',
+    effort: 'M',
+    severity: 'Medium',
+    blocker: { kind: 'none' },
+    source: 'Product owner Oct 5',
+    affects: ['GAP-38', 'FR-INT-22', 'FR-INT-04', 'F-55'],
+  },
   // Done
   {
     num: 17,
