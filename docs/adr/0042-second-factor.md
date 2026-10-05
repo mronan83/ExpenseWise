@@ -2,7 +2,7 @@
 
 People add an authenticator app (TOTP) in Settings › Sign-ins through Supabase Auth. While their organization has the second factor switched on, signing in asks for its code before anything else, and every admin action needs a session that passed it (aal2). Switching it on needs the owner's own code, so no one is locked out, and the server's override switches all of it off.
 
-- **Status:** Accepted (building the second factor in the same batch as approval, behind its own switch, decided by product owner, Oct 5, Q40; TOTP through Supabase Auth from the blueprint, ADR-0013; when the code is asked, who may add one while it is off, the no-lockout rule and what counts as an admin action recommended, no objection yet)
+- **Status:** Accepted (building the second factor in the same batch as approval, behind its own switch, decided by product owner, Oct 5, Q40; TOTP through Supabase Auth from the blueprint, ADR-0013; when the code is asked, who may add one while it is off, the no-lockout rule and what counts as an admin action recommended, no objection yet); Amended by [ADR-0044](0044-second-factor-everywhere.md) (every request of someone with an authenticator needs the code, and linking a sign-in always does, Q41)
 - **Date:** 2026-10-05
 - **Deciders:** Product owner (Q40); Claude (principal architect), for the design
 - **Decision register:** D-44. Builds on [ADR-0013](0013-supabase-platform.md) (Supabase Auth, our API for data), [ADR-0032](0032-features-switched-per-organization.md) (each feature switched per organization) and [ADR-0035](0035-own-records-and-invite-links.md) (roles); closes GAP-03 (#8).

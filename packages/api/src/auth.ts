@@ -1,5 +1,6 @@
 import type { MiddlewareHandler } from 'hono';
 import { createRemoteJWKSet, errors, jwtVerify, type JWTVerifyGetKey } from 'jose';
+import { recordIdentity } from './caller.ts';
 import { problem } from './problem.ts';
 
 /** Who is calling, as proven by a verified access token. Membership is resolved separately. */
@@ -108,7 +109,10 @@ export function requireIdentity(
       );
     }
     try {
-      c.set('identity', await verifier(token));
+      const identity = await verifier(token);
+      c.set('identity', identity);
+      // For the second factor's check as the request resolves its caller (#85).
+      recordIdentity(identity);
     } catch (error) {
       if (!(error instanceof AuthError)) throw error;
       return problem(

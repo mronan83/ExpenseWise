@@ -1,6 +1,7 @@
 /**
- * Asking for the second factor in the middle of an action (FR-GOV-04). The app's prompt
- * registers itself here once; `api()` calls `stepUp()` when an admin action answers 403
+ * Asking for the second factor in the middle of an action (FR-GOV-04, #85). The app's prompt
+ * registers itself here once; `api()` calls `stepUp()` when a request, an admin action or any
+ * other of someone whose organization asks the code before anything else, answers 403
  * second_factor_required, and repeats the request once the code is in. Its own module, with
  * no imports, so the API helper and the prompt don't import each other.
  */

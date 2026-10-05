@@ -29,6 +29,19 @@ const fill =
   (page) =>
     page.getByLabel(label, { exact: true }).first().fill(value);
 
+/** The API's answer to a request that needs the second factor. */
+const needsTheCode = (detail: string) => ({
+  status: 403,
+  contentType: 'application/problem+json',
+  body: JSON.stringify({
+    type: 'https://expensewise.app/problems/second-factor-required',
+    title: 'This needs your second factor',
+    status: 403,
+    code: 'second_factor_required',
+    detail,
+  }),
+});
+
 /**
  * The API asks for the second factor before changes at `pattern`, as it does while the second
  * factor is switched on and the session hasn't passed it; reads go through as before.
@@ -39,17 +52,26 @@ const asksForTheCode =
     page.route(pattern, (route) =>
       route.request().method() === 'GET'
         ? route.fallback()
-        : route.fulfill({
-            status: 403,
-            contentType: 'application/problem+json',
-            body: JSON.stringify({
-              type: 'https://expensewise.app/problems/second-factor-required',
-              title: 'This needs your second factor',
-              status: 403,
-              code: 'second_factor_required',
-              detail: 'Enter the code from your authenticator app, then try again.',
-            }),
-          }),
+        : route.fulfill(
+            needsTheCode('Enter the code from your authenticator app, then try again.'),
+          ),
+    );
+
+/**
+ * The API asks for the second factor before reads at `pattern` too, as it does for someone with
+ * an authenticator whose session hasn't passed it while the second factor is on (#85).
+ */
+const asksForTheCodeToRead =
+  (pattern: string): Step =>
+  (page) =>
+    page.route(pattern, (route) =>
+      route.request().method() === 'GET'
+        ? route.fulfill(
+            needsTheCode(
+              'Your organization asks for the code from your authenticator app before anything else. Enter it, then try again.',
+            ),
+          )
+        : route.fallback(),
     );
 
 /**
@@ -286,6 +308,20 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
       (page) =>
         expect(page.getByRole('heading', { name: 'Enter your code to continue' })).toBeVisible(),
       (page) => expect(page.getByRole('heading', { name: 'Features', level: 1 })).toBeHidden(),
+    ],
+    undefined,
+    /status of 403/,
+  ],
+  [
+    'the code asked for before a read',
+    () => '/settings/organization',
+    [
+      asksForTheCodeToRead('**/api/v1/settings/organization'),
+      (page) => page.reload({ waitUntil: 'networkidle' }),
+      (page) =>
+        expect(page.getByRole('heading', { name: 'Enter your code to continue' })).toBeVisible(),
+      (page) => expect(page.getByText(/asks for it before anything else/)).toBeVisible(),
+      (page) => expect(page.getByLabel('Which authenticator app')).toBeVisible(),
     ],
     undefined,
     /status of 403/,

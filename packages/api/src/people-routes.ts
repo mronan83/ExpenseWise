@@ -196,9 +196,18 @@ export function registerPeopleRoutes(
       code: 'not_found',
       detail: 'Check you copied the whole link, or ask for a new one.',
     });
+  /**
+   * Whoever holds a link may not belong anywhere yet, so nothing here needs their membership;
+   * it is still resolved, as every route's caller is, so the organization they are in now, if
+   * any, asks for the code of someone with an authenticator first (#85).
+   */
+  const admit = async (userId: string) => {
+    await stores().workspace.findMembership(userId);
+  };
 
   app.openapi(lookUpInviteRoute, async (c) => {
     const { token } = c.req.valid('json');
+    await admit(c.var.identity.userId);
     const found = await stores().people.lookUp(token, c.var.identity.userId, now());
     if (!found) throw noInvite();
     await features.require(found.orgId, FLAG);
@@ -218,6 +227,7 @@ export function registerPeopleRoutes(
     const { userId, email } = c.var.identity;
     const { token } = c.req.valid('json');
     const { people } = stores();
+    await admit(userId);
     const found = await people.lookUp(token, userId, now());
     if (!found) throw noInvite();
     await features.require(found.orgId, FLAG);

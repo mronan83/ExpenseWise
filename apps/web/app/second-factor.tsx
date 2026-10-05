@@ -105,18 +105,28 @@ export function CodeForm({
 
 type Asked = { resolve: (passed: boolean) => void; apps: Authenticator[] | null };
 
+/** Screens that ask for the code themselves, or come before it. */
+const BEFORE_THE_CODE = ['/sign-in'];
+const beforeTheCode = (path: string) =>
+  BEFORE_THE_CODE.some((p) => path === p || path.startsWith(`${p}/`));
+
 /**
- * The code, asked for in the middle of an admin action that needs it (FR-GOV-04). While it is
- * asked, it is the only thing on screen (globals.css); the page underneath keeps its place,
- * and the action carries on once the code is in. Cancelled, the page shows the refusal.
+ * The code, asked for in the middle of what needs it: an admin action (FR-GOV-04), or, for
+ * someone with an authenticator whose organization asks it before anything else, any read or
+ * change their session makes before passing it (#85). While it is asked, it is the only thing
+ * on screen (globals.css); the page underneath keeps its place, and what it was doing carries
+ * on once the code is in. Cancelled, the page shows the refusal.
  */
 export function StepUpPrompt() {
+  const path = usePathname();
   const [asked, setAsked] = useState<Asked | null>(null);
 
   useEffect(() => {
-    // Two actions refused at once share one prompt, and both carry on after the one code.
+    // Two requests refused at once share one prompt, and both carry on after the one code.
     let pending: Promise<boolean> | null = null;
     onStepUp(() => {
+      // The code screen asks for it itself: never a second prompt over it.
+      if (beforeTheCode(window.location.pathname)) return Promise.resolve(false);
       pending ??= new Promise<boolean>((resolve) => {
         const done = (passed: boolean) => {
           pending = null;
@@ -132,7 +142,19 @@ export function StepUpPrompt() {
     return () => onStepUp(null);
   }, []);
 
-  if (!asked) return null;
+  // A page's reads refused as it opened can ask just before the check in front of everything
+  // sends the session on to the code screen: the prompt gives way to it, so the code is asked
+  // once, there.
+  const onCodeScreen = beforeTheCode(path);
+  useEffect(() => {
+    if (!onCodeScreen || !asked) return;
+    asked.resolve(false);
+    // The route changed under an open prompt: a reaction to the router, not derivable state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setAsked(null);
+  }, [onCodeScreen, asked]);
+
+  if (!asked || onCodeScreen) return null;
   const finish = (passed: boolean) => {
     asked.resolve(passed);
     setAsked(null);
@@ -168,9 +190,9 @@ export function StepUpPrompt() {
           {asked.apps && asked.apps.length > 0 ? (
             <>
               <p className="text-sm text-ink-2">
-                What you were doing needs the code from your authenticator app, such as a change to
-                your organization&apos;s settings, people or keys. Enter the one showing now, and it
-                carries on.
+                What you were doing needs the code from your authenticator app: your organization
+                asks for it before anything else, or before a change to its settings, people or
+                keys. Enter the one showing now, and it carries on.
               </p>
               <CodeForm apps={asked.apps} onPassed={() => finish(true)}>
                 {cancel}
@@ -199,9 +221,6 @@ export function StepUpPrompt() {
   );
 }
 
-/** Screens that ask for the code themselves, or come before it. */
-const BEFORE_THE_CODE = ['/sign-in'];
-
 /**
  * Before anything else (FR-PLT-03): a session that signed in with a password alone, of someone
  * with an authenticator app, while their organization has the second factor on, goes to the
@@ -211,7 +230,7 @@ export function SecondFactorGate() {
   const path = usePathname();
   const router = useRouter();
   useEffect(() => {
-    if (BEFORE_THE_CODE.some((p) => path === p || path.startsWith(`${p}/`))) return;
+    if (beforeTheCode(path)) return;
     let live = true;
     void codeNeeded().then((needed) => {
       if (!live || !needed) return;

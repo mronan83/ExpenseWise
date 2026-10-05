@@ -20,9 +20,11 @@ export class ApiProblem extends Error {
 }
 
 /**
- * Calls our API as the signed-in user. An admin action that needs the second factor asks for
- * the code where the app shows its prompt, then is sent again, once, as the session that
- * passed it (FR-GOV-04); without the code it fails as any refusal does.
+ * Calls our API as the signed-in user. A request that needs the second factor, an admin action
+ * (FR-GOV-04) or, for someone with an authenticator whose organization asks it before anything
+ * else, any read or change (#85), asks for the code where the app shows its prompt, then is
+ * sent again, once, as the session that passed it; without the code it fails as any refusal
+ * does.
  */
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const session = (await supabase()?.auth.getSession())?.data.session;
@@ -63,9 +65,14 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 /**
  * Downloads a file from our API as the signed-in user, such as a report's CSV, under the name
- * the API gives it. A problem document becomes an ApiProblem, as with `api`.
+ * the API gives it. A problem document becomes an ApiProblem, as with `api`, and one asking
+ * for the second factor asks for the code, then downloads once more (#85).
  */
-export async function apiDownload(path: string, fallbackName: string): Promise<void> {
+export async function apiDownload(
+  path: string,
+  fallbackName: string,
+  afterCode = false,
+): Promise<void> {
   const session = (await supabase()?.auth.getSession())?.data.session;
   const res = await fetch(`/api${path}`, {
     headers: session ? { authorization: `Bearer ${session.access_token}` } : {},
@@ -76,6 +83,9 @@ export async function apiDownload(path: string, fallbackName: string): Promise<v
       title?: string;
       detail?: string;
     } & Record<string, unknown>;
+    if (isStepUp(res.status, body.code) && !afterCode && (await stepUp())) {
+      return apiDownload(path, fallbackName, true);
+    }
     throw new ApiProblem(
       res.status,
       body.code,

@@ -47,8 +47,18 @@ import { registerTripRoutes } from './trip-routes.ts';
 import type { TripStore } from './trips.ts';
 import { registerUnfiledEmailRoutes } from './unfiled-email-routes.ts';
 import type { UnfiledEmailStore } from './unfiled-emails.ts';
+import { listFeaturesRoute } from './routes/workspace.ts';
+import { beforeTheCode, secondFactorEverywhere } from './second-factor.ts';
 import { registerWorkspaceRoutes } from './workspace-routes.ts';
 import type { WorkspaceStore } from './workspace.ts';
+
+/**
+ * The only routes a session that hasn't passed the code may use while the second factor holds
+ * everything else (#85): the organization's switches, which the code screen and the check that
+ * sends someone to it read. `GET /v1/me` names who is signed in and nothing of an organization,
+ * so it is never held; the health checks and the email webhook carry no person's token.
+ */
+export const BEFORE_THE_CODE = [listFeaturesRoute] as const;
 
 export interface ApiOptions
   extends
@@ -142,7 +152,10 @@ export const OPENAPI_INFO = {
     version: '1.0.0',
     description:
       'The API behind the ExpenseWise web and iOS apps. Money is always integer minor units ' +
-      'plus an ISO 4217 code. Errors are RFC 9457 problem documents.',
+      'plus an ISO 4217 code. Errors are RFC 9457 problem documents. While an organization ' +
+      'has the second factor switched on, every request of a person whose sign-in has a ' +
+      'verified authenticator, from a session that has not passed it (aal1), is refused with ' +
+      '403 second_factor_required, except GET /v1/me and GET /v1/features.',
   },
   servers: [{ url: '/api' }],
 };
@@ -227,8 +240,14 @@ export function createApi(options: ApiOptions) {
   // One gate for every route: a feature that is off answers 404 feature_off.
   const features: FeatureGate = featureGate(options);
   // Each route resolves its caller through the workspace store, which records them as who the
-  // request acts for, so members' records are read and changed as them (ADR-0035).
-  const workspace = options.workspace && recordingCaller(options.workspace);
+  // request acts for, so members' records are read and changed as them (ADR-0035). Resolving
+  // them first asks for the code of someone with an authenticator who hasn't passed it, while
+  // their organization has the second factor on, so every route asks it (#85, ADR-0044).
+  const workspace =
+    options.workspace && recordingCaller(options.workspace, secondFactorEverywhere(features));
+  // What the code screen, and the check in front of it, need before the code: the switch. Who is
+  // signed in (GET /v1/me) never resolves an organization, so it needs no mark.
+  for (const route of BEFORE_THE_CODE) app.use(route.getRoutingPath(), beforeTheCode(route.method));
   const routes = { ...options, workspace, features };
   registerWorkspaceRoutes(app, routes);
   registerOrganizationRoutes(app, routes);

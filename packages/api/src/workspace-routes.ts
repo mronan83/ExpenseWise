@@ -25,6 +25,7 @@ import { ProblemError } from './problem.ts';
 import { sealContext } from './provider-keys.ts';
 import {
   requireAdminSecondFactor,
+  requireCodeToLink,
   requireSecondFactor,
   SECOND_FACTOR_FLAG,
 } from './second-factor.ts';
@@ -39,7 +40,7 @@ import {
 } from './routes/workspace.ts';
 import { linkSignInRoute, listSignInsRoute, unlinkSignInRoute } from './routes/sign-ins.ts';
 import { keyHint, SecretBoxError, type SecretBox } from './secret-box.ts';
-import type { WorkspaceStore } from './workspace.ts';
+import type { CallerMembership, WorkspaceStore } from './workspace.ts';
 
 export interface WorkspaceRouteOptions {
   readonly verifyToken?: TokenVerifier;
@@ -163,7 +164,7 @@ export function registerWorkspaceRoutes(
     });
 
   /** The caller's membership. */
-  const member = async (userId: string): Promise<Membership> => {
+  const member = async (userId: string): Promise<CallerMembership> => {
     const membership = await store().findMembership(userId);
     if (!membership) {
       throw new ProblemError(
@@ -336,6 +337,8 @@ export function registerWorkspaceRoutes(
   app.openapi(linkSignInRoute, async (c) => {
     const caller = c.var.identity;
     const who = await member(caller.userId);
+    // Before the other sign-in is even looked at, whatever the switch (#85).
+    requireCodeToLink(who, caller);
     const { accessToken } = c.req.valid('json');
     const invalid = (code: string, title: string, detail: string) =>
       new ProblemError(422, code.replaceAll('_', '-'), title, { code, detail });
