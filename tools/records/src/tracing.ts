@@ -34,6 +34,10 @@ export const GAPS: readonly Gap[] = [
       'Found building AI model settings (#52). NFR-AI-04 asks for the model tier to be re-confirmed after about 100 real receipts. The primary is now your choice in Settings › AI models, with each model’s record beside it, but nothing counts the receipts read since the choice or asks you to look again.',
     fix: 'Count the receipts read since the primary was last chosen, and at about 100 ask in Needs you to keep it or change it (#72).',
     backlog: 72,
+    closed: {
+      date: '2026-10-05',
+      note: 'Withdrawn at your word (Oct 5): no reminder to re-confirm the model. Each model’s record stays beside it in Settings › AI models for whenever you look (#72).',
+    },
   },
   {
     id: 'GAP-30',
@@ -55,6 +59,16 @@ export const GAPS: readonly Gap[] = [
       'Found building #50 (ADR-0035). Members see only their own receipts, expenses, trips and reports, but every member’s transaction can read the organization’s whole audit trail, which it reads to chain the next event, and its outbox. No screen or API operation shows either to a member, so nothing reaches one through the app; a screen that read them would show colleagues’ merchants and amounts.',
     fix: 'Hold reading the trail to owners, finance admins and auditors, with the chain’s last link read by an owner-run function, and the outbox to the system (#74).',
     backlog: 74,
+  },
+  {
+    id: 'GAP-32',
+    title: 'The eval harness has never been run against a model.',
+    affects: ['NFR-AI-01', 'NFR-AI-04'],
+    severity: 'Low',
+    evidence:
+      'Found closing #39 and #72 on Oct 5. The harness scores public and synthetic receipts, but no model key has reached the build environment, so it has never read one: accuracy by layer is unmeasured, and the tier is chosen from your own receipts compared on the page instead (ADR-0017).',
+    fix: 'Run the eval set against the models with your approval of the spend, estimated before it starts, and report accuracy by layer (#84).',
+    backlog: 84,
   },
   {
     id: 'GAP-25',
@@ -831,10 +845,28 @@ export const QUESTIONS: readonly Question[] = [
     affects: ['FR-INT-20', 'F-54'],
     answer: { date: '2026-10-04', text: 'A: rides, flights and rail.' },
   },
+  {
+    id: 'Q40',
+    title: 'Approval and the second factor',
+    ask: 'Approval (#24) needs a second factor before anyone approves someone else’s spend, and none is built yet (#8). A: build the second factor in the same batch, behind its own switch. B: approval on a password alone for now. C: approval for a one-person organization only, until #8. D: leave #24 and #70 for later.',
+    why: 'Approving someone else’s spend is the action most worth protecting, and the second factor is all that stands between #24 and its whole rule.',
+    recommendation: 'A.',
+    affects: ['FR-GOV-04', 'FR-PLT-03', 'F-11', 'F-18'],
+    answer: {
+      date: '2026-10-05',
+      text: 'A: the second factor is built in the same batch as approval, behind its own switch.',
+    },
+  },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-05',
+    change:
+      'Your decisions of Oct 5. Q40: the second factor (#8) is built in the same batch as approval (#24), behind its own switch. #72 is withdrawn: you don’t need a reminder to confirm the AI model, so NFR-AI-04 no longer asks for one and GAP-29 is closed. #39 is closed: your Gmail is not searched, so D-12 is decided and the eval set’s layers are public, synthetic and real captures (ADR-0012, NFR-AI-01). What those two leave missing is now GAP-32: the eval harness has never been run against a model, which waits on your approval of a run’s spend (#84).',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-04',
     change:

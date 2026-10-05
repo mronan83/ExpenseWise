@@ -19,7 +19,7 @@ Each ADR records one decision with its context, the alternatives considered and 
 | [0009](0009-delivery-model.md) | Delivery model | D-09 | Accepted (recommended; no objection) | 2026-09-30 |
 | [0010](0010-residency-and-compliance.md) | Residency and compliance | D-10 | Accepted (decided by product owner) | 2026-09-30 |
 | [0011](0011-travel-data-sources.md) | Travel data sources | D-11 | Accepted (recommended; no objection) | 2026-09-30 |
-| [0012](0012-eval-set-composition.md) | Eval set composition | D-12 | Proposed (awaiting product owner: permission to search the owner's Gmail for past receipts) | 2026-09-30 |
+| [0012](0012-eval-set-composition.md) | Eval set composition | D-12 | Decided by product owner (Oct 5: no Gmail search; public, synthetic and real-capture layers) | 2026-09-30 |
 | [0013](0013-supabase-platform.md) | Supabase platform | D-13 | Accepted (decided by product owner after a cost and capability comparison); Amended by [ADR-0014](0014-supabase-free-plan.md) | 2026-09-30 |
 | [0014](0014-supabase-free-plan.md) | Supabase Free plan with self-managed backups | D-16 | Accepted (Free plan decided by product owner; the controls are recommended, no objection) | 2026-10-01 |
 | [0015](0015-ai-provider-keys-in-app.md) | AI provider keys configured in the app | D-17 | Accepted (decided by product owner); amended by [ADR-0020](0020-openai-fallback-reader.md) | 2026-10-02 |

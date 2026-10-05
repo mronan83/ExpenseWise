@@ -1727,7 +1727,7 @@ export const NON_FUNCTIONAL: readonly Requirement[] = [
   // AI quality and cost
   {
     id: 'NFR-AI-01',
-    text: 'Extraction accuracy is measured on a labeled eval set and reported by layer: public, synthetic, the owner’s past emails if permitted, and real captures.',
+    text: 'Extraction accuracy is measured on a labeled eval set and reported by layer: public, synthetic and real captures.',
     enforcedBy: 'The eval harness',
     sources: ['ADR-0012', 'delivery §7.5'],
     priority: 'Must',
@@ -1735,8 +1735,8 @@ export const NON_FUNCTIONAL: readonly Requirement[] = [
     status: 'Partial',
     features: ['F-38'],
     checks: ['evals/score', 'evals/synthetic/synthetic'],
-    shortfalls: ['#39'],
-    note: 'The harness has never run against a model; real receipts are compared instead (ADR-0017).',
+    shortfalls: ['GAP-32'],
+    note: 'The harness has never run against a model; real receipts are compared instead (ADR-0017). Your decision of Oct 5: your Gmail is not searched, so there is no layer of past emails (ADR-0012, #39 closed).',
   },
   {
     id: 'NFR-AI-02',
@@ -1763,7 +1763,7 @@ export const NON_FUNCTIONAL: readonly Requirement[] = [
   },
   {
     id: 'NFR-AI-04',
-    text: 'The model tier is chosen from measured accuracy and cost, and re-confirmed after about 100 real receipts.',
+    text: 'The model tier is chosen from measured accuracy and cost.',
     enforcedBy: 'The running comparison, then a decision',
     sources: ['ADR-0006', 'ADR-0017', 'roadmap P1'],
     priority: 'Must',
@@ -1774,8 +1774,8 @@ export const NON_FUNCTIONAL: readonly Requirement[] = [
       'api/receipts › keeps a running comparison of the two models',
       'api/model-settings › shows each model, the primary, what each does now and how each has read our receipts',
     ],
-    shortfalls: ['GAP-29'],
-    note: 'The tier is now chosen by your setting: the primary in Settings › AI models, with each model’s readings, sureness, time and spend on your receipts beside it (#52). Nothing yet prompts re-confirming it after about 100 real receipts (GAP-29), and the eval harness has never run against a model (NFR-AI-01).',
+    shortfalls: ['GAP-32'],
+    note: 'The tier is now chosen by your setting: the primary in Settings › AI models, with each model’s readings, sureness, time and spend on your receipts beside it (#52). Your decision of Oct 5: nothing asks you to re-confirm it after about 100 receipts; you look again there when you choose (#72 withdrawn, GAP-29 closed). The eval harness has never run against a model (NFR-AI-01).',
   },
 
   // Architecture and portability

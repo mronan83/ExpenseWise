@@ -1,8 +1,8 @@
 # ADR-0012: Eval set composition
 
-Build the extraction eval set in layers (public, synthetic, the owner's past emails if permitted, then real captures) and report accuracy by layer.
+Build the extraction eval set in layers (public, synthetic, then real captures) and report accuracy by layer. The owner's past emails are not a layer: on Oct 5 the product owner declined to have their Gmail searched.
 
-- **Status:** Proposed (awaiting product owner: permission to search the owner's Gmail for past receipts)
+- **Status:** Decided by product owner (Oct 5, 2026: the owner's Gmail is not searched; the layers are public, synthetic and real captures)
 - **Date:** 2026-09-30
 - **Deciders:** Product owner; Claude (principal architect)
 - **Decision register:** D-12 ("Eval set without a shoebox")

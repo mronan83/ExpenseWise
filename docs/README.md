@@ -37,7 +37,7 @@ ExpenseWise is a receipt-first, automation-first expense, receipt, mileage and t
 | D-09 | Delivery model | [ADR-0009](adr/0009-delivery-model.md) | Accepted (recommended; no objection) |
 | D-10 | Residency and compliance | [ADR-0010](adr/0010-residency-and-compliance.md) | Accepted (decided by product owner) |
 | D-11 | Travel data sources | [ADR-0011](adr/0011-travel-data-sources.md) | Accepted (recommended; no objection) |
-| D-12 | Eval set composition | [ADR-0012](adr/0012-eval-set-composition.md) | Proposed (awaiting product owner: permission to search the owner's Gmail for past receipts) |
+| D-12 | Eval set composition | [ADR-0012](adr/0012-eval-set-composition.md) | Decided by product owner (Oct 5: no Gmail search; public, synthetic and real-capture layers) |
 | D-13 | Supabase platform | [ADR-0013](adr/0013-supabase-platform.md) | Accepted (decided by product owner after a cost and capability comparison); Amended by [ADR-0014](adr/0014-supabase-free-plan.md) |
 | D-14 | Start real use in week 4 (Oct 15) | [Roadmap: Phase 1 plan](07-roadmap.md#phase-1-plan) | Accepted (decided by product owner); its Supabase Pro part is replaced by D-16 |
 | D-15 | Email and password sign-in, no custom email domain in Phase 1 | [Roadmap: Phase 1 plan](07-roadmap.md#phase-1-plan) | Accepted (decided by product owner) |

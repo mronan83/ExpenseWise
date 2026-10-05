@@ -333,6 +333,19 @@ export const BACKLOG: readonly BacklogItem[] = [
     affects: ['FR-INT-20', 'FR-INT-21', 'FR-SET-01', 'F-54'],
   },
   {
+    num: 84,
+    title: 'Run the eval set against the models',
+    type: 'Gap',
+    detail:
+      'The eval harness has never read a receipt with a model (GAP-32), so accuracy by layer is unmeasured. Run it once on the public, synthetic and real-capture layers and report each, with the spend estimated before it starts and nothing spent without your approval. Receipt images and eval data stay out of git.',
+    priority: 'P3',
+    effort: 'S',
+    severity: 'Low',
+    blocker: { kind: 'owner', ask: 'Your approval of a run’s spend, estimated first' },
+    source: 'GAP-32',
+    affects: ['GAP-32', 'NFR-AI-01', 'NFR-AI-04'],
+  },
+  {
     num: 80,
     title: 'Show a receipt’s itemized lines under the total',
     type: 'Feature',
@@ -779,13 +792,14 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'The eval set has no real-world layer',
     type: 'Decision',
     detail:
-      'D-12 is still Proposed: may I search your Gmail for past travel receipts to label? The Gmail connector also needs authorizing in your claude.ai settings. Real captures can join the set either way.',
+      'D-12 is still Proposed: may I search your Gmail for past travel receipts to label? The Gmail connector also needs authorizing in your claude.ai settings. Real captures can join the set either way. Closed on Oct 5: you don’t want your Gmail connected, so it is never searched; the eval set keeps its public, synthetic and real-capture layers.',
     priority: 'P3',
     effort: 'S',
     severity: 'Low',
     blocker: { kind: 'owner', ask: 'Your decision on D-12, and the Gmail connector' },
     source: 'ADR-0012',
     affects: ['NFR-AI-01'],
+    done: { date: '2026-10-05', in: 'Closed at your word: your Gmail is not searched' },
   },
 
   {
@@ -846,13 +860,14 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Ask to re-confirm the AI model after about 100 receipts',
     type: 'Gap',
     detail:
-      'You now choose the primary model in Settings › AI models, with each model’s record beside it (#52), but nothing asks you to look again once it has read about 100 of your receipts, as NFR-AI-04 says. Count the receipts read since the primary was last chosen, and at about 100 put it in Needs you: keep it, or change it, with the record beside it.',
+      'You now choose the primary model in Settings › AI models, with each model’s record beside it (#52), but nothing asks you to look again once it has read about 100 of your receipts, as NFR-AI-04 says. Count the receipts read since the primary was last chosen, and at about 100 put it in Needs you: keep it, or change it, with the record beside it. Withdrawn on Oct 5: you don’t need a reminder to confirm the model.',
     priority: 'P3',
     effort: 'S',
     severity: 'Low',
     blocker: { kind: 'none' },
     source: 'GAP-29',
     affects: ['GAP-29', 'NFR-AI-04', 'F-45'],
+    done: { date: '2026-10-05', in: 'Withdrawn at your word: no reminder to re-confirm the model' },
   },
   {
     num: 53,
