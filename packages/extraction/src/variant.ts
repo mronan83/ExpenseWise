@@ -19,7 +19,8 @@ import {
 export interface ExtractorOptions {
   /**
    * Ask for the line of the document each field was read from: for an organization that has
-   * switched on `receipts.field-sources` (GAP-14). Off, the request is receipt-v3's, unchanged.
+   * switched on `receipts.field-sources` (GAP-14). Off, the request is receipt-v5's, with
+   * nothing added.
    */
   readonly fieldSources?: boolean;
   /**
@@ -39,8 +40,10 @@ export interface ExtractionVariant {
 
 /**
  * The requests as they were before additions composed: every organization's, and with source
- * lines, which kept its own versions (`extract-v4`, `receipt-v4`) from when it was the only
- * variant, so readings made since keep theirs.
+ * lines, which keeps its own versions from when it was the only variant. Both changed for every
+ * organization with #92 (`extract-v5` and `receipt-v5`, and with source lines `extract-v6` and
+ * `receipt-v6`, as `extract-v4` was `extract-v3` with them); a reading keeps the versions it was
+ * made with.
  */
 export const EXTRACTION_VARIANTS = {
   plain: {
@@ -73,7 +76,7 @@ const JOURNEYS: Addition = {
 /**
  * A request with an addition: its instructions after the others, its structure after the
  * others' (a field it redefines keeps its place), and its version joined on with "+", as in
- * `receipt-v3+journeys-v1`.
+ * `receipt-v5+journeys-v1`.
  */
 const withAddition = (variant: ExtractionVariant, addition: Addition): ExtractionVariant => ({
   promptVersion: `${variant.promptVersion}+${addition.version}`,

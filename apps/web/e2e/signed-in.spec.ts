@@ -555,6 +555,11 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
     [press('Show the receipt’s lines')],
   ],
   [
+    'a folio’s credit and each night’s charges, read as printed',
+    (s) => `/expenses/${s.expenses.folioCredit}`,
+    [press('Show the receipt’s lines')],
+  ],
+  [
     'splitting an expense by amount',
     (s) => `/expenses/${s.expenses.linesShort}`,
     [press('Split by amount')],

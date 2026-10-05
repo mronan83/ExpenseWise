@@ -346,7 +346,7 @@ export const RULES: readonly Rule[] = [
       constant: 'LINE_TOLERANCE_MINOR',
       literal: '1',
     },
-    note: 'A receipt rounds each line on its own, as R-SUMS-TOLERANCE allows for its tax, fee and tip lines. Using lines only when they add up is Claude’s rule, yours to confirm.',
+    note: 'A receipt rounds each line on its own, as R-SUMS-TOLERANCE allows for its tax, fee and tip lines. Using lines only when they add up is Claude’s rule, yours to confirm. Since PR #61 (#92) the same allowance holds a reading’s sums when no subtotal is printed, as on a hotel folio: its item lines, with its taxes, fees and tip, may miss the total by a cent a line, through the one function both use (`linesMakeTotal`).',
   },
   {
     id: 'R-EXCLUSION-NOTE-MAX',

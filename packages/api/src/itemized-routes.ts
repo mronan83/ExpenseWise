@@ -78,7 +78,7 @@ const PROBLEM_TEXT: Record<string, string> = {
   note_too_long: `A note is at most ${EXCLUSION_NOTE_MAX} characters.`,
   no_such_line: 'There is no such line on its receipt.',
   not_an_item: 'Only an item is left out or split off; tax, tip and fees go with the items.',
-  takes_off: 'A discount takes money off what was paid, so it can’t be left out.',
+  takes_off: 'A discount or credit takes money off what was paid, so it can’t be left out.',
   below_zero: 'That would claim less than nothing.',
   lines_dont_add_up: 'Its lines don’t add up, so nothing can be spread across them.',
   nothing_split: 'Give at least one line a category and type.',

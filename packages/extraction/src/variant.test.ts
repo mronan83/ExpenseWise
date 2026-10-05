@@ -18,19 +18,23 @@ const jpeg = { bytes: new Uint8Array([0xff, 0xd8, 0xff]), mediaType: 'image/jpeg
 const sha256 = (text: string) => createHash('sha256').update(text).digest('hex');
 
 /**
- * The requests as they were sent before journeys and stays could be asked for, taken from the
- * code of PR #58 with these inputs (Sonnet 5.5 and GPT-5.6 Luna, a three-byte JPEG): the
- * request each provider is handed, serialized. Any change to what an organization with
- * neither addition is asked shows here.
+ * The requests every organization is sent, with no addition and with source lines alone, taken
+ * with these inputs (Sonnet 5.5 and GPT-5.6 Luna, a three-byte JPEG): the request each provider
+ * is handed, serialized. Any change to what an organization with neither addition is asked
+ * shows here, and is made on purpose, with its versions: these are the requests of #92
+ * (extract-v5 and receipt-v5, extract-v6 and receipt-v6), which read every line each time it
+ * is printed and a credit as a line of its own, taken from the code of PR #61. Before it, from
+ * PR #58 to PR #60, they were ccabc890…, 45bf80cb…, 488fe2ec… and 2a57735d…, as extract-v3 and
+ * extract-v4.
  */
 const BEFORE = {
   claude: {
-    plain: 'ccabc890fff6444bd6496f370c5b2a3ad600f635721b2b95e1318eee7f747d9b',
-    sources: '45bf80cbdb5059a9dd35fadd2e2b7caa51207ad38e5932f993b56db7d7625529',
+    plain: '86a796aac41ea21553262dff45d19aa0dc4947b1a0e597499d220e4cf947d64b',
+    sources: 'a8600045e55b60b17c09fac8a1c76486886d659d11ad03bc33259226ecc0114d',
   },
   openai: {
-    plain: '488fe2ec3b8ea274b4c29ded45272c95f0fc45d1e0fa9ed446d1880db8a7631f',
-    sources: '2a57735de8df4d22f0c70b1751994ee21722318ab2c005b92362f50ad0b0a0a1',
+    plain: '33b85d2a18852fb36edb61c240feea55e149c878fcd81906b37c100c9530bb10',
+    sources: '64e1c60e818f2793bd030917ff670766083257a69bb953c793539b3a0ef5a6d7',
   },
 };
 
@@ -95,21 +99,27 @@ describe('a request with neither addition', () => {
   it('is byte for byte the request sent before, to Claude and to OpenAI', async () => {
     const claude = await claudeRequest({});
     expect(sha256(claude.sent)).toBe(BEFORE.claude.plain);
-    expect(claude.run).toMatchObject({ promptVersion: 'extract-v3', schemaVersion: 'receipt-v3' });
+    expect(claude.run).toMatchObject({ promptVersion: 'extract-v5', schemaVersion: 'receipt-v5' });
+    // Each addition switched off adds nothing: the same bytes as with none asked.
+    const off = await claudeRequest({ fieldSources: false, journeys: false });
+    expect(off.sent).toBe(claude.sent);
     const openai = await openaiRequest({ fieldSources: false, journeys: false });
     expect(sha256(openai.sent)).toBe(BEFORE.openai.plain);
-    expect(openai.run).toMatchObject({ promptVersion: 'extract-v3', schemaVersion: 'receipt-v3' });
+    expect(openai.run).toMatchObject({ promptVersion: 'extract-v5', schemaVersion: 'receipt-v5' });
+    expect((await openaiRequest({})).sent).toBe(openai.sent);
     expect(claude.sent).not.toContain('rail_ticket');
     expect(openai.sent).not.toContain('journey');
   });
 
-  it('is unchanged with only source lines asked for, still receipt-v4', async () => {
+  it('is unchanged with only source lines asked for, still receipt-v6', async () => {
     const claude = await claudeRequest({ fieldSources: true });
     expect(sha256(claude.sent)).toBe(BEFORE.claude.sources);
-    expect(claude.run).toMatchObject({ promptVersion: 'extract-v4', schemaVersion: 'receipt-v4' });
+    expect(claude.run).toMatchObject({ promptVersion: 'extract-v6', schemaVersion: 'receipt-v6' });
+    // Journeys switched off adds nothing to it either.
+    expect((await claudeRequest({ fieldSources: true, journeys: false })).sent).toBe(claude.sent);
     const openai = await openaiRequest({ fieldSources: true });
     expect(sha256(openai.sent)).toBe(BEFORE.openai.sources);
-    expect(openai.run.schemaVersion).toBe('receipt-v4');
+    expect(openai.run.schemaVersion).toBe('receipt-v6');
   });
 });
 
@@ -123,8 +133,8 @@ describe('journeys and stays, asked for (FR-INT-20, FR-INT-21)', () => {
     expect(claude.run).toMatchObject({
       outcome: 'extracted',
       extraction: ride,
-      promptVersion: 'extract-v3+journeys-v1',
-      schemaVersion: 'receipt-v3+journeys-v1',
+      promptVersion: 'extract-v5+journeys-v1',
+      schemaVersion: 'receipt-v5+journeys-v1',
     });
     const openai = await openaiRequest({ journeys: true }, ride);
     expect(openai.body.instructions).toBe(`${SYSTEM_PROMPT}\n${JOURNEYS_INSTRUCTIONS}`);
@@ -139,7 +149,7 @@ describe('journeys and stays, asked for (FR-INT-20, FR-INT-21)', () => {
     expect(openai.run).toMatchObject({
       outcome: 'extracted',
       extraction: ride,
-      schemaVersion: 'receipt-v3+journeys-v1',
+      schemaVersion: 'receipt-v5+journeys-v1',
     });
   });
 
@@ -158,14 +168,14 @@ describe('journeys and stays, asked for (FR-INT-20, FR-INT-21)', () => {
     expect(both.system).toBe(`${SOURCES_SYSTEM_PROMPT}\n${JOURNEYS_INSTRUCTIONS}`);
     expect(both.system).toBe(`${SYSTEM_PROMPT}\n${SOURCES_INSTRUCTIONS}\n${JOURNEYS_INSTRUCTIONS}`);
     expect([both.promptVersion, both.schemaVersion]).toEqual([
-      'extract-v4+journeys-v1',
-      'receipt-v4+journeys-v1',
+      'extract-v6+journeys-v1',
+      'receipt-v6+journeys-v1',
     ]);
     expect(Object.keys(both.schema.shape).slice(-3)).toEqual(['sources', 'journey', 'stay']);
     // Made once: the same options ask the same request.
     expect(variantOf({ journeys: true, fieldSources: true })).toBe(both);
     const openai = await openaiRequest({ fieldSources: true, journeys: true });
-    expect(openai.run.schemaVersion).toBe('receipt-v4+journeys-v1');
+    expect(openai.run.schemaVersion).toBe('receipt-v6+journeys-v1');
     expect(openai.body.text.format.schema.properties).toHaveProperty('sources');
     expect(openai.body.text.format.schema.properties).toHaveProperty('stay');
     const claude = await claudeRequest({ fieldSources: true, journeys: true });

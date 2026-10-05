@@ -155,7 +155,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   expense_lines: {
     about:
-      'One line of that copy, numbered from 1 as printed: each item (a discount a negative one), then each tax, each fee and the tip, in the itemization’s currency. An item can be left out of the claim with a reason picked from four and a note, which other needs (FR-EXP-16, Q38), and given a category and type of its own in a split by line (FR-EXP-15, Q36). What a line and its share of the tax, tip and fees take off is the domain’s arithmetic, never stored: the claim is written to the expense’s amount. Read only through its expense, with the expense’s member named.',
+      'One line of that copy, numbered from 1 as printed: each item, each time it is printed (a discount or a credit, refund or reversal a negative one of its own, #92), then each tax, each fee and the tip, in the itemization’s currency. An item can be left out of the claim with a reason picked from four and a note, which other needs (FR-EXP-16, Q38), and given a category and type of its own in a split by line (FR-EXP-15, Q36). What a line and its share of the tax, tip and fees take off is the domain’s arithmetic, never stored: the claim is written to the expense’s amount. Read only through its expense, with the expense’s member named.',
   },
   expense_parts: {
     about:

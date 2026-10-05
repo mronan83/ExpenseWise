@@ -152,6 +152,10 @@ export const GAPS: readonly Gap[] = [
       'Your report of Oct 5, from a Hilton folio: two overnight parking charges of $34 were reversed by one credit of $68, and the reading didn’t show it as the credit it was; the folio charges its taxes per night, and the itemized tax lines held only one night’s, half the tax total. The reading’s instructions say nothing of credits, reversals or a line printed once a night, and the check that a reading adds up runs only when a subtotal is printed, which a folio rarely prints, so the reading wasn’t held for a look.',
     fix: 'Read a credit, refund or reversal as its own negative line, and each line every time it is printed, never merged; check the lines against the total when no subtotal is printed (#92).',
     backlog: 92,
+    closed: {
+      date: '2026-10-05',
+      note: 'PR #61 (#92), for every organization: each reading is asked for every line each time it is printed, a credit as a negative line of its own, never netted into what it reverses, and a folio’s total as what was charged after credits (`extract-v5`, `receipt-v5`). A reading whose item lines, with its taxes, fees and tip, don’t make its total within a cent a line is held for a look even with no subtotal printed. A credit can’t be left out of a claim. A receipt read before keeps its reading and status; Read again reads it the new way.',
+    },
   },
   {
     id: 'GAP-25',

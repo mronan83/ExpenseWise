@@ -404,3 +404,95 @@ describe('splitting into parts (FR-EXP-15, Q35, Q36)', () => {
     ]);
   });
 });
+
+/**
+ * A Hilton folio as the product owner described it on Oct 5 (GAP-38, #92), its lines as the
+ * reading gives them: each night's room, both nights' $34 parking and the one $68 credit that
+ * reversed them, then each night's taxes. It prints no subtotal; the total is the payment.
+ */
+const HILTON: Itemization = {
+  currency: 'USD',
+  subtotal: null,
+  total: usd(42_526),
+  lines: [
+    line('item', 'Guest room', 18_900),
+    line('item', 'Overnight parking', 3400),
+    line('item', 'Guest room', 18_900),
+    line('item', 'Overnight parking', 3400),
+    line('item', 'Parking credit', -6800),
+    line('tax', 'State occupancy tax', 1323),
+    line('tax', 'City tax', 1040),
+    line('tax', 'State occupancy tax', 1323),
+    line('tax', 'City tax', 1040),
+  ],
+};
+const PARKING = { categoryId: 'travel', typeId: 'parking' };
+
+describe('a folio’s credit, read as a line of its own (#92)', () => {
+  it('adds up with no subtotal, and gives the credit a negative share that offsets its charges’', () => {
+    expect(checkLines(HILTON)).toEqual({
+      addsUp: true,
+      items: usd(37_800),
+      extras: usd(4726),
+      taxIncluded: false,
+    });
+    const claims = lineClaims(HILTON)!;
+    expect(claims.map((c) => [c.position, c.share.amountMinor, c.claimed.amountMinor])).toEqual([
+      [1, 2364, 21_264],
+      [2, 425, 3825],
+      [3, 2363, 21_263],
+      [4, 425, 3825],
+      [5, -851, -7651],
+    ]);
+    // The charges and their credit net out; with their shares, within the cent that rounding
+    // down leaves, which the largest line takes.
+    expect(
+      sum(
+        'USD',
+        [2, 4, 5].map((p) => HILTON.lines[p - 1]!.amount),
+      ),
+    ).toEqual(usd(0));
+    expect(
+      sum(
+        'USD',
+        claims.map((c) => c.claimed),
+      ),
+    ).toEqual(HILTON.total);
+  });
+
+  it('never leaves the credit out, may leave out a charge it reversed, and never claims below zero', () => {
+    expect(claimWithout(HILTON, new Set([5]))).toEqual({ ok: false, error: 'takes_off' });
+    expect(claimWithout(HILTON, new Set([2]))).toEqual({
+      ok: true,
+      value: { receipt: usd(42_526), excluded: usd(3825), claimed: usd(38_701) },
+    });
+    expect(claimWithout(HILTON, new Set([1, 2, 3, 4]))).toEqual({
+      ok: false,
+      error: 'below_zero',
+    });
+  });
+
+  it('splits the credit off only with lines that come to more than it', () => {
+    expect(partsByLine(HILTON, new Set(), [{ position: 5, ...PARKING }])).toEqual({
+      ok: false,
+      error: 'part_not_positive',
+    });
+    // The parking and its credit come to nothing, so they make no part of their own.
+    const parking = [2, 4, 5].map((position) => ({ position, ...PARKING }));
+    expect(partsByLine(HILTON, new Set(), parking)).toEqual({
+      ok: false,
+      error: 'part_not_positive',
+    });
+    const withRoom = partsByLine(HILTON, new Set(), [
+      { position: 3, ...MEALS },
+      { position: 5, ...MEALS },
+    ]);
+    expect(withRoom).toEqual({
+      ok: true,
+      value: [
+        { categoryId: null, typeId: null, amount: usd(28_914), positions: [1, 2, 4] },
+        { ...MEALS, amount: usd(13_612), positions: [3, 5] },
+      ],
+    });
+  });
+});
