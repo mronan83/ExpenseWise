@@ -7,6 +7,7 @@ import { api, ApiProblem } from '../../../lib/api';
 import { formText } from '../../../lib/form';
 import { OtherSignInError, supabase, withOtherSignIn } from '../../../lib/supabase';
 import { SettingsNav } from '../nav';
+import { Authenticators } from './authenticators';
 
 interface SignIn {
   id: string;
@@ -32,7 +33,10 @@ const describeError = (error: unknown) => {
     : 'Something went wrong. Try again.';
 };
 
-/** The emails one person signs in with (ADR-0016). Each reaches the same receipts. */
+/**
+ * The emails one person signs in with (ADR-0016), each reaching the same receipts, and their
+ * authenticator apps for the second factor (F-11).
+ */
 export default function SignInsPage() {
   const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [message, setMessage] = useState<Message>(null);
@@ -206,6 +210,7 @@ export default function SignInsPage() {
                 </button>
               </form>
             </section>
+            <Authenticators />
           </>
         ) : null}
         <p

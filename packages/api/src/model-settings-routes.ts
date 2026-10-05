@@ -11,6 +11,7 @@ import {
   type ModelSettingsStore,
 } from './model-settings.ts';
 import { ProblemError } from './problem.ts';
+import { requireAdminSecondFactor } from './second-factor.ts';
 import type { ReceiptStore } from './receipts.ts';
 import { getModelSettingsRoute, saveModelSettingsRoute } from './routes/model-settings.ts';
 import type { WorkspaceStore } from './workspace.ts';
@@ -140,6 +141,7 @@ export function registerModelSettingsRoutes(
         code: 'forbidden_role',
       });
     }
+    await requireAdminSecondFactor(features, who.orgId, caller);
     const checked = checkModelSettings(c.req.valid('json'));
     if (!checked.ok) throw settingsProblem(checked.problem);
     const { workspace, models } = stores();

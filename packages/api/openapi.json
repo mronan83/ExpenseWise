@@ -467,11 +467,14 @@
           "receipts.model-settings",
           "receipts.field-sources",
           "receipts.capture-time",
+          "receipts.unfiled-emails",
           "receipts.journeys",
           "expenses.mileage",
           "expenses.route-mileage",
           "reports.export",
+          "reports.approval",
           "governance.audit-trail",
+          "security.second-factor",
           "team.invites",
           "expenses.itemized",
           "expenses.split"
@@ -7205,7 +7208,7 @@
             }
           },
           "403": {
-            "description": "Only an owner or finance admin can manage AI provider keys.",
+            "description": "Only an owner or finance admin can manage AI provider keys. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -7281,7 +7284,7 @@
             }
           },
           "403": {
-            "description": "Only an owner or finance admin can manage AI provider keys.",
+            "description": "Only an owner or finance admin can manage AI provider keys. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -7356,7 +7359,7 @@
             }
           },
           "403": {
-            "description": "Only an owner or finance admin can manage AI provider keys.",
+            "description": "Only an owner or finance admin can manage AI provider keys. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -7737,7 +7740,7 @@
             }
           },
           "403": {
-            "description": "Only the owner can switch features.",
+            "description": "Only the owner can switch features. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04). Switching the second factor itself on always needs it, so no one is locked out.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -7887,7 +7890,7 @@
             }
           },
           "403": {
-            "description": "The caller has no organization yet, or is not its owner.",
+            "description": "The caller has no organization yet, or is not its owner. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -8047,7 +8050,7 @@
             }
           },
           "403": {
-            "description": "The caller has no organization yet, or is not its owner.",
+            "description": "The caller has no organization yet, or is not its owner. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -10202,7 +10205,7 @@
             }
           },
           "403": {
-            "description": "The caller has no organization yet, or is not an owner or finance admin (forbidden_role).",
+            "description": "The caller has no organization yet, or is not an owner or finance admin (forbidden_role). While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -11059,7 +11062,7 @@
             }
           },
           "403": {
-            "description": "No organization yet, or the caller is not an owner or finance admin.",
+            "description": "No organization yet, or the caller is not an owner or finance admin. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -11136,7 +11139,7 @@
             }
           },
           "403": {
-            "description": "No organization yet, or the caller is not an owner or finance admin.",
+            "description": "No organization yet, or the caller is not an owner or finance admin. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -12637,7 +12640,7 @@
             }
           },
           "403": {
-            "description": "Only an owner or finance admin can change categories and types.",
+            "description": "Only an owner or finance admin can change categories and types. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -12744,7 +12747,7 @@
             }
           },
           "403": {
-            "description": "Only an owner or finance admin can change categories and types.",
+            "description": "Only an owner or finance admin can change categories and types. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -12832,7 +12835,7 @@
             }
           },
           "403": {
-            "description": "Only an owner or finance admin can change categories and types.",
+            "description": "Only an owner or finance admin can change categories and types. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -12938,7 +12941,7 @@
             }
           },
           "403": {
-            "description": "Only an owner or finance admin can change categories and types.",
+            "description": "Only an owner or finance admin can change categories and types. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -13045,7 +13048,7 @@
             }
           },
           "403": {
-            "description": "Only an owner or finance admin can change categories and types.",
+            "description": "Only an owner or finance admin can change categories and types. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -13133,7 +13136,7 @@
             }
           },
           "403": {
-            "description": "Only an owner or finance admin can change categories and types.",
+            "description": "Only an owner or finance admin can change categories and types. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -13923,7 +13926,7 @@
             }
           },
           "403": {
-            "description": "Only an owner or finance admin can choose the models.",
+            "description": "Only an owner or finance admin can choose the models. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -14075,7 +14078,7 @@
             }
           },
           "403": {
-            "description": "Only an owner manages people, or the caller has no organization yet.",
+            "description": "Only an owner manages people, or the caller has no organization yet. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -14144,7 +14147,7 @@
             }
           },
           "403": {
-            "description": "Only an owner manages people, or the caller has no organization yet.",
+            "description": "Only an owner manages people, or the caller has no organization yet. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -14240,7 +14243,7 @@
             }
           },
           "403": {
-            "description": "Only an owner manages people, or the caller has no organization yet.",
+            "description": "Only an owner manages people, or the caller has no organization yet. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -14318,7 +14321,7 @@
             }
           },
           "403": {
-            "description": "Only an owner manages people, or the caller has no organization yet.",
+            "description": "Only an owner manages people, or the caller has no organization yet. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {

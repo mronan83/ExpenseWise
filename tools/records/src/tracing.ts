@@ -71,6 +71,17 @@ export const GAPS: readonly Gap[] = [
     backlog: 84,
   },
   {
+    id: 'GAP-33',
+    title:
+      'A session that skipped the second factor can still use the API, short of admin actions.',
+    affects: ['FR-PLT-03', 'F-11'],
+    severity: 'Medium',
+    evidence:
+      'Found building #8 on Oct 5. The app asks for the code before anything else, but the API refuses aal1 only for admin actions and approving (FR-GOV-04), because a token doesn’t say whether its person has an authenticator. A stolen password, used against the API directly, still reads that person’s records (all of them, for an owner or finance admin), changes their own, and can link another sign-in that has no authenticator.',
+    fix: 'Refuse aal1 on every request of someone with a verified authenticator while the organization has the second factor on, and require aal2 to link a sign-in (#85, Q41).',
+    backlog: 85,
+  },
+  {
     id: 'GAP-25',
     title: 'Photos emailed in are stored with their location.',
     affects: ['NFR-PRV-03'],
@@ -219,6 +230,10 @@ export const GAPS: readonly Gap[] = [
       'The API reads the session’s assurance level (`aal1` or `aal2`), but nothing enrolls a factor or asks for one.',
     fix: 'TOTP enrollment and challenge on the sign-in page; require `aal2` where approvals and admin actions need it (#8).',
     backlog: 8,
+    closed: {
+      date: '2026-10-05',
+      note: 'Behind `security.second-factor` (ADR-0042): authenticator apps are added in Settings › Sign-ins, and while the organization has it on, sign-in asks for the code and every admin action needs aal2; approving someone else’s spend calls the same check with #24. What a token from a password alone can still do through the API is GAP-33.',
+    },
   },
   {
     id: 'GAP-04',
@@ -856,6 +871,14 @@ export const QUESTIONS: readonly Question[] = [
       date: '2026-10-05',
       text: 'A: the second factor is built in the same batch as approval, behind its own switch.',
     },
+  },
+  {
+    id: 'Q41',
+    title: 'How far the second factor reaches',
+    ask: 'With the second factor on, the app asks for the code at sign-in, and the API refuses admin actions and approving without it, as FR-GOV-04 says. A token from a password alone, used directly against the API, can still read that person’s records and change their own (GAP-33). A: refuse every request of someone with an authenticator until they enter the code, and need it to link a sign-in (#85). B: keep it to admin actions and approving, as built.',
+    why: 'An owner or finance admin sees everyone’s records, so their password alone still reaches all of the organization’s spending.',
+    recommendation: 'A, before a second person joins.',
+    affects: ['FR-PLT-03', 'GAP-33', 'F-11'],
   },
 ];
 

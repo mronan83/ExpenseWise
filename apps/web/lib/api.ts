@@ -1,4 +1,8 @@
+import { isStepUp, stepUp } from './step-up';
 import { supabase } from './supabase';
+
+/** Requests being sent again after the code, so one is never asked about twice. */
+const stepping = new WeakSet<RequestInit>();
 
 /** A problem document from the API (RFC 9457), as an error. */
 export class ApiProblem extends Error {
@@ -15,7 +19,11 @@ export class ApiProblem extends Error {
   }
 }
 
-/** Calls our API as the signed-in user. */
+/**
+ * Calls our API as the signed-in user. An admin action that needs the second factor asks for
+ * the code where the app shows its prompt, then is sent again, once, as the session that
+ * passed it (FR-GOV-04); without the code it fails as any refusal does.
+ */
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const session = (await supabase()?.auth.getSession())?.data.session;
   const res = await fetch(`/api${path}`, {
@@ -32,6 +40,16 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     detail?: string;
   } & Record<string, unknown>;
   if (!res.ok) {
+    // Only a body that can be sent twice; the retry carries the new session's token.
+    const resendable = init.body === undefined || typeof init.body === 'string';
+    if (isStepUp(res.status, body.code) && resendable && !stepping.has(init) && (await stepUp())) {
+      stepping.add(init);
+      try {
+        return await api<T>(path, init);
+      } finally {
+        stepping.delete(init);
+      }
+    }
     throw new ApiProblem(
       res.status,
       body.code,

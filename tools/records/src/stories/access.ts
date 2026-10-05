@@ -4,6 +4,7 @@ const ADR13 = { by: 'blueprint', source: 'ADR-0013' } as const;
 const ADR15 = { by: 'blueprint', source: 'ADR-0015' } as const;
 const ADR16 = { by: 'blueprint', source: 'ADR-0016' } as const;
 const OWNER_OCT_4 = { by: 'owner', source: 'owner 2026-10-04' } as const;
+const ADR42 = { by: 'claude', source: 'ADR-0042' } as const;
 
 /** Sign-in, organizations, sign-ins and AI provider keys (FR-PLT-01 to FR-PLT-05, FR-GOV-01). */
 export const ACCESS_STORIES: readonly Story[] = [
@@ -95,7 +96,7 @@ export const ACCESS_STORIES: readonly Story[] = [
         untested: 66,
       },
     ],
-    note: 'There is no sign-up screen: accounts are made in the sign-in service’s dashboard and public sign-ups stay off. Sign-in is a password alone until the second factor arrives (F-11, #8). No test signs in through the Sign in page itself; the signed-in screen checks start from a session already made.',
+    note: 'There is no sign-up screen: accounts are made in the sign-in service’s dashboard and public sign-ups stay off. Sign-in is a password alone unless the organization switches the second factor on and the person adds an authenticator app (F-11, US-ACC-11). No test signs in through the Sign in page itself; the signed-in screen checks start from a session already made.',
   },
   {
     id: 'US-ACC-02',
@@ -1042,5 +1043,220 @@ export const ACCESS_STORIES: readonly Story[] = [
         checks: ['db/people.int › replaces the empty organization a first sign-in made'],
       },
     ],
+  },
+  {
+    id: 'US-ACC-11',
+    title: 'Add an authenticator app, and enter its code when I sign in',
+    as: 'Alex, who travels for work',
+    want: 'to add an authenticator app and be asked for its code each time I sign in',
+    soThat: 'my password alone no longer opens my receipts and expenses',
+    feature: 'F-11',
+    requirements: ['FR-PLT-03'],
+    status: 'Partial',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'my organization has the second factor switched on',
+        when: 'I open Sign-ins in Settings and add an authenticator app',
+        then: 'I name it, scan its QR code or type its key into the app, and enter the 6-digit code it shows; it is then listed with its name and the day I added it',
+        decided: ADR13,
+        rules: ['R-SECOND-FACTOR-CODE'],
+        checks: [
+          'e2e/signed-in › adding an authenticator app',
+          'domain/second-factor › is offered to everyone while it is on, and suggests a second to someone with one',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'I have an authenticator app, and my organization has the second factor switched on',
+        when: 'I sign in with my email and password',
+        then: 'before anything else I am asked for its code on a screen of its own, with a way to sign out instead, and the app opens once the code is right',
+        decided: ADR42,
+        checks: [
+          'domain/second-factor › asks someone with an authenticator who signed in with a password alone, while it is on',
+          'e2e/signed-in › the code asked for after signing in',
+        ],
+      },
+      {
+        id: 'AC3',
+        given: 'the code I type',
+        when: 'it isn’t 6 digits',
+        then: 'it is refused before it is sent; spaces or a dash in it, as some apps show, are ignored',
+        decided: ADR42,
+        rules: ['R-SECOND-FACTOR-CODE'],
+        checks: [
+          'domain/second-factor › is 6 digits, read without the spaces or dash an app shows',
+          'domain/second-factor › is refused when it is anything but 6 digits',
+        ],
+      },
+      {
+        id: 'AC4',
+        given: 'my organization has the second factor switched off, or the server’s override has',
+        when: 'I sign in, whether or not I added an authenticator app',
+        then: 'no code is asked for',
+        decided: ADR42,
+        checks: [
+          'domain/second-factor › asks no one while the second factor is switched off, whatever they enrolled',
+        ],
+      },
+      {
+        id: 'AC5',
+        given: 'I have no authenticator app, or this session already passed the code',
+        when: 'I sign in or open any screen',
+        then: 'no code is asked for',
+        decided: ADR13,
+        checks: [
+          'domain/second-factor › asks no one without an authenticator, and no one who already passed it',
+        ],
+      },
+      {
+        id: 'AC6',
+        given: 'my organization has the second factor switched off',
+        when: 'I open Sign-ins',
+        then: 'adding an authenticator app is offered only if I am the owner, so I can pass it before switching it on; anyone who already has one still sees it, to remove it',
+        decided: ADR42,
+        checks: [
+          'domain/second-factor › is offered to the owner alone while it is off, so the owner can pass it before switching it on',
+          'domain/second-factor › still shows someone their own while it is off, to remove, without offering another',
+        ],
+      },
+      {
+        id: 'AC7',
+        given: 'authenticator apps I have added',
+        when: 'I have one, or 10',
+        then: 'with one, the page suggests adding a second so losing a phone doesn’t lock me out; at 10 it offers no more',
+        decided: ADR42,
+        rules: ['R-AUTHENTICATORS-MAX'],
+        checks: [
+          'domain/second-factor › is offered to everyone while it is on, and suggests a second to someone with one',
+          'domain/second-factor › stops at 10, Supabase Auth’s own limit',
+        ],
+      },
+      {
+        id: 'AC8',
+        given: 'an authenticator app I added',
+        when: 'I remove it, or add another',
+        then: 'I am asked for the code first if this session hasn’t passed it, as Supabase Auth requires; a removed one’s codes no longer work',
+        decided: ADR13,
+        checks: [],
+        untested: 66,
+      },
+      {
+        id: 'AC9',
+        given: 'the code screen, opened on the way to a page',
+        when: 'the code is right',
+        then: 'it goes on to that page if it is on this site, and Home otherwise',
+        decided: ADR42,
+        checks: [
+          'domain/second-factor › goes back to the page that asked, on this site only',
+          'domain/second-factor › goes Home for anything else: no page, another site, or the sign-in screens',
+        ],
+      },
+    ],
+    note: 'Your decision of Oct 5 (Q40): the second factor is built behind its own switch. When the code is asked, and that the owner may add one before switching it on, are Claude’s (ADR-0042), yours to confirm. Supabase Auth keeps each authenticator’s secret and checks each code; no test talks to Supabase itself, so removing or adding another after the code is owed to #66. A token used against the API directly can still read without the code (GAP-33, Q41).',
+  },
+  {
+    id: 'US-ACC-12',
+    title: 'Enter my code before changing how the organization works',
+    as: 'the organization’s owner',
+    want: 'every change to our settings, people and keys to need the code from an authenticator app while the second factor is on',
+    soThat:
+      'a stolen password alone can’t change who works here, what is paid, or which keys spend our money',
+    feature: 'F-11',
+    requirements: ['FR-GOV-04'],
+    status: 'Partial',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'the second factor is switched on',
+        when: 'an owner or finance admin whose session hasn’t passed the code makes any admin change: a feature switch, the organization’s details or duplicate window, people or invite links, an AI key or the AI models, the route key, a mileage rate, or a category or type',
+        then: 'it is refused as needing the second factor, and nothing changes',
+        decided: { by: 'blueprint', source: 'arch §6.9' },
+        checks: [
+          'api/second-factor › refuses every admin action from a password-only session, and does nothing',
+          'api/second-factor › asks a finance admin for the code too, and still tells a member it isn’t theirs',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'the second factor is switched on',
+        when: 'the same change comes from a session that passed the code',
+        then: 'it goes through',
+        decided: { by: 'blueprint', source: 'arch §6.9' },
+        checks: [
+          'api/second-factor › lets every admin action through once the session passed the code',
+        ],
+      },
+      {
+        id: 'AC3',
+        given: 'the second factor is switched off, or the server’s override has it off',
+        when: 'any admin change comes from a password alone',
+        then: 'it goes through as before',
+        decided: { by: 'owner', source: 'Q40' },
+        checks: [
+          'api/second-factor › lets every admin action through on a password alone, as before',
+          'api/second-factor › asks for nothing while the server’s override has it off, whatever the switch says',
+          'api/second-factor › lets the server’s override switch it off for everyone, the kill switch',
+        ],
+      },
+      {
+        id: 'AC4',
+        given: 'I am the owner and my session hasn’t passed my own code',
+        when: 'I switch the second factor on in Features',
+        then: 'it is refused, I am told to add an authenticator app in Sign-ins and enter its code first, and nothing is switched, so no one is locked out',
+        decided: ADR42,
+        checks: [
+          'api/second-factor › refuses an owner whose own session has not passed the code, and switches nothing',
+        ],
+      },
+      {
+        id: 'AC5',
+        given: 'my session passed my own code',
+        when: 'I switch the second factor on, and later off',
+        then: 'it switches on, and from then on admin changes need the code; switching it off needs the code too',
+        decided: ADR42,
+        checks: [
+          'api/second-factor › switches it on for an owner who passed the code, then asks it of every admin action',
+          'api/second-factor › needs the code to switch it off again, so a password alone can’t undo it',
+        ],
+      },
+      {
+        id: 'AC6',
+        given: 'an admin change refused as needing the second factor',
+        when: 'the screen I made it on hears so',
+        then: 'the code is asked for on a screen of its own, the page kept underneath; without an authenticator app it says where to add one',
+        decided: ADR42,
+        rules: ['R-SECOND-FACTOR-CODE'],
+        checks: ['e2e/signed-in › the code asked for before an admin change'],
+      },
+      {
+        id: 'AC7',
+        given: 'the code asked for in the middle of an admin change',
+        when: 'I enter it, or cancel',
+        then: 'entered, the change carries on as if never stopped; cancelled, the page says the change needs the code',
+        decided: ADR42,
+        checks: [],
+        untested: 66,
+      },
+      {
+        id: 'AC8',
+        given: 'a member who is not an owner or finance admin',
+        when: 'they try an admin change, with or without the code',
+        then: 'they are refused, as it isn’t theirs to make',
+        decided: { by: 'blueprint', source: 'arch §6.9' },
+        checks: [
+          'api/second-factor › asks a finance admin for the code too, and still tells a member it isn’t theirs',
+        ],
+      },
+      {
+        id: 'AC9',
+        given: 'the second factor is switched on',
+        when: 'an owner or finance admin reads settings with a password alone',
+        then: 'they are shown as before: only changes need the code',
+        decided: ADR42,
+        checks: ['api/second-factor › leaves reading the settings to a password alone'],
+      },
+    ],
+    note: 'FR-GOV-04’s other half, approving someone else’s spend, calls the same check with approval (#24). Which changes count as admin actions, and that reading settings doesn’t, are Claude’s (ADR-0042), yours to confirm. The code asked for in the middle of a change is checked for how it shows, not yet for carrying the change on (#66).',
   },
 ];

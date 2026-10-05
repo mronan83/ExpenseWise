@@ -12,6 +12,7 @@ import {
   SetRouteKeySchema,
 } from '../route-mileage-schemas.ts';
 import { ProblemSchema } from '../schemas.ts';
+import { SECOND_FACTOR_REFUSAL } from '../second-factor.ts';
 
 const problem = (description: string) => ({
   description,
@@ -212,6 +213,13 @@ const managers = {
   403: problem('No organization yet, or the caller is not an owner or finance admin.'),
 };
 
+/** A change to the key: an admin action (FR-GOV-04). */
+const managersChanging = {
+  403: problem(
+    'No organization yet, or the caller is not an owner or finance admin.' + SECOND_FACTOR_REFUSAL,
+  ),
+};
+
 export const getRouteKeyRoute = createRoute({
   method: 'get',
   path: '/v1/settings/mileage/route-key',
@@ -243,7 +251,7 @@ export const setRouteKeyRoute = createRoute({
   responses: {
     200: keyStatus('Accepted and stored.'),
     ...common,
-    ...managers,
+    ...managersChanging,
     404: problem(`${OFF}.`),
     422: problem('OpenRouteService refused the key, or it isn’t one; nothing was stored.'),
     502: problem('OpenRouteService is busy, used up or could not be reached; nothing was stored.'),
@@ -260,7 +268,7 @@ export const deleteRouteKeyRoute = createRoute({
   responses: {
     204: { description: 'Removed.' },
     ...common,
-    ...managers,
+    ...managersChanging,
     404: problem(`No key is stored, or ${OFF.toLowerCase()}.`),
   },
 });

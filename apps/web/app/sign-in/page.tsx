@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState, type FormEvent } from 'react';
 import { formText } from '../../lib/form';
+import { codeNeeded } from '../../lib/second-factor';
 import { supabase } from '../../lib/supabase';
 
 /**
@@ -15,7 +16,10 @@ function returnTo(search: string): string | undefined {
   return next && /^\/invite\/[A-Za-z0-9_-]+$/.test(next) ? next : undefined;
 }
 
-/** Email and password sign-in (D-15). Accounts are created in Supabase; sign-ups are off. */
+/**
+ * Email and password sign-in (D-15). Accounts are created in Supabase; sign-ups are off. Someone
+ * with an authenticator app goes on to its code while their organization asks for it (F-11).
+ */
 export default function SignInPage() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
@@ -32,12 +36,16 @@ export default function SignInPage() {
       email: formText(form, 'email'),
       password: formText(form, 'password'),
     });
-    setBusy(false);
     if (failure) {
+      setBusy(false);
       setError(failure.message);
       return;
     }
-    router.push(returnTo(window.location.search) ?? '/settings/ai');
+    const next = returnTo(window.location.search) ?? '/settings/ai';
+    // The code, on its own screen, before anything else (FR-PLT-03).
+    const needed = await codeNeeded(true);
+    setBusy(false);
+    router.push(needed ? `/sign-in/code?next=${encodeURIComponent(next)}` : next);
   }
 
   return (

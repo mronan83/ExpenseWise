@@ -5,6 +5,7 @@ import {
   SetMileageRateSchema,
 } from '../mileage-rate-schemas.ts';
 import { ProblemSchema } from '../schemas.ts';
+import { SECOND_FACTOR_REFUSAL } from '../second-factor.ts';
 
 const problem = (description: string) => ({
   description,
@@ -63,7 +64,8 @@ export const setMileageRateRoute = createRoute({
     ...common,
     400: problem('The body is not valid.'),
     403: problem(
-      'The caller has no organization yet, or is not an owner or finance admin (forbidden_role).',
+      'The caller has no organization yet, or is not an owner or finance admin (forbidden_role).' +
+        SECOND_FACTOR_REFUSAL,
     ),
     404: problem(OFF),
     422: problem('The day or the rate is not valid; field names which.'),

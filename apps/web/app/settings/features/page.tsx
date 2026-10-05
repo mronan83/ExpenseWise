@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiProblem } from '../../../lib/api';
 import { loadFeatures, type Feature, type FeatureList } from '../../../lib/features';
+import { SECOND_FACTOR_FLAG } from '../../../lib/second-factor';
 import { supabase } from '../../../lib/supabase';
 import { SettingsNav } from '../nav';
 
@@ -129,6 +130,22 @@ export default function FeaturesPage() {
                     <span className="text-sm font-medium">{f.name}</span>
                     <span className="text-xs text-ink-2">{f.description}</span>
                     <span className="text-xs font-medium">{stateText(f)}</span>
+                    {f.key === SECOND_FACTOR_FLAG &&
+                    load.canSwitch &&
+                    !f.enabled &&
+                    f.source !== 'override' ? (
+                      <span className="text-xs text-ink-2">
+                        Switching it on needs your own code first, so no one is locked out: add an
+                        authenticator app in{' '}
+                        <Link
+                          href="/settings/sign-ins"
+                          className="font-semibold text-carbon underline"
+                        >
+                          Settings › Sign-ins
+                        </Link>{' '}
+                        and enter its code, then switch it on here.
+                      </span>
+                    ) : null}
                   </span>
                   {load.canSwitch && f.source !== 'override' ? (
                     <button

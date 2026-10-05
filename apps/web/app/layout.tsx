@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
 import './globals.css';
+import { SecondFactorGate, StepUpPrompt } from './second-factor';
 import { TabBar } from './tab-bar';
 
 export const metadata: Metadata = {
@@ -26,6 +27,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body className="flex min-h-dvh flex-col font-sans antialiased">
         {children}
         <TabBar />
+        <StepUpPrompt />
+        <SecondFactorGate />
       </body>
     </html>
   );

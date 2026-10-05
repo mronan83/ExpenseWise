@@ -271,7 +271,7 @@ export const SECURITY_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Anyone who can run the server can decrypt every key. Until a second factor at sign-in exists (F-11), a stolen password lets someone replace or remove keys (ADR-0015).',
+    note: 'Anyone who can run the server can decrypt every key. While the organization has the second factor switched on, saving, testing or removing a key also needs the code from an authenticator app (F-11, US-ACC-12); while it is off, a stolen password lets someone replace or remove keys (ADR-0015).',
   },
   {
     id: 'US-SEC-05',

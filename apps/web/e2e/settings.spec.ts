@@ -68,6 +68,7 @@ for (const colorScheme of ['light', 'dark'] as const) {
 
     for (const path of [
       '/sign-in',
+      '/sign-in/code',
       '/settings/ai',
       '/settings/sign-ins',
       '/settings/features',

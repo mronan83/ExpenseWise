@@ -1,5 +1,6 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import { ProblemSchema } from '../schemas.ts';
+import { SECOND_FACTOR_REFUSAL } from '../second-factor.ts';
 
 const problem = (description: string) => ({
   description,
@@ -140,7 +141,7 @@ export const saveModelSettingsRoute = createRoute({
     },
     400: problem('The request is not valid.'),
     401: problem('Sign in required.'),
-    403: problem('Only an owner or finance admin can choose the models.'),
+    403: problem('Only an owner or finance admin can choose the models.' + SECOND_FACTOR_REFUSAL),
     404: featureOff,
     422: problem(
       'A model is unknown or listed twice, the primary is not on, or a model is switched on ' +

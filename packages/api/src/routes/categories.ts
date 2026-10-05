@@ -10,6 +10,7 @@ import {
   NewExpenseTypeSchema,
 } from '../category-schemas.ts';
 import { ExpenseDetailSchema, ProblemSchema } from '../schemas.ts';
+import { SECOND_FACTOR_REFUSAL } from '../second-factor.ts';
 
 /*
  * Categories and types (FR-EXP-11, FR-INT-10, ADR-0036). Every route answers 404 feature_off
@@ -48,7 +49,9 @@ const idParam = <K extends keyof typeof params>(name: K) => params[name];
 const manage = {
   ...common,
   400: problem('The request is not valid.'),
-  403: problem('Only an owner or finance admin can change categories and types.'),
+  403: problem(
+    'Only an owner or finance admin can change categories and types.' + SECOND_FACTOR_REFUSAL,
+  ),
   404: problem('No such one in this organization, or the feature is off (feature_off).'),
   422: problem(
     'A value is not valid: a blank or taken name, a parent that is missing or inside it, a type ' +

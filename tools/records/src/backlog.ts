@@ -168,6 +168,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none' },
     source: 'GAP-03, roadmap increment 1',
     affects: ['GAP-03', 'FR-PLT-03', 'FR-GOV-04', 'F-11'],
+    done: { date: '2026-10-05', in: 'PR #60' },
   },
   {
     num: 9,
@@ -344,6 +345,19 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'owner', ask: 'Your approval of a run’s spend, estimated first' },
     source: 'GAP-32',
     affects: ['GAP-32', 'NFR-AI-01', 'NFR-AI-04'],
+  },
+  {
+    num: 85,
+    title: 'Refuse a session that skipped the code everywhere, not only for admin actions',
+    type: 'Security',
+    detail:
+      'The second factor (#8) asks for the code at sign-in in the app, and the API refuses admin actions and approving at aal1, but a token from a password alone, used directly, still reads the person’s records, changes their own and links another sign-in (GAP-33). Have the API know who has a verified authenticator, through an owner-run function over Supabase’s factors or a record of our own kept as they enroll, and refuse aal1 for them on every request while the organization has the second factor on; linking a sign-in needs aal2 too. Your answer to Q41.',
+    priority: 'P2',
+    effort: 'M',
+    severity: 'Medium',
+    blocker: { kind: 'owner', ask: 'Your answer to Q41' },
+    source: 'GAP-33, Claude, building #8',
+    affects: ['GAP-33', 'FR-PLT-03', 'F-11'],
   },
   {
     num: 80,
@@ -634,7 +648,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     priority: 'P3',
     effort: 'L',
     severity: 'Medium',
-    blocker: { kind: 'items', items: [8] },
+    blocker: { kind: 'none' },
     source: 'Roadmap increment 3',
     affects: [
       'FR-GOV-02',
