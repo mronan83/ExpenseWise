@@ -26,8 +26,12 @@ export interface Seeded {
   readonly trips: Record<'omaha' | 'houston' | 'long' | 'empty', string>;
   readonly receipts: Record<string, string>;
   readonly expenses: Record<string, string>;
-  /** open: still needing review, with a justified and an unjustified local expense. */
-  readonly reports: Record<'open' | 'closed', string>;
+  /**
+   * open: still needing review, with a justified and an unjustified local expense. toApprove:
+   * Sam's, waiting for Riley's approval. returned: Riley's, which Casey returned with its drive
+   * rejected (#24).
+   */
+  readonly reports: Record<'open' | 'closed' | 'toApprove' | 'returned', string>;
   /**
    * Links to another organization (#29): one Riley's own work stops Riley joining, and one its
    * owner revoked.

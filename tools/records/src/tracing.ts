@@ -14,6 +14,10 @@ export const GAPS: readonly Gap[] = [
       'Found merging PR #58: an expense points at its category and type (ADR-0036) and copies neither name, so renaming one shows the new name on every claim that used it, submitted or exported ones included. One in use can be retired but never deleted, so nothing is lost, but an old claim no longer reads as it did.',
     fix: 'Copy the category and type names onto an expense when its report is submitted, as the mileage and FX rates are copied, and show those on submitted claims and exports (#70).',
     backlog: 70,
+    closed: {
+      date: '2026-10-05',
+      note: 'PR #60, with approval (#24): submitting a report copies each expense’s category and type names onto it, and its parts’, and its export and totals by category read those once it is submitted (#70).',
+    },
   },
   {
     id: 'GAP-28',
@@ -69,6 +73,16 @@ export const GAPS: readonly Gap[] = [
       'Found closing #39 and #72 on Oct 5. The harness scores public and synthetic receipts, but no model key has reached the build environment, so it has never read one: accuracy by layer is unmeasured, and the tier is chosen from your own receipts compared on the page instead (ADR-0017).',
     fix: 'Run the eval set against the models with your approval of the spend, estimated before it starts, and report accuracy by layer (#84).',
     backlog: 84,
+  },
+  {
+    id: 'GAP-34',
+    title: 'An approved expense can’t be corrected.',
+    affects: ['FR-EXP-03', 'F-18'],
+    severity: 'Medium',
+    evidence:
+      'Found building approval (#24) in PR #60. An approved expense is locked, in the app and in the database, as FR-EXP-03 asks, but nothing makes the reversal and new version that correct one; the expense keeps a version and a reversal link that nothing writes yet.',
+    fix: 'Reverse an approved expense with a copy that cancels it, pointing at it, and file a new version for its member to correct and submit, each in the audit trail (#87).',
+    backlog: 87,
   },
   {
     id: 'GAP-25',
@@ -856,6 +870,14 @@ export const QUESTIONS: readonly Question[] = [
       date: '2026-10-05',
       text: 'A: the second factor is built in the same batch as approval, behind its own switch.',
     },
+  },
+  {
+    id: 'Q42',
+    title: 'Who a team member’s report goes to',
+    ask: 'Approval (#24) sends a report to one approver. As built: the member’s manager if one is set and can approve it, otherwise the longest-standing approver, then finance admin, then owner, never the member themselves; an owner or finance admin may also decide in that person’s place. A: keep that. B: as A, and let an owner choose each member’s approver in Settings › People (#86). C: something else.',
+    why: 'In a small team there is usually one obvious approver, and routing by role finds them without a setting. Once two people approve, who gets which member’s report matters, and nothing sets a manager yet.',
+    recommendation: 'A until a second approver joins, then B.',
+    affects: ['FR-GOV-02', 'F-18'],
   },
 ];
 

@@ -10,6 +10,7 @@ import { and, eq, not, or, sql } from 'drizzle-orm';
 import type { Transaction } from './client.ts';
 import { heldAsDuplicate } from './duplicates.ts';
 import { itemizationsOf, partsOf } from './itemized.ts';
+import { shownCategoryName, shownTypeName } from './submitted-names.ts';
 import {
   categories,
   expenses,
@@ -71,8 +72,9 @@ export async function reportForExport(
       id: expenses.id,
       date: expenses.transactionDate,
       merchant: expenses.merchant,
-      category: categories.name,
-      type: expenseTypes.name,
+      // As submitted, once its report is (NFR-DAT-04, #70).
+      category: shownCategoryName,
+      type: shownTypeName,
       trip: trips.name,
       tripPurpose: trips.purpose,
       justification: expenses.justification,

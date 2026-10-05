@@ -280,11 +280,27 @@ export function reportCsv(table: ReportExportTable): string {
 }
 
 /**
- * Whether a report can be exported: once it has closed, and at every state after it. Until
- * approval (#24) exists a report goes no further than closed, so this is the closed report.
+ * Whether a report can be exported: once it has closed, and at every state after it, while
+ * approval is off, since then a report goes no further than closed.
  */
 export function isReportExportable(status: ReportStatus): boolean {
   return status !== 'open';
+}
+
+/** A report's states from submission on. */
+const SUBMITTED: ReadonlySet<ReportStatus> = new Set([
+  'submitted',
+  'in_approval',
+  'approved',
+  'settled',
+]);
+
+/**
+ * Whether a report can be exported once approval exists: submitted and approved reports only,
+ * by your answer to Q29. A closed report is checked, and sent, by submitting it.
+ */
+export function isExportableOnceApproved(status: ReportStatus): boolean {
+  return SUBMITTED.has(status);
 }
 
 /** Roles that see every member’s reports: the owner, finance admins, and auditors, who read. */

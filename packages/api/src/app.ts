@@ -3,6 +3,8 @@ import { DomainError } from '@expensewise/domain';
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { Hono, type Context, type ErrorHandler, type NotFoundHandler } from 'hono';
 import type { ProviderKeyVerifier } from './ai-providers.ts';
+import type { ApprovalStore } from './approval.ts';
+import { registerApprovalRoutes } from './approval-routes.ts';
 import type { AuditStore } from './audit.ts';
 import { registerAuditRoutes } from './audit-routes.ts';
 import { callerScope, notYours, recordingCaller } from './caller.ts';
@@ -83,6 +85,11 @@ export interface ApiOptions
   readonly home?: HomeStore;
   /** Expense reports. Without it, those routes answer 503 and Needs you shows no reports. */
   readonly reports?: ReportStore;
+  /**
+   * Approval (#24). Without it, those routes answer 503, and Needs you shows nothing to approve
+   * and no returned report.
+   */
+  readonly approvals?: ApprovalStore;
   /** The audit trail and its chain check. Without it, those routes answer 503. */
   readonly audit?: AuditStore;
   /** Categories and types (FR-EXP-11). Without it, those routes answer 503 and expenses show none. */
@@ -226,6 +233,7 @@ export function createApi(options: ApiOptions) {
   registerRouteMileageRoutes(app, routes);
   registerHomeRoutes(app, routes);
   registerReportRoutes(app, routes);
+  registerApprovalRoutes(app, routes);
   registerReportExportRoutes(app, routes);
   registerReimbursementRoutes(app, routes);
   registerInboundRoutes(app, routes);

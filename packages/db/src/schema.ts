@@ -1,4 +1,5 @@
 import {
+  APPROVAL_NOTE_MAX,
   DISTANCE_UNITS,
   EXCLUSION_NOTE_MAX,
   EXCLUSION_REASONS,
@@ -483,6 +484,18 @@ export const expenses = pgTable(
      */
     justification: text('justification'),
     /**
+     * Why it claims less than its receipt, in the person's words (FR-EXP-10, Q6). A report
+     * can't be submitted while an expense claims less without a reason, its own or the lines it
+     * leaves out (FR-GOV-13).
+     */
+    claimReason: text('claim_reason'),
+    /**
+     * Its category's and type's names as they were when its report was last submitted, so
+     * renaming either later never changes a submitted claim or its export (NFR-DAT-04, #70).
+     */
+    categoryName: text('category_name'),
+    typeName: text('type_name'),
+    /**
      * When a person last edited the values. From then on a reading of the receipt never
      * overwrites them (ADR-0022); a difference from the receipt shows instead.
      */
@@ -546,6 +559,10 @@ export const expenses = pgTable(
       foreignColumns: [t.orgId, t.id],
     }),
     check('expenses_currency_iso', sql`${t.currency} IS NULL OR ${isoCurrency(t.currency)}`),
+    check(
+      'expenses_claim_reason_length',
+      sql`${t.claimReason} IS NULL OR char_length(${t.claimReason}) BETWEEN 1 AND ${sql.raw(String(APPROVAL_NOTE_MAX))}`,
+    ),
     // From Ready onward an expense is complete: amount, currency and date are known.
     check(
       'expenses_complete_when_ready',
@@ -755,6 +772,12 @@ export const expenseParts = pgTable(
     typeId: uuid('type_id'),
     amountMinor: bigint('amount_minor', { mode: 'number' }).notNull(),
     currency: char('currency', { length: 3 }).notNull(),
+    /**
+     * Its category's and type's names as they were when its expense's report was last
+     * submitted (NFR-DAT-04, #70); null for a part of the lines left with the expense's own.
+     */
+    categoryName: text('category_name'),
+    typeName: text('type_name'),
     createdAt: createdAt(),
   },
   (t) => [
@@ -1199,6 +1222,11 @@ export const savedPlaces = pgTable(
   ],
 );
 
+/**
+ * One step of a report's approval (FR-GOV-02, #24): the approver it went to, then the decision,
+ * when and with what comment; a return needs one. Single-step in Phase 1, so each submission adds
+ * one step, numbered by `sequence`; the steps of earlier rounds stay as they were decided.
+ */
 export const approvalSteps = pgTable(
   'approval_steps',
   {
@@ -1213,6 +1241,7 @@ export const approvalSteps = pgTable(
     createdAt: createdAt(),
   },
   (t) => [
+    unique('approval_steps_org_id_id_key').on(t.orgId, t.id),
     unique('approval_steps_report_sequence_key').on(t.orgId, t.reportId, t.sequence),
     foreignKey({
       name: 'approval_steps_report_fk',
@@ -1228,6 +1257,45 @@ export const approvalSteps = pgTable(
       'approval_steps_return_needs_comment',
       sql`${t.decision} <> 'returned' OR length(trim(coalesce(${t.comment}, ''))) > 0`,
     ),
+  ],
+);
+
+/**
+ * An expense rejected when its report was returned (FR-GOV-10 to FR-GOV-12, #24), with why: one
+ * that differs from its receipt, rejected on its own, or one the approver rejected in their own
+ * words. Kept with the step that returned it, so each round's rejections stay as they were. It
+ * goes with its expense.
+ */
+export const expenseRejections = pgTable(
+  'expense_rejections',
+  {
+    id: id(),
+    orgId: orgId(),
+    stepId: uuid('step_id').notNull(),
+    expenseId: uuid('expense_id').notNull(),
+    reason: text('reason').notNull(),
+    /** True when the review rejected it on its own, because it differs from its receipt. */
+    automatic: boolean('automatic').notNull().default(false),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('expense_rejections_org_id_id_key').on(t.orgId, t.id),
+    unique('expense_rejections_step_expense_key').on(t.orgId, t.stepId, t.expenseId),
+    foreignKey({
+      name: 'expense_rejections_step_fk',
+      columns: [t.orgId, t.stepId],
+      foreignColumns: [approvalSteps.orgId, approvalSteps.id],
+    }),
+    foreignKey({
+      name: 'expense_rejections_expense_fk',
+      columns: [t.orgId, t.expenseId],
+      foreignColumns: [expenses.orgId, expenses.id],
+    }).onDelete('cascade'),
+    check(
+      'expense_rejections_reason_length',
+      sql`char_length(trim(${t.reason})) BETWEEN 1 AND ${sql.raw(String(APPROVAL_NOTE_MAX))}`,
+    ),
+    index('expense_rejections_expense_idx').on(t.orgId, t.expenseId),
   ],
 );
 

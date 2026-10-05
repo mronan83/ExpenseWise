@@ -1,5 +1,8 @@
 import {
   closeReport,
+  expensesByIds,
+  loadReports,
+  returnedReports,
   getReport,
   justifyExpense,
   listReports,
@@ -19,13 +22,32 @@ import {
   type Transaction,
   withReportAmounts,
 } from '@expensewise/db';
+import { reportsWaitingFor } from './approval.ts';
 import { asCaller } from './caller.ts';
 import { uncodedNeedingYou, type UncodedNeedingYou } from './categories.ts';
+
+/** A report that came back to its member (FR-GOV-12), with each rejected expense still on it. */
+export interface ReturnedNeedingYou {
+  readonly report: ReportContents;
+  readonly comment: string;
+  /** Who returned it. */
+  readonly by: string;
+  readonly at: Date;
+  readonly rejected: readonly {
+    readonly expense: ExpenseRecord;
+    readonly reason: string;
+    readonly automatic: boolean;
+  }[];
+}
 
 /** What Needs you shows of reports: a member's open and closed ones, and unjustified expenses. */
 export interface ReportsNeedingYou {
   readonly reports: ReportContents[];
   readonly unjustified: ExpenseRecord[];
+  /** While approval is on and asked for: the reports waiting for the member's decision. */
+  readonly toApprove?: ReportContents[];
+  /** While approval is on and asked for: the member's reports that came back (FR-GOV-12). */
+  readonly returned?: ReturnedNeedingYou[];
   /**
    * With categories on and asked for: the member's expenses with no category and type, with
    * what each would be suggested (Q27).
@@ -37,6 +59,47 @@ export interface ReportsNeedingYou {
 export interface NeedsYouOptions {
   /** The member's expenses with no category and type, while categories are on (Q27). */
   readonly uncoded?: boolean;
+  /** Reports to approve, and returned reports with their rejections, while approval is on. */
+  readonly approval?: boolean;
+}
+
+/**
+ * A member's reports that came back, each with its comment and every rejected expense still on
+ * it (FR-GOV-12). Call inside withOrg().
+ */
+export async function returnedNeedingYou(
+  tx: Transaction,
+  memberId: string,
+): Promise<ReturnedNeedingYou[]> {
+  const returned = await returnedReports(tx, memberId);
+  if (returned.length === 0) return [];
+  const contents = await withReportAmounts(
+    tx,
+    await loadReports(
+      tx,
+      returned.map((r) => r.reportId),
+    ),
+  );
+  const rejectedIds = returned.flatMap((r) => r.rejections.map((x) => x.expenseId));
+  const expenses = await expensesByIds(tx, rejectedIds);
+  return returned.flatMap((r) => {
+    const report = contents.find((c) => c.report.id === r.reportId);
+    if (!report) return [];
+    return [
+      {
+        report,
+        comment: r.step.comment ?? '',
+        by: r.step.approver,
+        at: r.step.decidedAt ?? r.step.createdAt,
+        rejected: r.rejections.flatMap((x) => {
+          const expense = expenses.find((e) => e.id === x.expenseId);
+          // Only what is still on the report: one moved off it no longer holds it up.
+          const onIt = expense && (expense.reportId ?? expense.tripReportId) === r.reportId;
+          return onIt ? [{ expense, reason: x.reason, automatic: x.automatic }] : [];
+        }),
+      },
+    ];
+  });
 }
 
 /** What the API needs from the database for reports (FR-EXP-05). Tests use an in-memory fake. */
@@ -85,6 +148,12 @@ export async function reportsNeedingYou(
     reports: await withReportAmounts(tx, reports),
     unjustified: await listUnjustifiedExpenses(tx, memberId, limit),
     ...(options.uncoded ? { uncoded: await uncodedNeedingYou(tx, memberId, limit) } : {}),
+    ...(options.approval
+      ? {
+          toApprove: await reportsWaitingFor(tx, memberId),
+          returned: await returnedNeedingYou(tx, memberId),
+        }
+      : {}),
   };
 }
 

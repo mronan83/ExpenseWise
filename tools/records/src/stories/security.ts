@@ -936,16 +936,17 @@ export const SECURITY_STORIES: readonly Story[] = [
       },
       {
         id: 'AC6',
-        given: 'an approver, while approval isn’t built (#24) and no report is routed to them',
+        given: 'an approver with no report routed to them',
         when: 'they work in the app',
-        then: 'they see and change only their own records, as a member does',
+        then: 'they see and change only their own records, as a member does; one routed to them they see with what is on it (US-GOV-06)',
         decided: CLAUDE,
         checks: [
           "db/own-records.int › can't see another member's receipts, expenses or trips, or their readings",
+          'db/approval.int › shows a report routed to an approver, and what is on it, and nothing else of its member’s',
         ],
       },
     ],
-    note: 'Your choice of Oct 4: #50 before anyone is invited (GAP-20). Approvers see the reports they approve once approval routes them (#24).',
+    note: 'Your choice of Oct 4: #50 before anyone is invited (GAP-20). Since PR #60, with approval on, an approver sees the reports routed to them (#24, US-GOV-06).',
   },
   {
     id: 'US-SEC-15',

@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { api, ApiProblem } from '../../lib/api';
+import { APPROVAL_FLAG } from '../../lib/approval';
+import { useFeatures } from '../../lib/features';
 import { formatMoney } from '../../lib/receipts';
 import {
   asSpent,
@@ -19,7 +21,7 @@ type Load =
   | { state: 'loading' }
   | { state: 'signed-out' }
   | { state: 'error'; message: string }
-  | { state: 'ready'; reports: ReportSummary[] };
+  | { state: 'ready'; reports: ReportSummary[]; toApprove: ReportSummary[] };
 
 const describeError = (error: unknown) =>
   error instanceof ApiProblem
@@ -44,6 +46,8 @@ function totals(r: ReportSummary): { main: string; aside: string | null } {
  */
 export default function ReportsPage() {
   const [load, setLoad] = useState<Load>({ state: 'loading' });
+  const features = useFeatures();
+  const approval = features(APPROVAL_FLAG);
 
   const refresh = useCallback(async () => {
     const session = (await supabase()?.auth.getSession())?.data.session;
@@ -52,12 +56,16 @@ export default function ReportsPage() {
       return;
     }
     try {
-      const { reports } = await api<{ reports: ReportSummary[] }>('/v1/reports');
-      setLoad({ state: 'ready', reports });
+      // While approval is on, the reports waiting for the person's decision come first (#24).
+      const [{ reports }, waiting] = await Promise.all([
+        api<{ reports: ReportSummary[] }>('/v1/reports'),
+        approval ? api<{ reports: ReportSummary[] }>('/v1/approvals') : { reports: [] },
+      ]);
+      setLoad({ state: 'ready', reports, toApprove: waiting.reports });
     } catch (error) {
       setLoad({ state: 'error', message: describeError(error) });
     }
-  }, []);
+  }, [approval]);
 
   useEffect(() => {
     // Loading reads the browser's session, so it can only start after mounting.
@@ -66,7 +74,12 @@ export default function ReportsPage() {
   }, [refresh]);
 
   const open = load.state === 'ready' ? load.reports.filter((r) => r.status === 'open') : [];
-  const done = load.state === 'ready' ? load.reports.filter((r) => r.status !== 'open') : [];
+  const done = load.state === 'ready' ? load.reports.filter((r) => r.status === 'closed') : [];
+  const submitted =
+    load.state === 'ready'
+      ? load.reports.filter((r) => r.status !== 'open' && r.status !== 'closed')
+      : [];
+  const toApprove = load.state === 'ready' ? load.toApprove : [];
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]">
@@ -95,8 +108,14 @@ export default function ReportsPage() {
             </p>
           </section>
         ) : null}
+        {toApprove.length > 0 ? (
+          <ReportList id="approve" title="To approve" reports={toApprove} showOwner />
+        ) : null}
         {open.length > 0 ? <ReportList id="open" title="Open" reports={open} /> : null}
         {done.length > 0 ? <ReportList id="done" title="Closed" reports={done} /> : null}
+        {submitted.length > 0 ? (
+          <ReportList id="submitted" title="Submitted" reports={submitted} />
+        ) : null}
       </main>
     </div>
   );
@@ -106,10 +125,13 @@ function ReportList({
   id,
   title,
   reports,
+  showOwner = false,
 }: {
   id: string;
   title: string;
   reports: ReportSummary[];
+  /** Name whose report each is: for reports someone else submitted. */
+  showOwner?: boolean;
 }) {
   return (
     <section aria-labelledby={`${id}-title`} className="flex flex-col gap-2">
@@ -126,7 +148,10 @@ function ReportList({
                 href={`/reports/${r.id}`}
                 className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 px-4 py-3"
               >
-                <span className="truncate text-sm font-semibold">{reportName(r)}</span>
+                <span className="truncate text-sm font-semibold">
+                  {showOwner ? `${r.owner} · ` : ''}
+                  {reportName(r)}
+                </span>
                 <span className="text-right font-mono text-sm whitespace-nowrap">{total.main}</span>
                 {total.aside ? (
                   <span className="col-span-2 text-right text-xs break-words text-ink-2">

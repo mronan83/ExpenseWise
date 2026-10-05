@@ -243,6 +243,13 @@
       ],
       "uniques": [
         {
+          "name": "approval_steps_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
           "name": "approval_steps_report_sequence_key",
           "columns": [
             "org_id",
@@ -280,7 +287,12 @@
           "check": "(org_id = app_current_org())"
         }
       ],
-      "triggers": [],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.approval_steps FOR EACH ROW EXECUTE FUNCTION enforce_approval_steps()"
+        }
+      ],
       "grants": {
         "expensewise_app": [
           "DELETE",
@@ -1377,6 +1389,18 @@
           "type": "timestamp with time zone",
           "nullable": false,
           "default": "now()"
+        },
+        {
+          "name": "category_name",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "type_name",
+          "type": "text",
+          "nullable": true,
+          "default": null
         }
       ],
       "primaryKey": [
@@ -1504,6 +1528,160 @@
           "INSERT",
           "SELECT",
           "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "expense_rejections",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "step_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "expense_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "reason",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "automatic",
+          "type": "boolean",
+          "nullable": false,
+          "default": "false"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "expense_rejections_expense_fk",
+          "columns": [
+            "org_id",
+            "expense_id"
+          ],
+          "table": "expenses",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "expense_rejections_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "expense_rejections_step_fk",
+          "columns": [
+            "org_id",
+            "step_id"
+          ],
+          "table": "approval_steps",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "expense_rejections_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "expense_rejections_step_expense_key",
+          "columns": [
+            "org_id",
+            "step_id",
+            "expense_id"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "expense_rejections_reason_length",
+          "definition": "CHECK (((char_length(TRIM(BOTH FROM reason)) >= 1) AND (char_length(TRIM(BOTH FROM reason)) <= 500)))"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "expense_rejections_expense_idx",
+          "definition": "CREATE INDEX expense_rejections_expense_idx ON public.expense_rejections USING btree (org_id, expense_id)"
+        }
+      ],
+      "policies": [
+        {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (EXISTS ( SELECT 1\n   FROM expenses e\n  WHERE ((e.org_id = expense_rejections.org_id) AND (e.id = expense_rejections.expense_id)))))",
+          "check": null
+        },
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.expense_rejections FOR EACH ROW EXECUTE FUNCTION enforce_own_records('expense')"
+        }
+      ],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT"
         ]
       }
     },
@@ -1882,6 +2060,24 @@
           "type": "date",
           "nullable": true,
           "default": null
+        },
+        {
+          "name": "claim_reason",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "category_name",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "type_name",
+          "type": "text",
+          "nullable": true,
+          "default": null
         }
       ],
       "primaryKey": [
@@ -1984,6 +2180,10 @@
       ],
       "checks": [
         {
+          "name": "expenses_claim_reason_length",
+          "definition": "CHECK (((claim_reason IS NULL) OR ((char_length(claim_reason) >= 1) AND (char_length(claim_reason) <= 500))))"
+        },
+        {
           "name": "expenses_classified_whole",
           "definition": "CHECK ((((category_id IS NULL) AND (type_id IS NULL) AND (classified_at IS NULL)) OR ((category_id IS NOT NULL) AND (type_id IS NOT NULL) AND (classified_at IS NOT NULL))))"
         },
@@ -2042,7 +2242,7 @@
           "roles": [
             "public"
           ],
-          "using": "(app_sees_every_member() OR (member_id = app_current_member()))",
+          "using": "(app_sees_every_member() OR (member_id = app_current_member()) OR app_approver_of(org_id, app_expense_report(org_id, trip_id, report_id)))",
           "check": null
         },
         {
@@ -2058,12 +2258,20 @@
       ],
       "triggers": [
         {
+          "name": "approved_locked",
+          "definition": "CREATE TRIGGER approved_locked BEFORE UPDATE ON public.expenses FOR EACH ROW EXECUTE FUNCTION lock_approved_expenses()"
+        },
+        {
           "name": "expense_conversion_first",
           "definition": "CREATE TRIGGER expense_conversion_first BEFORE DELETE ON public.expenses FOR EACH ROW EXECUTE FUNCTION delete_expense_conversion()"
         },
         {
           "name": "expense_lines_first",
           "definition": "CREATE TRIGGER expense_lines_first BEFORE DELETE ON public.expenses FOR EACH ROW EXECUTE FUNCTION delete_expense_lines()"
+        },
+        {
+          "name": "expense_rejections_first",
+          "definition": "CREATE TRIGGER expense_rejections_first BEFORE DELETE ON public.expenses FOR EACH ROW EXECUTE FUNCTION delete_expense_rejections()"
         },
         {
           "name": "own_records",
@@ -4654,7 +4862,7 @@
           "roles": [
             "public"
           ],
-          "using": "(app_sees_every_member() OR (member_id = app_current_member()))",
+          "using": "(app_sees_every_member() OR (member_id = app_current_member()) OR app_approver_of(org_id, app_report_of_expense(org_id, expense_id)))",
           "check": null
         },
         {
@@ -4836,7 +5044,7 @@
           "roles": [
             "public"
           ],
-          "using": "(app_sees_every_member() OR (member_id = app_current_member()))",
+          "using": "(app_sees_every_member() OR (member_id = app_current_member()) OR app_approver_of(org_id, id))",
           "check": null
         },
         {
@@ -5286,7 +5494,7 @@
           "roles": [
             "public"
           ],
-          "using": "(app_sees_every_member() OR (member_id = app_current_member()))",
+          "using": "(app_sees_every_member() OR (member_id = app_current_member()) OR app_approver_of(org_id, report_id))",
           "check": null
         },
         {
@@ -5505,6 +5713,16 @@
   ],
   "functions": [
     {
+      "name": "app_approver_of",
+      "arguments": "org uuid, report uuid",
+      "returns": "boolean",
+      "security": "definer",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
+    },
+    {
       "name": "app_changes_member",
       "arguments": "owner uuid",
       "returns": "boolean",
@@ -5555,10 +5773,50 @@
       ]
     },
     {
+      "name": "app_deciding_report",
+      "arguments": "",
+      "returns": "uuid",
+      "security": "invoker",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
+    },
+    {
+      "name": "app_decision_change",
+      "arguments": "tbl text, before jsonb, after jsonb",
+      "returns": "boolean",
+      "security": "invoker",
+      "volatility": "immutable",
+      "executableBy": [
+        "expensewise_app"
+      ]
+    },
+    {
+      "name": "app_expense_report",
+      "arguments": "org uuid, trip uuid, report uuid",
+      "returns": "uuid",
+      "security": "definer",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
+    },
+    {
       "name": "app_invite_hash",
       "arguments": "",
       "returns": "text",
       "security": "invoker",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
+    },
+    {
+      "name": "app_may_decide",
+      "arguments": "org uuid, report uuid",
+      "returns": "boolean",
+      "security": "definer",
       "volatility": "stable",
       "executableBy": [
         "expensewise_app"
@@ -5575,10 +5833,40 @@
       ]
     },
     {
+      "name": "app_report_of_expense",
+      "arguments": "org uuid, expense uuid",
+      "returns": "uuid",
+      "security": "definer",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
+    },
+    {
+      "name": "app_row_report",
+      "arguments": "tbl text, org uuid, rec jsonb",
+      "returns": "uuid",
+      "security": "definer",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
+    },
+    {
       "name": "app_sees_every_member",
       "arguments": "",
       "returns": "boolean",
       "security": "invoker",
+      "volatility": "stable",
+      "executableBy": [
+        "expensewise_app"
+      ]
+    },
+    {
+      "name": "app_self_attests",
+      "arguments": "org uuid, report uuid",
+      "returns": "boolean",
+      "security": "definer",
       "volatility": "stable",
       "executableBy": [
         "expensewise_app"
@@ -5621,6 +5909,14 @@
       "executableBy": []
     },
     {
+      "name": "delete_expense_rejections",
+      "arguments": "",
+      "returns": "trigger",
+      "security": "invoker",
+      "volatility": "volatile",
+      "executableBy": []
+    },
+    {
       "name": "delete_receipt",
       "arguments": "target uuid",
       "returns": "TABLE(storage_key text, expense_id uuid)",
@@ -5631,7 +5927,23 @@
       ]
     },
     {
+      "name": "enforce_approval_steps",
+      "arguments": "",
+      "returns": "trigger",
+      "security": "invoker",
+      "volatility": "volatile",
+      "executableBy": []
+    },
+    {
       "name": "enforce_own_records",
+      "arguments": "",
+      "returns": "trigger",
+      "security": "invoker",
+      "volatility": "volatile",
+      "executableBy": []
+    },
+    {
+      "name": "lock_approved_expenses",
       "arguments": "",
       "returns": "trigger",
       "security": "invoker",

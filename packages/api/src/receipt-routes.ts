@@ -11,6 +11,7 @@ import { detailsOf } from '@expensewise/extraction/place';
 import { receiptPath, RECEIPT_BUCKET, type ObjectStore } from '@expensewise/storage';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
+import type { ApprovalStore } from './approval.ts';
 import type { CategoryStore } from './categories.ts';
 import { featureGate, type FeatureGate } from './features.ts';
 import {
@@ -20,7 +21,7 @@ import {
   type ModelSettingsStore,
 } from './model-settings.ts';
 import { notYours } from './caller.ts';
-import { askForCoding, needsYouItems, NO_REPORTS } from './needs-you-views.ts';
+import { askForApproval, askForCoding, needsYouItems, NO_REPORTS } from './needs-you-views.ts';
 import { ProblemError } from './problem.ts';
 import { showConverted } from './reimbursement.ts';
 import { inboxRoute } from './routes/inbox.ts';
@@ -64,6 +65,8 @@ export interface ReceiptRouteOptions {
   readonly reports?: ReportStore;
   /** Present where categories can be on, so Needs you asks for them (FR-EXP-11, Q27). */
   readonly categories?: CategoryStore;
+  /** Present where approval can be on, so Needs you lists what to approve and what came back. */
+  readonly approvals?: ApprovalStore;
   /** Which features are on. Built from `workspace` when not given. */
   readonly features?: FeatureGate;
   /** Which AI models read receipts, under receipts.model-settings (FR-INT-16). */
@@ -306,6 +309,8 @@ export function registerReceiptRoutes(
     const reports = options.reports
       ? await options.reports.needsYou(who.orgId, who.memberId, LIST_LIMIT, {
           uncoded: await askForCoding(options, features, who.orgId),
+          // Asked for only where approval is on, so Needs you is otherwise asked as before.
+          ...((await askForApproval(options, features, who.orgId)) ? { approval: true } : {}),
         })
       : NO_REPORTS;
     const converting = await showConverted(features, who.orgId, reports.reports);

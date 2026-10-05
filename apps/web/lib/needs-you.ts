@@ -71,6 +71,19 @@ export function inboxCard(item: InboxItem): InboxCard {
     case 'expense': {
       const { expense } = item;
       if (item.reason.code === 'uncoded') return uncodedCard(expense, item.category);
+      if (item.reason.code === 'rejected') {
+        return {
+          key: `rejected-${expense.id}`,
+          title: expense.merchant ?? 'An expense',
+          amount: expense.amount ? formatMoney(expense.amount) : null,
+          when: expense.date ? showDate(expense.date) : '',
+          status: { label: 'Rejected', tone: 'text-warn' },
+          text: `Its report came back with it rejected: ${item.reason.why ?? 'see why on it.'}`,
+          action: 'Fix it',
+          href: `/expenses/${expense.id}`,
+          edge: 'bad',
+        };
+      }
       return {
         key: `expense-${expense.id}`,
         title: expense.merchant ?? 'An expense',
@@ -85,6 +98,32 @@ export function inboxCard(item: InboxItem): InboxCard {
     }
     case 'report': {
       const { report, reason } = item;
+      if (reason.code === 'returned') {
+        return {
+          key: `returned-${report.id}`,
+          title: reportName(report),
+          amount: totalsText(report),
+          when: reportHolds(report),
+          status: { label: 'Returned', tone: 'text-warn' },
+          text: `${reason.by ?? 'Its approver'} sent it back: “${reason.comment ?? ''}” Put it right, then close it and submit it again.`,
+          action: 'Open the report',
+          href: `/reports/${report.id}`,
+          edge: 'bad',
+        };
+      }
+      if (reason.code === 'to_approve') {
+        return {
+          key: `approve-${report.id}`,
+          title: reportName(report),
+          amount: totalsText(report),
+          when: reportHolds(report),
+          status: { label: 'To approve', tone: 'text-ink-2' },
+          text: `${report.owner} submitted it for your approval. Approve it, or return it with a comment.`,
+          action: 'Review it',
+          href: `/reports/${report.id}`,
+          edge: 'warn',
+        };
+      }
       const close = day(report.closesAt);
       const n = report.needsAttention;
       const things = n === 1 ? '1 thing still needs you' : `${n} things still need you`;

@@ -8,7 +8,8 @@ const CLAUDE = { by: 'claude' } as const;
 
 /**
  * Money, FX, dates, ids and the audit log (F-24, F-28; FR-GOV-05, NFR-DAT-01, NFR-DAT-02,
- * NFR-DAT-03, NFR-DAT-05), and reading the audit trail (US-GOV, F-20, FR-GOV-06). ADR-0008
+ * NFR-DAT-03, NFR-DAT-05), reading the audit trail (US-GOV, F-20, FR-GOV-06), and who
+ * approves (US-GOV-05, US-GOV-06, F-18, FR-GOV-03). ADR-0008
  * was recommended with no objection, so the rules it adds beyond the blueprint's are Claude's
  * to confirm.
  */
@@ -669,5 +670,97 @@ export const DOMAIN_STORIES: readonly Story[] = [
       },
     ],
     note: 'The screen narrows by record; narrowing by who made the change is in the API only.',
+  },
+  {
+    id: 'US-GOV-05',
+    title: 'Approve my own report when I work alone, and say so',
+    as: 'Riley, a solo professional who self-attests',
+    want: 'to approve my own reports when there is no one else in my organization',
+    soThat:
+      'my claims are finished without a second person, and the trail says plainly I approved them myself',
+    feature: 'F-18',
+    requirements: ['FR-GOV-03'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'an organization of one, its owner’s closed report',
+        when: 'I submit it',
+        then: 'it comes to me, marked as one I approve myself',
+        decided: { by: 'blueprint', source: 'ADR-0001' },
+        checks: [
+          'domain/approvals › sends a one-person organization’s report to its owner, who self-attests',
+          'api/approval.int › self-attests without the second factor, and says so',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'my own report waiting for approval, alone in my organization',
+        when: 'I approve it',
+        then: 'it is approved without asking for the second factor, and the audit event says it was self-attested',
+        decided: { by: 'blueprint', source: 'arch §6.9' },
+        checks: [
+          'db/approval.int › asks for the second factor to approve someone else’s, and never to self-attest alone',
+          'api/approval.int › self-attests without the second factor, and says so',
+        ],
+      },
+      {
+        id: 'AC3',
+        given: 'a second person has joined my organization',
+        when: 'I try to approve my own report',
+        then: 'it is refused: in a team, someone else approves it',
+        decided: { by: 'blueprint', source: 'ADR-0001' },
+        checks: [
+          'domain/approvals › blocks self-approval in any team, even for owners',
+          'db/approval.int › never lets anyone decide their own in a team, and lets an owner or finance admin decide in the approver’s place',
+        ],
+      },
+    ],
+    note: 'Built in PR #60 behind Approval (#24, ADR-0043). A report submitted while alone and decided after someone joins goes by the team’s rule then: the owner can’t approve their own, and a finance admin or approver who joins can.',
+  },
+  {
+    id: 'US-GOV-06',
+    title: 'As an approver, see only the reports sent to me',
+    as: 'Jordan, an approver',
+    want: 'to see each report sent to me and everything on it, and nothing else of its member’s',
+    soThat:
+      'I can judge a claim on its evidence without seeing more of a colleague’s spending than I approve',
+    feature: 'F-18',
+    requirements: ['FR-GOV-01', 'FR-GOV-02'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'a report routed to me',
+        when: 'I open it, its trips, its expenses or their receipts',
+        then: 'I see them; the database shows them to me from the moment it is routed',
+        decided: { by: 'claude', source: 'ADR-0035' },
+        checks: [
+          'db/approval.int › shows a report routed to an approver, and what is on it, and nothing else of its member’s',
+          'api/approval.int › shows the approver what is routed to them, and asks for the second factor to approve it',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'the same member’s other reports, or a report routed to another approver',
+        when: 'I look for them',
+        then: 'they are not found',
+        decided: { by: 'claude', source: 'ADR-0035' },
+        checks: [
+          'db/approval.int › shows a report routed to an approver, and what is on it, and nothing else of its member’s',
+        ],
+      },
+      {
+        id: 'AC3',
+        given: 'a report I am deciding',
+        when: 'anything tries to change more than its status and its expenses’, or another report of its member’s',
+        then: 'the database refuses it, and nothing changes',
+        decided: { by: 'claude', source: 'ADR-0043' },
+        checks: [
+          'db/approval.int › lets the approver decide it, changing only its status and its expenses’, and nothing else of its member’s',
+        ],
+      },
+    ],
+    note: 'ADR-0035 kept approvers to their own records until approval routed reports to them (#24). Owners, finance admins and auditors see everyone’s already.',
   },
 ];

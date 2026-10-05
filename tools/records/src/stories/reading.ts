@@ -1692,7 +1692,7 @@ export const READING_STORIES: readonly Story[] = [
         id: 'AC6',
         given: 'a receipt whose expense is submitted or approved',
         when: 'I try to correct it',
-        then: 'it is refused and the page says why: an approved expense is locked, and its correction is a reversal plus a new version, which comes with approval (#24)',
+        then: 'it is refused and the page says why: an approved expense is locked, and its correction is a reversal plus a new version, still to come (#87)',
         decided: { by: 'blueprint', source: 'ADR-0008' },
         checks: [
           'db/receipt-corrections.int › refuses one not Ready, read again since, or locked, and leaves nothing behind',
@@ -1733,7 +1733,7 @@ export const READING_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'A correction made on the receipt page is the person saying the model misread it, so it is kept as an eval candidate; an edit made on the expense page is not, since it may be a choice rather than a misreading: Claude’s decision. Correcting an approved expense (FR-EXP-03) waits on approval (#24); nothing can be submitted yet.',
+    note: 'A correction made on the receipt page is the person saying the model misread it, so it is kept as an eval candidate; an edit made on the expense page is not, since it may be a choice rather than a misreading: Claude’s decision. Since PR #60 a report is submitted and approved (#24); correcting an approved expense (FR-EXP-03) is #87.',
   },
   {
     id: 'US-READ-22',

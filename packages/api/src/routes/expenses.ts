@@ -89,7 +89,10 @@ export const editExpenseRoute = createRoute({
     409: problem(
       'It can’t be edited now: its receipt is being read, or it is submitted or later; or it is a drive, edited as mileage.',
     ),
-    422: problem('A value is not valid; field names which.'),
+    422: problem(
+      'A value is not valid; field names which. With approval on, an amount above its ' +
+        'receipt’s total is refused too (over_receipt).',
+    ),
   },
 });
 
@@ -113,7 +116,10 @@ export const setExpenseTripRoute = createRoute({
     },
     ...common,
     404: problem('No such expense in this organization.'),
-    409: problem('It is submitted or later, so it stays with its report.'),
+    409: problem(
+      'It is submitted or later, so it stays with its report; or the trip is on a report ' +
+        'submitted or later, which takes no more expenses (trip_submitted).',
+    ),
     422: problem('No such trip, or the trip is another member’s.'),
   },
 });

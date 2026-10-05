@@ -14,6 +14,7 @@ import { createServer } from 'node:http';
 import { deflateSync } from 'node:zlib';
 import {
   createHttpApp,
+  dbApprovalStore,
   createSecretBox,
   dbAuditStore,
   dbCategoryStore,
@@ -322,6 +323,7 @@ const app = createHttpApp({
   home: dbHomeStore(db),
   people: dbPeopleStore(db),
   reports: dbReportStore(db),
+  approvals: dbApprovalStore(db),
   audit: dbAuditStore(db),
   categories: dbCategoryStore(db),
   itemized: dbItemizedStore(db),
@@ -832,6 +834,36 @@ const open = (
   await call<{ trips: { id: string; reportId: string | null }[] }>('GET', '/v1/trips')
 ).trips.find((t) => t.id === trips.omaha.id)?.reportId;
 if (!open) throw new Error('The schedule put no trip on a report');
+// Approval (#24): Sam's drive goes on a report of its own, submitted to Riley, the only one
+// who can approve it then. Casey then joins as an approver, Riley's own drive is submitted to
+// Casey, and Casey returns it with the drive rejected.
+const drive = (who: string, date: string, destination: string, purpose: string) =>
+  callAs<{ id: string }>(who, 'POST', '/v1/mileage', { date, destination, purpose, miles: '14' });
+const submitted = async (who: string, expenseId: string) => {
+  const { reportId } = await callAs<{ reportId: string }>(
+    who,
+    'PUT',
+    `/v1/expenses/${expenseId}/report`,
+    { newReport: true },
+  );
+  await callAs(who, 'POST', `/v1/reports/${reportId}/close`);
+  await callAs(who, 'POST', `/v1/reports/${reportId}/submit`);
+  return reportId;
+};
+const samDrive = await drive('sam', '2026-09-15', 'Acme HQ', 'Client visit at Acme');
+const toApprove = await submitted('sam', samDrive.id);
+const casey = await call<Made>('POST', '/v1/settings/people/invites', {
+  role: 'approver',
+  label: 'Casey',
+});
+await callAs('casey', 'POST', '/v1/invites/accept', { token: casey.token });
+const officeDrive = await drive('riley', '2026-09-16', 'The office', 'Drive to the office');
+const returned = await submitted(E2E_USER, officeDrive.id);
+await callAs('casey', 'POST', `/v1/reports/${returned}/return`, {
+  comment: 'Claim client visits only: the office isn’t one',
+  rejections: [{ expenseId: officeDrive.id, reason: 'A drive to your own office is commuting' }],
+});
+
 // The organization's details and its duplicate window (#63, #64), set after the reports so
 // they open as they always have.
 await call('PATCH', '/v1/settings/organization', {
@@ -866,7 +898,7 @@ const seeded: Seeded = {
   },
   receipts,
   expenses,
-  reports: { open, closed },
+  reports: { open, closed, toApprove, returned },
   invites: { join: join.token, revoked: revoked.token },
 };
 

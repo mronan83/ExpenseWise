@@ -1,11 +1,18 @@
 import type { Membership } from '@expensewise/db';
-import { amountMatches, type DetailField, type TravelEdit } from '@expensewise/domain';
+import {
+  amountMatches,
+  applyExpenseEdit,
+  type DetailField,
+  type TravelEdit,
+} from '@expensewise/domain';
 import { timeZoneFor } from '@expensewise/extraction/place';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
 import type { CategoryStore } from './categories.ts';
 import { categorize, detailWithCategory } from './category-views.ts';
-import { expenseSummaries } from './expense-views.ts';
+import { receiptCheckOf } from './approval.ts';
+import { checkView } from './approval-views.ts';
+import { expenseSummaries, proofOf } from './expense-views.ts';
 import type { ExpenseStore } from './expenses.ts';
 import { featureGate, type FeatureGate } from './features.ts';
 import type { ItemizedStore } from './itemized.ts';
@@ -121,8 +128,48 @@ export function registerExpenseRoutes(
     const shown = {
       ...(await detailWithCategory(await categoriesOn(orgId), orgId, found)),
       ...(await sections(orgId, found)),
+      // How it holds up against its receipt, while approval is on (FR-EXP-10, FR-GOV-13).
+      ...((await features.isOn(orgId, 'reports.approval'))
+        ? {
+            claim: {
+              reason: found.expense.claimReason ?? null,
+              check: checkView(receiptCheckOf(found.expense, found.proof)),
+            },
+          }
+        : {}),
     };
     return (await features.isOn(orgId, 'receipts.journeys')) ? withTravel(shown, found) : shown;
+  };
+
+  /**
+   * While approval is on, an expense never claims more than its receipt (FR-EXP-10, Q6): an
+   * edit to an amount above the receipt's total, in its currency, is refused.
+   */
+  const refuseOverReceipt = async (
+    orgId: string,
+    expenseId: string,
+    values: { merchant?: string; date?: string; currency?: string; amount?: string },
+  ) => {
+    if (values.amount === undefined && values.currency === undefined) return;
+    if (!(await features.isOn(orgId, 'reports.approval'))) return;
+    const found = await stores().expenses.get(orgId, expenseId);
+    if (!found?.proof) return;
+    const receipt = proofOf(found.proof).values;
+    const applied = applyExpenseEdit(found.expense, values);
+    if (!applied.ok || receipt.amountMinor === null) return;
+    const { amountMinor, currency } = applied.value.values;
+    if (
+      currency === receipt.currency &&
+      amountMinor !== null &&
+      amountMinor > receipt.amountMinor
+    ) {
+      throw new ProblemError(422, 'over-receipt', 'An expense never claims more than its receipt', {
+        code: 'over_receipt',
+        detail:
+          'Claim its receipt’s total or less. Claiming less, say why on the expense (FR-EXP-10).',
+        field: 'amount',
+      });
+    }
   };
 
   app.openapi(getExpenseRoute, async (c) => {
@@ -176,6 +223,7 @@ export function registerExpenseRoutes(
       });
       details.timeZone = zone ?? '';
     }
+    await refuseOverReceipt(who.orgId, expenseId, values);
     const result = await expenses.edit(
       who.orgId,
       expenseId,
@@ -233,6 +281,12 @@ export function registerExpenseRoutes(
       throw new ProblemError(409, 'not-movable', 'This expense can’t move to another trip now', {
         code: 'locked',
         detail: 'It is submitted or later, so it stays with its report.',
+      });
+    }
+    if (result.status === 'trip_submitted') {
+      throw new ProblemError(409, 'trip-submitted', 'That trip takes no more expenses', {
+        code: 'trip_submitted',
+        detail: 'Its report is submitted. The expense goes on your next report as local.',
       });
     }
     if (result.status === 'no_such_trip' || result.status === 'other_member') {

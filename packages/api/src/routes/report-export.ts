@@ -15,7 +15,10 @@ const common = {
     'No such report in this organization, or another member’s that the caller can’t export; ' +
       'or report export is switched off (feature_off).',
   ),
-  409: problem('The report is still open (not_closed): close it first.'),
+  409: problem(
+    'The report is still open (not_closed): close it first. With approval on, it is not ' +
+      'submitted yet (not_submitted): only submitted and approved reports are exported (Q29).',
+  ),
   503: problem('Sign-in or the database is not configured on this server.'),
 };
 

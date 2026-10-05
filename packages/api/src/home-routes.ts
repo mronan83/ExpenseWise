@@ -1,12 +1,13 @@
 import type { Membership } from '@expensewise/db';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
+import type { ApprovalStore } from './approval.ts';
 import type { CategoryStore } from './categories.ts';
 import { featureGate, type FeatureGate } from './features.ts';
 import type { HomeStore } from './home.ts';
 import type { ModelSettingsStore } from './model-settings.ts';
 import { homeView } from './home-views.ts';
-import { askForCoding } from './needs-you-views.ts';
+import { askForApproval, askForCoding } from './needs-you-views.ts';
 import { ProblemError } from './problem.ts';
 import { showConverted } from './reimbursement.ts';
 import { homeRoute } from './routes/home.ts';
@@ -22,6 +23,8 @@ export interface HomeRouteOptions {
   readonly modelSettings?: ModelSettingsStore;
   /** Present where categories can be on, so Needs you asks for them (FR-EXP-11, Q27). */
   readonly categories?: CategoryStore;
+  /** Present where approval can be on, so Needs you lists what to approve and what came back. */
+  readonly approvals?: ApprovalStore;
   readonly now?: () => Date;
 }
 
@@ -69,6 +72,8 @@ export function registerHomeRoutes(
       c.req.valid('query').day ?? (options.now?.() ?? new Date()).toISOString().slice(0, 10);
     const data = await stores().home.snapshot(who.orgId, who.memberId, day, NEEDS_LIMIT, {
       uncoded: await askForCoding(options, features, who.orgId),
+      // Asked for only where approval is on, so Needs you is otherwise asked as before.
+      ...((await askForApproval(options, features, who.orgId)) ? { approval: true } : {}),
     });
     const settingsOn =
       options.modelSettings !== undefined &&
