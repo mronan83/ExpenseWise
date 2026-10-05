@@ -901,6 +901,10 @@ export const QUESTIONS: readonly Question[] = [
     why: 'An owner or finance admin sees everyone’s records, so their password alone still reaches all of the organization’s spending.',
     recommendation: 'A, before a second person joins.',
     affects: ['FR-PLT-03', 'GAP-33', 'F-11'],
+    answer: {
+      date: '2026-10-05',
+      text: 'A: refuse every request of someone with an authenticator until they enter the code, and need it to link a sign-in (#85).',
+    },
   },
   {
     id: 'Q42',
@@ -909,11 +913,21 @@ export const QUESTIONS: readonly Question[] = [
     why: 'In a small team there is usually one obvious approver, and routing by role finds them without a setting. Once two people approve, who gets which member’s report matters, and nothing sets a manager yet.',
     recommendation: 'A until a second approver joins, then B.',
     affects: ['FR-GOV-02', 'F-18'],
+    answer: {
+      date: '2026-10-05',
+      text: 'B: keep the routing as built, and let an owner choose each member’s approver in Settings › People now (#86).',
+    },
   },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-05',
+    change:
+      'Your answers of Oct 5 on PR #60. Q41: the second factor locks everything for someone with an authenticator: every request is refused until they enter the code, and linking a sign-in needs it (#85, unblocked). Q42: a report keeps finding its approver as built, and an owner chooses each member’s approver in Settings › People now (#86, unblocked). Both join PR #60.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-05',
     change:
