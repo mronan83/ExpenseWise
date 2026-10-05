@@ -917,6 +917,12 @@ export const CHANGE_LOG: readonly ChangeLogEntry[] = [
   {
     date: '2026-10-05',
     change:
+      'PR #60, built behind its own switches, each off until you switch it on in Settings › Features. Single-step approval (#24, F-18, ADR-0043): a closed report is submitted to one approver, never while an expense differs from its receipt without a reason, and approved, or returned with a comment and each rejected expense and why, in Needs you; a one-person organization self-attests, and approving someone else’s spend needs the second factor. A submitted claim keeps its category and type names (#70, GAP-27 closed). The second factor (#8, F-11, ADR-0042): an authenticator app in Settings › Sign-ins, its code at sign-in, and before every admin action, with switching it on refused until your own session has passed it (GAP-03 closed). Emails from your address that filed nothing show in Needs you with why, for 30 days or until dismissed (#59). A report’s export adds From and to, and Stay (#83); Home shows the month’s business miles (#73, GAP-30 closed); a test proves no tools ever reach a model (#38, GAP-15 closed). New: Q41 and Q42 for you; GAP-33 with #85, GAP-34 with #87, and #86 and #89.',
+    by: 'Claude, at your direction',
+  },
+  {
+    date: '2026-10-05',
+    change:
       'Your decisions of Oct 5. Q40: the second factor (#8) is built in the same batch as approval (#24), behind its own switch. #72 is withdrawn: you don’t need a reminder to confirm the AI model, so NFR-AI-04 no longer asks for one and GAP-29 is closed. #39 is closed: your Gmail is not searched, so D-12 is decided and the eval set’s layers are public, synthetic and real captures (ADR-0012, NFR-AI-01). What those two leave missing is now GAP-32: the eval harness has never been run against a model, which waits on your approval of a run’s spend (#84).',
     by: 'Claude, at your direction',
   },

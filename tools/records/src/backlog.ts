@@ -1281,9 +1281,9 @@ export const BACKLOG: readonly BacklogItem[] = [
 
 /** How to order the open work, beyond priority. */
 export const SEQUENCING: readonly string[] = [
-  'Your batch of Oct 4 is built in PR #58, each feature behind its switch and off until you switch it on in Settings › Features, once you have checked it on your iPhone (Q5).',
-  '#48 needs you, not code: it keeps a leaked key from erasing the backups. #20 needs your decisions: a free OpenRouteService account, and whether trip addresses may be sent to it.',
-  'Mileage is built (#17); #73 adds business miles to Home.',
-  '#8 is security, not polish: it should land before #24, which needs it, and before you invite anyone through Settings › People (#29). #50 already keeps each member’s records their own.',
+  'Your batch of Oct 5 is built in PR #60: approval (#24) with the second factor (#8), a submitted claim keeping its names (#70), emails that filed nothing (#59), journeys and stays in the export (#83), business miles on Home (#73) and proof that no tools reach a model (#38), each behind its switch and off until you switch it on.',
+  '#85 is security, not polish: a session that skipped the code still opens everything but admin actions and approval for someone with an authenticator. It waits on your answer to Q41 and should land before you invite anyone through Settings › People (#29).',
+  'Approval in a team needs the second factor switched on too. #86 lets you choose each member’s approver once you answer Q42; #87 corrects an approved expense; #89 shows what awaits reimbursement on Home.',
+  '#48 needs you, not code: it keeps a leaked key from erasing the backups.',
   '#11–#15 are small, independent and each closes a gap; take them between features.',
 ];

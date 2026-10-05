@@ -744,9 +744,13 @@ await call('POST', `/v1/receipts/${receipts.parking}/corrections`, {
 });
 const expenseOf = async (name: string) =>
   (await call<{ expenseId: string }>('GET', `/v1/receipts/${receipts[name]}`)).expenseId;
+// It claims less than its receipt, saying why, as approval requires (FR-EXP-10).
 await call('PATCH', `/v1/expenses/${await expenseOf('coffee')}`, {
-  amount: '7.25',
+  amount: '4.25',
   merchant: 'Blue Bottle Coffee — Oxbow Public Market',
+});
+await call('PUT', `/v1/expenses/${await expenseOf('coffee')}/claim-reason`, {
+  reason: 'A pastry for a friend was on the same receipt.',
 });
 await call('PUT', `/v1/expenses/${await expenseOf('lufthansa')}/trip`, { tripId: trips.omaha.id });
 // Categories and types (FR-EXP-11): the hotel folio's chosen by hand; the rest show a
