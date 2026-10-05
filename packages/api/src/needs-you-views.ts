@@ -11,6 +11,7 @@ import type { FeatureGate } from './features.ts';
 import { amountView, inboxItem } from './receipt-views.ts';
 import { reportItem, unjustifiedItem } from './report-views.ts';
 import type { ReportsNeedingYou } from './reports.ts';
+import { unfiledEmailItem } from './unfiled-emails.ts';
 
 export interface ReceiptsNeedingYou {
   readonly receipts: readonly ReceiptRecord[];
@@ -63,10 +64,11 @@ function uncodedItems(uncoded: UncodedNeedingYou | undefined) {
 
 /**
  * Everything in Needs you, in the order to do it (FR-EXP-02): a report that is overdue or in
- * its last week with something left, then receipts that need a look, newest first, then local
- * expenses that need a justification, oldest first, then, while categories are on, expenses
- * with no category and type, oldest first (Q27), then reports ready to close. With
- * `converting`, reports total in their reimbursement currency (FR-EXP-13).
+ * its last week with something left, then receipts that need a look, newest first, then,
+ * while they are on, emails that filed nothing, newest first (#59), then local expenses that
+ * need a justification, oldest first, then, while categories are on, expenses with no category
+ * and type, oldest first (Q27), then reports ready to close. With `converting`, reports total
+ * in their reimbursement currency (FR-EXP-13).
  */
 export function needsYouItems(
   receipts: ReceiptsNeedingYou,
@@ -85,6 +87,7 @@ export function needsYouItems(
   return [
     ...reportItems.filter((i) => i.reason.code !== 'ready_to_close'),
     ...receiptItems,
+    ...(reports.emails ?? []).map(unfiledEmailItem),
     ...reports.unjustified.map(unjustifiedItem),
     ...uncodedItems(reports.uncoded),
     ...reportItems.filter((i) => i.reason.code === 'ready_to_close'),

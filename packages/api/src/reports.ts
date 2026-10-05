@@ -3,6 +3,7 @@ import {
   getReport,
   justifyExpense,
   listReports,
+  listUnfiledEmails,
   listUnjustifiedExpenses,
   moveToReport,
   reopenReport,
@@ -17,6 +18,7 @@ import {
   type ReportContents,
   type ReportForExport,
   type Transaction,
+  type UnfiledEmailRecord,
   withReportAmounts,
 } from '@expensewise/db';
 import { asCaller } from './caller.ts';
@@ -31,12 +33,19 @@ export interface ReportsNeedingYou {
    * what each would be suggested (Q27).
    */
   readonly uncoded?: UncodedNeedingYou;
+  /** Asked for: the member's emails that filed nothing, newest first (#59). */
+  readonly emails?: UnfiledEmailRecord[];
 }
 
 /** What else Needs you is asked to read. */
 export interface NeedsYouOptions {
   /** The member's expenses with no category and type, while categories are on (Q27). */
   readonly uncoded?: boolean;
+  /**
+   * The member's emails that filed nothing, arrived since then and not dismissed, while
+   * emails that filed nothing are on (#59).
+   */
+  readonly unfiledSince?: Date;
 }
 
 /** What the API needs from the database for reports (FR-EXP-05). Tests use an in-memory fake. */
@@ -71,7 +80,7 @@ export interface ReportStore {
 
 /**
  * A member's open and closed reports, and their unjustified local expenses; asked for, their
- * expenses with no category and type too.
+ * expenses with no category and type, and their emails that filed nothing, too.
  */
 export async function reportsNeedingYou(
   tx: Transaction,
@@ -85,6 +94,9 @@ export async function reportsNeedingYou(
     reports: await withReportAmounts(tx, reports),
     unjustified: await listUnjustifiedExpenses(tx, memberId, limit),
     ...(options.uncoded ? { uncoded: await uncodedNeedingYou(tx, memberId, limit) } : {}),
+    ...(options.unfiledSince
+      ? { emails: await listUnfiledEmails(tx, memberId, options.unfiledSince, limit) }
+      : {}),
   };
 }
 

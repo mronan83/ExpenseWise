@@ -422,6 +422,29 @@ describe('keeping an email', () => {
     expect(w.recorded[0]?.attachments).toEqual([]);
   });
 
+  it('keeps why it couldn’t prove the sender, such as a message changed after it was signed', async () => {
+    const raw = await signed(message({ subject: 'Fwd: Your ride', text: 'Total $12.00' }));
+    const w = world(raw.replace('Total $12.00', 'Total $12.00 [scanned]'));
+    expect(await keepEmail(w.ports, BIRD)).toMatchObject({
+      status: 'unverified',
+      problem: 'signature_failed',
+    });
+    expect(w.recorded[0]?.email).toMatchObject({
+      status: 'unverified',
+      senderProblem: 'signature_failed',
+      subject: 'Fwd: Your ride',
+      bodyText: null,
+    });
+
+    // A proved sender has no problem to keep, whatever came of the email.
+    const proved = world(await signed(message({ text: '   ' })));
+    await keepEmail(proved.ports, BIRD);
+    expect(proved.recorded[0]?.email).toMatchObject({
+      status: 'no_attachments',
+      senderProblem: null,
+    });
+  });
+
   it('keeps nothing from someone who is not a member', async () => {
     const raw = await signed(
       message({ from: 'stranger@example.com', parts: [{ type: 'application/pdf', bytes: pdf() }] }),

@@ -1,10 +1,18 @@
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import { appendAuditEvent } from './audit.ts';
 import type { Database, Transaction } from './client.ts';
 import { fileReceipt, RECEIPT_UPLOADED, type CommittedEvent } from './receipts.ts';
-import { inboundEmails, outboxEvents, receipts, type inboundEmailStatus } from './schema.ts';
+import {
+  inboundEmails,
+  outboxEvents,
+  receipts,
+  type inboundEmailProblem,
+  type inboundEmailStatus,
+} from './schema.ts';
 
 export type InboundEmailStatus = (typeof inboundEmailStatus.enumValues)[number];
+/** Why an email from a member's address wasn't proved to be theirs (ADR-0026). */
+export type InboundEmailProblem = (typeof inboundEmailProblem.enumValues)[number];
 
 /** The member an email's sender signs in as, and the sign-in's user, who files it. */
 export interface Sender {
@@ -35,6 +43,8 @@ export interface NewInboundEmail {
   readonly subject: string | null;
   readonly sentAt: Date | null;
   readonly status: InboundEmailStatus;
+  /** unverified: why the sender wasn't proved. */
+  readonly senderProblem?: InboundEmailProblem | null;
   /** Kept only for a verified sender, at most 64 KiB. */
   readonly bodyText: string | null;
 }
@@ -158,4 +168,104 @@ export async function recordInboundEmail(
     },
   });
   return { status: 'recorded', receiptIds, events };
+}
+
+/** The statuses of an email that filed nothing: unproved, or nothing in it to read (#59). */
+export const UNFILED_EMAIL_STATUSES = ['unverified', 'no_attachments'] as const;
+
+/**
+ * An email from a member that filed nothing, as Needs you shows it: never its text, which an
+ * unproved email doesn't keep and an empty one doesn't have.
+ */
+export interface UnfiledEmailRecord {
+  readonly id: string;
+  readonly status: (typeof UNFILED_EMAIL_STATUSES)[number];
+  /** unverified: why the sender wasn't proved; null when not known. */
+  readonly senderProblem: InboundEmailProblem | null;
+  readonly fromAddress: string;
+  readonly subject: string | null;
+  /** When it arrived. */
+  readonly receivedAt: Date;
+}
+
+const isUnfiled = (status: InboundEmailStatus): status is UnfiledEmailRecord['status'] =>
+  (UNFILED_EMAIL_STATUSES as readonly string[]).includes(status);
+
+/**
+ * The member's emails that filed nothing, arrived since `since` and not dismissed, newest
+ * first (#59). Only the member's own, whatever the caller's role lets them see. Call inside
+ * withOrg().
+ */
+export async function listUnfiledEmails(
+  tx: Transaction,
+  memberId: string,
+  since: Date,
+  limit: number,
+): Promise<UnfiledEmailRecord[]> {
+  const rows = await tx
+    .select({
+      id: inboundEmails.id,
+      status: inboundEmails.status,
+      senderProblem: inboundEmails.senderProblem,
+      fromAddress: inboundEmails.fromAddress,
+      subject: inboundEmails.subject,
+      receivedAt: inboundEmails.createdAt,
+    })
+    .from(inboundEmails)
+    .where(
+      and(
+        eq(inboundEmails.memberId, memberId),
+        inArray(inboundEmails.status, [...UNFILED_EMAIL_STATUSES]),
+        isNull(inboundEmails.dismissedAt),
+        gte(inboundEmails.createdAt, since),
+      ),
+    )
+    .orderBy(desc(inboundEmails.createdAt), desc(inboundEmails.id))
+    .limit(limit);
+  return rows.flatMap(({ status, ...r }) => (isUnfiled(status) ? [{ ...r, status }] : []));
+}
+
+/**
+ * dismissed: gone from Needs you, with its audit event. already: dismissed before; nothing
+ * changes. missing: no such email here, or one that filed receipts, which is never in Needs you.
+ */
+export type DismissEmailResult = 'dismissed' | 'already' | 'missing';
+
+/**
+ * Dismisses an email that filed nothing from Needs you, for good, with its audit event, in one
+ * transaction (#59). The row stays as it arrived. Only its member may: the own_records trigger
+ * refuses anyone else. Call inside withOrg().
+ */
+export async function dismissInboundEmail(
+  tx: Transaction,
+  orgId: string,
+  emailId: string,
+  actorUserId: string,
+): Promise<DismissEmailResult> {
+  const [email] = await tx
+    .select({
+      status: inboundEmails.status,
+      senderProblem: inboundEmails.senderProblem,
+      dismissedAt: inboundEmails.dismissedAt,
+    })
+    .from(inboundEmails)
+    .where(eq(inboundEmails.id, emailId))
+    .for('update');
+  if (!email || !isUnfiled(email.status)) return 'missing';
+  if (email.dismissedAt) return 'already';
+  await tx
+    .update(inboundEmails)
+    .set({ dismissedAt: sql`now()` })
+    .where(eq(inboundEmails.id, emailId));
+  await appendAuditEvent(tx, orgId, {
+    actor: { type: 'user', id: actorUserId },
+    entityType: 'inbound_email',
+    entityId: emailId,
+    action: 'inbound_email.dismissed',
+    payload: {
+      status: email.status,
+      ...(email.senderProblem ? { problem: email.senderProblem } : {}),
+    },
+  });
+  return 'dismissed';
 }

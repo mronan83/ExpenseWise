@@ -252,7 +252,20 @@ export interface ExpenseInboxItem {
   category?: ExpenseCategory;
 }
 
-export type InboxItem = ReceiptInboxItem | ReportInboxItem | ExpenseInboxItem;
+/** Why an email from the person's own address wasn't proved to be theirs (ADR-0026). */
+export type EmailProblem = 'unsigned' | 'signature_failed' | 'not_aligned' | 'partly_signed';
+
+/**
+ * An email from the person's own address that filed nothing, while that is on (#59): nothing
+ * proved it was theirs, or it had nothing in it to read. Never its text.
+ */
+export interface EmailInboxItem {
+  kind: 'email';
+  email: { id: string; subject: string | null; from: string; receivedAt: string };
+  reason: { code: 'unproved' | 'empty'; problem: EmailProblem | null };
+}
+
+export type InboxItem = ReceiptInboxItem | ReportInboxItem | ExpenseInboxItem | EmailInboxItem;
 
 const CHECK_REASONS: Record<ReadingCheck, string> = {
   sums: 'Its parts don’t come to its total.',

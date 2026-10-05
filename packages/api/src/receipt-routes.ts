@@ -38,6 +38,7 @@ import {
 } from './receipt-views.ts';
 import type { ReceiptInReview, ReceiptStore } from './receipts.ts';
 import type { ReportStore } from './reports.ts';
+import { unfiledEmailsAsked, type UnfiledEmailStore } from './unfiled-emails.ts';
 import {
   confirmReceiptRoute,
   correctReceiptRoute,
@@ -64,6 +65,8 @@ export interface ReceiptRouteOptions {
   readonly reports?: ReportStore;
   /** Present where categories can be on, so Needs you asks for them (FR-EXP-11, Q27). */
   readonly categories?: CategoryStore;
+  /** Present where emails that filed nothing can be on, so Needs you lists them (#59). */
+  readonly emails?: UnfiledEmailStore;
   /** Which features are on. Built from `workspace` when not given. */
   readonly features?: FeatureGate;
   /** Which AI models read receipts, under receipts.model-settings (FR-INT-16). */
@@ -303,19 +306,15 @@ export function registerReceiptRoutes(
       statuses: ['needs_review', 'failed'],
       memberId: who.memberId,
     });
+    const now = options.now?.() ?? new Date();
     const reports = options.reports
       ? await options.reports.needsYou(who.orgId, who.memberId, LIST_LIMIT, {
           uncoded: await askForCoding(options, features, who.orgId),
+          unfiledSince: await unfiledEmailsAsked(options, features, who.orgId, now),
         })
       : NO_REPORTS;
     const converting = await showConverted(features, who.orgId, reports.reports);
-    const items = needsYouItems(
-      receipts,
-      reports,
-      options.now?.() ?? new Date(),
-      await settingsOn(who.orgId),
-      converting,
-    );
+    const items = needsYouItems(receipts, reports, now, await settingsOn(who.orgId), converting);
     return c.json({ items }, 200);
   });
 

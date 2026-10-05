@@ -503,13 +503,14 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Show an email that came but filed nothing',
     type: 'Feature',
     detail:
-      'An email from your address that couldn’t be proved, for example one a mail system changed after signing it, or one with nothing in it to read, is kept but shown nowhere. Show it in Needs you with why and what to do: send it from your own mailbox, or attach the receipt. Mail from anyone who isn’t a member stays unrecorded.',
+      'An email from your address that couldn’t be proved, for example one a mail system changed after signing it, or one with nothing in it to read, is kept but shown nowhere. Show it in Needs you with why and what to do: send it from your own mailbox, or attach the receipt. Mail from anyone who isn’t a member stays unrecorded. Built in PR #60 behind `receipts.unfiled-emails`: each such email of yours is in your Needs you after the receipts, with its subject, the address it came from and why in plain words, never its text, with Attach the receipt and Dismiss. Dismissing is yours alone, audited and final; the email stays kept, and it is in the audit trail. One not dismissed leaves Needs you 30 days after it arrived (US-INBOX-02).',
     priority: 'P2',
     effort: 'M',
     severity: 'Low',
     blocker: { kind: 'none' },
     source: 'Split from #58',
     affects: ['FR-CAP-02', 'F-16', 'FR-EXP-02'],
+    done: { date: '2026-10-05', in: 'PR #60' },
   },
   {
     num: 60,

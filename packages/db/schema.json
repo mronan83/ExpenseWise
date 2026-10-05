@@ -2358,6 +2358,18 @@
           "type": "timestamp with time zone",
           "nullable": false,
           "default": "now()"
+        },
+        {
+          "name": "sender_problem",
+          "type": "inbound_email_problem",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "dismissed_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
         }
       ],
       "primaryKey": [
@@ -2406,6 +2418,14 @@
       ],
       "checks": [
         {
+          "name": "inbound_emails_dismissed_unfiled",
+          "definition": "CHECK (((dismissed_at IS NULL) OR (status <> 'filed'::inbound_email_status)))"
+        },
+        {
+          "name": "inbound_emails_problem_unverified",
+          "definition": "CHECK (((sender_problem IS NULL) OR (status = 'unverified'::inbound_email_status)))"
+        },
+        {
           "name": "inbound_emails_receipt_count",
           "definition": "CHECK ((receipt_count >= 0))"
         }
@@ -2439,6 +2459,10 @@
         }
       ],
       "triggers": [
+        {
+          "name": "dismissed_once",
+          "definition": "CREATE TRIGGER dismissed_once BEFORE UPDATE OF dismissed_at ON public.inbound_emails FOR EACH ROW EXECUTE FUNCTION inbound_email_dismissed_once()"
+        },
         {
           "name": "own_records",
           "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.inbound_emails FOR EACH ROW EXECUTE FUNCTION enforce_own_records('member')"
@@ -5408,6 +5432,15 @@
       ]
     },
     {
+      "name": "inbound_email_problem",
+      "values": [
+        "unsigned",
+        "signature_failed",
+        "not_aligned",
+        "partly_signed"
+      ]
+    },
+    {
       "name": "inbound_email_status",
       "values": [
         "filed",
@@ -5632,6 +5665,14 @@
     },
     {
       "name": "enforce_own_records",
+      "arguments": "",
+      "returns": "trigger",
+      "security": "invoker",
+      "volatility": "volatile",
+      "executableBy": []
+    },
+    {
+      "name": "inbound_email_dismissed_once",
       "arguments": "",
       "returns": "trigger",
       "security": "invoker",

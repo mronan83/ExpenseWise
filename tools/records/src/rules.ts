@@ -366,4 +366,16 @@ export const RULES: readonly Rule[] = [
     decided: { by: 'claude', source: 'ADR-0041' },
     code: { file: 'packages/domain/src/itemized.ts', constant: 'SPLIT_PARTS_MAX', literal: '20' },
   },
+  {
+    id: 'R-UNFILED-EMAIL-DAYS',
+    name: 'How long an email that filed nothing stays in Needs you',
+    value: '30 days from when it arrived, unless dismissed first',
+    decided: { by: 'claude' },
+    code: {
+      file: 'packages/domain/src/unfiled-emails.ts',
+      constant: 'UNFILED_EMAIL_DAYS',
+      literal: '30',
+    },
+    note: 'A month, about as long as a report stays open (R-REPORT-WINDOW) and as long as Bird keeps the message as it arrived (ADR-0026): by then its receipt has been attached or it no longer matters. Claude’s, yours to confirm.',
+  },
 ];
