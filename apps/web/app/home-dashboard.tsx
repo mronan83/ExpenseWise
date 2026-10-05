@@ -82,18 +82,22 @@ export function HomeDashboard() {
           {load.message}
         </p>
       ) : null}
-      {load.state === 'ready' ? <Dashboard home={load.home} /> : null}
+      {load.state === 'ready' ? <Dashboard home={load.home} onChanged={refresh} /> : null}
     </>
   );
 }
 
-function Dashboard({ home }: { home: Home }) {
+function Dashboard({ home, onChanged }: { home: Home; onChanged: () => Promise<void> }) {
   const { month } = home;
   const range = `from=${month.from}&to=${monthEnd(month.from)}`;
   const name = monthName(month.from);
   return (
     <>
-      <NeedsYouList items={home.needsYou.items} count={home.needsYou.count} />
+      <NeedsYouList
+        items={home.needsYou.items}
+        count={home.needsYou.count}
+        onChanged={() => void onChanged()}
+      />
       {home.trip ? <TripCard trip={home.trip} /> : null}
       {month.expenses > 0 || month.trips > 0 ? (
         <Section

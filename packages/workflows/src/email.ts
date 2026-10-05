@@ -216,7 +216,7 @@ export type KeepEmailResult =
  * member's sign-in address, or nothing is kept. When its signature proves it, each attachment
  * that can be a receipt is stored and filed, and the body text is kept; with nothing attached,
  * the email's text is filed as a PDF instead (ADR-0027). When it doesn't, the email is kept as
- * unverified, with nothing filed and no body, so the member can see it came.
+ * unverified, with why but nothing filed and no body, so the member can see it came (#59).
  * Every id is derived from the message, so a retry makes the same records again.
  */
 export async function keepEmail(
@@ -274,6 +274,10 @@ export async function keepEmail(
       subject: parsed.subject,
       sentAt: parsed.sentAt,
       status,
+      // Why it wasn't proved, kept so Needs you can say so (#59). A kept email always has one
+      // author, so `no_single_author` never reaches here.
+      senderProblem:
+        sender.verified || sender.problem === 'no_single_author' ? null : sender.problem,
       bodyText: sender.verified ? parsed.bodyText : null,
     },
     attachments,

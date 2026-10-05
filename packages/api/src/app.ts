@@ -43,6 +43,8 @@ import type { RouteKeyStore, RouteKeyVerifier, RouteMileageStore } from './route
 import { registerRouteMileageRoutes } from './route-mileage-routes.ts';
 import { registerTripRoutes } from './trip-routes.ts';
 import type { TripStore } from './trips.ts';
+import { registerUnfiledEmailRoutes } from './unfiled-email-routes.ts';
+import type { UnfiledEmailStore } from './unfiled-emails.ts';
 import { registerWorkspaceRoutes } from './workspace-routes.ts';
 import type { WorkspaceStore } from './workspace.ts';
 
@@ -87,6 +89,11 @@ export interface ApiOptions
   readonly audit?: AuditStore;
   /** Categories and types (FR-EXP-11). Without it, those routes answer 503 and expenses show none. */
   readonly categories?: CategoryStore;
+  /**
+   * Emails that filed nothing (#59). Without it, Needs you lists none and dismissing one
+   * answers 503.
+   */
+  readonly emails?: UnfiledEmailStore;
   /** Receipts' itemized lines and expenses' splits. Without it, those routes answer 503. */
   readonly itemized?: ItemizedStore;
   /** Which AI models read receipts (FR-INT-16). Without it, Settings › AI models answers 503. */
@@ -234,6 +241,7 @@ export function createApi(options: ApiOptions) {
   registerItemizedRoutes(app, routes);
   registerModelSettingsRoutes(app, routes);
   registerPeopleRoutes(app, routes);
+  registerUnfiledEmailRoutes(app, routes);
 
   app.doc31('/v1/openapi.json', OPENAPI_INFO);
 

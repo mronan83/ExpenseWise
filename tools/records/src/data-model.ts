@@ -133,7 +133,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   inbound_emails: {
     about:
-      'An email a member sent to the receipts address, kept once per provider message: who sent it, its subject, whether its sender was proved, how many receipts it filed (its attachments, or with none its own text as a PDF) and, when proved, its text (at most 64 KiB). Mail from anyone who is not a member is never kept (ADR-0026, ADR-0027, FR-CAP-02).',
+      'An email a member sent to the receipts address, kept once per provider message: who sent it, its subject, whether its sender was proved and, when not, why (`sender_problem`, kept since PR #60), how many receipts it filed (its attachments, or with none its own text as a PDF) and, when proved, its text (at most 64 KiB). Mail from anyone who is not a member is never kept (ADR-0026, ADR-0027, FR-CAP-02). One that filed nothing, unproved or with nothing in it to read, is in its member’s Needs you while `receipts.unfiled-emails` is on, for 30 days through the member-and-arrival index, until they dismiss it: `dismissed_at` is the one column the app may change, set once, by the member, with its audit event; the row is otherwise as it arrived (#59).',
   },
   expenses: {
     about:
@@ -253,6 +253,8 @@ export const FUNCTIONS: Readonly<Record<string, string>> = {
     'Fires before an expense is deleted and deletes its lines and parts first, while the expense is still there to say whose they are, so the `own_records` trigger on each lets the member who deleted the receipt delete them too (ADR-0041). The foreign keys’ cascade stays as a backstop.',
   reject_audit_mutation:
     'Fires on any UPDATE, DELETE or TRUNCATE of audit_events and refuses it, whoever asks.',
+  inbound_email_dismissed_once:
+    'Fires before `dismissed_at` of an email changes, and refuses to clear or move a dismissal already made, whoever asks: an email dismissed from Needs you stays dismissed (#59).',
 };
 
 /** What each database role is, and who uses it. */
@@ -608,6 +610,19 @@ export const RULES: readonly Rule[] = [
       'One row per organization, provider and message id; the workflow derives every id from the message, so a repeat delivery or a retried step files nothing twice. The sender is found through one owner-run function that answers with ids, and the row points at its member by a composite key.',
     objects: ['inbound_emails_message_key', 'member_for_sign_in_email', 'inbound_emails_member_fk'],
     refs: ['ADR-0026', 'NFR-DAT-06'],
+  },
+  {
+    rule: 'An email that filed nothing is dismissed once, by its member, and stays as it arrived.',
+    mechanism:
+      'The app may update only `dismissed_at`, by a column grant, and never deletes an email. The `own_records` trigger lets only the member it came from set it, and no auditor; another trigger refuses to clear or move a dismissal, and checks keep a dismissal off an email that filed receipts and a sender problem off a proved one. The audit event is written in the same transaction.',
+    objects: [
+      'inbound_email_dismissed_once',
+      'dismissed_once',
+      'own_records',
+      'inbound_emails_dismissed_unfiled',
+      'inbound_emails_problem_unverified',
+    ],
+    refs: ['FR-CAP-02', 'ADR-0035', '#59'],
   },
   {
     rule: 'A receipt is deleted whole, only through one function, and never once its expense is submitted.',

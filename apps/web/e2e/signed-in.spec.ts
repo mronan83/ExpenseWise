@@ -46,6 +46,21 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
       (page) => expect(page.getByText(/^Needs a category and type/).first()).toBeVisible(),
     ],
   ],
+  [
+    'emails that filed nothing, unproved and empty, in Needs you',
+    () => '/',
+    [
+      press('Show all'),
+      (page) => expect(page.getByText(/changed on its way after your email/)).toBeVisible(),
+      (page) => expect(page.getByText(/no receipt attached and no text/)).toBeVisible(),
+      (page) => expect(page.getByText(/Send it again from your own mailbox/)).toBeVisible(),
+      (page) =>
+        expect(
+          page.getByRole('link', { name: /^Attach the receipt: Fwd: Your Tuesday evening trip/ }),
+        ).toHaveAttribute('href', '/receipts'),
+      (page) => expect(page.getByRole('button', { name: /^Dismiss: Receipt$/ })).toBeVisible(),
+    ],
+  ],
   ['Receipts', () => '/receipts', []],
   ['a Ready receipt', (s) => `/receipts/${s.receipts.coffee}`, []],
   [

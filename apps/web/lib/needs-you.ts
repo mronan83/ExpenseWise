@@ -1,9 +1,11 @@
-import { showDate } from '@expensewise/domain';
+import { showDate, showDateTime } from '@expensewise/domain';
 import { categoryText, type ExpenseCategory } from './categories';
 import {
   formatMoney,
   needsYou,
   RECEIPT_STATUS,
+  type EmailInboxItem,
+  type EmailProblem,
   type ExpenseInboxItem,
   type InboxItem,
 } from './receipts';
@@ -22,6 +24,8 @@ export interface InboxCard {
   href: string;
   /** The colour of the card's edge: bad for what nothing could read, ok for a report to close. */
   edge: 'warn' | 'bad' | 'ok';
+  /** Where to post to take it out of Needs you, for what the person can dismiss (#59). */
+  dismiss?: string;
 }
 
 const totalsText = (report: ReportSummary) =>
@@ -50,6 +54,40 @@ function uncodedCard(
     action: suggested ? 'Confirm it' : 'Choose them',
     href: `/expenses/${expense.id}`,
     edge: 'warn',
+  };
+}
+
+/** Why nothing proved an email came from the person, in plain words (ADR-0026). */
+const UNPROVED: Record<EmailProblem, string> = {
+  unsigned: 'Your email provider didn’t sign it, so we couldn’t prove it came from you.',
+  signature_failed:
+    'It was changed on its way after your email provider signed it, so we couldn’t prove it came from you.',
+  not_aligned:
+    'It was signed by another service, not your own email provider, so we couldn’t prove it came from you.',
+  partly_signed:
+    'Your email provider signed only part of it, so we couldn’t prove all of it came from you.',
+};
+
+/**
+ * An email from the person's own address that filed nothing (#59): why, in plain words, and
+ * what to do. Attaching the receipt opens capture; the email itself can be dismissed.
+ */
+function emailCard({ email, reason }: EmailInboxItem): InboxCard {
+  const why =
+    reason.code === 'empty'
+      ? 'It had no receipt attached and no text, so there was nothing to file. Send it again with the receipt attached, or attach the receipt here.'
+      : `${reason.problem ? UNPROVED[reason.problem] : 'We couldn’t prove it came from you.'} Nothing in it was filed. Send it again from your own mailbox, or attach the receipt here.`;
+  return {
+    key: `email-${email.id}`,
+    title: email.subject ?? 'An email with no subject',
+    amount: null,
+    when: showDateTime(email.receivedAt),
+    status: { label: 'Nothing filed', tone: 'text-warn' },
+    text: `From ${email.from}. ${why}`,
+    action: 'Attach the receipt',
+    href: '/receipts',
+    edge: 'warn',
+    dismiss: `/v1/inbox/emails/${email.id}/dismiss`,
   };
 }
 
@@ -83,6 +121,8 @@ export function inboxCard(item: InboxItem): InboxCard {
         edge: 'warn',
       };
     }
+    case 'email':
+      return emailCard(item);
     case 'report': {
       const { report, reason } = item;
       const close = day(report.closesAt);

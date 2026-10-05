@@ -467,11 +467,14 @@
           "receipts.model-settings",
           "receipts.field-sources",
           "receipts.capture-time",
+          "receipts.unfiled-emails",
           "receipts.journeys",
           "expenses.mileage",
           "expenses.route-mileage",
           "reports.export",
+          "reports.approval",
           "governance.audit-trail",
+          "security.second-factor",
           "team.invites",
           "expenses.itemized",
           "expenses.split"
@@ -1112,6 +1115,9 @@
           },
           {
             "$ref": "#/components/schemas/ExpenseInboxItem"
+          },
+          {
+            "$ref": "#/components/schemas/EmailInboxItem"
           }
         ],
         "discriminator": {
@@ -1119,7 +1125,8 @@
           "mapping": {
             "receipt": "#/components/schemas/ReceiptInboxItem",
             "report": "#/components/schemas/ReportInboxItem",
-            "expense": "#/components/schemas/ExpenseInboxItem"
+            "expense": "#/components/schemas/ExpenseInboxItem",
+            "email": "#/components/schemas/EmailInboxItem"
           }
         }
       },
@@ -1664,6 +1671,86 @@
           "basis"
         ],
         "description": "uncoded: what is suggested for it, or missing when nothing is."
+      },
+      "EmailInboxItem": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "email"
+            ]
+          },
+          "email": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "subject": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "example": "Fwd: Your Tuesday evening trip"
+              },
+              "from": {
+                "type": "string",
+                "description": "The address it came from: always one the person signs in with.",
+                "example": "riley@example.com"
+              },
+              "receivedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When it arrived."
+              }
+            },
+            "required": [
+              "id",
+              "subject",
+              "from",
+              "receivedAt"
+            ]
+          },
+          "reason": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "unproved",
+                  "empty"
+                ],
+                "description": "unproved: nothing proved it came from the person, so nothing in it was filed (ADR-0026). empty: it had nothing attached that could be a receipt, and no text."
+              },
+              "problem": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "unsigned",
+                  "signature_failed",
+                  "not_aligned",
+                  "partly_signed",
+                  null
+                ],
+                "description": "unproved: why. unsigned: no DKIM signature. signature_failed: none checks out, often because a mail system changed it after signing. not_aligned: signed by a domain other than its address’s, such as a mailing service. partly_signed: the signature leaves part of it out. Null when not known, and for empty."
+              }
+            },
+            "required": [
+              "code",
+              "problem"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "email",
+          "reason"
+        ],
+        "description": "An email from the person’s own address that filed nothing, while emails that filed nothing are on (#59). Never its text. It shows for 30 days after it arrived, unless dismissed first."
       },
       "ReceiptDetail": {
         "allOf": [
@@ -8300,7 +8387,7 @@
           "Inbox"
         ],
         "summary": "What needs the person: the Needs you inbox",
-        "description": "What needs the person, each with why (FR-EXP-02): a report overdue or in its last week with something left; receipts that need a look or that no model could read, newest first; local expenses needing a justification; and reports ready to close (FR-EXP-12, FR-EXP-14). Missing receipts and returned reports join it as they are built.",
+        "description": "What needs the person, each with why (FR-EXP-02): a report overdue or in its last week with something left; receipts that need a look or that no model could read, newest first; while they are on, emails from the person’s own address that filed nothing (#59); local expenses needing a justification; and reports ready to close (FR-EXP-12, FR-EXP-14). Missing receipts and returned reports join it as they are built.",
         "security": [
           {
             "bearerAuth": []
@@ -14501,6 +14588,76 @@
           },
           "422": {
             "description": "The account has no email address.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/inbox/emails/{emailId}/dismiss": {
+      "post": {
+        "tags": [
+          "Inbox"
+        ],
+        "summary": "Dismiss an email that filed nothing from Needs you",
+        "description": "It leaves Needs you for good, and the audit trail records who dismissed it. The email is kept as it arrived. Only the person it came from dismisses it (#59, ADR-0035). Dismissing one already dismissed changes nothing.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "emailId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Dismissed."
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or the email is someone else’s, or the caller is an auditor, who changes nothing (not_yours).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such email that filed nothing, or emails that filed nothing are switched off there.",
             "content": {
               "application/problem+json": {
                 "schema": {

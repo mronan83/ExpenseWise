@@ -380,7 +380,7 @@ export const CAPTURE_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Forwarding by hand works; an automatic forwarding rule keeps the merchant’s address as the sender, so it isn’t filed (ADR-0026). A PDF made from an email is written in a font that covers Latin script: signs such as ₹ become their currency codes, and other scripts, such as Japanese, become question marks (ADR-0027). A longer email is cut at five pages, ending with a line saying the rest is left out. Nothing in the app shows the receipts address yet, and an email that filed nothing is shown nowhere until #59.',
+    note: 'Forwarding by hand works; an automatic forwarding rule keeps the merchant’s address as the sender, so it isn’t filed (ADR-0026). A PDF made from an email is written in a font that covers Latin script: signs such as ₹ become their currency codes, and other scripts, such as Japanese, become question marks (ADR-0027). A longer email is cut at five pages, ending with a line saying the rest is left out. Nothing in the app shows the receipts address yet. Since PR #60 an email that filed nothing shows in Needs you, while Emails that filed nothing is on (US-INBOX-02).',
   },
   {
     id: 'US-CAP-06',
@@ -473,8 +473,19 @@ export const CAPTURE_STORIES: readonly Story[] = [
           'db/inbound.int › answers with ids only: the runtime still cannot read sign-ins outside an organization',
         ],
       },
+      {
+        id: 'AC8',
+        given: 'an email from my address that isn’t proved',
+        when: 'it is kept',
+        then: 'why it wasn’t proved is kept with it: unsigned, signed by another domain, changed after it was signed, or signed over only part of it, so Needs you can say so',
+        decided: { by: 'claude' },
+        checks: [
+          'workflows/email › keeps why it couldn’t prove the sender, such as a message changed after it was signed',
+          'db/inbound.int › keeps why a sender wasn’t proved only for an unproved email, and dismisses none filed',
+        ],
+      },
     ],
-    note: 'Bird’s own allowlist, which you set (Q16), is a first gate in front of these checks. An email that waits more than 30 days to be read can no longer be fetched or checked, so it is dropped (ADR-0026). An email from your address that isn’t proved is kept but shown nowhere until #59.',
+    note: 'Bird’s own allowlist, which you set (Q16), is a first gate in front of these checks. An email that waits more than 30 days to be read can no longer be fetched or checked, so it is dropped (ADR-0026). Since PR #60 an email from your address that isn’t proved shows in your Needs you with why, while Emails that filed nothing is on (US-INBOX-02).',
   },
   {
     id: 'US-MILE-01',

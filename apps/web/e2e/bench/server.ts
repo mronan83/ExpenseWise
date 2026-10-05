@@ -31,15 +31,20 @@ import {
   dbRouteKeyStore,
   dbRouteMileageStore,
   dbTripStore,
+  dbUnfiledEmailStore,
   dbWorkspaceStore,
   ORG_FEATURE_KEYS,
 } from '@expensewise/api';
 import {
   createDatabase,
+  findMemberships,
+  recordInboundEmail,
   ROUTE_MEASURE_REQUESTED,
   runReportSchedule,
   setRolePasswords,
+  withOrg,
 } from '@expensewise/db';
+import { derivedId } from '@expensewise/domain';
 import { runMigrations } from '@expensewise/db/migrate';
 import { COMPARISON_MODELS, FALLBACK_MODEL, type ModelId } from '@expensewise/extraction';
 import {
@@ -327,6 +332,7 @@ const app = createHttpApp({
   itemized: dbItemizedStore(db),
   modelSettings: dbModelSettingsStore(db),
   reimbursement: dbReimbursementStore(db),
+  emails: dbUnfiledEmailStore(db),
   files: store,
   dispatch,
   secrets: createSecretBox('bench-only-secret-0123456789'),
@@ -857,6 +863,37 @@ const ecb = (url: string) => {
   return Promise.resolve(new Response(csv.join('\n'), { status: 200 }));
 };
 await convertOrganization(conversionPorts({ db, fetch: ecb as typeof fetch }), organization.id);
+// Two emails from Riley's own address that filed nothing (#59), kept as the email workflow keeps
+// them: one a mail system changed after it was signed, so nothing proved it was Riley's, and
+// one with nothing in it to read.
+const [riley] = await findMemberships(db, E2E_USER);
+if (!riley) throw new Error('The bench has no membership for its user');
+for (const [n, subject, status, senderProblem] of [
+  [1, 'Fwd: Your Tuesday evening trip with Uber', 'unverified', 'signature_failed'],
+  [2, 'Receipt', 'no_attachments', null],
+] as const) {
+  await withOrg(db, organization.id, (tx) =>
+    recordInboundEmail(
+      tx,
+      organization.id,
+      {
+        id: derivedId(`bench-email:${n}`),
+        memberId: riley.memberId,
+        provider: 'bird',
+        providerMessageId: `rem_bench_${n}`,
+        fromAddress: `${E2E_USER}@example.com`,
+        subject,
+        sentAt: new Date(),
+        status,
+        senderProblem,
+        bodyText: null,
+      },
+      [],
+      E2E_USER,
+    ),
+  );
+}
+
 const seeded: Seeded = {
   trips: {
     omaha: trips.omaha.id,

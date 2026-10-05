@@ -984,6 +984,18 @@ export const inboundEmailStatus = pgEnum('inbound_email_status', [
 ]);
 
 /**
+ * Why an email from a member's address wasn't proved to be theirs (ADR-0026): no DKIM
+ * signature; none that checks out, often because a mail system changed it after signing; a
+ * good one by a domain other than the From address's; or one that leaves part of it unsigned.
+ */
+export const inboundEmailProblem = pgEnum('inbound_email_problem', [
+  'unsigned',
+  'signature_failed',
+  'not_aligned',
+  'partly_signed',
+]);
+
+/**
  * An email a member sent to the receipts address (FR-CAP-02, ADR-0026): who sent it, what it
  * was about, and what came of it. Kept once per provider message, so a retried delivery adds
  * nothing. Mail from anyone who doesn't sign in here is never kept.
@@ -1006,10 +1018,20 @@ export const inboundEmails = pgTable(
      * signature proved the sender, so nothing was filed and no body kept.
      */
     status: inboundEmailStatus('status').notNull(),
+    /**
+     * unverified: why its sender wasn't proved, shown in Needs you (#59). Null for a proved
+     * sender, and for one kept before the reason was.
+     */
+    senderProblem: inboundEmailProblem('sender_problem'),
     /** The email's own text as read, at most 64 KiB, kept only for a proved sender. */
     bodyText: text('body_text'),
     /** How many receipts it filed; a file already filed before is not counted again. */
     receiptCount: integer('receipt_count').notNull().default(0),
+    /**
+     * When its member dismissed it from Needs you, where an email that filed nothing shows
+     * (#59). Set once, by them, and never cleared; the row is otherwise as it arrived.
+     */
+    dismissedAt: timestamp('dismissed_at', { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => [
@@ -1021,6 +1043,14 @@ export const inboundEmails = pgTable(
       foreignColumns: [members.orgId, members.id],
     }),
     check('inbound_emails_receipt_count', sql`${t.receiptCount} >= 0`),
+    check(
+      'inbound_emails_problem_unverified',
+      sql`${t.senderProblem} is null or ${t.status} = 'unverified'`,
+    ),
+    check(
+      'inbound_emails_dismissed_unfiled',
+      sql`${t.dismissedAt} is null or ${t.status} <> 'filed'`,
+    ),
     index('inbound_emails_member_idx').on(t.orgId, t.memberId, t.createdAt),
   ],
 );

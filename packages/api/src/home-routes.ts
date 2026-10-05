@@ -10,6 +10,7 @@ import { askForCoding } from './needs-you-views.ts';
 import { ProblemError } from './problem.ts';
 import { showConverted } from './reimbursement.ts';
 import { homeRoute } from './routes/home.ts';
+import { unfiledEmailsAsked, type UnfiledEmailStore } from './unfiled-emails.ts';
 import type { WorkspaceStore } from './workspace.ts';
 
 export interface HomeRouteOptions {
@@ -22,6 +23,8 @@ export interface HomeRouteOptions {
   readonly modelSettings?: ModelSettingsStore;
   /** Present where categories can be on, so Needs you asks for them (FR-EXP-11, Q27). */
   readonly categories?: CategoryStore;
+  /** Present where emails that filed nothing can be on, so Needs you lists them (#59). */
+  readonly emails?: UnfiledEmailStore;
   readonly now?: () => Date;
 }
 
@@ -65,18 +68,16 @@ export function registerHomeRoutes(
 
   app.openapi(homeRoute, async (c) => {
     const who = await member(c.var.identity.userId);
-    const day =
-      c.req.valid('query').day ?? (options.now?.() ?? new Date()).toISOString().slice(0, 10);
+    const now = options.now?.() ?? new Date();
+    const day = c.req.valid('query').day ?? now.toISOString().slice(0, 10);
     const data = await stores().home.snapshot(who.orgId, who.memberId, day, NEEDS_LIMIT, {
       uncoded: await askForCoding(options, features, who.orgId),
+      unfiledSince: await unfiledEmailsAsked(options, features, who.orgId, now),
     });
     const settingsOn =
       options.modelSettings !== undefined &&
       (await features.isOn(who.orgId, 'receipts.model-settings'));
     const converting = await showConverted(features, who.orgId, data.reports.reports);
-    return c.json(
-      homeView(data, day, NEEDS_SHOWN, options.now?.() ?? new Date(), settingsOn, converting),
-      200,
-    );
+    return c.json(homeView(data, day, NEEDS_SHOWN, now, settingsOn, converting), 200);
   });
 }

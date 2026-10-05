@@ -3,6 +3,7 @@ import {
   MERGE_FIELDS,
   STAY_MAX_NIGHTS,
   SUPPORTED_CURRENCIES,
+  UNFILED_EMAIL_DAYS,
 } from '@expensewise/domain';
 import { CORRECTABLE_FIELDS, READING_CHECKS } from '@expensewise/extraction';
 import { z } from '@hono/zod-openapi';
@@ -1410,11 +1411,49 @@ const ExpenseInboxItemSchema = z
   })
   .openapi('ExpenseInboxItem');
 
+const EmailInboxItemSchema = z
+  .object({
+    kind: z.literal('email'),
+    email: z.object({
+      id: z.string().uuid(),
+      subject: z.string().nullable().openapi({ example: 'Fwd: Your Tuesday evening trip' }),
+      from: z.string().openapi({
+        description: 'The address it came from: always one the person signs in with.',
+        example: 'riley@example.com',
+      }),
+      receivedAt: z.string().datetime().openapi({ description: 'When it arrived.' }),
+    }),
+    reason: z.object({
+      code: z.enum(['unproved', 'empty']).openapi({
+        description:
+          'unproved: nothing proved it came from the person, so nothing in it was filed ' +
+          '(ADR-0026). empty: it had nothing attached that could be a receipt, and no text.',
+      }),
+      problem: z
+        .enum(['unsigned', 'signature_failed', 'not_aligned', 'partly_signed'])
+        .nullable()
+        .openapi({
+          description:
+            'unproved: why. unsigned: no DKIM signature. signature_failed: none checks out, ' +
+            'often because a mail system changed it after signing. not_aligned: signed by a ' +
+            'domain other than its address’s, such as a mailing service. partly_signed: the ' +
+            'signature leaves part of it out. Null when not known, and for empty.',
+        }),
+    }),
+  })
+  .openapi('EmailInboxItem', {
+    description:
+      'An email from the person’s own address that filed nothing, while emails that filed ' +
+      `nothing are on (#59). Never its text. It shows for ${UNFILED_EMAIL_DAYS} days after it ` +
+      'arrived, unless dismissed first.',
+  });
+
 export const InboxItemSchema = z
   .discriminatedUnion('kind', [
     ReceiptInboxItemSchema,
     ReportInboxItemSchema,
     ExpenseInboxItemSchema,
+    EmailInboxItemSchema,
   ])
   .openapi('InboxItem');
 
