@@ -16,7 +16,9 @@ export const inboxRoute = createRoute({
     'with something left; receipts that need a look or that no model could read, newest ' +
     'first; while they are on, emails from the person’s own address that filed nothing (#59); ' +
     'local expenses needing a justification; and reports ready to close (FR-EXP-12, ' +
-    'FR-EXP-14). Missing receipts and returned reports join it as they are built.',
+    'FR-EXP-14). While approval is on, a report that came back with each rejected expense ' +
+    'and why, and each report waiting for the person’s decision (FR-GOV-12). Missing ' +
+    'receipts join it as they are built.',
   security: [{ bearerAuth: [] }],
   responses: {
     200: {

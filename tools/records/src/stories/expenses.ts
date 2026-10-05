@@ -181,7 +181,7 @@ export const EXPENSE_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Refusing to submit a report while a difference has no reason, and rejecting one at review, are FR-GOV-13 and FR-GOV-10, which come with approval (#24). Inside an organization a member opens only their own expenses (US-SEC-14).',
+    note: 'Refusing to submit a report while a difference has no reason, and rejecting one at review, are FR-GOV-13 and FR-GOV-10, built with approval in PR #60 (#24, US-RPT-08, US-RPT-09). Inside an organization a member opens only their own expenses (US-SEC-14).',
   },
   {
     id: 'US-EXP-03',
@@ -282,7 +282,7 @@ export const EXPENSE_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Editing again when a report comes back follows the expense lifecycle, where a returned expense is Ready again, but nothing returns a report until approval is built (#24). Inside an organization a member changes only their own expenses (US-SEC-14).',
+    note: 'Editing again when a report comes back follows the expense lifecycle, where a returned expense is Ready again; since PR #60 approval returns a report (#24, US-RPT-10). Inside an organization a member changes only their own expenses (US-SEC-14).',
   },
   {
     id: 'US-EXP-04',
@@ -793,7 +793,7 @@ export const EXPENSE_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'A held duplicate is in Needs you too, naming the receipt it looks like (US-DUP-02). Since PR #52 so are a report overdue or in its last week, a local expense needing a reason, and a report ready to close; their stories are with reports (FR-EXP-12, FR-EXP-14). Returned reports join with approval (#24), and missing receipts with card transactions (FR-CAP-06).',
+    note: 'A held duplicate is in Needs you too, naming the receipt it looks like (US-DUP-02). Since PR #52 so are a report overdue or in its last week, a local expense needing a reason, and a report ready to close; their stories are with reports (FR-EXP-12, FR-EXP-14). Since PR #60, with approval on, a returned report and each rejected expense join it, and reports to approve (#24, US-RPT-10); missing receipts join with card transactions (FR-CAP-06).',
   },
 
   // Home
@@ -1523,7 +1523,7 @@ export const EXPENSE_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Built in PR #59 behind `expenses.itemized` (#82). It is how FR-EXP-10 claims less than a receipt with a reason, line by line; setting a lower amount with a reason without lines, and the check before submission, stay with #24 (US-RPT-07).',
+    note: 'Built in PR #59 behind `expenses.itemized` (#82). It is how FR-EXP-10 claims less than a receipt with a reason, line by line; a lower amount with a reason in the person’s own words, and the check before submission, came with approval in PR #60 (#24, US-RPT-07).',
   },
 
   // Needs you: emails that filed nothing

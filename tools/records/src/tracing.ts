@@ -14,6 +14,10 @@ export const GAPS: readonly Gap[] = [
       'Found merging PR #58: an expense points at its category and type (ADR-0036) and copies neither name, so renaming one shows the new name on every claim that used it, submitted or exported ones included. One in use can be retired but never deleted, so nothing is lost, but an old claim no longer reads as it did.',
     fix: 'Copy the category and type names onto an expense when its report is submitted, as the mileage and FX rates are copied, and show those on submitted claims and exports (#70).',
     backlog: 70,
+    closed: {
+      date: '2026-10-05',
+      note: 'PR #60, with approval (#24): submitting a report copies each expense’s category and type names onto it, and its parts’, and its export and totals by category read those once it is submitted (#70).',
+    },
   },
   {
     id: 'GAP-28',
@@ -84,6 +88,16 @@ export const GAPS: readonly Gap[] = [
       'Found building #8 on Oct 5. The app asks for the code before anything else, but the API refuses aal1 only for admin actions and approving (FR-GOV-04), because a token doesn’t say whether its person has an authenticator. A stolen password, used against the API directly, still reads that person’s records (all of them, for an owner or finance admin), changes their own, and can link another sign-in that has no authenticator.',
     fix: 'Refuse aal1 on every request of someone with a verified authenticator while the organization has the second factor on, and require aal2 to link a sign-in (#85, Q41).',
     backlog: 85,
+  },
+  {
+    id: 'GAP-34',
+    title: 'An approved expense can’t be corrected.',
+    affects: ['FR-EXP-03', 'F-18'],
+    severity: 'Medium',
+    evidence:
+      'Found building approval (#24) in PR #60. An approved expense is locked, in the app and in the database, as FR-EXP-03 asks, but nothing makes the reversal and new version that correct one; the expense keeps a version and a reversal link that nothing writes yet.',
+    fix: 'Reverse an approved expense with a copy that cancels it, pointing at it, and file a new version for its member to correct and submit, each in the audit trail (#87).',
+    backlog: 87,
   },
   {
     id: 'GAP-25',
@@ -887,6 +901,14 @@ export const QUESTIONS: readonly Question[] = [
     why: 'An owner or finance admin sees everyone’s records, so their password alone still reaches all of the organization’s spending.',
     recommendation: 'A, before a second person joins.',
     affects: ['FR-PLT-03', 'GAP-33', 'F-11'],
+  },
+  {
+    id: 'Q42',
+    title: 'Who a team member’s report goes to',
+    ask: 'Approval (#24) sends a report to one approver. As built: the member’s manager if one is set and can approve it, otherwise the longest-standing approver, then finance admin, then owner, never the member themselves; an owner or finance admin may also decide in that person’s place. A: keep that. B: as A, and let an owner choose each member’s approver in Settings › People (#86). C: something else.',
+    why: 'In a small team there is usually one obvious approver, and routing by role finds them without a setting. Once two people approve, who gets which member’s report matters, and nothing sets a manager yet.',
+    recommendation: 'A until a second approver joins, then B.',
+    affects: ['FR-GOV-02', 'F-18'],
   },
 ];
 

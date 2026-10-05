@@ -402,4 +402,16 @@ export const RULES: readonly Rule[] = [
     },
     note: 'Supabase Auth’s own default limit on a person’s factors. Settings › Sign-ins stops offering another at 10.',
   },
+  {
+    id: 'R-APPROVAL-NOTE-MAX',
+    name: 'Longest reason for claiming less, comment on a return, or reason for a rejection',
+    value: '500 characters each',
+    decided: { by: 'claude', source: 'ADR-0043' },
+    code: {
+      file: 'packages/domain/src/approvals.ts',
+      constant: 'APPROVAL_NOTE_MAX',
+      literal: '500',
+    },
+    note: 'The same as a local expense’s justification (R-JUSTIFICATION-MAX): long enough to explain, short enough to read on a phone.',
+  },
 ];

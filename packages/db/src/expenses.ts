@@ -70,12 +70,20 @@ export interface ExpenseRecord extends ExpenseValues, ExpenseDetails, Partial<Ex
   readonly tripReportId: string | null;
   /** Why a local expense was for business; its report can't close without it. */
   readonly justification: string | null;
+  /** Why it claims less than its receipt (FR-EXP-10); read from the database, else unknown. */
+  readonly claimReason?: string | null;
+  /**
+   * How many of its receipt's lines it leaves out of the claim, each with its reason
+   * (FR-EXP-16): its reason for claiming less, line by line. Read from the database.
+   */
+  readonly excludedLines?: number;
   readonly editedAt: Date | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
 
-const expenseColumns = {
+/** The columns an ExpenseRecord is read from, joined as withProof() joins them. */
+export const expenseColumns = {
   id: expenses.id,
   memberId: expenses.memberId,
   owner: members.displayName,
@@ -102,6 +110,10 @@ const expenseColumns = {
   reportId: expenses.reportId,
   tripReportId: trips.reportId,
   justification: expenses.justification,
+  claimReason: expenses.claimReason,
+  excludedLines: sql<number>`(select count(*)::int from expense_lines l
+    where l.org_id = ${expenses.orgId} and l.expense_id = ${expenses.id}
+      and l.excluded_reason is not null)`,
   editedAt: expenses.editedAt,
   createdAt: expenses.createdAt,
   updatedAt: expenses.updatedAt,
@@ -243,6 +255,17 @@ export function listUncodedExpenses(
     )
     .orderBy(sql`${expenses.transactionDate} asc nulls last`, expenses.createdAt, expenses.id)
     .limit(limit);
+}
+
+/** These expenses, those the caller may see, in date order. Call inside withOrg(). */
+export async function expensesByIds(
+  tx: Transaction,
+  ids: readonly string[],
+): Promise<ExpenseRecord[]> {
+  if (ids.length === 0) return [];
+  return withProof(tx)
+    .where(inArray(expenses.id, [...ids]))
+    .orderBy(sql`${expenses.transactionDate} asc nulls last`, expenses.createdAt, expenses.id);
 }
 
 /** One expense, or undefined. Call inside withOrg(). */

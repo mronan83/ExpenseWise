@@ -1,5 +1,6 @@
 import {
   createHttpApp,
+  dbApprovalStore,
   dbAuditStore,
   dbCategoryStore,
   dbExpenseStore,
@@ -58,6 +59,7 @@ const handler = handle(
     routeKeys: db && dbRouteKeyStore(db),
     home: db && dbHomeStore(db),
     reports: db && dbReportStore(db),
+    approvals: db && dbApprovalStore(db),
     audit: db && dbAuditStore(db),
     categories: db && dbCategoryStore(db),
     itemized: db && dbItemizedStore(db),

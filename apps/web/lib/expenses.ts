@@ -1,3 +1,4 @@
+import type { ReceiptCheck } from './approval';
 import type { ExpenseCategory } from './categories';
 import type { ExpenseSplit, Itemized } from './itemized';
 import type { ReceiptSummary } from './receipts';
@@ -80,6 +81,8 @@ export interface ExpenseDetail extends ExpenseSummary {
   itemized?: Itemized | null;
   /** Its parts, while splits are on (FR-EXP-15). */
   split?: ExpenseSplit | null;
+  /** How it holds up against its receipt, and why it claims less; while approval is on. */
+  claim?: { reason: string | null; check: ReceiptCheck };
 }
 
 export interface Journey {

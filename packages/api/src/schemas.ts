@@ -690,7 +690,7 @@ export const ExpenseStatusSchema = z
       'and settled follow its report; approved is locked (FR-EXP-03).',
   });
 
-const ExpenseAmountSchema = z
+export const ExpenseAmountSchema = z
   .object({
     amountMinor: z.number().int().openapi({ description: 'Integer minor units, e.g. cents.' }),
     currency: z.string().openapi({ example: 'USD' }),
@@ -698,7 +698,34 @@ const ExpenseAmountSchema = z
   })
   .nullable();
 
-const ExpenseFieldSchema = z.enum(['merchant', 'date', 'currency', 'amount']);
+export const ExpenseFieldSchema = z.enum(['merchant', 'date', 'currency', 'amount']);
+
+export const ReceiptCheckSchema = z
+  .object({
+    state: z.enum(['matches', 'explained', 'differs', 'no_receipt']).openapi({
+      description:
+        'matches: it is what its receipt shows. explained: it claims less than its receipt, ' +
+        'with a reason or lines left out (FR-EXP-10). differs: it doesn’t hold up against its ' +
+        'receipt, so it can’t be submitted and is rejected on review (FR-GOV-10, FR-GOV-13). ' +
+        'no_receipt: a drive, or an expense typed in, has nothing to differ from.',
+    }),
+    differences: z
+      .array(ExpenseFieldSchema)
+      .openapi({ description: 'differs: the fields that aren’t its receipt’s.' }),
+    over: z.boolean().openapi({ description: 'differs: it claims more than its receipt.' }),
+    needsReason: z.boolean().openapi({
+      description: 'differs: it claims less than its receipt, and a reason would settle it.',
+    }),
+    explainedBy: z
+      .enum(['reason', 'lines'])
+      .nullable()
+      .openapi({ description: 'explained: the person’s own reason, or the lines left out.' }),
+    text: z.string().nullable().openapi({
+      description: 'differs: why, in a sentence.',
+      example: 'Its date isn’t its receipt’s.',
+    }),
+  })
+  .openapi('ReceiptCheck');
 
 export const ExpenseSummarySchema = z
   .object({
@@ -859,6 +886,21 @@ export const ExpenseDetailSchema = ExpenseSummarySchema.extend({
   itemized: ItemizedSchema.optional(),
   // Only while splits and categories are switched on (FR-EXP-15).
   split: ExpenseSplitSchema.optional(),
+  // Only while approval is switched on (FR-EXP-10, FR-GOV-13).
+  claim: z
+    .object({
+      reason: z
+        .string()
+        .nullable()
+        .openapi({ description: 'Why it claims less than its receipt, in the person’s words.' }),
+      check: ReceiptCheckSchema,
+    })
+    .optional()
+    .openapi({
+      description:
+        'How it holds up against its receipt for submitting and review: it may claim less ' +
+        'with a reason, never more (Q6). Only while `reports.approval` is on.',
+    }),
 }).openapi('ExpenseDetail');
 
 export const ExpenseListSchema = z
@@ -1379,11 +1421,21 @@ const ReportInboxItemSchema = z
     kind: z.literal('report'),
     report: ReportSummarySchema,
     reason: z.object({
-      code: z.enum(['overdue', 'closing_soon', 'ready_to_close']).openapi({
-        description:
-          'overdue: past day 28 and nothing ready. closing_soon: in its last week, something ' +
-          'still needing review, so reimbursement may wait. ready_to_close: nothing left to do.',
-      }),
+      code: z
+        .enum(['overdue', 'closing_soon', 'ready_to_close', 'returned', 'to_approve'])
+        .openapi({
+          description:
+            'overdue: past day 28 and nothing ready. closing_soon: in its last week, something ' +
+            'still needing review, so reimbursement may wait. ready_to_close: nothing left to ' +
+            'do. returned: its approver sent it back, with a comment (FR-GOV-11). to_approve: ' +
+            'it waits for the person’s decision (FR-GOV-02). The last two only while approval ' +
+            'is on.',
+        }),
+      comment: z
+        .string()
+        .optional()
+        .openapi({ description: 'returned: why it came back, in its approver’s words.' }),
+      by: z.string().optional().openapi({ description: 'returned: who sent it back.' }),
     }),
   })
   .openapi('ReportInboxItem');
@@ -1399,11 +1451,24 @@ const ExpenseInboxItemSchema = z
       receiptId: z.string().uuid().nullable(),
     }),
     reason: z.object({
-      code: z.enum(['justification', 'uncoded']).openapi({
+      code: z.enum(['justification', 'uncoded', 'rejected']).openapi({
         description:
           'justification: a local expense says nothing yet of why (FR-EXP-14). uncoded: it ' +
-          'has no category and type yet, while categories are on (FR-EXP-11, Q27).',
+          'has no category and type yet, while categories are on (FR-EXP-11, Q27). rejected: ' +
+          'its report came back with it rejected, while approval is on (FR-GOV-12).',
       }),
+      why: z
+        .string()
+        .optional()
+        .openapi({ description: 'rejected: why, in its approver’s words or the review’s.' }),
+      automatic: z.boolean().optional().openapi({
+        description: 'rejected: by the review on its own, because it differs from its receipt.',
+      }),
+      reportId: z
+        .string()
+        .uuid()
+        .optional()
+        .openapi({ description: 'rejected: the report it came back on.' }),
     }),
     category: ExpenseCategorySchema.optional().openapi({
       description: 'uncoded: what is suggested for it, or missing when nothing is.',

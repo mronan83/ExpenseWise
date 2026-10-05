@@ -65,8 +65,9 @@ export const DOMAINS: readonly Domain[] = [
   },
   {
     name: 'Reports and approval',
-    about: 'Expenses gathered for submission, and each approver’s decision.',
-    tables: ['reports', 'approval_steps'],
+    about:
+      'Expenses gathered for submission, each approver’s decision, and the expenses a returned report rejected, with why.',
+    tables: ['reports', 'approval_steps', 'expense_rejections'],
   },
   {
     name: 'Trail and delivery',
@@ -137,7 +138,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   expenses: {
     about:
-      'What is claimed: merchant, date, amount and currency, its status, and the trip it is filed to. It also carries when and where it was bought, as its receipt prints them: a local time with its time zone, worked out offline from the city, region and country, and the address (FR-INT-17, ADR-0030). It follows its receipt until a person edits it (ADR-0022) and files to trips by date until a person chooses (ADR-0023). One with a date and no trip is local: it carries a justification and points at its report itself, while one on a trip goes with the trip’s report (FR-EXP-14, ADR-0029). A drive is an expense with source `mileage` and a mileage log (ADR-0038). With Journeys and stays on, it carries where a ride, flight or train went (`journey_from`, `journey_to`, as printed) and a hotel stay’s `check_in` and `check_out` days, which follow the receipt the same way and are edited the same way; the nights are worked out from the two days when shown, never stored (FR-INT-20, FR-INT-21, ADR-0040). Home sums a member’s month through the member-and-date index, so it needs no index of its own. It carries the category and type a person chose, with when, all three together or none (FR-EXP-11); a suggestion is never stored, and suggestions read a member’s past choices through the member-and-chosen-at index (FR-INT-10, ADR-0036). Its Phase 0 columns for one converted amount (`home_amount_minor`, `fx_rate`, `fx_rate_date`, `fx_source`) assume one home currency per organization and stay unused: conversions are kept in `expense_conversions` (ADR-0034). Its amount is the claim: its receipt’s total less each line left out of it with its share of the tax, tip and fees, so reports, Home and conversion follow an exclusion with nothing of their own (ADR-0041).',
+      'What is claimed: merchant, date, amount and currency, its status, and the trip it is filed to. It also carries when and where it was bought, as its receipt prints them: a local time with its time zone, worked out offline from the city, region and country, and the address (FR-INT-17, ADR-0030). It follows its receipt until a person edits it (ADR-0022) and files to trips by date until a person chooses (ADR-0023). One with a date and no trip is local: it carries a justification and points at its report itself, while one on a trip goes with the trip’s report (FR-EXP-14, ADR-0029). A drive is an expense with source `mileage` and a mileage log (ADR-0038). With Journeys and stays on, it carries where a ride, flight or train went (`journey_from`, `journey_to`, as printed) and a hotel stay’s `check_in` and `check_out` days, which follow the receipt the same way and are edited the same way; the nights are worked out from the two days when shown, never stored (FR-INT-20, FR-INT-21, ADR-0040). Home sums a member’s month through the member-and-date index, so it needs no index of its own. It carries the category and type a person chose, with when, all three together or none (FR-EXP-11); a suggestion is never stored, and suggestions read a member’s past choices through the member-and-chosen-at index (FR-INT-10, ADR-0036). Its Phase 0 columns for one converted amount (`home_amount_minor`, `fx_rate`, `fx_rate_date`, `fx_source`) assume one home currency per organization and stay unused: conversions are kept in `expense_conversions` (ADR-0034). Its amount is the claim: its receipt’s total less each line left out of it with its share of the tax, tip and fees, so reports, Home and conversion follow an exclusion with nothing of their own (ADR-0041). It keeps why it claims less than its receipt, in its member’s words, 1 to 500 characters (FR-EXP-10), and, from when its report was last submitted, its category’s and type’s names as they were then (`category_name`, `type_name`), which a submitted claim and its export show from then on (NFR-DAT-04, ADR-0043). Approved, it is locked: nothing changes it but settling it.',
   },
   expense_conversions: {
     about:
@@ -153,7 +154,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   expense_parts: {
     about:
-      'The parts of a split expense (FR-EXP-15, Q35): each with a category and type and an amount in the expense’s currency, together its claim exactly. Split by line, they are worked out from the lines’ categories and types whenever those or an exclusion change, and the part with no category and type is the lines left with the expense’s own; split by amount, a person typed each, at least two. Reports total by them, and the export writes a row each.',
+      'The parts of a split expense (FR-EXP-15, Q35): each with a category and type and an amount in the expense’s currency, together its claim exactly. Split by line, they are worked out from the lines’ categories and types whenever those or an exclusion change, and the part with no category and type is the lines left with the expense’s own; split by amount, a person typed each, at least two. Reports total by them, and the export writes a row each. Submitting its expense’s report copies each part’s category and type names onto it, which the submitted claim shows from then on (NFR-DAT-04).',
   },
   trips: {
     about:
@@ -193,11 +194,15 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   reports: {
     about:
-      'A member’s claim for reimbursement: the trips and local expenses that point at it, when it closes itself (day 28, later if reopened), and when it closed. Open, then closed by the person or on day 28, reopenable until submitted; approval follows with #24 (FR-EXP-05, FR-EXP-12, ADR-0029). Its currency is the one it is reimbursed in: while currency conversion is on, its member’s, which it opens in and follows until it is submitted; otherwise the organization’s home currency (FR-EXP-13, ADR-0034).',
+      'A member’s claim for reimbursement: the trips and local expenses that point at it, when it closes itself (day 28, later if reopened), and when it closed. Open, then closed by the person or on day 28, reopenable until submitted; with approval on, submitted by its member and waiting for approval, then approved, or returned and open again (FR-EXP-05, FR-EXP-12, ADR-0029, ADR-0043). One that has been through approval is never dropped. Its currency is the one it is reimbursed in: while currency conversion is on, its member’s, which it opens in and follows until it is submitted; otherwise the organization’s home currency (FR-EXP-13, ADR-0034).',
   },
   approval_steps: {
     about:
-      'Each approver’s decision on a report, in order. Returning a report needs a comment (FR-GOV-02, #24).',
+      'One step per submission of a report, numbered: the approver it went to, pending until decided, then who decided, approved or returned, when and with what comment; a return needs one (FR-GOV-02, ADR-0043). Only the report’s own member adds one, and only a pending one is decided, by whoever may decide it. The approver it names sees the report and what is on it.',
+  },
+  expense_rejections: {
+    about:
+      'Each expense a returned report rejected, with why, once per step and expense: one the review rejected on its own because it differs from its receipt (`automatic`), or one its approver rejected in their words (FR-GOV-10 to FR-GOV-12). Kept with the step that returned it, so each round stays as it was; the latest round’s show on the report and in Needs you until it is submitted again. Its expense’s member’s under the own-records rules, written by the person deciding as a decision allows, never changed, and deleted just before its expense.',
   },
   audit_events: {
     about:
@@ -231,7 +236,29 @@ export const FUNCTIONS: Readonly<Record<string, string>> = {
   app_record_owner:
     'The member a row belongs to: its own `member_id`, or that of the receipt or expense it hangs off, looked up under the caller’s own row-level security.',
   enforce_own_records:
-    'Fires before every insert, update and delete of a member’s records and what hangs off them, and refuses one the acting member may not change with an error, so the whole transaction, its audit event included, rolls back. Silent for the system (ADR-0035).',
+    'Fires before every insert, update and delete of a member’s records and what hangs off them, and refuses one the acting member may not change with an error, so the whole transaction, its audit event included, rolls back. Silent for the system (ADR-0035). While a transaction decides a report, it also lets whoever may decide it change that report’s status and times and its expenses’ status, and add its rejections, and nothing else (ADR-0043).',
+  app_expense_report:
+    'The report an expense is on: its own, as a local expense, or its trip’s. Runs as its owner, so a policy can ask it without the policies of trips calling back into it.',
+  app_report_of_expense:
+    'The report an expense, by its id, is on, as `app_expense_report` finds it.',
+  app_approver_of:
+    'Whether the acting member is the approver a step of a report went to; the own-records policies on reports, trips, expenses and receipts show them that report and what is on it. Runs as its owner (ADR-0043).',
+  app_deciding_report:
+    'The report the current transaction decides, from `app.deciding_report`, which `decideReport()` sets for that transaction only.',
+  app_may_decide:
+    'Whether the acting member may decide someone else’s report now: it waits on a pending step, they have an approving role, and they are the approver it went to or an owner or finance admin; the database’s twin of `mayDecide()`. Runs as its owner.',
+  app_self_attests:
+    'Whether the acting member self-attests a report: their own, with an approving role, in an organization of one active member; the database’s twin of the self-attestation in `canApprove()`.',
+  app_row_report:
+    'The report a row of reports, expenses or expense rejections is on, as a decision sees it.',
+  app_decision_change:
+    'Whether a change touches only what a decision changes: a report’s status and the times that go with it, or an expense’s status.',
+  enforce_approval_steps:
+    'Fires before every insert, update and delete of an approval step for a member: only a report’s own member routes it, only a pending step is decided, by whoever may decide its report or a one-person organization’s owner on their own, and a member deletes none. Silent for the system.',
+  delete_expense_rejections:
+    'Fires before an expense is deleted and deletes its rejections first, while the expense is still there to say whose they are, so its member can delete the receipt that proves it. The foreign key’s cascade stays as a backstop.',
+  lock_approved_expenses:
+    'Fires before every update of an expense and refuses any change to an approved or settled one but settling it, whoever asks, the system included: an approved claim is corrected by a reversal and a new version (FR-EXP-03, #87).',
   app_invite_hash:
     'The SHA-256 of the invite token the API was given, from `app.invite_hash`. Lets the person holding a link see that one invite before they belong to its organization; the API clears it once read.',
   delete_receipt:
@@ -242,7 +269,7 @@ export const FUNCTIONS: Readonly<Record<string, string>> = {
   conversion_work_due:
     'Which organizations have amounts to convert at a moment: an open or closed report in another currency than its member’s, or an amount on one in another currency than the report’s with no conversion recorded for exactly it, its purchase date before that day. Only organizations whose owner switched currency conversion on count, unless the server’s override has it on for all. The hourly sweep asks it outside any organization; it runs as its owner and answers with organization ids only (ADR-0034).',
   report_work_due:
-    'Which organizations have report work due at a moment: a trip or local expense whose time to join a report has come, an open report on its day 28, or one with nothing to claim. The 24 hours are counted in the organization’s time zone when it keeps one, and at UTC−12 otherwise; it reads the zone whether or not the feature is on, so it may name an organization a few hours early, never late, and the run inside finds nothing due (ADR-0037). The hourly schedule asks it outside any organization; it runs as its owner and answers with organization ids only (ADR-0029).',
+    'Which organizations have report work due at a moment: a trip or local expense whose time to join a report has come, an open report on its day 28, or one with nothing to claim that has never been through approval. The 24 hours are counted in the organization’s time zone when it keeps one, and at UTC−12 otherwise; it reads the zone whether or not the feature is on, so it may name an organization a few hours early, never late, and the run inside finds nothing due (ADR-0037). The hourly schedule asks it outside any organization; it runs as its owner and answers with organization ids only (ADR-0029).',
   member_for_sign_in_email:
     'Which member signs in with an email address, case aside, and that sign-in’s user, for an arriving email that names no organization yet. Runs as its owner and returns ids only, so the app still can’t read sign-ins outside an organization (ADR-0026).',
   seed_starter_catalog:
@@ -289,7 +316,7 @@ export const RULES: readonly Rule[] = [
   {
     rule: 'Inside an organization, each member sees and changes only their own records.',
     mechanism:
-      'With a member named for the transaction, a restrictive `own_records` policy shows a member or approver only their own receipts, expenses, trips, reports, emails and saved places, and the readings, confirmations, duplicate pairs, conversions, mileage, routes, receipt lines and split parts that hang off them; owners, finance admins and auditors see everyone’s. An `own_records` trigger refuses any change to another member’s rows, and every change by an auditor, with an error rather than a silent skip. What hangs off an expense is deleted just before it, while it still says whose it is, so a member can delete their own receipt (`delete_expense_conversion`, `delete_expense_lines`). With no member named, the system’s own work sees and changes everything, as before (ADR-0035).',
+      'With a member named for the transaction, a restrictive `own_records` policy shows a member or approver only their own receipts, expenses, trips, reports, emails and saved places, and the readings, confirmations, duplicate pairs, conversions, mileage, routes, receipt lines and split parts that hang off them; owners, finance admins and auditors see everyone’s. An `own_records` trigger refuses any change to another member’s rows, and every change by an auditor, with an error rather than a silent skip. What hangs off an expense is deleted just before it, while it still says whose it is, so a member can delete their own receipt (`delete_expense_conversion`, `delete_expense_lines`, `delete_expense_rejections`). An approver also sees each report routed to them and what is on it (ADR-0043). With no member named, the system’s own work sees and changes everything, as before (ADR-0035).',
     objects: [
       'own_records',
       'app_current_member',
@@ -449,10 +476,35 @@ export const RULES: readonly Rule[] = [
     refs: ['FR-EXP-04', 'ADR-0023'],
   },
   {
-    rule: 'A returned report says why.',
-    mechanism: 'A returned approval step must carry a comment.',
-    objects: ['approval_steps_return_needs_comment'],
-    refs: ['FR-GOV-02'],
+    rule: 'A returned report says why, and so does each expense it rejected.',
+    mechanism:
+      'A returned approval step must carry a comment. A rejection belongs to one step and one expense of the same organization, once per step and expense, with a reason of 1 to 500 characters (R-APPROVAL-NOTE-MAX); it goes with its expense. A reason for claiming less than a receipt is 1 to 500 characters too.',
+    objects: [
+      'approval_steps_return_needs_comment',
+      'approval_steps_org_id_id_key',
+      'expense_rejections_step_expense_key',
+      'expense_rejections_step_fk',
+      'expense_rejections_expense_fk',
+      'expense_rejections_reason_length',
+      'expenses_claim_reason_length',
+      'delete_expense_rejections',
+    ],
+    refs: ['FR-GOV-02', 'FR-GOV-12', 'FR-EXP-10', 'ADR-0043'],
+  },
+  {
+    rule: 'Only whoever may decide a report decides it, and changes nothing of its member’s but its state.',
+    mechanism:
+      'An approver sees a report a step names them on, with what is on it (`app_approver_of`). Deciding, the transaction names the report it decides; the own-records trigger then lets the approver it went to, or an owner or finance admin, never its own member in a team, change that report’s status and times and its expenses’ status, and add its rejections, while its step is pending, and refuses anything else of its member’s. Only a report’s own member routes it, and a step is decided once (`enforce_approval_steps`). Who it goes to, and that approving someone else’s needs the second factor, are the domain’s and the API’s (`chooseApprover`, `mayDecide`, `requireSecondFactor`).',
+    objects: [
+      'app_approver_of',
+      'app_deciding_report',
+      'app_may_decide',
+      'app_self_attests',
+      'app_decision_change',
+      'enforce_approval_steps',
+      'enforce_own_records',
+    ],
+    refs: ['FR-GOV-02', 'FR-GOV-03', 'FR-GOV-01', 'ADR-0043', 'ADR-0035'],
   },
   {
     rule: 'A mileage claim keeps the rate it was made at.',
@@ -672,8 +724,8 @@ export const RULES: readonly Rule[] = [
   {
     rule: 'An approved expense is locked; a correction is a reversal and a new version.',
     mechanism:
-      'Enforced in the application today: the domain’s lifecycle refuses an edit after submission. No database rule stops an update yet; it comes with approval (#24).',
-    objects: [],
-    refs: ['FR-EXP-03'],
+      'The domain’s lifecycle refuses an edit after submission, and the database refuses any change to an approved or settled expense but settling it, whoever asks. `delete_receipt()` refuses a submitted one. The reversal and new version that correct one are not built yet (GAP-34, #87).',
+    objects: ['lock_approved_expenses', 'approved_locked', 'delete_receipt'],
+    refs: ['FR-EXP-03', 'ADR-0043'],
   },
 ];

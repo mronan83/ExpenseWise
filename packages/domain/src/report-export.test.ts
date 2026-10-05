@@ -3,6 +3,7 @@ import { NO_TRAVEL, type ExpenseTravel } from './journeys.ts';
 import { REPORT_STATUSES } from './lifecycle/report.ts';
 import {
   canExportReport,
+  isExportableOnceApproved,
   isReportExportable,
   reportCsv,
   reportExportTable,
@@ -219,6 +220,15 @@ describe('which reports can be exported, and by whom', () => {
   it('exports a report once it has closed, and never one still open', () => {
     expect(REPORT_STATUSES.filter(isReportExportable)).toEqual([
       'closed',
+      'submitted',
+      'in_approval',
+      'approved',
+      'settled',
+    ]);
+  });
+
+  it('exports only a submitted or approved report once approval exists (Q29)', () => {
+    expect(REPORT_STATUSES.filter((s) => isExportableOnceApproved(s))).toEqual([
       'submitted',
       'in_approval',
       'approved',

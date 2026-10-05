@@ -1,4 +1,6 @@
 export * from './app.ts';
+export * from './approval.ts';
+export * from './approval-schemas.ts';
 export * from './auth.ts';
 export * from './categories.ts';
 export * from './schemas.ts';

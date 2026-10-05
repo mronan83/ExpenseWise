@@ -163,7 +163,16 @@ const fileableColumns = {
   transactionDate: expenses.transactionDate,
 };
 
-/** The member's trips that share at least one day with from–to. */
+/**
+ * A trip that can take an expense: on no report, or on one still open or closed. A trip on a
+ * report submitted or later takes no more (#24): an expense dated in it files as local, and goes
+ * on the next report. Nothing is submitted while approval is off, so then every trip can.
+ */
+const takesExpenses = sql`(${trips.reportId} is null or exists (
+  select 1 from reports r where r.org_id = ${trips.orgId} and r.id = ${trips.reportId}
+     and r.status in ('open', 'closed')))`;
+
+/** The member's trips that share at least one day with from–to, and can take an expense. */
 const tripsOverlapping = (
   tx: Transaction,
   memberId: string,
@@ -178,7 +187,14 @@ const tripsOverlapping = (
       createdAt: trips.createdAt,
     })
     .from(trips)
-    .where(and(eq(trips.memberId, memberId), lte(trips.startDate, to), gte(trips.endDate, from)));
+    .where(
+      and(
+        eq(trips.memberId, memberId),
+        lte(trips.startDate, to),
+        gte(trips.endDate, from),
+        takesExpenses,
+      ),
+    );
 
 /**
  * Files each expense to the trip its date falls in, among `windows`, unless a person chose its
@@ -480,7 +496,9 @@ export type SetExpenseTripResult =
   | { readonly status: 'not_movable'; readonly current: ExpenseStatus }
   | { readonly status: 'no_such_trip' }
   /** The trip is another member's. */
-  | { readonly status: 'other_member' };
+  | { readonly status: 'other_member' }
+  /** The trip is on a report submitted or later, which takes no more expenses (#24). */
+  | { readonly status: 'trip_submitted' };
 
 /**
  * A person puts an expense on a trip, or on none, and filing by date leaves it there from then
@@ -512,11 +530,12 @@ export async function setExpenseTrip(
   } else {
     if (choice.tripId !== null) {
       const [trip] = await tx
-        .select({ memberId: trips.memberId })
+        .select({ memberId: trips.memberId, takes: sql<boolean>`${takesExpenses}` })
         .from(trips)
         .where(eq(trips.id, choice.tripId));
       if (!trip) return { status: 'no_such_trip' };
       if (trip.memberId !== expense.memberId) return { status: 'other_member' };
+      if (!trip.takes) return { status: 'trip_submitted' };
     }
     tripId = choice.tripId;
     pinned = true;

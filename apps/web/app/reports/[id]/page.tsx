@@ -26,6 +26,8 @@ import { tripDates } from '../../../lib/trips';
 import { HistoryLink } from '../../history-link';
 import { CATEGORIES_FLAG } from '../../../lib/categories';
 import { SPLIT_FLAG } from '../../../lib/itemized';
+import { APPROVAL_FLAG } from '../../../lib/approval';
+import { ApprovalPanel } from './approval';
 import { ByCategory } from './by-category';
 
 type Load =
@@ -58,13 +60,16 @@ function reimbursedText(r: Reimbursed): string {
 
 const day = (iso: string) => showDate(iso);
 
-/** What the report needs, in a sentence (FR-EXP-12). */
-function verdict(report: ReportDetail): string {
+/** What the report needs, in a sentence (FR-EXP-12); with approval on, its approval too. */
+function verdict(report: ReportDetail, approval: boolean): string {
   const n = report.needsAttention;
   const things = n === 1 ? '1 thing needs you' : `${n} things need you`;
   if (report.status === 'closed') {
-    return 'You can reopen it until it is submitted. Submitting for reimbursement comes next.';
+    return approval
+      ? 'Submit it for approval when you’re ready. Until then you can reopen it.'
+      : 'You can reopen it until it is submitted. Submitting for reimbursement comes next.';
   }
+  if (report.status === 'approved') return 'It is approved, and locked.';
   if (report.status !== 'open') return 'It is submitted, and locked.';
   if (report.overdue) {
     return `It was due to close ${day(report.closesAt)}. ${things} first; reimbursement waits until then.`;
@@ -80,7 +85,9 @@ function verdict(report: ReportDetail): string {
 /**
  * One report (FR-EXP-05, FR-EXP-12, FR-EXP-14): its trips and local expenses, what still needs
  * the person, and closing or reopening it. A trip or local expense moves to another open
- * report, or a new one. A closed report exports as CSV or PDF, while `reports.export` is on.
+ * report, or a new one. A closed report exports as CSV or PDF, while `reports.export` is on;
+ * with approval on, a submitted or approved one does instead (Q29), and the report is
+ * submitted, approved or returned here (#24).
  */
 export default function ReportPage() {
   const { id } = useParams<{ id: string }>();
@@ -205,7 +212,7 @@ export default function ReportPage() {
               <span className={`font-semibold ${REPORT_STATUS[report.status].tone}`}>
                 {REPORT_STATUS[report.status].label}.
               </span>{' '}
-              {verdict(report)}
+              {verdict(report, features(APPROVAL_FLAG))}
             </p>
 
             <section
@@ -376,6 +383,14 @@ export default function ReportPage() {
               </section>
             ) : null}
 
+            {features(APPROVAL_FLAG) ? (
+              <ApprovalPanel
+                key={`${report.status}-${report.closedAt ?? ''}`}
+                reportId={id}
+                onChanged={() => void refresh()}
+              />
+            ) : null}
+
             {features(SPLIT_FLAG) && features(CATEGORIES_FLAG) ? (
               <ByCategory key={JSON.stringify(report.totals)} reportId={id} />
             ) : null}
@@ -429,7 +444,10 @@ export default function ReportPage() {
               ) : null}
               <span className="text-xs text-ink-2">Opened {showDate(report.openedAt)}</span>
             </div>
-            {report.status !== 'open' && features('reports.export') ? (
+            {features('reports.export') &&
+            (features(APPROVAL_FLAG)
+              ? !['open', 'closed'].includes(report.status)
+              : report.status !== 'open') ? (
               <div className="flex flex-wrap items-center gap-3">
                 {(['csv', 'pdf'] as const).map((format) => (
                   <button

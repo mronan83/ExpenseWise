@@ -226,6 +226,34 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
     [press('Move to another report')],
   ],
   ['a closed report', (s) => `/reports/${s.reports.closed}`, []],
+  [
+    'submitting a report for approval',
+    (s) => `/reports/${s.reports.closed}`,
+    [press('Submit for approval')],
+  ],
+  ['a report waiting for your approval', (s) => `/reports/${s.reports.toApprove}`, []],
+  [
+    'returning a report with an expense rejected',
+    (s) => `/reports/${s.reports.toApprove}`,
+    [
+      press('Return it'),
+      (page) =>
+        page
+          .getByLabel(/^Reject /)
+          .first()
+          .check(),
+    ],
+  ],
+  ['a report returned with a rejected expense', (s) => `/reports/${s.reports.returned}`, []],
+  [
+    'a rejected expense in Needs you',
+    () => '/',
+    [
+      press('Show all'),
+      (page) =>
+        expect(page.getByText(/^Its report came back with it rejected/).first()).toBeVisible(),
+    ],
+  ],
   ['a local expense needing a reason', (s) => `/expenses/${s.expenses.fallback}`, []],
   ['a local expense with its reason', (s) => `/expenses/${s.expenses.lunch}`, []],
   ['organization settings', () => '/settings/organization', []],
