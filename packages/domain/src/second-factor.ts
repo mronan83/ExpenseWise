@@ -77,10 +77,10 @@ export function afterSecondFactor(next: string | null): string {
 /*
  * Only an email a person lets in signs in, once they have an authenticator (#90, Q44,
  * ADR-0044). Each email someone signs in with is its own sign-in, with its own password and its
- * own authenticators. The first of a person's emails to pass its code is let in; from then on
- * another of theirs opens nothing until they let it in from one that passed its code, and it
- * adds its own authenticator and passes that. Email-in never asks: an email from any of their
- * addresses is still filed.
+ * own authenticators. Only the email they first signed in with is let in on its own, once it
+ * passes its code (#91, Q45); another of theirs opens nothing until they let it in from one that
+ * passed its code, and it adds its own authenticator and passes that. Email-in never asks: an
+ * email from any of their addresses is still filed.
  */
 
 /**
@@ -102,7 +102,7 @@ export type LetIn = 'no' | 'waiting' | 'yes';
  */
 export type PersonLetIn = 'none' | 'without_authenticator' | 'with_authenticator';
 
-/** What decides how far a session of one of a person's emails gets (#85, #88, #90). */
+/** What decides how far a session of one of a person's emails gets (#85, #88, #90, #91). */
 export interface SignInStanding {
   /** This email has a verified authenticator of its own. */
   readonly authenticator: boolean;
@@ -110,6 +110,12 @@ export interface SignInStanding {
   readonly personAuthenticator: boolean;
   readonly letIn: LetIn;
   readonly personLetIn: PersonLetIn;
+  /**
+   * This is the email the person first signed in with: the sign-in their membership was made
+   * with, on their first sign-in or by accepting their invite (#91, Q45). The only one let in
+   * on its own, while none of theirs is.
+   */
+  readonly firstSignIn: boolean;
 }
 
 /** What a session meets while its organization has the second factor switched on. */
@@ -118,11 +124,18 @@ export type Admission =
   | 'open'
   /** The code of its own authenticator, before anything else (#85). */
   | 'code'
-  /** It passed its own code while none of the person's emails is let in: it is, the first. */
+  /**
+   * The email the person first signed in with passed its own code while none of theirs is let
+   * in: it is, the first (#91).
+   */
   | 'let_in_first'
   /** Let in and waiting, it passed its own code: it stays let in. */
   | 'passed'
-  /** Let in, with no authenticator of its own, while another let-in email has one (#88). */
+  /**
+   * Let in, with no authenticator of its own, while another let-in email has one (#88); or the
+   * email the person first signed in with, with none of its own, while none of theirs is let in
+   * and another has one: it may add its own, and is then let in first (#91).
+   */
   | 'own_authenticator'
   /** Not let in, while the person has an authenticator that counts. */
   | 'not_let_in';
@@ -142,20 +155,23 @@ export function hasAuthenticatorThatCounts(standing: SignInStanding): boolean {
 
 /**
  * How far a session of one of a person's emails gets while their organization has the second
- * factor switched on (#85, #88, #90), from where the email stands and whether the session
+ * factor switched on (#85, #88, #90, #91), from where the email stands and whether the session
  * passed a code (aal2). Someone with no authenticator that counts isn't asked. Otherwise an
  * email that isn't let in is refused whatever its session says, its own authenticators
- * included; the one exception is the first of the person's emails to pass its own code while
- * none is let in, which is let in then. An email let in needs its own authenticator, then its
- * code; one waiting stays let in once it passes it. A session's aal2 counts only with an
- * authenticator of the email's own now: a token can read aal2 for a while after its last is
+ * included; the one exception, while none of the person's emails is let in, is the email they
+ * first signed in with, which is asked for its own code, or to add its own authenticator if it
+ * has none, and is let in once it passes it. Any other of theirs waits to be let in from it,
+ * even one that passes a code of its own first. An email let in needs its own authenticator,
+ * then its code; one waiting stays let in once it passes it. A session's aal2 counts only with
+ * an authenticator of the email's own now: a token can read aal2 for a while after its last is
  * removed.
  */
 export function admission(standing: SignInStanding, assuranceLevel: string): Admission {
   if (!hasAuthenticatorThatCounts(standing)) return 'open';
   const passedCode = assuranceLevel === 'aal2';
   if (standing.letIn === 'no') {
-    if (standing.personLetIn === 'none' && standing.authenticator) {
+    if (standing.personLetIn === 'none' && standing.firstSignIn) {
+      if (!standing.authenticator) return 'own_authenticator';
       return passedCode ? 'let_in_first' : 'code';
     }
     return 'not_let_in';

@@ -372,6 +372,13 @@
       "when": 1791169977986,
       "tag": "0052_let_in_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1791203063566,
+      "tag": "0053_first_sign_in_let_in",
+      "breakpoints": true
     }
   ]
 }

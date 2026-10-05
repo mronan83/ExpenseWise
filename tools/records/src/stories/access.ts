@@ -1650,7 +1650,7 @@ export const ACCESS_STORIES: readonly Story[] = [
     id: 'US-ACC-15',
     title: 'Only the emails I let in sign in, once I have an authenticator',
     as: 'Alex, who signs in with a personal and a work email',
-    want: 'once I have an authenticator app and my organization has the second factor on, only the emails I let in to open ExpenseWise, the first being the one I pass my code on, and to let another in from an email that has passed its code, after which it adds its own authenticator',
+    want: 'once I have an authenticator app and my organization has the second factor on, only the emails I let in to open ExpenseWise, the first being the one I first signed in with, once I pass my code on it, and to let another in from an email that has passed its code, after which it adds its own authenticator',
     soThat:
       'a stolen password for another of my emails can’t open my receipts, or everyone’s if I am an owner or finance admin, even by adding an authenticator app of its own, while the receipts I forward from it are still filed',
     feature: 'F-11',
@@ -1661,14 +1661,14 @@ export const ACCESS_STORIES: readonly Story[] = [
         id: 'AC1',
         given:
           'I have an authenticator app, none of my emails is let in yet, and my organization has the second factor switched on',
-        when: 'an email of mine with an authenticator of its own passes its code',
-        then: 'it is let in, the first, recorded in the audit trail; until then a session of it that hasn’t passed the code is asked for it, as before (US-ACC-13)',
-        decided: { by: 'owner', source: 'Q44' },
+        when: 'the email I first signed in with, with an authenticator of its own, passes its code',
+        then: 'it is let in, the first, recorded in the audit trail; until then a session of it that hasn’t passed the code is asked for it, as before (US-ACC-13). Before #91 the first of my emails to pass its code was let in, whichever it was',
+        decided: { by: 'owner', source: 'Q45' },
         checks: [
-          'domain/second-factor › lets in the first of a person’s emails to pass its own code, while none is let in',
-          'api/second-factor-everywhere › lets in the first of a person’s emails to pass its own code while none is let in, then lets it through',
-          'db/authenticators.int › lets in the first of a person’s emails to pass its code, once, with its audit event',
-          'api/second-factor-everywhere.int › lets in only the first of a person’s emails to pass its code',
+          'domain/second-factor › lets in the email a person first signed in with once it passes its own code, while none is let in',
+          'api/second-factor-everywhere › lets in the email a person first signed in with once it passes its own code while none is let in, then lets it through',
+          'db/authenticators.int › lets in the email a person first signed in with once it passes its code, once, with its audit event',
+          'api/second-factor-everywhere.int › lets in first only the email a person first signed in with, never another that passes its code first',
         ],
       },
       {
@@ -1792,12 +1792,13 @@ export const ACCESS_STORIES: readonly Story[] = [
       {
         id: 'AC12',
         given:
-          'I can’t reach the email I let in, or an email of mine was let in first by someone else (GAP-37)',
+          'I can’t reach the email I let in, or an email of mine was let in first by someone else before #91',
         when: 'the owner removes that email’s authenticator in Supabase and resets who is let in, as the runbook says',
-        then: 'none of my emails is let in, and the next of them to pass its code is the first',
+        then: 'none of my emails is let in, and the one I first signed in with is let in first again once it passes its code; if that is the email I can’t reach, the owner first names the one I still use as the first (AC20)',
         decided: { by: 'claude', source: 'ADR-0044' },
         checks: [
-          'db/authenticators.int › lets the schema owner reset who is let in, as the runbook does, and the next to pass its code is the first again',
+          'db/authenticators.int › lets the schema owner reset who is let in, as the runbook does, and the email first signed in with is let in first again',
+          'db/authenticators.int › lets no other email be let in first once the one first signed in with is unlinked, until the schema owner names another, as the runbook does (#91)',
         ],
       },
       {
@@ -1843,7 +1844,113 @@ export const ACCESS_STORIES: readonly Story[] = [
         checks: [],
         untested: 66,
       },
+      {
+        id: 'AC17',
+        given:
+          'I have an authenticator app, none of my emails is let in yet, and my organization has the second factor switched on',
+        when: 'another of my emails, not the one I first signed in with, asks for anything, even once it has an authenticator app of its own and has passed its code',
+        then: 'it is refused as not let in, naming it, before anything is read or changed, and nothing is recorded: it waits to be let in from the email I first signed in with',
+        decided: { by: 'owner', source: 'Q45' },
+        checks: [
+          'domain/second-factor › refuses another of a person’s emails that passes its own code while none is let in: it waits to be let in from the first (#91)',
+          'api/second-factor-everywhere › refuses every request of another email while none is let in, even once it passes a code of its own, records nothing and reaches nothing',
+          'db/authenticators.int › lets in only the email a person first signed in with, never another that passes its code first, and records nothing for it (#91)',
+          'api/second-factor-everywhere.int › lets in first only the email a person first signed in with, never another that passes its code first',
+        ],
+      },
+      {
+        id: 'AC18',
+        given:
+          'another of my emails has an authenticator app, the one I first signed in with has none, none is let in yet, and my organization has the second factor switched on',
+        when: 'I use the email I first signed in with',
+        then: 'it is asked to add its own authenticator app, never refused as not let in, and the app says it is the one let in first; once it adds one and passes its code it is let in, and I let my other emails in from it',
+        decided: { by: 'owner', source: 'Q45' },
+        checks: [
+          'domain/second-factor › asks the email a person first signed in with to add its own authenticator while another has one and none is let in, then lets it in (#91)',
+          'api/second-factor-everywhere › asks the email first signed in with to add its own authenticator while another has one and none is let in, never refusing it as not let in',
+          'api/second-factor-everywhere.int › asks the email first signed in with to add its own authenticator while only another has one, then lets it in first (#91)',
+          'e2e/signed-in › the email first signed in with, held for its own authenticator while none is let in',
+        ],
+      },
+      {
+        id: 'AC19',
+        given: 'a person in an organization',
+        when: 'ExpenseWise decides which of their emails they first signed in with',
+        then: 'it is the one their membership was made with: the email that first signed in and so made the organization, or the one that accepted their invite link; an email linked later never is, and a person who comes back by invite with that email keeps it',
+        decided: { by: 'claude', source: 'ADR-0044' },
+        checks: [
+          'db/authenticators.int › knows which email a person first signed in with: the one their member was made with, on their first sign-in or by an invite, never one linked later (#91)',
+        ],
+      },
+      {
+        id: 'AC20',
+        given:
+          'the email I first signed in with was unlinked, or can no longer be used, and none of my emails is let in',
+        when: 'another of my emails passes its code, or I unlink the first',
+        then: 'no other email becomes the first, so none of mine is let in on its own once one has an authenticator; the owner names the email I still use as the first and resets who is let in, as the runbook says, and it is let in once it passes its code',
+        decided: { by: 'claude', source: 'ADR-0044' },
+        checks: [
+          'domain/second-factor › lets no email in on its own once none of a person’s emails is the one they first signed in with, as when it was unlinked (#91)',
+          'db/authenticators.int › lets no other email be let in first once the one first signed in with is unlinked, until the schema owner names another, as the runbook does (#91)',
+        ],
+      },
+      {
+        id: 'AC21',
+        given: 'a session of any of my emails, whether or not it passed the code',
+        when: 'it tries to change which email I first signed in with, or to let itself in first when it isn’t that one, through the app, the API or ExpenseWise’s database role',
+        then: 'it is refused and nothing changes; only the owner, outside the app, changes which is first',
+        decided: { by: 'claude', source: 'ADR-0044' },
+        checks: [
+          'db/authenticators.int › never lets the app change which email a member first signed in with, whatever its session, in the database too (#91)',
+          'db/authenticators.int › keeps every change to the person themselves, from an email let in with its own authenticator, in the database too',
+        ],
+      },
+      {
+        id: 'AC22',
+        given:
+          'a screen whose reads were refused because this email isn’t let in, while none of my emails is',
+        when: 'it hears so',
+        then: 'the app says that only the email I first signed in with is let in on its own and this isn’t it, even with an authenticator of its own, how to let this one in from that one, that receipts sent from it are still filed, and to tell the owner if I can no longer sign in with the first; never asking for a code',
+        decided: { by: 'claude', source: 'ADR-0044' },
+        checks: [
+          'api/second-factor-everywhere › tells another email, while none is let in, to let it in from the one first signed in with, and says nothing of it once one is let in',
+          'e2e/signed-in › an email that isn’t let in while none is, refused before a read',
+        ],
+      },
+      {
+        id: 'AC23',
+        given:
+          'I am the owner, my organization has the second factor switched off, and the email I use has an authenticator and passed its code but would be refused once it is on: not the one I first signed in with while none is let in, or not let in while another is',
+        when: 'I switch the second factor on',
+        then: 'it is refused, saying which email to switch it on from, and nothing is switched, so I don’t lock out the email I am using',
+        decided: { by: 'claude', source: 'ADR-0044' },
+        checks: [
+          'api/second-factor-everywhere › refuses switching the second factor on from an email it would then refuse, and switches nothing',
+          'api/second-factor-everywhere.int › refuses switching the second factor on from an email it would then refuse (#91)',
+        ],
+      },
+      {
+        id: 'AC24',
+        given: 'I sign in with only one email',
+        when: 'I add an authenticator app and my organization has the second factor switched on',
+        then: 'nothing changes from before: it is the one I first signed in with, asked for its code and let in once I pass it',
+        decided: { by: 'claude', source: 'ADR-0044' },
+        checks: [
+          'domain/second-factor › asks the same of a person with only one email as before: it is the one they first signed in with (#91)',
+          'api/second-factor-everywhere.int › holds every request of someone with an authenticator until they pass the code, and lets go once it is removed',
+        ],
+      },
+      {
+        id: 'AC25',
+        given: 'the second factor switched off, or the server’s override has it off',
+        when: 'I use any of my emails, the first or another, none let in',
+        then: 'nothing changes: none is refused or held for which was first, and nothing is recorded',
+        decided: { by: 'owner', source: 'Q5' },
+        checks: [
+          'api/second-factor-everywhere › changes nothing for another email, or the first, while the second factor is off',
+        ],
+      },
     ],
-    note: 'Your answer of Oct 5 (Q44), B with the choice to add an authenticator to another email. That the first to pass its code is let in automatically is in #90 as you approved it; that letting an email in lapses after 24 hours unless it passes its own code, that it can be withdrawn, what the refused email may still read and how its screen reads, that no one is asked anything once every email let in has lost its authenticator, and the owner’s reset are Claude’s (ADR-0044), yours to confirm. Before any of my emails is let in, whoever has another’s password could add an authenticator to it and be let in first: GAP-37, asked as Q45. No test talks to Supabase itself: the tests stand in for its record of factors, and the screens stand in for the API’s refusals; the code asked of an email that isn’t let in, before its screen, is owed to #66.',
+    note: 'Your answer of Oct 5 (Q44), B with the choice to add an authenticator to another email, and your answer of Oct 5 to Q45, A: only the email I first signed in with is let in automatically, which until then may add its own authenticator, and any other waits to be let in from it (#91, GAP-37 closed). That letting an email in lapses after 24 hours unless it passes its own code, that it can be withdrawn, what the refused email may still read and how its screen reads, that no one is asked anything once every email let in has lost its authenticator, and the owner’s reset are Claude’s (ADR-0044), yours to confirm; so are, for #91, that the first is the email my membership was made with (the one that accepted my invite, if I was invited), that unlinking it makes no other the first until the owner names one, that the app can never change which is first, and that switching the second factor on from an email it would refuse is refused. Emails let in before #91 stay let in. No test talks to Supabase itself: the tests stand in for its record of factors, and the screens stand in for the API’s refusals; the code asked of an email that isn’t let in, before its screen, is owed to #66.',
   },
 ];

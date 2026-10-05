@@ -24,8 +24,11 @@ type Load =
   | { state: 'signed-out' }
   | { state: 'error'; message: string }
   | { state: 'ready'; signIns: SignIn[]; canLetIn: boolean }
-  /** This email needs its own authenticator before anything else (#88). */
-  | { state: 'held'; email: string | null };
+  /**
+   * This email needs its own authenticator before anything else (#88); while none of the
+   * person's emails is let in, it is the one they first signed in with (#91).
+   */
+  | { state: 'held'; email: string | null; noneLetIn: boolean };
 
 type Message = { tone: 'ok' | 'warn'; text: string } | null;
 
@@ -89,6 +92,7 @@ export default function SignInsPage() {
         setLoad({
           state: 'held',
           email: typeof named === 'string' ? named : (session.user.email ?? null),
+          noneLetIn: error.extra.noneLetIn === true,
         });
         return;
       }
@@ -205,10 +209,18 @@ export default function SignInsPage() {
               has no authenticator app of its own, and another email you sign in with has one. Your
               organization asks each of your emails for its own before anything else.
             </p>
-            <p className="text-sm text-ink-2">
-              Add one below and enter its code; then your sign-ins, receipts and everything else
-              open as before.
-            </p>
+            {load.noneLetIn ? (
+              <p className="text-sm text-ink-2">
+                It is the email you first signed in with, the one let in first. Add one below and
+                enter its code; then your sign-ins, receipts and everything else open as before, and
+                you let your other emails in from here.
+              </p>
+            ) : (
+              <p className="text-sm text-ink-2">
+                Add one below and enter its code; then your sign-ins, receipts and everything else
+                open as before.
+              </p>
+            )}
           </section>
         ) : null}
         {load.state === 'ready' ? (

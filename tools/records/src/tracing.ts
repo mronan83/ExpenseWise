@@ -142,6 +142,10 @@ export const GAPS: readonly Gap[] = [
       'Found building #90 on Oct 5. By your answer to Q44, the first of a person’s emails to pass its code is let in. Supabase Auth lets an email with no authenticator add one on its password alone, so until the person’s own email passes its code, for instance before they ever add an authenticator, whoever holds the password of another email linked to them can add theirs to it, pass its code and be let in first. The person’s own email is then refused and says it isn’t let in, which tells them; the owner removes that authenticator in Supabase and resets who is let in (the runbook).',
     fix: 'If your answer to Q45 asks for it: let in automatically only the email the person first signed in with, which until then may add its own authenticator, and refuse any other until it is let in from it (#91).',
     backlog: 91,
+    closed: {
+      date: '2026-10-05',
+      note: 'PR #61, at your answer to Q45 (ADR-0044, Which email is let in first): while the second factor is on and none of a person’s emails is let in, only the one they first signed in with is let in on its own, once it passes its code; with no authenticator of its own while another of theirs has one, it is asked to add its own, never refused. Any other is refused with 403 `sign_in_not_let_in`, its own authenticator and code included, nothing recorded, and waits to be let in from the first; the app says so. The first is the sign-in the person’s membership was made with, on their first sign-in or by accepting their invite (`members.user_id`): never one linked later, and no other when it is unlinked, until the owner names another (the runbook). The app never changes it, in the database too, and switching the second factor on from an email it would refuse is refused. Emails let in before this release stay let in.',
+    },
   },
   {
     id: 'GAP-38',
@@ -1016,6 +1020,12 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-05',
+    change:
+      'PR #61. Your folio report fixed for every organization (#92, GAP-38 closed): a credit, refund or reversal is read as its own negative line, so a hotel’s $68 credit and the two $34 parking charges it reverses both show and net out; each line is read every time it is printed, so each night’s taxes are all there; a folio’s total is the payment to the card after credits; and a reading whose lines don’t add up to its total is held for a look even when no subtotal is printed. A receipt read before needs Read again. By your answer to Q45, while the second factor is on, only the email a person first signed in with is let in on its own; any other waits to be let in from it (#91, GAP-37 closed), and switching the second factor on from an email it would refuse is refused.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-05',
     change:

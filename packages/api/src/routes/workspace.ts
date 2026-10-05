@@ -191,7 +191,11 @@ export const switchFeatureRoute = createRoute({
         SECOND_FACTOR_REFUSAL +
         ' Switching the second factor itself on always needs it, so no one is locked out.',
     ),
-    409: problem('The server overrides this feature, so a switch here would have no effect.'),
+    409: problem(
+      'The server overrides this feature, so a switch here would have no effect ' +
+        '(feature_overridden); or switching the second factor on would refuse the email ' +
+        'used, as one not let in (second_factor_would_refuse_you).',
+    ),
     503: problem('Sign-in or the database is not configured on this server.'),
   },
 });

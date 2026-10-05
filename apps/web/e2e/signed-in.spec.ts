@@ -76,10 +76,12 @@ const asksForTheCodeToRead =
 
 /**
  * The API holds this email until it adds its own authenticator, at `pattern` for `method`, as
- * it does for a person with one on another email while the second factor is on (#88).
+ * it does for a person with one on another email while the second factor is on (#88); with
+ * `noneLetIn`, as it holds the email they first signed in with while none of theirs is let in
+ * (#91).
  */
 const holdsThisEmail =
-  (pattern: string, method = 'GET'): Step =>
+  (pattern: string, method = 'GET', noneLetIn = false): Step =>
   (page) =>
     page.route(pattern, (route) =>
       route.request().method() === method
@@ -93,6 +95,7 @@ const holdsThisEmail =
               code: 'authenticator_required',
               detail: `${E2E_USER}@example.com has no authenticator app of its own, and another email you sign in with has one.`,
               email: `${E2E_USER}@example.com`,
+              ...(noneLetIn ? { noneLetIn: true } : {}),
             }),
           })
         : route.fallback(),
@@ -100,10 +103,12 @@ const holdsThisEmail =
 
 /**
  * The API refuses this email as not let in, at `pattern` for `method`, as it does once a person
- * has an authenticator and hasn't let this email in, while the second factor is on (#90).
+ * has an authenticator and hasn't let this email in, while the second factor is on (#90); with
+ * `noneLetIn`, as it refuses any but the email they first signed in with while none of theirs is
+ * let in (#91).
  */
 const refusesThisEmail =
-  (pattern: string, method = 'GET'): Step =>
+  (pattern: string, method = 'GET', noneLetIn = false): Step =>
   (page) =>
     page.route(pattern, (route) =>
       route.request().method() === method
@@ -117,6 +122,7 @@ const refusesThisEmail =
               code: 'sign_in_not_let_in',
               detail: `${E2E_USER}@example.com isn't let in to sign in.`,
               email: `${E2E_USER}@example.com`,
+              ...(noneLetIn ? { noneLetIn: true } : {}),
             }),
           })
         : route.fallback(),
@@ -483,6 +489,55 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
       (page) =>
         expect(page.getByRole('heading', { name: 'Enter your code to continue' })).toHaveCount(0),
       (page) => expect(page.getByRole('link', { name: /Settings › Sign-ins/ })).toHaveCount(0),
+    ],
+    undefined,
+    /status of 403/,
+  ],
+  [
+    'an email that isn’t let in while none is, refused before a read',
+    () => '/settings/organization',
+    [
+      refusesThisEmail('**/api/v1/settings/organization', 'GET', true),
+      (page) => page.reload({ waitUntil: 'networkidle' }),
+      (page) =>
+        expect(
+          page.getByRole('heading', { name: 'This email isn’t let in to sign in', level: 1 }),
+        ).toBeVisible(),
+      (page) =>
+        expect(
+          page.getByText(/only the email you first signed in with is let in on its own/),
+        ).toBeVisible(),
+      (page) =>
+        expect(
+          page.getByText(/To let it in, sign in with the email you first signed in with/),
+        ).toBeVisible(),
+      (page) =>
+        expect(page.getByText('Receipts you send from this email are still filed.')).toBeVisible(),
+      (page) => expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible(),
+      (page) =>
+        expect(page.getByRole('heading', { name: 'Enter your code to continue' })).toHaveCount(0),
+    ],
+    undefined,
+    /status of 403/,
+  ],
+  [
+    'the email first signed in with, held for its own authenticator while none is let in',
+    () => '/settings/organization',
+    [
+      holdsThisEmail('**/api/v1/settings/organization', 'GET', true),
+      (page) => page.reload({ waitUntil: 'networkidle' }),
+      (page) =>
+        expect(
+          page.getByRole('heading', { name: 'This email needs its own authenticator', level: 1 }),
+        ).toBeVisible(),
+      (page) =>
+        expect(
+          page.getByText(/This is the email you first signed in with, the one let in first/),
+        ).toBeVisible(),
+      (page) =>
+        expect(page.getByRole('link', { name: 'Add one in Settings › Sign-ins' })).toBeVisible(),
+      // It never sends them to the email with the authenticator, which waits to be let in.
+      (page) => expect(page.getByText(/sign in with the email that has yours/)).toHaveCount(0),
     ],
     undefined,
     /status of 403/,
