@@ -6,6 +6,7 @@ import {
 } from '@expensewise/domain';
 import { createRoute, z } from '@hono/zod-openapi';
 import { ProblemSchema } from '../schemas.ts';
+import { SECOND_FACTOR_REFUSAL } from '../second-factor.ts';
 
 const problem = (description: string) => ({
   description,
@@ -104,6 +105,12 @@ const common = {
   503: problem('Sign-in or the database is not configured on this server.'),
 };
 
+/** A change by the owner: an admin action (FR-GOV-04). */
+const ownerChange = {
+  ...common,
+  403: problem('The caller has no organization yet, or is not its owner.' + SECOND_FACTOR_REFUSAL),
+};
+
 export const getOrganizationRoute = createRoute({
   method: 'get',
   path: '/v1/settings/organization',
@@ -140,7 +147,7 @@ export const editOrganizationRoute = createRoute({
       content: { 'application/json': { schema: OrganizationSettingsSchema } },
     },
     400: problem('The request is not valid.'),
-    ...common,
+    ...ownerChange,
     422: problem('A value is not valid; `field` names it.'),
   },
 });
@@ -182,6 +189,6 @@ export const setDuplicateWindowRoute = createRoute({
       content: { 'application/json': { schema: DuplicateWindowSchema } },
     },
     400: problem('The request is not valid: a whole number of minutes, 0 to 120.'),
-    ...common,
+    ...ownerChange,
   },
 });

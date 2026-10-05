@@ -11,6 +11,7 @@ import { featureGate, type FeatureGate } from './features.ts';
 import type { MileageRateSettings, MileageRateStore } from './mileage-rates.ts';
 import { rateView } from './mileage-views.ts';
 import { ProblemError } from './problem.ts';
+import { requireAdminSecondFactor } from './second-factor.ts';
 import { getMileageRatesRoute, setMileageRateRoute } from './routes/mileage-rates.ts';
 import type { WorkspaceStore } from './workspace.ts';
 
@@ -117,6 +118,7 @@ export function registerMileageRateRoutes(
         detail: 'What drives are paid at is set by an owner or a finance admin.',
       });
     }
+    await requireAdminSecondFactor(features, who.orgId, caller);
     const { effectiveFrom } = c.req.valid('param');
     const { perMile } = c.req.valid('json');
     const result = await stores().rates.set(

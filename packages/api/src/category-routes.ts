@@ -1,7 +1,7 @@
 import type { CatalogDeletion, CatalogWrite, Membership } from '@expensewise/db';
 import type { MemberRole } from '@expensewise/domain';
 import type { OpenAPIHono } from '@hono/zod-openapi';
-import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
+import { requireIdentity, type AuthVariables, type Identity, type TokenVerifier } from './auth.ts';
 import type { CategoryStore } from './categories.ts';
 import { catalogView, categoryView, detailWithCategory, typeView } from './category-views.ts';
 import type { ExpenseStore } from './expenses.ts';
@@ -9,6 +9,7 @@ import { featureGate, type FeatureGate } from './features.ts';
 import type { ItemizedStore } from './itemized.ts';
 import { itemizedSections } from './itemized-routes.ts';
 import { ProblemError } from './problem.ts';
+import { requireAdminSecondFactor } from './second-factor.ts';
 import {
   classifyExpenseRoute,
   createCategoryRoute,
@@ -107,14 +108,18 @@ export function registerCategoryRoutes(
     await features.require(membership.orgId, FLAG);
     return membership;
   };
-  /** The caller's membership, when they may change the lists. */
-  const manager = async (userId: string): Promise<Membership> => {
-    const membership = await member(userId);
+  /**
+   * The caller's membership, when they may change the lists: past the second factor while it
+   * is on (FR-GOV-04).
+   */
+  const manager = async (identity: Identity): Promise<Membership> => {
+    const membership = await member(identity.userId);
     if (!MANAGER_ROLES.has(membership.role)) {
       throw new ProblemError(403, 'forbidden', 'Only an owner or finance admin can do this', {
         code: 'forbidden_role',
       });
     }
+    await requireAdminSecondFactor(features, membership.orgId, identity);
     return membership;
   };
   const notFound = (what: string) =>
@@ -156,7 +161,7 @@ export function registerCategoryRoutes(
 
   app.openapi(createCategoryRoute, async (c) => {
     const { userId } = c.var.identity;
-    const who = await manager(userId);
+    const who = await manager(c.var.identity);
     const result = await store().saveCategory(
       who.orgId,
       null,
@@ -169,7 +174,7 @@ export function registerCategoryRoutes(
 
   app.openapi(updateCategoryRoute, async (c) => {
     const { userId } = c.var.identity;
-    const who = await manager(userId);
+    const who = await manager(c.var.identity);
     const { categoryId } = c.req.valid('param');
     const result = await store().saveCategory(
       who.orgId,
@@ -183,7 +188,7 @@ export function registerCategoryRoutes(
 
   app.openapi(deleteCategoryRoute, async (c) => {
     const { userId } = c.var.identity;
-    const who = await manager(userId);
+    const who = await manager(c.var.identity);
     const { categoryId } = c.req.valid('param');
     deleted(await store().deleteCategory(who.orgId, categoryId, userId), 'category');
     return c.body(null, 204);
@@ -191,7 +196,7 @@ export function registerCategoryRoutes(
 
   app.openapi(createTypeRoute, async (c) => {
     const { userId } = c.var.identity;
-    const who = await manager(userId);
+    const who = await manager(c.var.identity);
     const result = await store().saveType(
       who.orgId,
       null,
@@ -204,7 +209,7 @@ export function registerCategoryRoutes(
 
   app.openapi(updateTypeRoute, async (c) => {
     const { userId } = c.var.identity;
-    const who = await manager(userId);
+    const who = await manager(c.var.identity);
     const { typeId } = c.req.valid('param');
     const result = await store().saveType(
       who.orgId,
@@ -218,7 +223,7 @@ export function registerCategoryRoutes(
 
   app.openapi(deleteTypeRoute, async (c) => {
     const { userId } = c.var.identity;
-    const who = await manager(userId);
+    const who = await manager(c.var.identity);
     const { typeId } = c.req.valid('param');
     deleted(await store().deleteType(who.orgId, typeId, userId), 'type');
     return c.body(null, 204);

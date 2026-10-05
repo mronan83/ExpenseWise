@@ -65,6 +65,12 @@ export const FLAGS = {
     description:
       'How the models compare shows the 95th-percentile time from capture to Ready (GAP-16, #32).',
   },
+  'receipts.unfiled-emails': {
+    name: 'Emails that filed nothing',
+    description:
+      'An email from your own address that filed no receipt shows in Needs you, with why and ' +
+      'what to do (FR-CAP-02, #59).',
+  },
   'receipts.journeys': {
     name: 'Journeys and stays',
     description:
@@ -89,11 +95,23 @@ export const FLAGS = {
     name: 'Report export',
     description: 'Export a closed report as CSV or PDF (FR-SET-01, #25).',
   },
+  'reports.approval': {
+    name: 'Approval',
+    description:
+      'Submit a report for approval: its approver approves it, or returns it with each rejected ' +
+      'expense and why; a one-person organization self-attests (FR-GOV-02, FR-GOV-03, #24).',
+  },
   'governance.audit-trail': {
     name: 'Audit trail',
     description:
       'Settings › Audit trail: every record’s history, with the hash chain checked on screen ' +
       '(FR-GOV-06, #26).',
+  },
+  'security.second-factor': {
+    name: 'Second factor',
+    description:
+      'A code from an authenticator app at sign-in once you enroll one in Settings › Sign-ins, ' +
+      'required to approve someone else’s spend and for admin actions (FR-PLT-03, FR-GOV-04, #8).',
   },
   'team.invites': {
     name: 'Invite people',

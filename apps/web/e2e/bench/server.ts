@@ -14,6 +14,7 @@ import { createServer } from 'node:http';
 import { deflateSync } from 'node:zlib';
 import {
   createHttpApp,
+  dbApprovalStore,
   createSecretBox,
   dbAuditStore,
   dbCategoryStore,
@@ -31,15 +32,20 @@ import {
   dbRouteKeyStore,
   dbRouteMileageStore,
   dbTripStore,
+  dbUnfiledEmailStore,
   dbWorkspaceStore,
   ORG_FEATURE_KEYS,
 } from '@expensewise/api';
 import {
   createDatabase,
+  findMemberships,
+  recordInboundEmail,
   ROUTE_MEASURE_REQUESTED,
   runReportSchedule,
   setRolePasswords,
+  withOrg,
 } from '@expensewise/db';
+import { derivedId } from '@expensewise/domain';
 import { runMigrations } from '@expensewise/db/migrate';
 import { COMPARISON_MODELS, FALLBACK_MODEL, type ModelId } from '@expensewise/extraction';
 import {
@@ -306,7 +312,9 @@ const app = createHttpApp({
     Promise.resolve({
       userId: token,
       email: `${token}@example.com`,
-      assuranceLevel: 'aal1',
+      // Past the second factor, as the owner who switched it on must be (F-11): every feature
+      // is switched on below, the second factor too, and admin changes then need it.
+      assuranceLevel: 'aal2',
       sessionId: 'bench',
       issuedAt: new Date(),
     }),
@@ -322,11 +330,13 @@ const app = createHttpApp({
   home: dbHomeStore(db),
   people: dbPeopleStore(db),
   reports: dbReportStore(db),
+  approvals: dbApprovalStore(db),
   audit: dbAuditStore(db),
   categories: dbCategoryStore(db),
   itemized: dbItemizedStore(db),
   modelSettings: dbModelSettingsStore(db),
   reimbursement: dbReimbursementStore(db),
+  emails: dbUnfiledEmailStore(db),
   files: store,
   dispatch,
   secrets: createSecretBox('bench-only-secret-0123456789'),
@@ -734,9 +744,13 @@ await call('POST', `/v1/receipts/${receipts.parking}/corrections`, {
 });
 const expenseOf = async (name: string) =>
   (await call<{ expenseId: string }>('GET', `/v1/receipts/${receipts[name]}`)).expenseId;
+// It claims less than its receipt, saying why, as approval requires (FR-EXP-10).
 await call('PATCH', `/v1/expenses/${await expenseOf('coffee')}`, {
-  amount: '7.25',
+  amount: '4.25',
   merchant: 'Blue Bottle Coffee — Oxbow Public Market',
+});
+await call('PUT', `/v1/expenses/${await expenseOf('coffee')}/claim-reason`, {
+  reason: 'A pastry for a friend was on the same receipt.',
 });
 await call('PUT', `/v1/expenses/${await expenseOf('lufthansa')}/trip`, { tripId: trips.omaha.id });
 // Categories and types (FR-EXP-11): the hotel folio's chosen by hand; the rest show a
@@ -779,6 +793,13 @@ expenses.mileage = (
     miles: '38.4',
   })
 ).id;
+// And the drive home on its last day, Oct 1, so Home shows October's business miles (#73).
+await call('POST', '/v1/mileage', {
+  date: '2026-10-01',
+  destination: '12 Elm St, Omaha',
+  purpose: 'Drive home from the airport after the Q4 architect meeting',
+  miles: '36.15',
+});
 // The organization's own rate a mile from Nov 1, and the IRS rate again from Mar 1 (Q28, #77),
 // set after the drive, which keeps the IRS rate it was logged at.
 await call('PUT', '/v1/settings/mileage-rates/2026-11-01', { perMile: '0.65' });
@@ -832,6 +853,54 @@ const open = (
   await call<{ trips: { id: string; reportId: string | null }[] }>('GET', '/v1/trips')
 ).trips.find((t) => t.id === trips.omaha.id)?.reportId;
 if (!open) throw new Error('The schedule put no trip on a report');
+// Approval (#24): Sam's drive goes on a report of its own, submitted to Riley, the only one
+// who can approve it then. Casey then joins as an approver, Riley's own drive is submitted to
+// Casey, and Casey returns it with the drive rejected.
+const drive = (who: string, date: string, destination: string, purpose: string) =>
+  callAs<{ id: string }>(who, 'POST', '/v1/mileage', { date, destination, purpose, miles: '14' });
+const submitted = async (who: string, expenseId: string) => {
+  const { reportId } = await callAs<{ reportId: string }>(
+    who,
+    'PUT',
+    `/v1/expenses/${expenseId}/report`,
+    { newReport: true },
+  );
+  await callAs(who, 'POST', `/v1/reports/${reportId}/close`);
+  await callAs(who, 'POST', `/v1/reports/${reportId}/submit`);
+  return reportId;
+};
+const samDrive = await drive('sam', '2026-09-15', 'Acme HQ', 'Client visit at Acme');
+const toApprove = await submitted('sam', samDrive.id);
+const casey = await call<Made>('POST', '/v1/settings/people/invites', {
+  role: 'approver',
+  label: 'Casey',
+});
+await callAs('casey', 'POST', '/v1/invites/accept', { token: casey.token });
+const officeDrive = await drive('riley', '2026-09-16', 'The office', 'Drive to the office');
+const returned = await submitted(E2E_USER, officeDrive.id);
+await callAs('casey', 'POST', `/v1/reports/${returned}/return`, {
+  comment: 'Claim client visits only: the office isn’t one',
+  rejections: [{ expenseId: officeDrive.id, reason: 'A drive to your own office is commuting' }],
+});
+// Who approves whose reports (#86): Riley chooses Casey for Sam, after Sam's report went to
+// Riley, where it stays. Riley chose Sam for Riley's own while Sam was an approver; Sam is a
+// member again, so Riley's go to Casey, as Automatic finds, and People says so.
+const { people: listed } = await call<{ people: { id: string; name: string; you: boolean }[] }>(
+  'GET',
+  '/v1/settings/people',
+);
+const personId = (found: { id: string } | undefined) => {
+  if (!found) throw new Error('The bench is missing someone in People');
+  return found.id;
+};
+const samId = personId(listed.find((p) => p.name === 'sam'));
+const caseyId = personId(listed.find((p) => p.name === 'casey'));
+const rileyId = personId(listed.find((p) => p.you));
+await call('PUT', `/v1/settings/people/${samId}/approver`, { approverId: caseyId });
+await call('PATCH', `/v1/settings/people/${samId}`, { role: 'approver' });
+await call('PUT', `/v1/settings/people/${rileyId}/approver`, { approverId: samId });
+await call('PATCH', `/v1/settings/people/${samId}`, { role: 'member' });
+
 // The organization's details and its duplicate window (#63, #64), set after the reports so
 // they open as they always have.
 await call('PATCH', '/v1/settings/organization', {
@@ -857,6 +926,37 @@ const ecb = (url: string) => {
   return Promise.resolve(new Response(csv.join('\n'), { status: 200 }));
 };
 await convertOrganization(conversionPorts({ db, fetch: ecb as typeof fetch }), organization.id);
+// Two emails from Riley's own address that filed nothing (#59), kept as the email workflow keeps
+// them: one a mail system changed after it was signed, so nothing proved it was Riley's, and
+// one with nothing in it to read.
+const [riley] = await findMemberships(db, E2E_USER);
+if (!riley) throw new Error('The bench has no membership for its user');
+for (const [n, subject, status, senderProblem] of [
+  [1, 'Fwd: Your Tuesday evening trip with Uber', 'unverified', 'signature_failed'],
+  [2, 'Receipt', 'no_attachments', null],
+] as const) {
+  await withOrg(db, organization.id, (tx) =>
+    recordInboundEmail(
+      tx,
+      organization.id,
+      {
+        id: derivedId(`bench-email:${n}`),
+        memberId: riley.memberId,
+        provider: 'bird',
+        providerMessageId: `rem_bench_${n}`,
+        fromAddress: `${E2E_USER}@example.com`,
+        subject,
+        sentAt: new Date(),
+        status,
+        senderProblem,
+        bodyText: null,
+      },
+      [],
+      E2E_USER,
+    ),
+  );
+}
+
 const seeded: Seeded = {
   trips: {
     omaha: trips.omaha.id,
@@ -866,7 +966,7 @@ const seeded: Seeded = {
   },
   receipts,
   expenses,
-  reports: { open, closed },
+  reports: { open, closed, toApprove, returned },
   invites: { join: join.token, revoked: revoked.token },
 };
 

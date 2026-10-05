@@ -366,4 +366,65 @@ export const RULES: readonly Rule[] = [
     decided: { by: 'claude', source: 'ADR-0041' },
     code: { file: 'packages/domain/src/itemized.ts', constant: 'SPLIT_PARTS_MAX', literal: '20' },
   },
+  {
+    id: 'R-UNFILED-EMAIL-DAYS',
+    name: 'How long an email that filed nothing stays in Needs you',
+    value: '30 days from when it arrived, unless dismissed first',
+    decided: { by: 'claude' },
+    code: {
+      file: 'packages/domain/src/unfiled-emails.ts',
+      constant: 'UNFILED_EMAIL_DAYS',
+      literal: '30',
+    },
+    note: 'A month, about as long as a report stays open (R-REPORT-WINDOW) and as long as Bird keeps the message as it arrived (ADR-0026): by then its receipt has been attached or it no longer matters. Claude’s, yours to confirm.',
+  },
+  {
+    id: 'R-SECOND-FACTOR-CODE',
+    name: 'The code from an authenticator app',
+    value: '6 digits, a new one every 30 seconds; spaces and a dash in what is typed are ignored',
+    decided: { by: 'blueprint', source: 'ADR-0013' },
+    code: {
+      file: 'packages/domain/src/second-factor.ts',
+      constant: 'SECOND_FACTOR_CODE_LENGTH',
+      literal: '6',
+    },
+    note: 'TOTP as Supabase Auth issues and checks it (RFC 6238); the app only reads what is typed before sending it.',
+  },
+  {
+    id: 'R-AUTHENTICATORS-MAX',
+    name: 'Most authenticator apps one person keeps',
+    value: '10',
+    decided: { by: 'claude', source: 'ADR-0042' },
+    code: {
+      file: 'packages/domain/src/second-factor.ts',
+      constant: 'MAX_AUTHENTICATORS',
+      literal: '10',
+    },
+    note: 'Supabase Auth’s own default limit on a person’s factors. Settings › Sign-ins stops offering another at 10.',
+  },
+  {
+    id: 'R-LET-IN-HOURS',
+    name: 'How long an email let in from another has to pass its own code',
+    value:
+      '24 hours from being let in; then letting it in lapses, unless it has added its own authenticator and passed its code, after which it stays let in until withdrawn',
+    decided: { by: 'claude', source: 'ADR-0044' },
+    code: {
+      file: 'packages/domain/src/second-factor.ts',
+      constant: 'LET_IN_HOURS',
+      literal: '24',
+    },
+    note: 'Letting an email in opens the one window in which its password alone can add an authenticator (GAP-36), so it is kept short: a day is long enough to sign in with it and add one, and letting it in again is one tap from an email let in. Counted by the database’s clock. Claude’s, yours to confirm.',
+  },
+  {
+    id: 'R-APPROVAL-NOTE-MAX',
+    name: 'Longest reason for claiming less, comment on a return, or reason for a rejection',
+    value: '500 characters each',
+    decided: { by: 'claude', source: 'ADR-0043' },
+    code: {
+      file: 'packages/domain/src/approvals.ts',
+      constant: 'APPROVAL_NOTE_MAX',
+      literal: '500',
+    },
+    note: 'The same as a local expense’s justification (R-JUSTIFICATION-MAX): long enough to explain, short enough to read on a phone.',
+  },
 ];

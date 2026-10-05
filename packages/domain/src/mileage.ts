@@ -146,6 +146,17 @@ export function rateDecimal(rate: Pick<MileageRate, 'perUnit' | 'currency'>): st
 /** Miles as shown and compared: "38.40" is "38.4", and "12.00" is "12". */
 export const plainMiles = (miles: string): string => trimmed(miles, 0);
 
+/**
+ * Miles added up exactly, never through a float, as shown: "38.40", "12" and "0.25" are
+ * "50.65", and none is "0". Each is a plain decimal, as a drive's miles are kept.
+ */
+export function sumMiles(miles: readonly string[]): string {
+  const parsed = miles.map(parseDecimal);
+  const scale = Math.max(0, ...parsed.map((d) => d.scale));
+  const total = parsed.reduce((sum, d) => sum + d.units * pow10(scale - d.scale), 0n);
+  return plainMiles(formatUnits(total, scale));
+}
+
 export const MILEAGE_FIELDS = ['date', 'destination', 'purpose', 'miles'] as const;
 export type MileageField = (typeof MILEAGE_FIELDS)[number];
 

@@ -18,11 +18,12 @@ export const DOMAINS: readonly Domain[] = [
   {
     name: 'Organizations and people',
     about:
-      'Who is in which organization and what its owner keeps about it, with what role, how they sign in and the links that let someone join, the AI keys and the routing key an organization brings, the AI models it reads receipts with, and the features its owner has switched on.',
+      'Who is in which organization and what its owner keeps about it, with what role, how they sign in and which of their emails they let in, the links that let someone join, the AI keys and the routing key an organization brings, the AI models it reads receipts with, and the features its owner has switched on.',
     tables: [
       'organizations',
       'members',
       'member_sign_ins',
+      'let_in_sign_ins',
       'member_invites',
       'ai_provider_keys',
       'route_service_keys',
@@ -65,8 +66,9 @@ export const DOMAINS: readonly Domain[] = [
   },
   {
     name: 'Reports and approval',
-    about: 'Expenses gathered for submission, and each approver’s decision.',
-    tables: ['reports', 'approval_steps'],
+    about:
+      'Expenses gathered for submission, each approver’s decision, and the expenses a returned report rejected, with why.',
+    tables: ['reports', 'approval_steps', 'expense_rejections'],
   },
   {
     name: 'Trail and delivery',
@@ -89,11 +91,15 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   members: {
     about:
-      'A person in an organization, with their role, for approval routing their manager (FR-GOV-01), and the currency they are reimbursed in, once they choose one in Settings; until then, their organization’s home currency (FR-EXP-13, Q23). An owner can change the role or remove them; a removed member keeps their row, their records and their history, signs in here no more, and comes back as the same member if invited again (FR-PLT-07, ADR-0035). The role also decides whose records they see: their own, or everyone’s for owners, finance admins and auditors.',
+      'A person in an organization, with their role, the approver an owner chose for their reports in Settings › People, empty for Automatic (FR-GOV-01, FR-GOV-02, #86), and the currency they are reimbursed in, once they choose one in Settings; until then, their organization’s home currency (FR-EXP-13, Q23). An owner can change the role or remove them; a removed member keeps their row, their records and their history, signs in here no more, and comes back as the same member if invited again (FR-PLT-07, ADR-0035). The role also decides whose records they see: their own, or everyone’s for owners, finance admins and auditors.',
   },
   member_sign_ins: {
     about:
-      'The sign-ins that reach a member. One person can have several, such as a personal and a work email, and approvals still see one person (ADR-0016).',
+      'The sign-ins that reach a member. One person can have several, such as a personal and a work email, and approvals still see one person (ADR-0016). Every one of them files the receipts emailed from its address, let in or not (#90).',
+  },
+  let_in_sign_ins: {
+    about:
+      'The sign-ins a person has let in (#90, Q44, ADR-0044). While their organization has the second factor on and they have an authenticator, only an email let in opens the app; the others still forward receipts. The first of their emails to pass its code is let in then, having passed it. Another is let in from an email let in that passed its code, and waits, with when it lapses, 24 hours on (`LET_IN_HOURS`), until it adds its own authenticator and passes its code; then it is let in for good, with when it passed. A lapsed one counts for nothing and stays until it is let in again. Withdrawing one deletes it, and removing its sign-in removes it too. Only the person, from a session of an email with its own authenticator that passed the code, changes it (`enforce_let_in`); each change is in the audit trail.',
   },
   member_invites: {
     about:
@@ -133,11 +139,11 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   inbound_emails: {
     about:
-      'An email a member sent to the receipts address, kept once per provider message: who sent it, its subject, whether its sender was proved, how many receipts it filed (its attachments, or with none its own text as a PDF) and, when proved, its text (at most 64 KiB). Mail from anyone who is not a member is never kept (ADR-0026, ADR-0027, FR-CAP-02).',
+      'An email a member sent to the receipts address, kept once per provider message: who sent it, its subject, whether its sender was proved and, when not, why (`sender_problem`, kept since PR #60), how many receipts it filed (its attachments, or with none its own text as a PDF) and, when proved, its text (at most 64 KiB). Mail from anyone who is not a member is never kept (ADR-0026, ADR-0027, FR-CAP-02). One that filed nothing, unproved or with nothing in it to read, is in its member’s Needs you while `receipts.unfiled-emails` is on, for 30 days through the member-and-arrival index, until they dismiss it: `dismissed_at` is the one column the app may change, set once, by the member, with its audit event; the row is otherwise as it arrived (#59).',
   },
   expenses: {
     about:
-      'What is claimed: merchant, date, amount and currency, its status, and the trip it is filed to. It also carries when and where it was bought, as its receipt prints them: a local time with its time zone, worked out offline from the city, region and country, and the address (FR-INT-17, ADR-0030). It follows its receipt until a person edits it (ADR-0022) and files to trips by date until a person chooses (ADR-0023). One with a date and no trip is local: it carries a justification and points at its report itself, while one on a trip goes with the trip’s report (FR-EXP-14, ADR-0029). A drive is an expense with source `mileage` and a mileage log (ADR-0038). With Journeys and stays on, it carries where a ride, flight or train went (`journey_from`, `journey_to`, as printed) and a hotel stay’s `check_in` and `check_out` days, which follow the receipt the same way and are edited the same way; the nights are worked out from the two days when shown, never stored (FR-INT-20, FR-INT-21, ADR-0040). Home sums a member’s month through the member-and-date index, so it needs no index of its own. It carries the category and type a person chose, with when, all three together or none (FR-EXP-11); a suggestion is never stored, and suggestions read a member’s past choices through the member-and-chosen-at index (FR-INT-10, ADR-0036). Its Phase 0 columns for one converted amount (`home_amount_minor`, `fx_rate`, `fx_rate_date`, `fx_source`) assume one home currency per organization and stay unused: conversions are kept in `expense_conversions` (ADR-0034). Its amount is the claim: its receipt’s total less each line left out of it with its share of the tax, tip and fees, so reports, Home and conversion follow an exclusion with nothing of their own (ADR-0041).',
+      'What is claimed: merchant, date, amount and currency, its status, and the trip it is filed to. It also carries when and where it was bought, as its receipt prints them: a local time with its time zone, worked out offline from the city, region and country, and the address (FR-INT-17, ADR-0030). It follows its receipt until a person edits it (ADR-0022) and files to trips by date until a person chooses (ADR-0023). One with a date and no trip is local: it carries a justification and points at its report itself, while one on a trip goes with the trip’s report (FR-EXP-14, ADR-0029). A drive is an expense with source `mileage` and a mileage log (ADR-0038). With Journeys and stays on, it carries where a ride, flight or train went (`journey_from`, `journey_to`, as printed) and a hotel stay’s `check_in` and `check_out` days, which follow the receipt the same way and are edited the same way; the nights are worked out from the two days when shown, never stored (FR-INT-20, FR-INT-21, ADR-0040). Home sums a member’s month through the member-and-date index, so it needs no index of its own. It carries the category and type a person chose, with when, all three together or none (FR-EXP-11); a suggestion is never stored, and suggestions read a member’s past choices through the member-and-chosen-at index (FR-INT-10, ADR-0036). Its Phase 0 columns for one converted amount (`home_amount_minor`, `fx_rate`, `fx_rate_date`, `fx_source`) assume one home currency per organization and stay unused: conversions are kept in `expense_conversions` (ADR-0034). Its amount is the claim: its receipt’s total less each line left out of it with its share of the tax, tip and fees, so reports, Home and conversion follow an exclusion with nothing of their own (ADR-0041). It keeps why it claims less than its receipt, in its member’s words, 1 to 500 characters (FR-EXP-10), and, from when its report was last submitted, its category’s and type’s names as they were then (`category_name`, `type_name`), which a submitted claim and its export show from then on (NFR-DAT-04, ADR-0043). Approved, it is locked: nothing changes it but settling it.',
   },
   expense_conversions: {
     about:
@@ -153,7 +159,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   expense_parts: {
     about:
-      'The parts of a split expense (FR-EXP-15, Q35): each with a category and type and an amount in the expense’s currency, together its claim exactly. Split by line, they are worked out from the lines’ categories and types whenever those or an exclusion change, and the part with no category and type is the lines left with the expense’s own; split by amount, a person typed each, at least two. Reports total by them, and the export writes a row each.',
+      'The parts of a split expense (FR-EXP-15, Q35): each with a category and type and an amount in the expense’s currency, together its claim exactly. Split by line, they are worked out from the lines’ categories and types whenever those or an exclusion change, and the part with no category and type is the lines left with the expense’s own; split by amount, a person typed each, at least two. Reports total by them, and the export writes a row each. Submitting its expense’s report copies each part’s category and type names onto it, which the submitted claim shows from then on (NFR-DAT-04).',
   },
   trips: {
     about:
@@ -193,11 +199,15 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   reports: {
     about:
-      'A member’s claim for reimbursement: the trips and local expenses that point at it, when it closes itself (day 28, later if reopened), and when it closed. Open, then closed by the person or on day 28, reopenable until submitted; approval follows with #24 (FR-EXP-05, FR-EXP-12, ADR-0029). Its currency is the one it is reimbursed in: while currency conversion is on, its member’s, which it opens in and follows until it is submitted; otherwise the organization’s home currency (FR-EXP-13, ADR-0034).',
+      'A member’s claim for reimbursement: the trips and local expenses that point at it, when it closes itself (day 28, later if reopened), and when it closed. Open, then closed by the person or on day 28, reopenable until submitted; with approval on, submitted by its member and waiting for approval, then approved, or returned and open again (FR-EXP-05, FR-EXP-12, ADR-0029, ADR-0043). One that has been through approval is never dropped. Its currency is the one it is reimbursed in: while currency conversion is on, its member’s, which it opens in and follows until it is submitted; otherwise the organization’s home currency (FR-EXP-13, ADR-0034).',
   },
   approval_steps: {
     about:
-      'Each approver’s decision on a report, in order. Returning a report needs a comment (FR-GOV-02, #24).',
+      'One step per submission of a report, numbered: the approver it went to, pending until decided, then who decided, approved or returned, when and with what comment; a return needs one (FR-GOV-02, ADR-0043). Only the report’s own member adds one, and only a pending one is decided, by whoever may decide it. The approver it names sees the report and what is on it.',
+  },
+  expense_rejections: {
+    about:
+      'Each expense a returned report rejected, with why, once per step and expense: one the review rejected on its own because it differs from its receipt (`automatic`), or one its approver rejected in their words (FR-GOV-10 to FR-GOV-12). Kept with the step that returned it, so each round stays as it was; the latest round’s show on the report and in Needs you until it is submitted again. Its expense’s member’s under the own-records rules, written by the person deciding as a decision allows, never changed, and deleted just before its expense.',
   },
   audit_events: {
     about:
@@ -231,7 +241,29 @@ export const FUNCTIONS: Readonly<Record<string, string>> = {
   app_record_owner:
     'The member a row belongs to: its own `member_id`, or that of the receipt or expense it hangs off, looked up under the caller’s own row-level security.',
   enforce_own_records:
-    'Fires before every insert, update and delete of a member’s records and what hangs off them, and refuses one the acting member may not change with an error, so the whole transaction, its audit event included, rolls back. Silent for the system (ADR-0035).',
+    'Fires before every insert, update and delete of a member’s records and what hangs off them, and refuses one the acting member may not change with an error, so the whole transaction, its audit event included, rolls back. Silent for the system (ADR-0035). While a transaction decides a report, it also lets whoever may decide it change that report’s status and times and its expenses’ status, and add its rejections, and nothing else (ADR-0043).',
+  app_expense_report:
+    'The report an expense is on: its own, as a local expense, or its trip’s. Runs as its owner, so a policy can ask it without the policies of trips calling back into it.',
+  app_report_of_expense:
+    'The report an expense, by its id, is on, as `app_expense_report` finds it.',
+  app_approver_of:
+    'Whether the acting member is the approver a step of a report went to; the own-records policies on reports, trips, expenses and receipts show them that report and what is on it. Runs as its owner (ADR-0043).',
+  app_deciding_report:
+    'The report the current transaction decides, from `app.deciding_report`, which `decideReport()` sets for that transaction only.',
+  app_may_decide:
+    'Whether the acting member may decide someone else’s report now: it waits on a pending step, they have an approving role, and they are the approver it went to or an owner or finance admin; the database’s twin of `mayDecide()`. Runs as its owner.',
+  app_self_attests:
+    'Whether the acting member self-attests a report: their own, with an approving role, in an organization of one active member; the database’s twin of the self-attestation in `canApprove()`.',
+  app_row_report:
+    'The report a row of reports, expenses or expense rejections is on, as a decision sees it.',
+  app_decision_change:
+    'Whether a change touches only what a decision changes: a report’s status and the times that go with it, or an expense’s status.',
+  enforce_approval_steps:
+    'Fires before every insert, update and delete of an approval step for a member: only a report’s own member routes it, only a pending step is decided, by whoever may decide its report or a one-person organization’s owner on their own, and a member deletes none. Silent for the system.',
+  delete_expense_rejections:
+    'Fires before an expense is deleted and deletes its rejections first, while the expense is still there to say whose they are, so its member can delete the receipt that proves it. The foreign key’s cascade stays as a backstop.',
+  lock_approved_expenses:
+    'Fires before every update of an expense and refuses any change to an approved or settled one but settling it, whoever asks, the system included: an approved claim is corrected by a reversal and a new version (FR-EXP-03, #87).',
   app_invite_hash:
     'The SHA-256 of the invite token the API was given, from `app.invite_hash`. Lets the person holding a link see that one invite before they belong to its organization; the API clears it once read.',
   delete_receipt:
@@ -242,9 +274,19 @@ export const FUNCTIONS: Readonly<Record<string, string>> = {
   conversion_work_due:
     'Which organizations have amounts to convert at a moment: an open or closed report in another currency than its member’s, or an amount on one in another currency than the report’s with no conversion recorded for exactly it, its purchase date before that day. Only organizations whose owner switched currency conversion on count, unless the server’s override has it on for all. The hourly sweep asks it outside any organization; it runs as its owner and answers with organization ids only (ADR-0034).',
   report_work_due:
-    'Which organizations have report work due at a moment: a trip or local expense whose time to join a report has come, an open report on its day 28, or one with nothing to claim. The 24 hours are counted in the organization’s time zone when it keeps one, and at UTC−12 otherwise; it reads the zone whether or not the feature is on, so it may name an organization a few hours early, never late, and the run inside finds nothing due (ADR-0037). The hourly schedule asks it outside any organization; it runs as its owner and answers with organization ids only (ADR-0029).',
+    'Which organizations have report work due at a moment: a trip or local expense whose time to join a report has come, an open report on its day 28, or one with nothing to claim that has never been through approval. The 24 hours are counted in the organization’s time zone when it keeps one, and at UTC−12 otherwise; it reads the zone whether or not the feature is on, so it may name an organization a few hours early, never late, and the run inside finds nothing due (ADR-0037). The hourly schedule asks it outside any organization; it runs as its owner and answers with organization ids only (ADR-0029).',
   member_for_sign_in_email:
     'Which member signs in with an email address, case aside, and that sign-in’s user, for an arriving email that names no organization yet. Runs as its owner and returns ids only, so the app still can’t read sign-ins outside an organization (ADR-0026).',
+  sign_in_has_authenticator:
+    'Whether a sign-in, a Supabase Auth user, has a verified second factor such as an authenticator app, read from Supabase Auth’s own `auth.mfa_factors` as it is asked: yes or no, and nothing else of Supabase’s. The API asks it in the query that finds each request’s caller, so the second factor holds every request of someone with one (ADR-0044). Runs as its owner, which can read Supabase’s auth schema, where the app has no right; only the app may call it. No if the id isn’t a UUID, and on plain Postgres, which has no Supabase Auth. Nothing the app writes changes the answer, so removing an authenticator in Supabase takes effect on the next request.',
+  person_has_authenticator:
+    'Whether the person a sign-in belongs to has a verified second factor on any email they sign in with: this sign-in, or another linked to the same member. Asked beside `sign_in_has_authenticator` in the query that finds each request’s caller, it tells the API, before any of the person’s emails is let in, that an email of theirs isn’t let in while another has an authenticator (#88, #90, ADR-0044). Yes or no, and nothing else: not which email has one, or any email. It reads Supabase Auth only through `sign_in_has_authenticator`, and runs as its owner because, before an organization is chosen, the app sees only its own sign-in; only the app may call it. No for a sign-in no member has, and on plain Postgres. Removing a person’s only authenticator in Supabase frees their other emails on the next request.',
+  sign_in_let_in:
+    'Whether a sign-in is let in (#90, ADR-0044): `yes`, let in and past its own code; `waiting`, let in from another of the person’s emails until it passes its own code or lapses; `no`, a lapsed one included. Asked in the query that finds each request’s caller, beside the authenticator questions. Nothing else. Runs as its owner because, before an organization is chosen, the app sees no let-in row; only the app may call it.',
+  person_let_in:
+    'The emails the person a sign-in belongs to has let in (#90, ADR-0044): `none`; `without_authenticator`, some, none of which has a verified factor now; `with_authenticator`. With the other three answers it decides how far a session gets: once one let in has an authenticator, an email not let in is refused. Reads Supabase Auth only through `sign_in_has_authenticator`, so removing every authenticator of the emails let in frees all the person’s emails on the next request. Nothing else: not which email, how many, or any email. Runs as its owner, as `person_has_authenticator` does; only the app may call it. `none` for a sign-in no member has.',
+  enforce_let_in:
+    'Fires before every insert, update and delete of `let_in_sign_ins` by the app, and refuses, with an error, a change that isn’t the person’s own, from a session of an email with an authenticator of its own that passed the code (`app.assurance_level` aal2, set by the API from the verified token for that transaction only): the first of their emails lets itself in, past its code, only while none of theirs counts as let in; an email let in that passed its code lets another in, to wait, or withdraws one, never itself; an email waiting marks only itself passed, before it lapses; a lapsed one may be cleared. One change to a person’s emails at a time, by an advisory lock, so two can’t each be the first. The schema owner, as for the runbook’s reset, and the cascade when a sign-in is removed are not held to it (#90).',
   seed_starter_catalog:
     'Gives an organization the ready-made categories and types, and which types each allows, unless it has a category or type already, so running it again adds nothing. Runs as its caller: the release ran it for every organization as the owner, and the app runs it inside `withOrg()` as an organization is created, where row-level security keeps it to that one (ADR-0036).',
   delete_expense_conversion:
@@ -253,6 +295,8 @@ export const FUNCTIONS: Readonly<Record<string, string>> = {
     'Fires before an expense is deleted and deletes its lines and parts first, while the expense is still there to say whose they are, so the `own_records` trigger on each lets the member who deleted the receipt delete them too (ADR-0041). The foreign keys’ cascade stays as a backstop.',
   reject_audit_mutation:
     'Fires on any UPDATE, DELETE or TRUNCATE of audit_events and refuses it, whoever asks.',
+  inbound_email_dismissed_once:
+    'Fires before `dismissed_at` of an email changes, and refuses to clear or move a dismissal already made, whoever asks: an email dismissed from Needs you stays dismissed (#59).',
 };
 
 /** What each database role is, and who uses it. */
@@ -287,7 +331,7 @@ export const RULES: readonly Rule[] = [
   {
     rule: 'Inside an organization, each member sees and changes only their own records.',
     mechanism:
-      'With a member named for the transaction, a restrictive `own_records` policy shows a member or approver only their own receipts, expenses, trips, reports, emails and saved places, and the readings, confirmations, duplicate pairs, conversions, mileage, routes, receipt lines and split parts that hang off them; owners, finance admins and auditors see everyone’s. An `own_records` trigger refuses any change to another member’s rows, and every change by an auditor, with an error rather than a silent skip. What hangs off an expense is deleted just before it, while it still says whose it is, so a member can delete their own receipt (`delete_expense_conversion`, `delete_expense_lines`). With no member named, the system’s own work sees and changes everything, as before (ADR-0035).',
+      'With a member named for the transaction, a restrictive `own_records` policy shows a member or approver only their own receipts, expenses, trips, reports, emails and saved places, and the readings, confirmations, duplicate pairs, conversions, mileage, routes, receipt lines and split parts that hang off them; owners, finance admins and auditors see everyone’s. An `own_records` trigger refuses any change to another member’s rows, and every change by an auditor, with an error rather than a silent skip. What hangs off an expense is deleted just before it, while it still says whose it is, so a member can delete their own receipt (`delete_expense_conversion`, `delete_expense_lines`, `delete_expense_rejections`). An approver also sees each report routed to them and what is on it (ADR-0043). With no member named, the system’s own work sees and changes everything, as before (ADR-0035).',
     objects: [
       'own_records',
       'app_current_member',
@@ -447,10 +491,42 @@ export const RULES: readonly Rule[] = [
     refs: ['FR-EXP-04', 'ADR-0023'],
   },
   {
-    rule: 'A returned report says why.',
-    mechanism: 'A returned approval step must carry a comment.',
-    objects: ['approval_steps_return_needs_comment'],
-    refs: ['FR-GOV-02'],
+    rule: 'A returned report says why, and so does each expense it rejected.',
+    mechanism:
+      'A returned approval step must carry a comment. A rejection belongs to one step and one expense of the same organization, once per step and expense, with a reason of 1 to 500 characters (R-APPROVAL-NOTE-MAX); it goes with its expense. A reason for claiming less than a receipt is 1 to 500 characters too.',
+    objects: [
+      'approval_steps_return_needs_comment',
+      'approval_steps_org_id_id_key',
+      'expense_rejections_step_expense_key',
+      'expense_rejections_step_fk',
+      'expense_rejections_expense_fk',
+      'expense_rejections_reason_length',
+      'expenses_claim_reason_length',
+      'delete_expense_rejections',
+    ],
+    refs: ['FR-GOV-02', 'FR-GOV-12', 'FR-EXP-10', 'ADR-0043'],
+  },
+  {
+    rule: 'A member’s chosen approver is someone else in their own organization.',
+    mechanism:
+      'The approver is a member of the same organization by a composite key, and never the member themselves (`members_manager_not_self`). That they hold a role that may approve, and are still active, is checked when an owner chooses them (`mayChooseApprover`) and again at every submission, where routing passes over one who can’t approve now and finds one as Automatic does (`routeReport`), under the organization’s write lock. A report already submitted keeps the approver its step names.',
+    objects: ['members_manager_fk', 'members_manager_not_self', 'members_org_id_id_key'],
+    refs: ['FR-GOV-02', 'FR-GOV-03', 'ADR-0043'],
+  },
+  {
+    rule: 'Only whoever may decide a report decides it, and changes nothing of its member’s but its state.',
+    mechanism:
+      'An approver sees a report a step names them on, with what is on it (`app_approver_of`). Deciding, the transaction names the report it decides; the own-records trigger then lets the approver it went to, or an owner or finance admin, never its own member in a team, change that report’s status and times and its expenses’ status, and add its rejections, while its step is pending, and refuses anything else of its member’s. Only a report’s own member routes it, and a step is decided once (`enforce_approval_steps`). Who it goes to, and that approving someone else’s needs the second factor, are the domain’s and the API’s (`chooseApprover`, `mayDecide`, `requireSecondFactor`).',
+    objects: [
+      'app_approver_of',
+      'app_deciding_report',
+      'app_may_decide',
+      'app_self_attests',
+      'app_decision_change',
+      'enforce_approval_steps',
+      'enforce_own_records',
+    ],
+    refs: ['FR-GOV-02', 'FR-GOV-03', 'FR-GOV-01', 'ADR-0043', 'ADR-0035'],
   },
   {
     rule: 'A mileage claim keeps the rate it was made at.',
@@ -603,11 +679,57 @@ export const RULES: readonly Rule[] = [
     refs: ['ADR-0016'],
   },
   {
+    rule: 'The app learns whether a sign-in has a second factor, and nothing else of Supabase Auth.',
+    mechanism:
+      'One owner-run function answers yes or no from Supabase Auth’s own record of verified factors, as it is asked; the app holds no right on Supabase’s auth schema, so it can neither read a factor nor change what the answer is, and a session that skipped the code can’t clear it (ADR-0044). The release fails at its migration if the owner can’t read the record, rather than every request.',
+    objects: ['sign_in_has_authenticator'],
+    refs: ['FR-PLT-03', 'ADR-0044', 'ADR-0013'],
+  },
+  {
+    rule: 'The app learns whether a person has a second factor on any of their emails, and none of their other emails.',
+    mechanism:
+      'A second owner-run function asks the first of every sign-in of the member a sign-in belongs to and answers yes or no, so, before any of the person’s emails is let in, one without an authenticator of its own is refused while another has one (#88, #90). It adds no right on Supabase’s auth schema, and the app, before an organization is chosen, still sees only its own sign-in (ADR-0044).',
+    objects: ['person_has_authenticator', 'own_sign_ins'],
+    refs: ['FR-PLT-03', 'FR-PLT-04', 'ADR-0044', 'ADR-0016'],
+  },
+  {
+    rule: 'Only the person, from a session that passed the code, changes which of their emails are let in.',
+    mechanism:
+      'A sign-in is let in once, by a composite key to its sign-in in the same organization, which takes it away when the sign-in goes; it has passed its code or waits until it lapses, one or the other. A trigger refuses any change by the app that isn’t the person’s own, from an email with an authenticator of its own whose session passed the code: the first lets itself in only while none of theirs is, another is let in, or withdrawn, only from an email let in that passed its code, and one waiting marks only itself passed. Each change is audited in the same transaction (#90, ADR-0044).',
+    objects: [
+      'let_in_sign_ins_sign_in_fk',
+      'let_in_sign_ins_sign_in_key',
+      'let_in_sign_ins_passed_or_waiting',
+      'enforce_let_in',
+    ],
+    refs: ['FR-PLT-03', 'FR-PLT-04', 'ADR-0044'],
+  },
+  {
+    rule: 'The app learns whether a sign-in is let in, and none of the person’s other emails.',
+    mechanism:
+      'Two owner-run functions answer, for the token’s own sign-in, whether it is let in and whether the person has let in an email with an authenticator, in the query that finds the caller; before an organization is chosen the app still sees only its own sign-in and no let-in row (#90, ADR-0044).',
+    objects: ['sign_in_let_in', 'person_let_in', 'own_sign_ins'],
+    refs: ['FR-PLT-03', 'FR-PLT-04', 'ADR-0044'],
+  },
+  {
     rule: 'An email is kept once, and only for a member.',
     mechanism:
       'One row per organization, provider and message id; the workflow derives every id from the message, so a repeat delivery or a retried step files nothing twice. The sender is found through one owner-run function that answers with ids, and the row points at its member by a composite key.',
     objects: ['inbound_emails_message_key', 'member_for_sign_in_email', 'inbound_emails_member_fk'],
     refs: ['ADR-0026', 'NFR-DAT-06'],
+  },
+  {
+    rule: 'An email that filed nothing is dismissed once, by its member, and stays as it arrived.',
+    mechanism:
+      'The app may update only `dismissed_at`, by a column grant, and never deletes an email. The `own_records` trigger lets only the member it came from set it, and no auditor; another trigger refuses to clear or move a dismissal, and checks keep a dismissal off an email that filed receipts and a sender problem off a proved one. The audit event is written in the same transaction.',
+    objects: [
+      'inbound_email_dismissed_once',
+      'dismissed_once',
+      'own_records',
+      'inbound_emails_dismissed_unfiled',
+      'inbound_emails_problem_unverified',
+    ],
+    refs: ['FR-CAP-02', 'ADR-0035', '#59'],
   },
   {
     rule: 'A receipt is deleted whole, only through one function, and never once its expense is submitted.',
@@ -657,8 +779,8 @@ export const RULES: readonly Rule[] = [
   {
     rule: 'An approved expense is locked; a correction is a reversal and a new version.',
     mechanism:
-      'Enforced in the application today: the domain’s lifecycle refuses an edit after submission. No database rule stops an update yet; it comes with approval (#24).',
-    objects: [],
-    refs: ['FR-EXP-03'],
+      'The domain’s lifecycle refuses an edit after submission, and the database refuses any change to an approved or settled expense but settling it, whoever asks. `delete_receipt()` refuses a submitted one. The reversal and new version that correct one are not built yet (GAP-34, #87).',
+    objects: ['lock_approved_expenses', 'approved_locked', 'delete_receipt'],
+    refs: ['FR-EXP-03', 'ADR-0043'],
   },
 ];

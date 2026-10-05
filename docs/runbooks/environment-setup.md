@@ -96,6 +96,55 @@ Phase 1 signs in with email and password plus TOTP, and has no custom email doma
 
 Supabase's built-in email covers password resets and the owner's own notifications. It is rate-limited and delivers only to members of the Supabase team. Before a second person is invited, add a sender domain or create their account the same way as step 2.
 
+### The second factor (TOTP)
+
+Supabase's docs say TOTP multi-factor authentication "is enabled on all Supabase projects by default", so there is nothing to turn on in Supabase. Check it once: **Authentication → Multi-Factor** should show TOTP (authenticator app) as enabled, not disabled or verify-only. If it was turned off, adding an authenticator in the app fails with Supabase's own message.
+
+To switch it on for your organization ([ADR-0042](../adr/0042-second-factor.md)):
+
+1. **Settings → Sign-ins → Authenticator apps:** name it and choose **Add an authenticator app**. Scan the QR code with your authenticator app, or type the key into it, and enter the 6-digit code it shows. Anywhere else you were signed in is signed out.
+2. **Add a second one** the same way, on another phone or in a password manager that keeps codes, so losing one phone doesn't lock you out.
+3. **Settings → Features → Second factor → On.** It is refused unless this session has passed your code, so you can't lock yourself out.
+
+From then on, everyone who adds an authenticator is asked for its code when they sign in, and every owner's and finance admin's change to settings, people and keys needs it. Someone without one is told to add one in Settings → Sign-ins first. A session of someone with an authenticator that hasn't passed the code gets nothing from the API but who they are and the organization's switches, whether it comes from the app or straight from a token ([ADR-0044](../adr/0044-second-factor-everywhere.md)); linking another email needs the code from anyone with an authenticator, even while the switch is off. Someone who signs in with several emails signs in only with the ones they let in ([#90](../adr/0044-second-factor-everywhere.md#a-persons-emails-let-in-90-q44)): the first of their emails to pass its code is let in then, and another gets nothing but the same two answers, the app saying it isn't let in, though receipts emailed from it are still filed. To let another in, they sign in with the email that has the code, open **Settings → Sign-ins** and choose **Let in** beside it; within 24 hours they sign in with that email, add an authenticator app to it in Settings → Sign-ins and enter its code, and from then on it signs in with its own code. **Withdraw** there refuses it again. Each change is in the audit trail.
+
+The API reads who has an authenticator from Supabase Auth's own record, through the database function `sign_in_has_authenticator`, which the release creates as the schema owner. Once you have added your first authenticator, check it in the **SQL Editor** with your user UID from **Authentication → Users**:
+
+```sql
+select sign_in_has_authenticator('<your user UID>'), person_has_authenticator('<your user UID>'),
+       sign_in_let_in('<your user UID>'), person_let_in('<your user UID>');
+```
+
+The first two answer `true`. The second, created the same way, says whether any email the person signs in with has one. Once the second factor is on and you have opened the app past your code, the last two answer `yes` and `with_authenticator`: your email is let in, the first. If the release ever stops at migration 0048 with `permission denied` for `auth.mfa_factors`, the schema owner can't read Supabase Auth's factors, and nothing was changed; the migration checks this so that it is found there and not on every request.
+
+#### If someone loses their authenticator
+
+1. **They have another one:** they sign in with it, remove the lost one in **Settings → Sign-ins**, and add the new phone.
+2. **They have no other:** remove theirs in Supabase. **Authentication → Users**, open the person, and choose **Remove MFA factors** where the dashboard offers it. Otherwise copy their user UID there and run this in the **SQL Editor**:
+   ```sql
+   delete from auth.mfa_factors where user_id = '<their user UID>' and factor_type = 'totp';
+   ```
+   They then sign in with their password alone and add a new authenticator. The same works for the owner: the Supabase dashboard is reached with your Supabase account, which the app's second factor doesn't touch. The API reads Supabase's record as each request arrives, so nothing of ours needs clearing: their next request is let through.
+
+   If they sign in with several emails, each is its own user in **Authentication → Users**. Find them all from any one of their user UIDs:
+   ```sql
+   select theirs.email, theirs.user_id, sign_in_has_authenticator(theirs.user_id) as has_one
+     from member_sign_ins this
+     join member_sign_ins theirs on theirs.org_id = this.org_id and theirs.member_id = this.member_id
+    where this.user_id = '<their user UID>';
+   ```
+   Remove the lost authenticator from each one whose `has_one` is `true` and that kept it on the lost phone. Once no email they let in has one, all of their emails open on their passwords again, until the one let in adds a new authenticator and passes its code; then the others are refused again until let in. An email let in left with none while another let in still has one is asked to add its own before anything else, which it can do with its password alone.
+3. **The email they let in can't be used at all** (its password lost, or its account deleted), or **an email of theirs was let in first by someone else**: the person sees *This email isn't let in* on their own email although they never let another in. Before any of a person's emails is let in, whoever holds the password of another email linked to them can add an authenticator to it and be let in first ([GAP-37](../adr/0044-second-factor-everywhere.md#a-persons-emails-let-in-90-q44)). Remove the authenticator of the email that shouldn't be let in, as in step 2, and have the person change that email's password, or remove it in Settings → Sign-ins once they are in. Then reset who is let in for them in the **SQL Editor**, from any one of their user UIDs:
+   ```sql
+   delete from let_in_sign_ins
+    where sign_in_id in (
+      select theirs.id from member_sign_ins this
+        join member_sign_ins theirs on theirs.org_id = this.org_id and theirs.member_id = this.member_id
+       where this.user_id = '<their user UID>');
+   ```
+   It runs as the schema owner, outside the app, so the audit trail doesn't record it: note it where you keep incidents. None of their emails is let in now; the next to pass its code is the first, so have them sign in with their own email, add an authenticator if it has none, and enter its code before anything else.
+4. **Nobody can pass the code** (Supabase Auth failing, or the dashboard out of reach): set `FLAG_OVERRIDES` = `security.second-factor=off` for Production in Vercel and redeploy (add it after a comma if the variable already holds other flags). Sign-in stops asking for the code and admin changes stop needing it, for every organization, and every email a person signs in with opens again, let in or not; authenticators, and who is let in, stay as they were, and Settings → Features shows the switch as set on the server. It is also the quickest way back in for someone who lost the phone of the only email they let in, while you remove that authenticator as in step 2. Remove it from `FLAG_OVERRIDES` and redeploy to turn the second factor back on.
+
 ## 5. Off-site backups (Backblaze B2)
 
 The Free plan keeps no backups, so a nightly workflow keeps our own ([ADR-0014](../adr/0014-supabase-free-plan.md)): **Nightly backup** (`.github/workflows/backup.yml`, running `scripts/backup/backup.sh`) at 02:17 California time. It needs the secrets below and nothing else; it works out the Backblaze and Supabase S3 addresses itself.

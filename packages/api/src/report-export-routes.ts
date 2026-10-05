@@ -1,6 +1,7 @@
 import { ROUTE_MILEAGE_FLAG, type ReportForExport } from '@expensewise/db';
 import {
   canExportReport,
+  isExportableOnceApproved,
   isReportExportable,
   reportCsv,
   reportExportTable,
@@ -48,8 +49,9 @@ export function exportFileName(found: ReportForExport, extension: 'csv' | 'pdf')
 }
 
 /**
- * A report as CSV and as a PDF summary (FR-SET-01, #25), behind `reports.export`. Until
- * approval (#24) exists, a closed report is exported; an open one answers 409 not_closed.
+ * A report as CSV and as a PDF summary (FR-SET-01, #25), behind `reports.export`. While
+ * approval (#24) is off, a closed report is exported and an open one answers 409 not_closed;
+ * with it on, a submitted or approved one, and any other answers 409 not_submitted (Q29).
  * Both files are made in the request: they are read from the database and laid out in memory,
  * with no call to another service.
  */
@@ -89,7 +91,15 @@ export function registerReportExportRoutes(
     if (!found || !canExportReport(who.role, found.report.memberId === who.memberId)) {
       throw new ProblemError(404, 'not-found', 'No such report', { code: 'not_found' });
     }
-    if (!isReportExportable(found.report.status)) {
+    // Once approval exists, submitted and approved reports are exported (Q29).
+    if (await features.isOn(who.orgId, 'reports.approval')) {
+      if (!isExportableOnceApproved(found.report.status)) {
+        throw new ProblemError(409, 'not-submitted', 'Only a submitted report can be exported', {
+          code: 'not_submitted',
+          detail: 'Submit it for approval first; then it can be exported, and once approved.',
+        });
+      }
+    } else if (!isReportExportable(found.report.status)) {
       throw new ProblemError(409, 'not-closed', 'Only a closed report can be exported', {
         code: 'not_closed',
         detail: 'It is still open. Close it first.',
@@ -100,8 +110,9 @@ export function registerReportExportRoutes(
 
   /**
    * Each expense with its parts while splits are on, its excluded lines while itemized lines
-   * are on (FR-EXP-15, FR-EXP-16), and a drive's measured and claimed miles while route mileage
-   * is on (Q33); off, the export reads as it always has.
+   * are on (FR-EXP-15, FR-EXP-16), a drive's measured and claimed miles while route mileage
+   * is on (Q33), and a journey's from and to and a stay's dates while Journeys and stays is on
+   * (FR-INT-20, FR-INT-21); off, the export reads as it always has.
    */
   const shownRows = async (orgId: string, found: ReportForExport) => {
     const split =
@@ -109,11 +120,13 @@ export function registerReportExportRoutes(
       (await features.isOn(orgId, 'expenses.categories'));
     const lines = await features.isOn(orgId, 'expenses.itemized');
     const routes = await features.isOn(orgId, ROUTE_MILEAGE_FLAG);
-    return found.expenses.map(({ parts, excluded, miles, ...e }) => ({
+    const journeys = await features.isOn(orgId, 'receipts.journeys');
+    return found.expenses.map(({ parts, excluded, miles, travel, ...e }) => ({
       ...e,
       ...(routes && miles ? { miles } : {}),
       ...(split && parts ? { parts } : {}),
       ...(lines && excluded ? { excluded } : {}),
+      ...(journeys && travel ? { travel } : {}),
     }));
   };
 

@@ -227,16 +227,26 @@ export interface ReceiptInboxItem {
   reason: NeedsYouReason;
 }
 
-/** A report overdue, in its last week with something left, or ready to close (FR-EXP-12). */
+/**
+ * A report overdue, in its last week with something left, or ready to close (FR-EXP-12);
+ * while approval is on, one that came back with its approver's comment, or one waiting for the
+ * person's decision (FR-GOV-02, FR-GOV-11).
+ */
 export interface ReportInboxItem {
   kind: 'report';
   report: ReportSummary;
-  reason: { code: 'overdue' | 'closing_soon' | 'ready_to_close' };
+  reason: {
+    code: 'overdue' | 'closing_soon' | 'ready_to_close' | 'returned' | 'to_approve';
+    /** returned: why it came back, and who sent it. */
+    comment?: string;
+    by?: string;
+  };
 }
 
 /**
  * An expense that needs the person: a local one that says nothing yet of why it was for
- * business (FR-EXP-14), or, while categories are on, one with no category and type (Q27).
+ * business (FR-EXP-14); while categories are on, one with no category and type (Q27); while
+ * approval is on, one its report came back with rejected (FR-GOV-12).
  */
 export interface ExpenseInboxItem {
   kind: 'expense';
@@ -247,12 +257,31 @@ export interface ExpenseInboxItem {
     amount: ExpenseAmount | null;
     receiptId: string | null;
   };
-  reason: { code: 'justification' | 'uncoded' };
+  reason: {
+    code: 'justification' | 'uncoded' | 'rejected';
+    /** rejected: why, and whether the review rejected it on its own (FR-GOV-12). */
+    why?: string;
+    automatic?: boolean;
+    reportId?: string;
+  };
   /** uncoded: what is suggested for it, or missing when nothing is. */
   category?: ExpenseCategory;
 }
 
-export type InboxItem = ReceiptInboxItem | ReportInboxItem | ExpenseInboxItem;
+/** Why an email from the person's own address wasn't proved to be theirs (ADR-0026). */
+export type EmailProblem = 'unsigned' | 'signature_failed' | 'not_aligned' | 'partly_signed';
+
+/**
+ * An email from the person's own address that filed nothing, while that is on (#59): nothing
+ * proved it was theirs, or it had nothing in it to read. Never its text.
+ */
+export interface EmailInboxItem {
+  kind: 'email';
+  email: { id: string; subject: string | null; from: string; receivedAt: string };
+  reason: { code: 'unproved' | 'empty'; problem: EmailProblem | null };
+}
+
+export type InboxItem = ReceiptInboxItem | ReportInboxItem | ExpenseInboxItem | EmailInboxItem;
 
 const CHECK_REASONS: Record<ReadingCheck, string> = {
   sums: 'Its parts don’t come to its total.',

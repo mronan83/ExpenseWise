@@ -3,8 +3,9 @@ import {
   assertRowSecurityApplies,
   deleteProviderKey,
   ensureOwnerOrganization,
-  findMemberships,
+  findSignedInMember,
   getProviderKey,
+  letSignInIn,
   linkSignIn,
   listOrgFeatures,
   listProviderKeys,
@@ -12,24 +13,51 @@ import {
   markProviderKeyVerified,
   orgFeatureOn,
   organizations,
+  recordPassedCode,
   saveProviderKey,
   setOrgFeature,
+  signInStanding,
   unlinkSignIn,
+  withdrawSignIn,
   withOrg,
   type AiProvider,
   type Database,
+  type LetInActor,
+  type LetInResult,
   type LinkResult,
   type Membership,
   type OrgFeature,
+  type PassedCode,
   type SignIn,
   type ProviderKeyWrite,
   type StoredProviderKey,
+  type WithdrawResult,
 } from '@expensewise/db';
+import type { LetIn, PersonLetIn } from '@expensewise/domain';
 
 export interface OrganizationView {
   readonly id: string;
   readonly name: string;
   readonly homeCurrency: string;
+}
+
+/**
+ * The member a sign-in reaches, and whether that sign-in has a verified second factor in
+ * Supabase Auth, such as an authenticator app, read as the request resolves it (#85, ADR-0044).
+ * A store that can't tell, as a test's in-memory one, leaves `authenticator` out: none.
+ */
+export interface CallerMembership extends Membership {
+  readonly authenticator?: boolean;
+  /**
+   * Whether any email the person signs in with, this one or another linked to their
+   * membership, has one (#88, Q43): when it does and this one hasn't, this email is held until
+   * it adds its own. Left out: none.
+   */
+  readonly personAuthenticator?: boolean;
+  /** Whether this sign-in is let in (#90, Q44). Left out: not. */
+  readonly letIn?: LetIn;
+  /** The emails the person has let in, and whether one has an authenticator. Left out: none. */
+  readonly personLetIn?: PersonLetIn;
 }
 
 /**
@@ -40,8 +68,8 @@ export interface WorkspaceStore {
   ensureOrganization(owner: {
     userId: string;
     email: string;
-  }): Promise<{ membership: Membership; organization: OrganizationView; created: boolean }>;
-  findMembership(userId: string): Promise<Membership | undefined>;
+  }): Promise<{ membership: CallerMembership; organization: OrganizationView; created: boolean }>;
+  findMembership(userId: string): Promise<CallerMembership | undefined>;
   listKeys(orgId: string): Promise<StoredProviderKey[]>;
   getKey(orgId: string, provider: AiProvider): Promise<StoredProviderKey | undefined>;
   saveKey(orgId: string, key: ProviderKeyWrite, actorUserId: string): Promise<StoredProviderKey>;
@@ -58,6 +86,15 @@ export interface WorkspaceStore {
     signInId: string,
     actorUserId: string,
   ): Promise<'removed' | 'not_found' | 'last'>;
+  /**
+   * Records that the caller's email passed its code (#90): the first of the person's emails to
+   * is let in, and one waiting stays let in, each audited.
+   */
+  recordPassedCode(member: Membership, actor: LetInActor): Promise<PassedCode>;
+  /** Lets another of the member's emails in, from the actor's, audited (#90). */
+  letSignInIn(member: Membership, signInId: string, actor: LetInActor): Promise<LetInResult>;
+  /** Withdraws letting one of the member's other emails in, audited (#90). */
+  withdrawSignIn(member: Membership, signInId: string, actor: LetInActor): Promise<WithdrawResult>;
   /** The features this organization has switched; the rest are off. */
   listFeatures(orgId: string): Promise<OrgFeature[]>;
   featureOn(orgId: string, flag: string): Promise<boolean>;
@@ -83,21 +120,27 @@ export function dbWorkspaceStore(db: Database): WorkspaceStore {
     async ensureOrganization(owner) {
       await safe();
       const { membership, created } = await ensureOwnerOrganization(db, owner);
-      const [organization] = await withOrg(db, membership.orgId, (tx) =>
-        tx
-          .select({
-            id: organizations.id,
-            name: organizations.name,
-            homeCurrency: organizations.homeCurrency,
-          })
-          .from(organizations),
-      );
+      const { organization, standing } = await withOrg(db, membership.orgId, async (tx) => ({
+        organization: (
+          await tx
+            .select({
+              id: organizations.id,
+              name: organizations.name,
+              homeCurrency: organizations.homeCurrency,
+            })
+            .from(organizations)
+        )[0],
+        // Where the sign-in stands for the second factor, as finding the caller reads it.
+        standing: await signInStanding(tx, owner.userId),
+      }));
       if (!organization) throw new Error('The organization is not visible to its member');
-      return { membership, organization, created };
+      return { membership: { ...membership, ...standing }, organization, created };
     },
     async findMembership(userId) {
       await safe();
-      return (await findMemberships(db, userId))[0];
+      // Whether their sign-in, and any other of theirs, has a second factor comes in the same
+      // query (#85, #88).
+      return findSignedInMember(db, userId);
     },
     async listKeys(orgId) {
       await safe();
@@ -157,6 +200,18 @@ export function dbWorkspaceStore(db: Database): WorkspaceStore {
     async unlinkSignIn(member, signInId, actorUserId) {
       await safe();
       return unlinkSignIn(db, member, signInId, actorUserId);
+    },
+    async recordPassedCode(member, actor) {
+      await safe();
+      return recordPassedCode(db, member, actor);
+    },
+    async letSignInIn(member, signInId, actor) {
+      await safe();
+      return letSignInIn(db, member, signInId, actor);
+    },
+    async withdrawSignIn(member, signInId, actor) {
+      await safe();
+      return withdrawSignIn(db, member, signInId, actor);
     },
     async listFeatures(orgId) {
       await safe();

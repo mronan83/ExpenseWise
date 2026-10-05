@@ -1,4 +1,15 @@
+import {
+  authenticatorRequired,
+  isAuthenticatorRequired,
+  isNotLetIn,
+  isStepUp,
+  notLetIn,
+  stepUp,
+} from './step-up';
 import { supabase } from './supabase';
+
+/** Requests being sent again after the code, so one is never asked about twice. */
+const stepping = new WeakSet<RequestInit>();
 
 /** A problem document from the API (RFC 9457), as an error. */
 export class ApiProblem extends Error {
@@ -15,7 +26,27 @@ export class ApiProblem extends Error {
   }
 }
 
-/** Calls our API as the signed-in user. */
+/** The email the API named in a refusal, if any. */
+const named = (body: Record<string, unknown>) =>
+  typeof body.email === 'string' ? body.email : null;
+
+/**
+ * Tells the app this email needs its own authenticator (#88), or isn't let in (#90), by the
+ * email the API named: neither is ever asked for a code.
+ */
+function heldEmail(status: number, body: { code?: string } & Record<string, unknown>): void {
+  if (isAuthenticatorRequired(status, body.code)) authenticatorRequired(named(body));
+  if (isNotLetIn(status, body.code)) notLetIn(named(body));
+}
+
+/**
+ * Calls our API as the signed-in user. A request that needs the second factor, an admin action
+ * (FR-GOV-04) or, for someone with an authenticator whose organization asks it before anything
+ * else, any read or change (#85), asks for the code where the app shows its prompt, then is
+ * sent again, once, as the session that passed it; without the code it fails as any refusal
+ * does. One refused because this email needs its own authenticator (#88), or isn't let in (#90),
+ * asks for no code: the app says so, naming the email, and it fails as any refusal does.
+ */
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const session = (await supabase()?.auth.getSession())?.data.session;
   const res = await fetch(`/api${path}`, {
@@ -32,6 +63,17 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     detail?: string;
   } & Record<string, unknown>;
   if (!res.ok) {
+    heldEmail(res.status, body);
+    // Only a body that can be sent twice; the retry carries the new session's token.
+    const resendable = init.body === undefined || typeof init.body === 'string';
+    if (isStepUp(res.status, body.code) && resendable && !stepping.has(init) && (await stepUp())) {
+      stepping.add(init);
+      try {
+        return await api<T>(path, init);
+      } finally {
+        stepping.delete(init);
+      }
+    }
     throw new ApiProblem(
       res.status,
       body.code,
@@ -45,9 +87,14 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 /**
  * Downloads a file from our API as the signed-in user, such as a report's CSV, under the name
- * the API gives it. A problem document becomes an ApiProblem, as with `api`.
+ * the API gives it. A problem document becomes an ApiProblem, as with `api`, and one asking
+ * for the second factor asks for the code, then downloads once more (#85).
  */
-export async function apiDownload(path: string, fallbackName: string): Promise<void> {
+export async function apiDownload(
+  path: string,
+  fallbackName: string,
+  afterCode = false,
+): Promise<void> {
   const session = (await supabase()?.auth.getSession())?.data.session;
   const res = await fetch(`/api${path}`, {
     headers: session ? { authorization: `Bearer ${session.access_token}` } : {},
@@ -58,6 +105,10 @@ export async function apiDownload(path: string, fallbackName: string): Promise<v
       title?: string;
       detail?: string;
     } & Record<string, unknown>;
+    if (isStepUp(res.status, body.code) && !afterCode && (await stepUp())) {
+      return apiDownload(path, fallbackName, true);
+    }
+    heldEmail(res.status, body);
     throw new ApiProblem(
       res.status,
       body.code,

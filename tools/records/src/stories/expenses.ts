@@ -181,7 +181,7 @@ export const EXPENSE_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Refusing to submit a report while a difference has no reason, and rejecting one at review, are FR-GOV-13 and FR-GOV-10, which come with approval (#24). Inside an organization a member opens only their own expenses (US-SEC-14).',
+    note: 'Refusing to submit a report while a difference has no reason, and rejecting one at review, are FR-GOV-13 and FR-GOV-10, built with approval in PR #60 (#24, US-RPT-08, US-RPT-09). Inside an organization a member opens only their own expenses (US-SEC-14).',
   },
   {
     id: 'US-EXP-03',
@@ -282,7 +282,7 @@ export const EXPENSE_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Editing again when a report comes back follows the expense lifecycle, where a returned expense is Ready again, but nothing returns a report until approval is built (#24). Inside an organization a member changes only their own expenses (US-SEC-14).',
+    note: 'Editing again when a report comes back follows the expense lifecycle, where a returned expense is Ready again; since PR #60 approval returns a report (#24, US-RPT-10). Inside an organization a member changes only their own expenses (US-SEC-14).',
   },
   {
     id: 'US-EXP-04',
@@ -793,7 +793,7 @@ export const EXPENSE_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'A held duplicate is in Needs you too, naming the receipt it looks like (US-DUP-02). Since PR #52 so are a report overdue or in its last week, a local expense needing a reason, and a report ready to close; their stories are with reports (FR-EXP-12, FR-EXP-14). Returned reports join with approval (#24), and missing receipts with card transactions (FR-CAP-06).',
+    note: 'A held duplicate is in Needs you too, naming the receipt it looks like (US-DUP-02). Since PR #52 so are a report overdue or in its last week, a local expense needing a reason, and a report ready to close; their stories are with reports (FR-EXP-12, FR-EXP-14). Since PR #60, with approval on, a returned report and each rejected expense join it, and reports to approve (#24, US-RPT-10); missing receipts join with card transactions (FR-CAP-06).',
   },
 
   // Home
@@ -987,15 +987,20 @@ export const EXPENSE_STORIES: readonly Story[] = [
     soThat: 'the month’s figures are whole without a separate log or a spreadsheet',
     feature: 'F-22',
     requirements: ['FR-INS-01'],
-    status: 'Planned',
+    status: 'Partial',
     criteria: [
       {
         id: 'AC1',
-        given: 'business miles I logged this month',
+        given: 'business miles I logged this month, with mileage switched on',
         when: 'I open Home',
-        then: 'this month so far shows my business miles',
+        then: 'this month so far shows my business miles: every drive of mine dated this month, logged by hand or by its route, added up exactly, with how many drives',
         decided: { by: 'blueprint', source: 'design §5.3' },
-        checks: [],
+        checks: [
+          'db/home.int › lists the miles of the member’s drives this month, a route drive’s once measured',
+          'api/home › adds up this month’s drives exactly while mileage is on',
+          'domain/mileage › adds miles exactly, never through a float, and shows them plain',
+          'e2e/signed-in',
+        ],
       },
       {
         id: 'AC2',
@@ -1004,9 +1009,56 @@ export const EXPENSE_STORIES: readonly Story[] = [
         then: 'it shows what awaits reimbursement',
         decided: { by: 'blueprint', source: 'design §5.3' },
         checks: [],
+        untested: 89,
+      },
+      {
+        id: 'AC3',
+        given:
+          'a route drive still being measured, or one that couldn’t be measured and whose miles I haven’t entered yet',
+        when: 'I open Home',
+        then: 'it adds no miles until it is measured or I enter them; then it adds the miles it claims, mine where I claimed other miles than those measured',
+        decided: { by: 'claude' },
+        checks: [
+          'db/home.int › lists the miles of the member’s drives this month, a route drive’s once measured',
+        ],
+      },
+      {
+        id: 'AC4',
+        given: 'drives of another member of my organization, or mine dated in another month',
+        when: 'I open Home',
+        then: 'none of them is in this month’s business miles',
+        decided: OCT3,
+        checks: [
+          'db/home.int › lists the miles of the member’s drives this month, a route drive’s once measured',
+        ],
+      },
+      {
+        id: 'AC5',
+        given: 'mileage switched off for my organization',
+        when: 'I open Home',
+        then: 'no business miles show, and Home is exactly as it was before, even with drives logged',
+        decided: { by: 'owner', source: 'Q5' },
+        checks: ['api/home › shows no business miles while mileage is off, as Home always was'],
+      },
+      {
+        id: 'AC6',
+        given: 'mileage switched on and no drive of mine dated this month that claims miles',
+        when: 'I open Home',
+        then: 'the business miles are left out rather than shown as 0',
+        decided: { by: 'claude' },
+        checks: ['api/home › shows no business miles with no drive dated this month'],
+      },
+      {
+        id: 'AC7',
+        given: 'my business miles on Home',
+        when: 'I tap them',
+        then: 'Expenses opens on this month, each drive marked Mileage; it has no filter for drives alone',
+        decided: { by: 'claude' },
+        checks: [],
+        untested: 66,
       },
     ],
-    note: 'Mileage is built (#17), and business miles join Home with #73; what awaits reimbursement once payouts exist.',
+    note: 'Business miles are on Home since PR #60, while mileage is on (#73): a drive also counts in the month’s spend, as any expense does. What awaits reimbursement is #89, once approval (#24) exists. Counting a route drive at the miles claimed rather than those measured, leaving the figure out when there are none, and opening this month’s expenses are Claude’s, for you to confirm.',
   },
   // Category suggestions (FR-INT-10, ADR-0036)
   {
@@ -1471,6 +1523,137 @@ export const EXPENSE_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Built in PR #59 behind `expenses.itemized` (#82). It is how FR-EXP-10 claims less than a receipt with a reason, line by line; setting a lower amount with a reason without lines, and the check before submission, stay with #24 (US-RPT-07).',
+    note: 'Built in PR #59 behind `expenses.itemized` (#82). It is how FR-EXP-10 claims less than a receipt with a reason, line by line; a lower amount with a reason in the person’s own words, and the check before submission, came with approval in PR #60 (#24, US-RPT-07).',
+  },
+
+  // Needs you: emails that filed nothing
+  {
+    id: 'US-INBOX-02',
+    title: 'See an email I sent that filed nothing, and why',
+    as: 'Alex, who forwards receipts by email',
+    want: 'Needs you to show me an email I sent that filed nothing, why, and what to do about it',
+    soThat: 'a receipt I emailed is never lost without my knowing',
+    feature: 'F-16',
+    requirements: ['FR-EXP-02', 'FR-CAP-02'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given:
+          'an email from an address I sign in with that nothing proved was mine: unsigned, signed by another domain such as a mailing service, changed after it was signed, or signed over only part of it',
+        when: 'I open Needs you',
+        then: 'it is listed after the receipts that need a look, saying in plain words why it couldn’t be proved, and that nothing in it was filed',
+        decided: { by: 'claude', source: 'ADR-0026' },
+        checks: [
+          'workflows/email › keeps why it couldn’t prove the sender, such as a message changed after it was signed',
+          'api/unfiled-emails › lists the member’s own after receipts, newest first, with why and never their text',
+          'api/unfiled-emails.int › shows each member only their own, with why, in the inbox and on Home',
+          'e2e/signed-in',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'an email from me with no receipt attached and no text',
+        when: 'I open Needs you',
+        then: 'it is listed, saying it had nothing in it to file',
+        decided: { by: 'claude' },
+        checks: [
+          'db/inbound.int › lists a member’s own unproved and empty emails since a time, newest first, never their text',
+          'api/unfiled-emails › lists the member’s own after receipts, newest first, with why and never their text',
+          'e2e/signed-in',
+        ],
+      },
+      {
+        id: 'AC3',
+        given: 'an email of mine in Needs you',
+        when: 'I look at it',
+        then: 'it shows its subject, the address it came from and when it arrived, and never its text',
+        decided: { by: 'claude' },
+        checks: [
+          'db/inbound.int › lists a member’s own unproved and empty emails since a time, newest first, never their text',
+          'api/unfiled-emails › lists the member’s own after receipts, newest first, with why and never their text',
+        ],
+      },
+      {
+        id: 'AC4',
+        given: 'an email of mine in Needs you',
+        when: 'I decide what to do',
+        then: 'Attach the receipt opens capture, and it says to send it again from my own mailbox, or, when it had nothing in it, with the receipt attached',
+        decided: { by: 'claude', source: 'ADR-0026' },
+        checks: ['e2e/signed-in'],
+      },
+      {
+        id: 'AC5',
+        given: 'an email of mine in Needs you',
+        when: 'I dismiss it',
+        then: 'it leaves Needs you for good and the audit trail records that I dismissed it, while the email stays kept as it arrived; dismissing it again changes nothing',
+        decided: { by: 'claude' },
+        checks: [
+          'db/inbound.int › dismisses one for good, with its audit event, keeping the email as it arrived',
+          'db/inbound.int › never lets the app clear a dismissal, or change anything else about an email',
+          'api/unfiled-emails › dismisses one for the caller, and answers the same when it was dismissed already',
+          'api/unfiled-emails.int › lets only the member it came from dismiss it, once, and never one that filed receipts',
+        ],
+      },
+      {
+        id: 'AC6',
+        given: 'a colleague’s email that filed nothing',
+        when: 'I open Needs you, whatever my role',
+        then: 'it isn’t in mine: each person’s Needs you lists only their own',
+        decided: { by: 'claude', source: 'ADR-0035' },
+        checks: [
+          'db/inbound.int › lists a member’s own unproved and empty emails since a time, newest first, never their text',
+          'api/unfiled-emails.int › shows each member only their own, with why, in the inbox and on Home',
+        ],
+      },
+      {
+        id: 'AC7',
+        given: 'a colleague’s email that filed nothing, or my own when I am an auditor',
+        when: 'I try to dismiss it, even as an owner',
+        then: 'it is refused: only the person it came from dismisses it, and an auditor changes nothing',
+        decided: { by: 'owner', source: 'Q30' },
+        checks: [
+          'db/inbound.int › dismisses only its member’s own, and never one that filed receipts',
+          'api/unfiled-emails › answers 403 not_yours when the database refuses: someone else’s, or an auditor',
+          'api/unfiled-emails.int › lets only the member it came from dismiss it, once, and never one that filed receipts',
+        ],
+      },
+      {
+        id: 'AC8',
+        given: 'an email that filed nothing that I haven’t dismissed',
+        when: '30 days have passed since it arrived',
+        then: 'it is no longer in Needs you',
+        decided: { by: 'claude' },
+        checks: [
+          'domain/unfiled-emails › shows for 30 days from when it arrived',
+          'db/inbound.int › lists a member’s own unproved and empty emails since a time, newest first, never their text',
+          'api/unfiled-emails › lists the member’s own after receipts, newest first, with why and never their text',
+        ],
+        rules: ['R-UNFILED-EMAIL-DAYS'],
+      },
+      {
+        id: 'AC9',
+        given: 'an email from someone who isn’t a member, or one that filed a receipt',
+        when: 'I open Needs you',
+        then: 'it isn’t there: nothing of a stranger’s email is kept, and a filed receipt shows as itself',
+        decided: { by: 'claude', source: 'ADR-0026' },
+        checks: [
+          'workflows/email › keeps nothing from someone who is not a member',
+          'db/inbound.int › lists a member’s own unproved and empty emails since a time, newest first, never their text',
+        ],
+      },
+      {
+        id: 'AC10',
+        given: 'Emails that filed nothing is switched off for my organization',
+        when: 'I open Needs you or Home, or try to dismiss an email',
+        then: 'Needs you is exactly as before, and dismissing answers that the feature is off',
+        decided: { by: 'owner', source: 'Q5' },
+        checks: [
+          'api/unfiled-emails › leaves Needs you as it was, and dismisses nothing, with the feature off (%s)',
+          'api/unfiled-emails.int › shows none, and dismisses none, with the feature off',
+        ],
+      },
+    ],
+    note: 'Built in PR #60 behind `receipts.unfiled-emails` (#59). Why a sender wasn’t proved is kept with each email from PR #60 on, whether or not the feature is on; one kept before says only that it couldn’t be proved. A dismissed email appears nowhere else in the app; its arrival and dismissal stay in the audit trail. The receipts address itself is still shown nowhere in the app.',
   },
 ];

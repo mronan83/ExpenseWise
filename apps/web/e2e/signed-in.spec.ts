@@ -29,14 +29,165 @@ const fill =
   (page) =>
     page.getByLabel(label, { exact: true }).first().fill(value);
 
+/** The API's answer to a request that needs the second factor. */
+const needsTheCode = (detail: string) => ({
+  status: 403,
+  contentType: 'application/problem+json',
+  body: JSON.stringify({
+    type: 'https://expensewise.app/problems/second-factor-required',
+    title: 'This needs your second factor',
+    status: 403,
+    code: 'second_factor_required',
+    detail,
+  }),
+});
+
 /**
- * Each screen and state: what it shows, where it is, what a person does to get there, and,
- * where the day decides what shows, the day it is on the person's clock.
+ * The API asks for the second factor before changes at `pattern`, as it does while the second
+ * factor is switched on and the session hasn't passed it; reads go through as before.
  */
-const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
+const asksForTheCode =
+  (pattern: string): Step =>
+  (page) =>
+    page.route(pattern, (route) =>
+      route.request().method() === 'GET'
+        ? route.fallback()
+        : route.fulfill(
+            needsTheCode('Enter the code from your authenticator app, then try again.'),
+          ),
+    );
+
+/**
+ * The API asks for the second factor before reads at `pattern` too, as it does for someone with
+ * an authenticator whose session hasn't passed it while the second factor is on (#85).
+ */
+const asksForTheCodeToRead =
+  (pattern: string): Step =>
+  (page) =>
+    page.route(pattern, (route) =>
+      route.request().method() === 'GET'
+        ? route.fulfill(
+            needsTheCode(
+              'Your organization asks for the code from your authenticator app before anything else. Enter it, then try again.',
+            ),
+          )
+        : route.fallback(),
+    );
+
+/**
+ * The API holds this email until it adds its own authenticator, at `pattern` for `method`, as
+ * it does for a person with one on another email while the second factor is on (#88).
+ */
+const holdsThisEmail =
+  (pattern: string, method = 'GET'): Step =>
+  (page) =>
+    page.route(pattern, (route) =>
+      route.request().method() === method
+        ? route.fulfill({
+            status: 403,
+            contentType: 'application/problem+json',
+            body: JSON.stringify({
+              type: 'https://expensewise.dev/problems/authenticator-required',
+              title: 'This email needs its own authenticator',
+              status: 403,
+              code: 'authenticator_required',
+              detail: `${E2E_USER}@example.com has no authenticator app of its own, and another email you sign in with has one.`,
+              email: `${E2E_USER}@example.com`,
+            }),
+          })
+        : route.fallback(),
+    );
+
+/**
+ * The API refuses this email as not let in, at `pattern` for `method`, as it does once a person
+ * has an authenticator and hasn't let this email in, while the second factor is on (#90).
+ */
+const refusesThisEmail =
+  (pattern: string, method = 'GET'): Step =>
+  (page) =>
+    page.route(pattern, (route) =>
+      route.request().method() === method
+        ? route.fulfill({
+            status: 403,
+            contentType: 'application/problem+json',
+            body: JSON.stringify({
+              type: 'https://expensewise.dev/problems/sign-in-not-let-in',
+              title: 'This email isn’t let in to sign in',
+              status: 403,
+              code: 'sign_in_not_let_in',
+              detail: `${E2E_USER}@example.com isn't let in to sign in.`,
+              email: `${E2E_USER}@example.com`,
+            }),
+          })
+        : route.fallback(),
+    );
+
+/**
+ * The person's sign-ins as the API lists them once they let emails in (#90): this one let in,
+ * past its code, so it may let the others in; one let in waiting for its own authenticator, and
+ * one not let in. Letting one in answers as the API does.
+ */
+const listsEmailsLetIn: Step = async (page) => {
+  const signIn = (id: string, email: string, current: boolean, letIn: string, lapses?: string) => ({
+    id: `0192f7a0-0000-7000-8000-0000000000e${id}`,
+    email,
+    linkedAt: '2026-10-01T09:00:00Z',
+    current,
+    letIn,
+    letInLapsesAt: lapses ?? null,
+  });
+  await page.route('**/api/v1/me/sign-ins', (route) =>
+    route.request().method() === 'GET'
+      ? route.fulfill({
+          json: {
+            signIns: [
+              signIn('1', `${E2E_USER}@example.com`, true, 'yes'),
+              signIn('2', 'riley@work.example', false, 'waiting', '2026-10-06T15:00:00Z'),
+              signIn('3', 'riley.old@example.net', false, 'no'),
+            ],
+            canLetIn: true,
+          },
+        })
+      : route.fallback(),
+  );
+  await page.route('**/api/v1/me/sign-ins/*/let-in', (route) =>
+    route.fulfill({
+      json: signIn('3', 'riley.old@example.net', false, 'waiting', '2026-10-06T15:00:00Z'),
+    }),
+  );
+};
+
+/** Supabase Auth lists no authenticator app for this email, as for one held until it adds one. */
+const noAuthenticatorsOfItsOwn: Step = (page) =>
+  page.route(`${E2E_SUPABASE_URL}/auth/v1/user`, (route) =>
+    route.fulfill({
+      json: {
+        id: E2E_USER,
+        aud: 'authenticated',
+        email: `${E2E_USER}@example.com`,
+        app_metadata: {},
+        user_metadata: {},
+        created_at: '2026-10-01T00:00:00Z',
+        factors: [],
+      },
+    }),
+  );
+
+/**
+ * Each screen and state: what it shows, where it is, what a person does to get there, where
+ * the day decides what shows, the day it is on the person's clock, and the one console error
+ * the state means to cause, such as the browser logging a refusal the screen then handles.
+ */
+const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
   ['Home', () => '/', []],
   ['Home during a trip', () => '/', [], '2026-10-21T12:00:00'],
   ['Home with a trip coming up', () => '/', [], '2026-11-01T12:00:00'],
+  [
+    'Home with October’s business miles',
+    () => '/',
+    [(page) => expect(page.getByText('Business miles', { exact: true })).toBeVisible()],
+    '2026-10-12T12:00:00',
+  ],
   ['Home with everything in Needs you open', () => '/', [press('Show all')]],
   [
     'an expense with no category and type, in Needs you',
@@ -44,6 +195,21 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
     [
       press('Show all'),
       (page) => expect(page.getByText(/^Needs a category and type/).first()).toBeVisible(),
+    ],
+  ],
+  [
+    'emails that filed nothing, unproved and empty, in Needs you',
+    () => '/',
+    [
+      press('Show all'),
+      (page) => expect(page.getByText(/changed on its way after your email/)).toBeVisible(),
+      (page) => expect(page.getByText(/no receipt attached and no text/)).toBeVisible(),
+      (page) => expect(page.getByText(/Send it again from your own mailbox/)).toBeVisible(),
+      (page) =>
+        expect(
+          page.getByRole('link', { name: /^Attach the receipt: Fwd: Your Tuesday evening trip/ }),
+        ).toHaveAttribute('href', '/receipts'),
+      (page) => expect(page.getByRole('button', { name: /^Dismiss: Receipt$/ })).toBeVisible(),
     ],
   ],
   ['Receipts', () => '/receipts', []],
@@ -181,11 +347,163 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
     [press('Move to another report')],
   ],
   ['a closed report', (s) => `/reports/${s.reports.closed}`, []],
+  [
+    'submitting a report for approval',
+    (s) => `/reports/${s.reports.closed}`,
+    [press('Submit for approval')],
+  ],
+  ['a report waiting for your approval', (s) => `/reports/${s.reports.toApprove}`, []],
+  [
+    'returning a report with an expense rejected',
+    (s) => `/reports/${s.reports.toApprove}`,
+    [
+      press('Return it'),
+      (page) =>
+        page
+          .getByLabel(/^Reject /)
+          .first()
+          .check(),
+    ],
+  ],
+  ['a report returned with a rejected expense', (s) => `/reports/${s.reports.returned}`, []],
+  [
+    'a rejected expense in Needs you',
+    () => '/',
+    [
+      press('Show all'),
+      (page) =>
+        expect(page.getByText(/^Its report came back with it rejected/).first()).toBeVisible(),
+    ],
+  ],
   ['a local expense needing a reason', (s) => `/expenses/${s.expenses.fallback}`, []],
   ['a local expense with its reason', (s) => `/expenses/${s.expenses.lunch}`, []],
   ['organization settings', () => '/settings/organization', []],
   ['AI provider settings', () => '/settings/ai', []],
   ['sign-in settings', () => '/settings/sign-ins', []],
+  [
+    'adding an authenticator app',
+    () => '/settings/sign-ins',
+    [
+      (page) => expect(page.getByText('Password manager', { exact: true })).toBeVisible(),
+      press('Add an authenticator app'),
+      (page) => expect(page.getByRole('img', { name: /^QR code/ })).toBeVisible(),
+      (page) => expect(page.getByText('JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP')).toBeVisible(),
+    ],
+  ],
+  [
+    'the code asked for after signing in',
+    () => '/sign-in/code',
+    [
+      (page) => expect(page.getByLabel('Which authenticator app')).toBeVisible(),
+      (page) => expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible(),
+    ],
+  ],
+  [
+    'the code asked for before an admin change',
+    () => '/settings/features',
+    [
+      asksForTheCode('**/api/v1/settings/features/**'),
+      (page) => page.getByRole('switch', { name: 'Report export' }).click(),
+      (page) =>
+        expect(page.getByRole('heading', { name: 'Enter your code to continue' })).toBeVisible(),
+      (page) => expect(page.getByRole('heading', { name: 'Features', level: 1 })).toBeHidden(),
+    ],
+    undefined,
+    /status of 403/,
+  ],
+  [
+    'the code asked for before a read',
+    () => '/settings/organization',
+    [
+      asksForTheCodeToRead('**/api/v1/settings/organization'),
+      (page) => page.reload({ waitUntil: 'networkidle' }),
+      (page) =>
+        expect(page.getByRole('heading', { name: 'Enter your code to continue' })).toBeVisible(),
+      (page) => expect(page.getByText(/asks for it before anything else/)).toBeVisible(),
+      (page) => expect(page.getByLabel('Which authenticator app')).toBeVisible(),
+    ],
+    undefined,
+    /status of 403/,
+  ],
+  [
+    'an email that needs its own authenticator, held before a read',
+    () => '/settings/organization',
+    [
+      holdsThisEmail('**/api/v1/settings/organization'),
+      (page) => page.reload({ waitUntil: 'networkidle' }),
+      (page) =>
+        expect(
+          page.getByRole('heading', { name: 'This email needs its own authenticator', level: 1 }),
+        ).toBeVisible(),
+      (page) =>
+        expect(page.getByRole('heading', { name: `${E2E_USER}@example.com` })).toBeVisible(),
+      (page) =>
+        expect(page.getByRole('link', { name: 'Add one in Settings › Sign-ins' })).toBeVisible(),
+      // There is no code to enter yet, so it is never asked for one.
+      (page) =>
+        expect(page.getByRole('heading', { name: 'Enter your code to continue' })).toHaveCount(0),
+    ],
+    undefined,
+    /status of 403/,
+  ],
+  [
+    'an email that needs its own authenticator, adding one in Settings › Sign-ins',
+    () => '/settings/sign-ins',
+    [
+      holdsThisEmail('**/api/v1/me/organization', 'POST'),
+      noAuthenticatorsOfItsOwn,
+      (page) => page.reload({ waitUntil: 'networkidle' }),
+      (page) =>
+        expect(
+          page.getByRole('heading', { name: 'This email needs its own authenticator', level: 2 }),
+        ).toBeVisible(),
+      (page) => expect(page.getByRole('heading', { name: 'Your sign-ins' })).toHaveCount(0),
+      press('Add an authenticator app'),
+      (page) => expect(page.getByRole('img', { name: /^QR code/ })).toBeVisible(),
+    ],
+    undefined,
+    /status of 403/,
+  ],
+  [
+    'an email that isn’t let in, refused before a read',
+    () => '/settings/organization',
+    [
+      refusesThisEmail('**/api/v1/settings/organization'),
+      (page) => page.reload({ waitUntil: 'networkidle' }),
+      (page) =>
+        expect(
+          page.getByRole('heading', { name: 'This email isn’t let in to sign in', level: 1 }),
+        ).toBeVisible(),
+      (page) =>
+        expect(page.getByRole('heading', { name: `${E2E_USER}@example.com` })).toBeVisible(),
+      (page) =>
+        expect(page.getByText('Receipts you send from this email are still filed.')).toBeVisible(),
+      (page) => expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible(),
+      // Never asked for a code, or offered an authenticator.
+      (page) =>
+        expect(page.getByRole('heading', { name: 'Enter your code to continue' })).toHaveCount(0),
+      (page) => expect(page.getByRole('link', { name: /Settings › Sign-ins/ })).toHaveCount(0),
+    ],
+    undefined,
+    /status of 403/,
+  ],
+  [
+    'letting another email in, in Settings › Sign-ins',
+    () => '/settings/sign-ins',
+    [
+      listsEmailsLetIn,
+      (page) => page.reload({ waitUntil: 'networkidle' }),
+      (page) =>
+        expect(page.getByText(/^Let in until .+, to add its own authenticator app$/)).toBeVisible(),
+      (page) =>
+        expect(page.getByText('Not let in: receipts sent from it are still filed')).toBeVisible(),
+      (page) =>
+        expect(page.getByRole('button', { name: 'Withdraw riley@work.example' })).toBeVisible(),
+      (page) => page.getByRole('button', { name: 'Let in riley.old@example.net' }).click(),
+      (page) =>
+        expect(page.getByText(/^riley\.old@example\.net is let in for 24 hours/)).toBeVisible(),
+    ],
+  ],
   ['feature settings', () => '/settings/features', []],
   ['the audit trail, with its chain checked', () => '/settings/audit', []],
   ['the audit trail, older changes shown', () => '/settings/audit', [press('Show older changes')]],
@@ -246,9 +564,48 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
   ['mileage settings, with the route key and saved places', () => '/settings/mileage', []],
   ['people settings, with a member and a link not used yet', () => '/settings/people', []],
   ['removing someone', () => '/settings/people', [press('Remove sam')]],
+  [
+    'people settings, with who approves each person’s reports, one chosen who can’t approve now',
+    () => '/settings/people',
+    [
+      (page) =>
+        expect(page.getByText(/^sam can’t approve now, so your reports go to casey/)).toBeVisible(),
+      (page) => expect(page.getByLabel('Who approves sam’s reports')).toHaveValue(/.+/),
+    ],
+  ],
   ['an invite link this account can’t use', (s) => `/invite/${s.invites.join}`, []],
   ['a revoked invite link', (s) => `/invite/${s.invites.revoked}`, []],
 ];
+
+/** The bench user's two authenticator apps (F-11), as Supabase Auth lists them. */
+const factors = (
+  [
+    ['0192f7a0-0000-7000-8000-00000000f001', 'iPhone', '2026-10-05T09:00:00Z'],
+    ['0192f7a0-0000-7000-8000-00000000f002', 'Password manager', '2026-10-05T09:05:00Z'],
+  ] as const
+).map(([id, name, at]) => ({
+  id,
+  friendly_name: name,
+  factor_type: 'totp',
+  status: 'verified',
+  created_at: at,
+  updated_at: at,
+}));
+
+/** What Supabase Auth answers to adding one: a QR code to scan and the key to type. */
+const enrollment = {
+  id: '0192f7a0-0000-7000-8000-00000000f003',
+  type: 'totp',
+  friendly_name: 'Authenticator 3',
+  totp: {
+    qr_code:
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21" width="168" height="168">' +
+      '<rect width="21" height="21" fill="white"/><path d="M1 1h7v7H1zM13 1h7v7h-7zM1 13h7v7H1z"/>' +
+      '</svg>',
+    secret: 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP',
+    uri: 'otpauth://totp/ExpenseWise:riley@example.com?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP&issuer=ExpenseWise',
+  },
+};
 
 const session = {
   access_token: E2E_USER,
@@ -285,6 +642,14 @@ test.beforeEach(async ({ context }) => {
   });
   await context.route(`${E2E_SUPABASE_URL}/**`, (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }),
+  );
+  // Registered later, so they answer first: the user with their authenticator apps, and
+  // adding one (F-11).
+  await context.route(`${E2E_SUPABASE_URL}/auth/v1/user`, (route) =>
+    route.fulfill({ json: { ...session.user, factors } }),
+  );
+  await context.route(`${E2E_SUPABASE_URL}/auth/v1/factors`, (route) =>
+    route.request().method() === 'POST' ? route.fulfill({ json: enrollment }) : route.fallback(),
   );
 });
 
@@ -352,7 +717,7 @@ function rawDates(page: Page): Promise<string[]> {
   });
 }
 
-for (const [title, path, steps, at] of SCREENS) {
+for (const [title, path, steps, at, expected] of SCREENS) {
   test(`${title}: fits the screen and passes WCAG 2.2 AA, in light and dark`, async ({
     page,
   }, testInfo) => {
@@ -360,7 +725,9 @@ for (const [title, path, steps, at] of SCREENS) {
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('console', (message) => {
-      if (message.type() === 'error') errors.push(message.text());
+      if (message.type() === 'error' && !expected?.test(message.text())) {
+        errors.push(message.text());
+      }
     });
     const settled = requestsInFlight(page);
     const size = page.viewportSize()!;

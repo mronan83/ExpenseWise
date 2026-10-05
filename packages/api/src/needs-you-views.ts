@@ -5,12 +5,15 @@ import type {
   ReceiptRecord,
   ReceiptReviewRecord,
 } from '@expensewise/db';
+import type { ApprovalStore } from './approval.ts';
 import type { CategoryStore, UncodedNeedingYou } from './categories.ts';
 import { expenseCategory, type ExpenseCategory } from './category-views.ts';
 import type { FeatureGate } from './features.ts';
 import { amountView, inboxItem } from './receipt-views.ts';
 import { reportItem, unjustifiedItem } from './report-views.ts';
-import type { ReportsNeedingYou } from './reports.ts';
+import { reportSummary } from './report-views.ts';
+import type { ReportsNeedingYou, ReturnedNeedingYou } from './reports.ts';
+import { unfiledEmailItem } from './unfiled-emails.ts';
 
 export interface ReceiptsNeedingYou {
   readonly receipts: readonly ReceiptRecord[];
@@ -29,6 +32,18 @@ export async function askForCoding(
   orgId: string,
 ): Promise<boolean> {
   return options.categories !== undefined && (await features.isOn(orgId, 'expenses.categories'));
+}
+
+/**
+ * Whether Needs you lists reports to approve and reports that came back (#24): where approval
+ * can be on, and is on for the organization. Off, Needs you shows what it always has.
+ */
+export async function askForApproval(
+  options: { readonly approvals?: ApprovalStore },
+  features: FeatureGate,
+  orgId: string,
+): Promise<boolean> {
+  return options.approvals !== undefined && (await features.isOn(orgId, 'reports.approval'));
 }
 
 /**
@@ -61,12 +76,57 @@ function uncodedItems(uncoded: UncodedNeedingYou | undefined) {
   });
 }
 
+/** A report that came back to the person, with its approver's comment (FR-GOV-11). */
+function returnedItem(returned: ReturnedNeedingYou, now: Date, converting: boolean) {
+  return {
+    kind: 'report' as const,
+    report: reportSummary(returned.report, now, converting),
+    reason: { code: 'returned' as const, comment: returned.comment, by: returned.by },
+  };
+}
+
+/** An expense its report came back with rejected, and why (FR-GOV-12). */
+function rejectedItems(returned: ReturnedNeedingYou) {
+  return returned.rejected.map(({ expense, reason, automatic }) => ({
+    kind: 'expense' as const,
+    expense: {
+      id: expense.id,
+      merchant: expense.merchant,
+      date: expense.transactionDate,
+      amount: amountView(expense.amountMinor, expense.currency),
+      receiptId: expense.receiptId,
+    },
+    reason: {
+      code: 'rejected' as const,
+      why: reason,
+      automatic,
+      reportId: returned.report.report.id,
+    },
+  }));
+}
+
+/** A report waiting for the person's decision (FR-GOV-02). */
+function toApproveItem(
+  contents: ReportsNeedingYou['reports'][number],
+  now: Date,
+  converting: boolean,
+) {
+  return {
+    kind: 'report' as const,
+    report: reportSummary(contents, now, converting),
+    reason: { code: 'to_approve' as const },
+  };
+}
+
 /**
  * Everything in Needs you, in the order to do it (FR-EXP-02): a report that is overdue or in
- * its last week with something left, then receipts that need a look, newest first, then local
- * expenses that need a justification, oldest first, then, while categories are on, expenses
- * with no category and type, oldest first (Q27), then reports ready to close. With
- * `converting`, reports total in their reimbursement currency (FR-EXP-13).
+ * its last week with something left; while approval is on, each report that came back with
+ * its rejected expenses (FR-GOV-12), then reports waiting for the person's decision; then
+ * receipts that need a look, newest first, then, while they are on, emails that filed
+ * nothing, newest first (#59), then local expenses that need a justification, oldest first,
+ * then, while categories are on, expenses with no category and type, oldest first (Q27), then
+ * reports ready to close. A report that came back is listed as that, not as ready to close.
+ * With `converting`, reports total in their reimbursement currency (FR-EXP-13).
  */
 export function needsYouItems(
   receipts: ReceiptsNeedingYou,
@@ -79,15 +139,20 @@ export function needsYouItems(
   const receiptItems = receipts.receipts
     .map((r) => inboxItem(r, receipts.runs, receipts.reviews, receipts.pairs, settingsOn))
     .filter((item) => item !== null);
+  const returned = reports.returned ?? [];
+  const back = new Set(returned.map((r) => r.report.report.id));
   const reportItems = reports.reports
     .map((r) => reportItem(r, now, converting))
     .filter((item) => item !== null);
   return [
     ...reportItems.filter((i) => i.reason.code !== 'ready_to_close'),
+    ...returned.flatMap((r) => [returnedItem(r, now, converting), ...rejectedItems(r)]),
+    ...(reports.toApprove ?? []).map((r) => toApproveItem(r, now, converting)),
     ...receiptItems,
+    ...(reports.emails ?? []).map(unfiledEmailItem),
     ...reports.unjustified.map(unjustifiedItem),
     ...uncodedItems(reports.uncoded),
-    ...reportItems.filter((i) => i.reason.code === 'ready_to_close'),
+    ...reportItems.filter((i) => i.reason.code === 'ready_to_close' && !back.has(i.report.id)),
   ];
 }
 

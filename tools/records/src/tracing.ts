@@ -14,6 +14,10 @@ export const GAPS: readonly Gap[] = [
       'Found merging PR #58: an expense points at its category and type (ADR-0036) and copies neither name, so renaming one shows the new name on every claim that used it, submitted or exported ones included. One in use can be retired but never deleted, so nothing is lost, but an old claim no longer reads as it did.',
     fix: 'Copy the category and type names onto an expense when its report is submitted, as the mileage and FX rates are copied, and show those on submitted claims and exports (#70).',
     backlog: 70,
+    closed: {
+      date: '2026-10-05',
+      note: 'PR #60, with approval (#24): submitting a report copies each expense’s category and type names onto it, and its parts’, and its export and totals by category read those once it is submitted (#70).',
+    },
   },
   {
     id: 'GAP-28',
@@ -34,6 +38,10 @@ export const GAPS: readonly Gap[] = [
       'Found building AI model settings (#52). NFR-AI-04 asks for the model tier to be re-confirmed after about 100 real receipts. The primary is now your choice in Settings › AI models, with each model’s record beside it, but nothing counts the receipts read since the choice or asks you to look again.',
     fix: 'Count the receipts read since the primary was last chosen, and at about 100 ask in Needs you to keep it or change it (#72).',
     backlog: 72,
+    closed: {
+      date: '2026-10-05',
+      note: 'Withdrawn at your word (Oct 5): no reminder to re-confirm the model. Each model’s record stays beside it in Settings › AI models for whenever you look (#72).',
+    },
   },
   {
     id: 'GAP-30',
@@ -44,6 +52,10 @@ export const GAPS: readonly Gap[] = [
       'FR-INS-01 asks Home for business miles once mileage exists, and manual mileage was built in PR #58 (#17). Home’s request has no flag check of its own yet, so the figure was left out of that change rather than shown while mileage is switched off. A drive does count in Home’s spend for the month, as any expense does.',
     fix: 'Sum the person’s drives dated this month and show the figure on Home behind the expenses.mileage flag (#73).',
     backlog: 73,
+    closed: {
+      date: '2026-10-05',
+      note: 'Home’s month shows Business miles while mileage is on: the person’s own drives dated this month, by hand and by route once measured, added up exactly, opening the month’s expenses (#73). What awaits reimbursement is #89.',
+    },
   },
   {
     id: 'GAP-31',
@@ -55,6 +67,81 @@ export const GAPS: readonly Gap[] = [
       'Found building #50 (ADR-0035). Members see only their own receipts, expenses, trips and reports, but every member’s transaction can read the organization’s whole audit trail, which it reads to chain the next event, and its outbox. No screen or API operation shows either to a member, so nothing reaches one through the app; a screen that read them would show colleagues’ merchants and amounts.',
     fix: 'Hold reading the trail to owners, finance admins and auditors, with the chain’s last link read by an owner-run function, and the outbox to the system (#74).',
     backlog: 74,
+  },
+  {
+    id: 'GAP-32',
+    title: 'The eval harness has never been run against a model.',
+    affects: ['NFR-AI-01', 'NFR-AI-04'],
+    severity: 'Low',
+    evidence:
+      'Found closing #39 and #72 on Oct 5. The harness scores public and synthetic receipts, but no model key has reached the build environment, so it has never read one: accuracy by layer is unmeasured, and the tier is chosen from your own receipts compared on the page instead (ADR-0017).',
+    fix: 'Run the eval set against the models with your approval of the spend, estimated before it starts, and report accuracy by layer (#84).',
+    backlog: 84,
+  },
+  {
+    id: 'GAP-33',
+    title:
+      'A session that skipped the second factor can still use the API, short of admin actions.',
+    affects: ['FR-PLT-03', 'F-11'],
+    severity: 'Medium',
+    evidence:
+      'Found building #8 on Oct 5. The app asks for the code before anything else, but the API refuses aal1 only for admin actions and approving (FR-GOV-04), because a token doesn’t say whether its person has an authenticator. A stolen password, used against the API directly, still reads that person’s records (all of them, for an owner or finance admin), changes their own, and can link another sign-in that has no authenticator.',
+    fix: 'Refuse aal1 on every request of someone with a verified authenticator while the organization has the second factor on, and require aal2 to link a sign-in (#85, Q41).',
+    backlog: 85,
+    closed: {
+      date: '2026-10-05',
+      note: 'ADR-0044: while the second factor is on, a session of someone whose sign-in has a verified authenticator gets nothing from the API until it passes the code, but who they are and the organization’s switches, checked once as each request finds its caller; linking a sign-in needs the code from anyone with an authenticator, whatever the switch. The API reads Supabase Auth’s own record of factors through one function, so removing one takes effect at once. A person’s other email with no authenticator of its own is GAP-35.',
+    },
+  },
+  {
+    id: 'GAP-34',
+    title: 'An approved expense can’t be corrected.',
+    affects: ['FR-EXP-03', 'F-18'],
+    severity: 'Medium',
+    evidence:
+      'Found building approval (#24) in PR #60. An approved expense is locked, in the app and in the database, as FR-EXP-03 asks, but nothing makes the reversal and new version that correct one; the expense keeps a version and a reversal link that nothing writes yet.',
+    fix: 'Reverse an approved expense with a copy that cancels it, pointing at it, and file a new version for its member to correct and submit, each in the audit trail (#87).',
+    backlog: 87,
+  },
+  {
+    id: 'GAP-35',
+    title: 'A person’s other email with no authenticator of its own still opens on its password.',
+    affects: ['FR-PLT-03', 'FR-PLT-04', 'F-11'],
+    severity: 'Low',
+    evidence:
+      'Found building #85 on Oct 5. Each email a person signs in with is its own Supabase Auth user with its own authenticators, and the second factor holds each sign-in by its own (ADR-0044), as the code screen does. Linking one now needs the code from someone with an authenticator, but the email linked, or linked before, has none until its person adds one, and opens everything on its password alone.',
+    fix: 'Once a person has an authenticator on any of their sign-ins, hold every other sign-in of theirs that has none until it adds one and passes it, with the app saying which email needs one (#88, Q43).',
+    backlog: 88,
+    closed: {
+      date: '2026-10-05',
+      note: 'ADR-0044, at your answer to Q43: while the second factor is on, a session of an email with no authenticator of its own, of a person with one on another of their emails, gets nothing from the API but who they are and the switches, whatever its session says: 403 `authenticator_required`, naming the email, until it adds its own and enters its code. The app says which email needs one, never asks it for a code, and sends it to Settings › Sign-ins, where adding one works. The API asks `person_has_authenticator`, one owner-run function over the person’s sign-ins that reads Supabase Auth only through `sign_in_has_authenticator`, so removing a person’s only authenticator frees their other emails at once. Whoever has a held email’s password can still add an authenticator to it: GAP-36.',
+    },
+  },
+  {
+    id: 'GAP-36',
+    title:
+      'Whoever has the password of a person’s held email can add an authenticator to it and get in.',
+    affects: ['FR-PLT-03', 'FR-PLT-04', 'F-11'],
+    severity: 'Low',
+    evidence:
+      'Found building #88 on Oct 5. A person’s other email with no authenticator of its own is held until it adds one and enters its code (Q43). Supabase Auth lets an email with no verified factor add one on its password alone, so whoever has that password, the person or someone who stole it, can add an authenticator of their own in Settings › Sign-ins, enter its code, and open everything. The hold stops a password used as it is; it can’t tell the person adding one from someone else.',
+    fix: 'By your answer to Q44: once a person has an authenticator, only an email they have let in signs in; their other emails still forward receipts, and one is let in only from an email that passed its code, then adds its own authenticator (#90).',
+    backlog: 90,
+    closed: {
+      date: '2026-10-05',
+      note: 'PR #60, at your answer to Q44 (ADR-0044, A person’s emails let in): while the second factor is on and a person has an authenticator, only an email they let in opens the app. The first of their emails to pass its code is let in then; another is refused, with 403 `sign_in_not_let_in` naming it, whatever its session says, its own authenticator included, and the app says it isn’t let in, that its receipts are still filed and how to let it in, never asking for a code. From an email let in that passed its code, Settings › Sign-ins lets another in, for 24 hours, in which it adds its own authenticator and passes its code; then it is let in for good, until withdrawn. Kept in `let_in_sign_ins`, each change audited, and only the person, from a session that passed the code, changes it, in the database too. Email-in files receipts from every address, let in or not. Before the first email passes its code, whoever holds another’s password could be let in first: GAP-37.',
+    },
+  },
+  {
+    id: 'GAP-37',
+    title:
+      'Before any of a person’s emails is let in, whoever has the password of one can add an authenticator to it and be let in first.',
+    affects: ['FR-PLT-03', 'FR-PLT-04', 'F-11'],
+    severity: 'Low',
+    evidence:
+      'Found building #90 on Oct 5. By your answer to Q44, the first of a person’s emails to pass its code is let in. Supabase Auth lets an email with no authenticator add one on its password alone, so until the person’s own email passes its code, for instance before they ever add an authenticator, whoever holds the password of another email linked to them can add theirs to it, pass its code and be let in first. The person’s own email is then refused and says it isn’t let in, which tells them; the owner removes that authenticator in Supabase and resets who is let in (the runbook).',
+    fix: 'If your answer to Q45 asks for it: let in automatically only the email the person first signed in with, which until then may add its own authenticator, and refuse any other until it is let in from it (#91).',
+    backlog: 91,
   },
   {
     id: 'GAP-25',
@@ -205,6 +292,10 @@ export const GAPS: readonly Gap[] = [
       'The API reads the session’s assurance level (`aal1` or `aal2`), but nothing enrolls a factor or asks for one.',
     fix: 'TOTP enrollment and challenge on the sign-in page; require `aal2` where approvals and admin actions need it (#8).',
     backlog: 8,
+    closed: {
+      date: '2026-10-05',
+      note: 'Behind `security.second-factor` (ADR-0042): authenticator apps are added in Settings › Sign-ins, and while the organization has it on, sign-in asks for the code and every admin action needs aal2; approving someone else’s spend calls the same check with #24. What a token from a password alone can still do through the API is GAP-33.',
+    },
   },
   {
     id: 'GAP-04',
@@ -353,6 +444,10 @@ export const GAPS: readonly Gap[] = [
     evidence: 'The Claude extractor passes no tools today, but no test fails if one is added.',
     fix: 'Assert in the extractor tests that no tools are sent (#38).',
     backlog: 38,
+    closed: {
+      date: '2026-10-05',
+      note: 'A test builds every request a reader can send, to each Claude model and to OpenAI, with each addition on, off and left out, for a photo and a PDF, and fails if any carries a tool, a tool choice or a function, or a field beyond those it sends today (#38).',
+    },
   },
   {
     id: 'GAP-16',
@@ -831,10 +926,100 @@ export const QUESTIONS: readonly Question[] = [
     affects: ['FR-INT-20', 'F-54'],
     answer: { date: '2026-10-04', text: 'A: rides, flights and rail.' },
   },
+  {
+    id: 'Q40',
+    title: 'Approval and the second factor',
+    ask: 'Approval (#24) needs a second factor before anyone approves someone else’s spend, and none is built yet (#8). A: build the second factor in the same batch, behind its own switch. B: approval on a password alone for now. C: approval for a one-person organization only, until #8. D: leave #24 and #70 for later.',
+    why: 'Approving someone else’s spend is the action most worth protecting, and the second factor is all that stands between #24 and its whole rule.',
+    recommendation: 'A.',
+    affects: ['FR-GOV-04', 'FR-PLT-03', 'F-11', 'F-18'],
+    answer: {
+      date: '2026-10-05',
+      text: 'A: the second factor is built in the same batch as approval, behind its own switch.',
+    },
+  },
+  {
+    id: 'Q41',
+    title: 'How far the second factor reaches',
+    ask: 'With the second factor on, the app asks for the code at sign-in, and the API refuses admin actions and approving without it, as FR-GOV-04 says. A token from a password alone, used directly against the API, can still read that person’s records and change their own (GAP-33). A: refuse every request of someone with an authenticator until they enter the code, and need it to link a sign-in (#85). B: keep it to admin actions and approving, as built.',
+    why: 'An owner or finance admin sees everyone’s records, so their password alone still reaches all of the organization’s spending.',
+    recommendation: 'A, before a second person joins.',
+    affects: ['FR-PLT-03', 'GAP-33', 'F-11'],
+    answer: {
+      date: '2026-10-05',
+      text: 'A: refuse every request of someone with an authenticator until they enter the code, and need it to link a sign-in (#85).',
+    },
+  },
+  {
+    id: 'Q42',
+    title: 'Who a team member’s report goes to',
+    ask: 'Approval (#24) sends a report to one approver. As built: the member’s manager if one is set and can approve it, otherwise the longest-standing approver, then finance admin, then owner, never the member themselves; an owner or finance admin may also decide in that person’s place. A: keep that. B: as A, and let an owner choose each member’s approver in Settings › People (#86). C: something else.',
+    why: 'In a small team there is usually one obvious approver, and routing by role finds them without a setting. Once two people approve, who gets which member’s report matters, and nothing sets a manager yet.',
+    recommendation: 'A until a second approver joins, then B.',
+    affects: ['FR-GOV-02', 'F-18'],
+    answer: {
+      date: '2026-10-05',
+      text: 'B: keep the routing as built, and let an owner choose each member’s approver in Settings › People now (#86).',
+    },
+  },
+  {
+    id: 'Q43',
+    title: 'A person’s other email, once they have an authenticator',
+    ask: 'With the second factor on, a session of someone with an authenticator gets nothing until it passes the code (#85). Each email a person signs in with has its own authenticators, so the code is asked of the email that has one; another email of theirs with none still opens on its password, as linked before or since (GAP-35). A: hold that email until it adds its own authenticator and enters its code, the app saying which email needs one (#88). B: keep each email to its own authenticators, as built.',
+    why: 'Linking a second email now needs the code, but the email linked starts with no authenticator, so a stolen password for it still opens the person’s receipts, and an owner’s everyone’s.',
+    recommendation: 'A, before anyone links a second email with the second factor on.',
+    affects: ['FR-PLT-03', 'FR-PLT-04', 'GAP-35', 'F-11'],
+    answer: {
+      date: '2026-10-05',
+      text: 'A: hold a person’s other email until it adds its own authenticator and enters its code, the app saying which email needs one (#88).',
+    },
+  },
+  {
+    id: 'Q44',
+    title: 'How one of a person’s other emails is let in',
+    ask: 'By your answer to Q43, a person’s other email with no authenticator of its own is held until it adds one (#88), but Supabase Auth lets an email with none add one on its password alone, so whoever has that password could add their own and get in (GAP-36). A: a new authenticator on another email counts only once confirmed from an email that already passed its code. B: once a person has an authenticator, only an email with one signs in; their other emails still forward receipts but can’t open the app. C: keep it as built.',
+    why: 'Each email a person links is its own sign-in with its own password, so each is its own way in; the hold stops a password used alone, not one used to add an authenticator.',
+    recommendation: 'A.',
+    affects: ['FR-PLT-03', 'FR-PLT-04', 'GAP-36', 'F-11'],
+    answer: {
+      date: '2026-10-05',
+      text: 'B, with the choice to add an authenticator to another email: only an email with an authenticator signs in, the others still forward receipts, and the person may let another email in from one that has passed its code, after which it adds its own authenticator (#90).',
+    },
+  },
+  {
+    id: 'Q45',
+    title: 'Which of a person’s emails is let in first',
+    ask: 'By your answer to Q44, once a person has an authenticator only an email they let in signs in, and the first of their emails to pass its code is let in (#90). Until then, whoever holds the password of another email linked to them could add an authenticator to it and be let in first (GAP-37); the person would find their own email refused, and the owner would reset it as the runbook says. A: let in automatically only the email the person first signed in with, which until then may add its own authenticator; any other is refused until it is let in from it (#91). B: keep the first to pass its code, as built.',
+    why: 'Linking an email needs the passwords of both and, from someone with an authenticator, the code, so the email a person first signed in with is their own; a later one may be the one whose password leaked.',
+    recommendation: 'A, before a second person with two emails joins.',
+    affects: ['FR-PLT-03', 'FR-PLT-04', 'GAP-37', 'F-11'],
+    answer: {
+      date: '2026-10-05',
+      text: 'A, in the next pull request: let in automatically only the email the person first signed in with; any other waits to be let in from it (#91).',
+    },
+  },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-05',
+    change:
+      'Your answers of Oct 5 on PR #60. Q41: the second factor locks everything for someone with an authenticator: every request is refused until they enter the code, and linking a sign-in needs it (#85, unblocked). Q42: a report keeps finding its approver as built, and an owner chooses each member’s approver in Settings › People now (#86, unblocked). Both join PR #60.',
+    by: 'Claude, at your direction',
+  },
+  {
+    date: '2026-10-05',
+    change:
+      'PR #60, built behind its own switches, each off until you switch it on in Settings › Features. Single-step approval (#24, F-18, ADR-0043): a closed report is submitted to one approver, never while an expense differs from its receipt without a reason, and approved, or returned with a comment and each rejected expense and why, in Needs you; a one-person organization self-attests, and approving someone else’s spend needs the second factor. A submitted claim keeps its category and type names (#70, GAP-27 closed). The second factor (#8, F-11, ADR-0042): an authenticator app in Settings › Sign-ins, its code at sign-in, and before every admin action, with switching it on refused until your own session has passed it (GAP-03 closed). Emails from your address that filed nothing show in Needs you with why, for 30 days or until dismissed (#59). A report’s export adds From and to, and Stay (#83); Home shows the month’s business miles (#73, GAP-30 closed); a test proves no tools ever reach a model (#38, GAP-15 closed). At your answers to Q41 and Q42, also in PR #60: while the second factor is on, someone with an authenticator gets nothing from the API until they enter the code, and linking a sign-in always needs it (#85, ADR-0044, GAP-33 closed); an owner chooses each member’s approver in Settings › People (#86). Your answer to Q43, also in PR #60: once a person has an authenticator, their other emails are held until each adds its own (#88, GAP-35 closed). Your answer to Q44, also in PR #60: once a person has an authenticator, only an email they let in signs in, the others still forward receipts, and another email is let in from one that passed its code, a letting-in lapsing after 24 hours unless it adds its own authenticator (#90, GAP-36 closed). Your answer to Q45: only the email a person first signed in with is let in automatically, built in the next pull request (#91, GAP-37). New: GAP-34 with #87; #89.',
+    by: 'Claude, at your direction',
+  },
+  {
+    date: '2026-10-05',
+    change:
+      'Your decisions of Oct 5. Q40: the second factor (#8) is built in the same batch as approval (#24), behind its own switch. #72 is withdrawn: you don’t need a reminder to confirm the AI model, so NFR-AI-04 no longer asks for one and GAP-29 is closed. #39 is closed: your Gmail is not searched, so D-12 is decided and the eval set’s layers are public, synthetic and real captures (ADR-0012, NFR-AI-01). What those two leave missing is now GAP-32: the eval harness has never been run against a model, which waits on your approval of a run’s spend (#84).',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-04',
     change:

@@ -60,6 +60,15 @@ html {
   scroll-padding-bottom: calc(4rem + env(safe-area-inset-bottom));
 }
 
+/*
+ * While an admin action waits for the second factor, its code is the only thing on screen. The
+ * page underneath is hidden, not unmounted, so it carries on where it was once the code is in.
+ * An email that needs its own authenticator (#88), or isn't let in (#90), is told so the same way.
+ */
+body:has(> [data-step-up]) > :not([data-step-up]) {
+  display: none !important;
+}
+
 body {
   background: var(--paper);
   color: var(--ink);

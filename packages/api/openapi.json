@@ -3,7 +3,7 @@
   "info": {
     "title": "ExpenseWise API",
     "version": "1.0.0",
-    "description": "The API behind the ExpenseWise web and iOS apps. Money is always integer minor units plus an ISO 4217 code. Errors are RFC 9457 problem documents."
+    "description": "The API behind the ExpenseWise web and iOS apps. Money is always integer minor units plus an ISO 4217 code. Errors are RFC 9457 problem documents. While an organization has the second factor switched on, every request of a person whose sign-in has a verified authenticator, from a session that has not passed it (aal1), is refused with 403 second_factor_required, except GET /v1/me and GET /v1/features. Once a person has an authenticator, only a sign-in they let in opens the API: the first of theirs to pass its code is let in, and a session of another is refused the same way with 403 sign_in_not_let_in, naming its email, until they let it in from a sign-in let in that passed its code. One let in with no authenticator of its own is refused with 403 authenticator_required, naming its email, until it adds one and passes it."
   },
   "servers": [
     {
@@ -347,6 +347,10 @@
             "items": {
               "$ref": "#/components/schemas/SignIn"
             }
+          },
+          "canLetIn": {
+            "type": "boolean",
+            "description": "While the organization has the second factor switched on (#90): whether this session may let another of the person’s sign-ins in, or withdraw one: its own is let in, has an authenticator and passed its code."
           }
         },
         "required": [
@@ -371,6 +375,23 @@
           "current": {
             "type": "boolean",
             "description": "Whether this is the sign-in making the request."
+          },
+          "letIn": {
+            "type": "string",
+            "enum": [
+              "yes",
+              "waiting",
+              "no"
+            ],
+            "description": "While the organization has the second factor switched on (#90): whether this sign-in is let in. Once the person has an authenticator, only a sign-in let in opens the app; the others still forward receipts. waiting: let in from another of theirs, until it adds its own authenticator and passes its code, or lapses at letInLapsesAt."
+          },
+          "letInLapsesAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time",
+            "description": "When letting it in lapses, while it waits; null otherwise."
           }
         },
         "required": [
@@ -467,11 +488,14 @@
           "receipts.model-settings",
           "receipts.field-sources",
           "receipts.capture-time",
+          "receipts.unfiled-emails",
           "receipts.journeys",
           "expenses.mileage",
           "expenses.route-mileage",
           "reports.export",
+          "reports.approval",
           "governance.audit-trail",
+          "security.second-factor",
           "team.invites",
           "expenses.itemized",
           "expenses.split"
@@ -1112,6 +1136,9 @@
           },
           {
             "$ref": "#/components/schemas/ExpenseInboxItem"
+          },
+          {
+            "$ref": "#/components/schemas/EmailInboxItem"
           }
         ],
         "discriminator": {
@@ -1119,7 +1146,8 @@
           "mapping": {
             "receipt": "#/components/schemas/ReceiptInboxItem",
             "report": "#/components/schemas/ReportInboxItem",
-            "expense": "#/components/schemas/ExpenseInboxItem"
+            "expense": "#/components/schemas/ExpenseInboxItem",
+            "email": "#/components/schemas/EmailInboxItem"
           }
         }
       },
@@ -1298,9 +1326,19 @@
                 "enum": [
                   "overdue",
                   "closing_soon",
-                  "ready_to_close"
+                  "ready_to_close",
+                  "returned",
+                  "to_approve"
                 ],
-                "description": "overdue: past day 28 and nothing ready. closing_soon: in its last week, something still needing review, so reimbursement may wait. ready_to_close: nothing left to do."
+                "description": "overdue: past day 28 and nothing ready. closing_soon: in its last week, something still needing review, so reimbursement may wait. ready_to_close: nothing left to do. returned: its approver sent it back, with a comment (FR-GOV-11). to_approve: it waits for the person’s decision (FR-GOV-02). The last two only while approval is on."
+              },
+              "comment": {
+                "type": "string",
+                "description": "returned: why it came back, in its approver’s words."
+              },
+              "by": {
+                "type": "string",
+                "description": "returned: who sent it back."
               }
             },
             "required": [
@@ -1567,9 +1605,23 @@
                 "type": "string",
                 "enum": [
                   "justification",
-                  "uncoded"
+                  "uncoded",
+                  "rejected"
                 ],
-                "description": "justification: a local expense says nothing yet of why (FR-EXP-14). uncoded: it has no category and type yet, while categories are on (FR-EXP-11, Q27)."
+                "description": "justification: a local expense says nothing yet of why (FR-EXP-14). uncoded: it has no category and type yet, while categories are on (FR-EXP-11, Q27). rejected: its report came back with it rejected, while approval is on (FR-GOV-12)."
+              },
+              "why": {
+                "type": "string",
+                "description": "rejected: why, in its approver’s words or the review’s."
+              },
+              "automatic": {
+                "type": "boolean",
+                "description": "rejected: by the review on its own, because it differs from its receipt."
+              },
+              "reportId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "rejected: the report it came back on."
               }
             },
             "required": [
@@ -1664,6 +1716,86 @@
           "basis"
         ],
         "description": "uncoded: what is suggested for it, or missing when nothing is."
+      },
+      "EmailInboxItem": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "email"
+            ]
+          },
+          "email": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "subject": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "example": "Fwd: Your Tuesday evening trip"
+              },
+              "from": {
+                "type": "string",
+                "description": "The address it came from: always one the person signs in with.",
+                "example": "riley@example.com"
+              },
+              "receivedAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When it arrived."
+              }
+            },
+            "required": [
+              "id",
+              "subject",
+              "from",
+              "receivedAt"
+            ]
+          },
+          "reason": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "unproved",
+                  "empty"
+                ],
+                "description": "unproved: nothing proved it came from the person, so nothing in it was filed (ADR-0026). empty: it had nothing attached that could be a receipt, and no text."
+              },
+              "problem": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "enum": [
+                  "unsigned",
+                  "signature_failed",
+                  "not_aligned",
+                  "partly_signed",
+                  null
+                ],
+                "description": "unproved: why. unsigned: no DKIM signature. signature_failed: none checks out, often because a mail system changed it after signing. not_aligned: signed by a domain other than its address’s, such as a mailing service. partly_signed: the signature leaves part of it out. Null when not known, and for empty."
+              }
+            },
+            "required": [
+              "code",
+              "problem"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "email",
+          "reason"
+        ],
+        "description": "An email from the person’s own address that filed nothing, while emails that filed nothing are on (#59). Never its text. It shows for 30 days after it arrived, unless dismissed first."
       },
       "ReceiptDetail": {
         "allOf": [
@@ -3463,6 +3595,26 @@
               },
               "split": {
                 "$ref": "#/components/schemas/ExpenseSplit"
+              },
+              "claim": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "Why it claims less than its receipt, in the person’s words."
+                  },
+                  "check": {
+                    "$ref": "#/components/schemas/ReceiptCheck"
+                  }
+                },
+                "required": [
+                  "reason",
+                  "check"
+                ],
+                "description": "How it holds up against its receipt for submitting and review: it may claim less with a reason, never more (Q6). Only while `reports.approval` is on."
               }
             },
             "required": [
@@ -3912,6 +4064,70 @@
           "type",
           "amount",
           "lines"
+        ]
+      },
+      "ReceiptCheck": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "string",
+            "enum": [
+              "matches",
+              "explained",
+              "differs",
+              "no_receipt"
+            ],
+            "description": "matches: it is what its receipt shows. explained: it claims less than its receipt, with a reason or lines left out (FR-EXP-10). differs: it doesn’t hold up against its receipt, so it can’t be submitted and is rejected on review (FR-GOV-10, FR-GOV-13). no_receipt: a drive, or an expense typed in, has nothing to differ from."
+          },
+          "differences": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "merchant",
+                "date",
+                "currency",
+                "amount"
+              ]
+            },
+            "description": "differs: the fields that aren’t its receipt’s."
+          },
+          "over": {
+            "type": "boolean",
+            "description": "differs: it claims more than its receipt."
+          },
+          "needsReason": {
+            "type": "boolean",
+            "description": "differs: it claims less than its receipt, and a reason would settle it."
+          },
+          "explainedBy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "reason",
+              "lines",
+              null
+            ],
+            "description": "explained: the person’s own reason, or the lines left out."
+          },
+          "text": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "differs: why, in a sentence.",
+            "example": "Its date isn’t its receipt’s."
+          }
+        },
+        "required": [
+          "state",
+          "differences",
+          "over",
+          "needsReason",
+          "explainedBy",
+          "text"
         ]
       },
       "EditExpense": {
@@ -5195,6 +5411,25 @@
                   "expenses",
                   "spent"
                 ]
+              },
+              "miles": {
+                "type": "object",
+                "properties": {
+                  "total": {
+                    "type": "string",
+                    "description": "The miles of the person’s drives dated this month, added up exactly, as a plain decimal: a drive logged by hand, and a route drive once measured.",
+                    "example": "79.4"
+                  },
+                  "drives": {
+                    "type": "integer",
+                    "description": "How many drives claim them."
+                  }
+                },
+                "required": [
+                  "total",
+                  "drives"
+                ],
+                "description": "Business miles (FR-INS-01). Only while expenses.mileage is on, and only when a drive dated this month claims miles."
               }
             },
             "required": [
@@ -5586,6 +5821,447 @@
         },
         "required": [
           "justification"
+        ],
+        "additionalProperties": false
+      },
+      "Approval": {
+        "type": "object",
+        "properties": {
+          "reportId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "closed",
+              "submitted",
+              "in_approval",
+              "approved",
+              "settled"
+            ],
+            "description": "open: trips and local expenses join it. closed: done, by the person or on day 28, and reopenable until submitted. Submitting is the person’s own act (FR-EXP-12)."
+          },
+          "member": {
+            "type": "string",
+            "description": "Whose report it is."
+          },
+          "mine": {
+            "type": "boolean",
+            "description": "Whether it is the caller’s own."
+          },
+          "approver": {
+            "$ref": "#/components/schemas/NamedMember"
+          },
+          "selfAttests": {
+            "type": "boolean",
+            "description": "A one-person organization’s owner approves their own, and says so (FR-GOV-03)."
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ApprovalStep"
+            },
+            "description": "Each round, oldest first."
+          },
+          "returned": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "comment": {
+                "type": "string"
+              },
+              "by": {
+                "type": "string"
+              },
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "comment",
+              "by",
+              "at"
+            ],
+            "description": "Its latest return, while it is back with its member."
+          },
+          "expenses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewedExpense"
+            },
+            "description": "Every expense on it, its trips’ and its local ones, in date order."
+          },
+          "can": {
+            "type": "object",
+            "properties": {
+              "submit": {
+                "type": "boolean"
+              },
+              "approve": {
+                "type": "boolean"
+              },
+              "return": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "submit",
+              "approve",
+              "return"
+            ],
+            "description": "What the caller may do with it now."
+          },
+          "why": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "not_closed",
+                  "differs",
+                  "no_approver",
+                  "self_approval",
+                  "not_an_approver",
+                  "not_your_approval",
+                  "rejected",
+                  "second_factor_required"
+                ]
+              },
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "code",
+              "detail"
+            ],
+            "description": "Why the next step can’t be taken by the caller, if it can’t."
+          },
+          "secondFactor": {
+            "type": "string",
+            "enum": [
+              "needed",
+              "passed",
+              "not_needed"
+            ],
+            "description": "For deciding it: approving someone else’s spend needs the second factor in this session (FR-GOV-04); a one-person organization’s self-attestation does not."
+          }
+        },
+        "required": [
+          "reportId",
+          "status",
+          "member",
+          "mine",
+          "approver",
+          "selfAttests",
+          "steps",
+          "returned",
+          "expenses",
+          "can",
+          "why",
+          "secondFactor"
+        ]
+      },
+      "NamedMember": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "memberId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "memberId",
+          "name"
+        ],
+        "description": "Who it is with while it waits for approval, and once decided who decided it; before it is submitted, who it would go to now. Null when no one else in the team can approve it."
+      },
+      "ApprovalStep": {
+        "type": "object",
+        "properties": {
+          "sequence": {
+            "type": "integer"
+          },
+          "approver": {
+            "type": "string",
+            "description": "Who it went to, or who decided it."
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "returned"
+            ]
+          },
+          "comment": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "decidedAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "sequence",
+          "approver",
+          "decision",
+          "comment",
+          "decidedAt",
+          "createdAt"
+        ]
+      },
+      "ReviewedExpense": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "merchant": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "amount": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "amountMinor": {
+                "type": "integer",
+                "description": "Integer minor units, e.g. cents."
+              },
+              "currency": {
+                "type": "string",
+                "example": "USD"
+              },
+              "decimal": {
+                "type": "string",
+                "example": "6.50",
+                "description": "The same amount, for display."
+              }
+            },
+            "required": [
+              "amountMinor",
+              "currency",
+              "decimal"
+            ]
+          },
+          "receiptId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "trip": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The trip it is on, by name."
+          },
+          "receipt": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "merchant": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "date": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "amount": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "amountMinor": {
+                    "type": "integer",
+                    "description": "Integer minor units, e.g. cents."
+                  },
+                  "currency": {
+                    "type": "string",
+                    "example": "USD"
+                  },
+                  "decimal": {
+                    "type": "string",
+                    "example": "6.50",
+                    "description": "The same amount, for display."
+                  }
+                },
+                "required": [
+                  "amountMinor",
+                  "currency",
+                  "decimal"
+                ]
+              }
+            },
+            "required": [
+              "merchant",
+              "date",
+              "amount"
+            ],
+            "description": "What its receipt shows; null without one."
+          },
+          "check": {
+            "$ref": "#/components/schemas/ReceiptCheck"
+          },
+          "claimReason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Why it claims less than its receipt, in the person’s words."
+          },
+          "excludedLines": {
+            "type": "integer",
+            "description": "Lines of its receipt left out of the claim, each with its reason."
+          },
+          "rejection": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "reason": {
+                "type": "string"
+              },
+              "automatic": {
+                "type": "boolean",
+                "description": "Rejected by the review on its own, because it differs from its receipt."
+              }
+            },
+            "required": [
+              "reason",
+              "automatic"
+            ],
+            "description": "Why its report’s latest return rejected it, while it is back."
+          }
+        },
+        "required": [
+          "id",
+          "merchant",
+          "date",
+          "amount",
+          "receiptId",
+          "trip",
+          "receipt",
+          "check",
+          "claimReason",
+          "excludedLines",
+          "rejection"
+        ]
+      },
+      "ReturnReport": {
+        "type": "object",
+        "properties": {
+          "comment": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Why it goes back, for its member to read: up to 500 characters.",
+            "example": "The hotel’s dates don’t match the trip; fix them and send it again"
+          },
+          "rejections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "expenseId": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "reason": {
+                  "type": "string",
+                  "maxLength": 2000,
+                  "description": "Why this one is rejected, up to 500 characters.",
+                  "example": "A lunch alone isn’t a business meal"
+                }
+              },
+              "required": [
+                "expenseId",
+                "reason"
+              ],
+              "additionalProperties": false
+            },
+            "maxItems": 500,
+            "default": [],
+            "description": "Expenses the approver rejects, each with why. Any that differ from their receipts are rejected too, on their own (FR-GOV-10)."
+          }
+        },
+        "required": [
+          "comment"
+        ],
+        "additionalProperties": false
+      },
+      "ClaimReason": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "ClaimReasonBody": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Why it claims less than its receipt, up to 500 characters; blank removes it.",
+            "example": "The minibar was personal"
+          }
+        },
+        "required": [
+          "reason"
         ],
         "additionalProperties": false
       },
@@ -6697,6 +7373,9 @@
           "you": {
             "type": "boolean",
             "description": "Whether this is the caller."
+          },
+          "approver": {
+            "$ref": "#/components/schemas/PersonApprover"
           }
         },
         "required": [
@@ -6719,6 +7398,63 @@
           "auditor"
         ],
         "description": "member and approver see and change their own records; finance_admin and owner see everyone’s and change their own; auditor reads everyone’s and changes nothing. Owners and finance admins take admin actions; only owners manage people."
+      },
+      "PersonApprover": {
+        "type": "object",
+        "properties": {
+          "chosen": {
+            "$ref": "#/components/schemas/PersonRef"
+          },
+          "goesTo": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PersonRef"
+              },
+              {
+                "description": "Who a report they submit now goes to: the one chosen while they can approve it, otherwise the longest-standing approver, then finance admin, then owner; in a one-person organization, its owner. Null when no one else can approve it."
+              }
+            ]
+          },
+          "passedOver": {
+            "type": "boolean",
+            "description": "The approver chosen can’t approve it now (their role changed, or they were removed), so goesTo is found as Automatic finds it."
+          },
+          "choices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PersonRef"
+            },
+            "description": "Whom an owner may choose: everyone else here whose role may approve."
+          }
+        },
+        "required": [
+          "chosen",
+          "goesTo",
+          "passedOver",
+          "choices"
+        ],
+        "description": "While approval is on, who approves their reports (#86). Absent for someone removed, and for everyone while approval is off."
+      },
+      "PersonRef": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "casey"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "description": "The approver an owner chose for their reports; null for Automatic."
       },
       "Invite": {
         "type": "object",
@@ -6807,6 +7543,22 @@
         },
         "required": [
           "role"
+        ]
+      },
+      "ChooseApprover": {
+        "type": "object",
+        "properties": {
+          "approverId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Who approves their reports: someone else here whose role may approve. Null for Automatic, the routing as built."
+          }
+        },
+        "required": [
+          "approverId"
         ]
       },
       "InvitePreview": {
@@ -7205,7 +7957,7 @@
             }
           },
           "403": {
-            "description": "Only an owner or finance admin can manage AI provider keys.",
+            "description": "Only an owner or finance admin can manage AI provider keys. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -7281,7 +8033,7 @@
             }
           },
           "403": {
-            "description": "Only an owner or finance admin can manage AI provider keys.",
+            "description": "Only an owner or finance admin can manage AI provider keys. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -7356,7 +8108,7 @@
             }
           },
           "403": {
-            "description": "Only an owner or finance admin can manage AI provider keys.",
+            "description": "Only an owner or finance admin can manage AI provider keys. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -7517,6 +8269,171 @@
           },
           "422": {
             "description": "The token is not a valid, recent sign-in with an email address, or it is the caller.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/sign-ins/{signInId}/let-in": {
+      "put": {
+        "tags": [
+          "Identity"
+        ],
+        "summary": "Let another of the caller’s sign-ins in",
+        "description": "Behind security.second-factor (#90, Q44). Once a person has an authenticator, only a sign-in they let in opens the app; the others still forward receipts. From a sign-in let in, with an authenticator of its own, whose session passed the code (aal2), this lets another of theirs in: it may then add its own authenticator, and once it passes its code it signs in. Until then it waits, for 24 hours, after which letting it in lapses. Audited.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "signInId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The sign-in, let in: waiting until it passes its own code, or let in already.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignIn"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The session has not passed the code (second_factor_required), or the caller has no organization.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The caller has no such sign-in, or the second factor is switched off.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It is the sign-in making the request, or that sign-in is not let in with an authenticator.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Identity"
+        ],
+        "summary": "Stop letting one of the caller’s other sign-ins in",
+        "description": "Behind security.second-factor (#90). From a sign-in let in, with an authenticator of its own, whose session passed the code (aal2), withdraws letting another of the person’s sign-ins in: it is refused again, and still forwards receipts. Audited.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "signInId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "The sign-in is not let in."
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The session has not passed the code (second_factor_required), or the caller has no organization.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The caller has no such sign-in, or the second factor is switched off.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It is the sign-in making the request, or that sign-in is not let in with an authenticator.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -7737,7 +8654,7 @@
             }
           },
           "403": {
-            "description": "Only the owner can switch features.",
+            "description": "Only the owner can switch features. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04). Switching the second factor itself on always needs it, so no one is locked out.",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -7887,7 +8804,7 @@
             }
           },
           "403": {
-            "description": "The caller has no organization yet, or is not its owner.",
+            "description": "The caller has no organization yet, or is not its owner. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -8047,7 +8964,7 @@
             }
           },
           "403": {
-            "description": "The caller has no organization yet, or is not its owner.",
+            "description": "The caller has no organization yet, or is not its owner. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -8300,7 +9217,7 @@
           "Inbox"
         ],
         "summary": "What needs the person: the Needs you inbox",
-        "description": "What needs the person, each with why (FR-EXP-02): a report overdue or in its last week with something left; receipts that need a look or that no model could read, newest first; local expenses needing a justification; and reports ready to close (FR-EXP-12, FR-EXP-14). Missing receipts and returned reports join it as they are built.",
+        "description": "What needs the person, each with why (FR-EXP-02): a report overdue or in its last week with something left; receipts that need a look or that no model could read, newest first; while they are on, emails from the person’s own address that filed nothing (#59); local expenses needing a justification; and reports ready to close (FR-EXP-12, FR-EXP-14). While approval is on, a report that came back with each rejected expense and why, and each report waiting for the person’s decision (FR-GOV-12). Missing receipts join it as they are built.",
         "security": [
           {
             "bearerAuth": []
@@ -9133,7 +10050,7 @@
             }
           },
           "422": {
-            "description": "A value is not valid; field names which.",
+            "description": "A value is not valid; field names which. With approval on, an amount above its receipt’s total is refused too (over_receipt).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -9230,7 +10147,7 @@
             }
           },
           "409": {
-            "description": "It is submitted or later, so it stays with its report.",
+            "description": "It is submitted or later, so it stays with its report; or the trip is on a report submitted or later, which takes no more expenses (trip_submitted).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -10202,7 +11119,7 @@
             }
           },
           "403": {
-            "description": "The caller has no organization yet, or is not an owner or finance admin (forbidden_role).",
+            "description": "The caller has no organization yet, or is not an owner or finance admin (forbidden_role). While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -11059,7 +11976,7 @@
             }
           },
           "403": {
-            "description": "No organization yet, or the caller is not an owner or finance admin.",
+            "description": "No organization yet, or the caller is not an owner or finance admin. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -11136,7 +12053,7 @@
             }
           },
           "403": {
-            "description": "No organization yet, or the caller is not an owner or finance admin.",
+            "description": "No organization yet, or the caller is not an owner or finance admin. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -11865,6 +12782,536 @@
         }
       }
     },
+    "/v1/reports/{reportId}/approval": {
+      "get": {
+        "tags": [
+          "Approval"
+        ],
+        "summary": "A report’s approval: each expense against its receipt, and what the caller may do",
+        "description": "Who it is with, or would go to; each round so far; every expense on it judged against its receipt (Q6); a return’s comment and rejections while it is back (FR-GOV-12). Behind `reports.approval`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "reportId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The approval.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Approval"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such report, or approval is switched off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reports/{reportId}/submit": {
+      "post": {
+        "tags": [
+          "Approval"
+        ],
+        "summary": "Submit a closed report for approval",
+        "description": "Only the person’s own closed report (FR-EXP-12), and never while an expense on it differs from its receipt without a reason (FR-GOV-13). It goes to its approver in one step (FR-GOV-02); in a one-person organization, to its owner, who self-attests (FR-GOV-03). Each expense’s category and type names are kept as they are now (NFR-DAT-04).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "reportId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Submitted: it waits for its approver.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Approval"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "It is another person’s report (not_yours), or the caller has no organization.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such report, or approval is switched off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It is not closed, holds nothing, an expense on it differs from its receipt without a reason (differs_from_receipt, naming each), or no one else in the team can approve it (no_approver).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reports/{reportId}/approve": {
+      "post": {
+        "tags": [
+          "Approval"
+        ],
+        "summary": "Approve a report waiting for approval",
+        "description": "By the approver it went to, or an owner or finance admin in their place; never one’s own in a team (FR-GOV-03). Approving someone else’s needs the second factor in this session (FR-GOV-04). An expense that differs from its receipt is rejected (FR-GOV-10), so the report can only be returned. Its expenses are then approved, and locked.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "reportId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Approved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Approval"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not the caller’s to decide (self_approval, not_an_approver, not_your_approval), or the second factor is needed (second_factor_required).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such report, or approval is switched off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It is not waiting for approval, or an expense on it differs from its receipt (rejected_on_review, naming each): return it instead.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/reports/{reportId}/return": {
+      "post": {
+        "tags": [
+          "Approval"
+        ],
+        "summary": "Return a report to its member, with a comment and each rejected expense",
+        "description": "The whole report goes back (FR-GOV-11), open again with a week to close, each rejected expense kept with why (FR-GOV-12); any that differ from their receipts are rejected on their own (FR-GOV-10).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "reportId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReturnReport"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Approval"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not the caller’s to decide (self_approval, not_an_approver, not_your_approval).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such report, or approval is switched off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It is not waiting for approval.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "No comment, a reason missing or too long, or an expense not on it.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/approvals": {
+      "get": {
+        "tags": [
+          "Approval"
+        ],
+        "summary": "The reports waiting for the caller’s decision, oldest first",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Every report routed to the caller and not yet decided.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Approval is switched off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/expenses/{expenseId}/claim-reason": {
+      "put": {
+        "tags": [
+          "Expenses"
+        ],
+        "summary": "Say why an expense claims less than its receipt",
+        "description": "An expense may claim less than its receipt with a reason, never more (FR-EXP-10, Q6). A closed report it is on reopens. Behind `reports.approval`.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ClaimReasonBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimReason"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such expense, or approval is switched off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It is being read, or submitted or later.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The reason is too long.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/reports/{reportId}/export.csv": {
       "get": {
         "tags": [
@@ -11941,7 +13388,7 @@
             }
           },
           "409": {
-            "description": "The report is still open (not_closed): close it first.",
+            "description": "The report is still open (not_closed): close it first. With approval on, it is not submitted yet (not_submitted): only submitted and approved reports are exported (Q29).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -12040,7 +13487,7 @@
             }
           },
           "409": {
-            "description": "The report is still open (not_closed): close it first.",
+            "description": "The report is still open (not_closed): close it first. With approval on, it is not submitted yet (not_submitted): only submitted and approved reports are exported (Q29).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -12637,7 +14084,7 @@
             }
           },
           "403": {
-            "description": "Only an owner or finance admin can change categories and types.",
+            "description": "Only an owner or finance admin can change categories and types. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -12744,7 +14191,7 @@
             }
           },
           "403": {
-            "description": "Only an owner or finance admin can change categories and types.",
+            "description": "Only an owner or finance admin can change categories and types. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -12832,7 +14279,7 @@
             }
           },
           "403": {
-            "description": "Only an owner or finance admin can change categories and types.",
+            "description": "Only an owner or finance admin can change categories and types. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -12938,7 +14385,7 @@
             }
           },
           "403": {
-            "description": "Only an owner or finance admin can change categories and types.",
+            "description": "Only an owner or finance admin can change categories and types. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -13045,7 +14492,7 @@
             }
           },
           "403": {
-            "description": "Only an owner or finance admin can change categories and types.",
+            "description": "Only an owner or finance admin can change categories and types. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -13133,7 +14580,7 @@
             }
           },
           "403": {
-            "description": "Only an owner or finance admin can change categories and types.",
+            "description": "Only an owner or finance admin can change categories and types. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -13923,7 +15370,7 @@
             }
           },
           "403": {
-            "description": "Only an owner or finance admin can choose the models.",
+            "description": "Only an owner or finance admin can choose the models. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -14075,7 +15522,7 @@
             }
           },
           "403": {
-            "description": "Only an owner manages people, or the caller has no organization yet.",
+            "description": "Only an owner manages people, or the caller has no organization yet. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -14144,7 +15591,7 @@
             }
           },
           "403": {
-            "description": "Only an owner manages people, or the caller has no organization yet.",
+            "description": "Only an owner manages people, or the caller has no organization yet. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -14240,7 +15687,7 @@
             }
           },
           "403": {
-            "description": "Only an owner manages people, or the caller has no organization yet.",
+            "description": "Only an owner manages people, or the caller has no organization yet. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -14318,7 +15765,7 @@
             }
           },
           "403": {
-            "description": "Only an owner manages people, or the caller has no organization yet.",
+            "description": "Only an owner manages people, or the caller has no organization yet. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -14339,6 +15786,103 @@
           },
           "409": {
             "description": "They are the last owner, or the caller.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/settings/people/{memberId}/approver": {
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Choose who approves someone’s reports",
+        "description": "Someone else here whose role may approve, or null for Automatic: the longest-standing approver, then finance admin, then owner (ADR-0043). A report they submit goes to the one chosen while they can approve it, and otherwise as Automatic finds; one already submitted keeps the approver it went to. Owners only, behind team.invites and reports.approval; each change is audited.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "memberId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChooseApprover"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The person, with who approves their reports.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Person"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only an owner manages people, or the caller has no organization yet. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Inviting people or approval is not switched on (feature_off), or no such person here.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The one chosen is the person themselves (own_approver), or not someone here whose role may approve (not_an_approver).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -14501,6 +16045,76 @@
           },
           "422": {
             "description": "The account has no email address.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/inbox/emails/{emailId}/dismiss": {
+      "post": {
+        "tags": [
+          "Inbox"
+        ],
+        "summary": "Dismiss an email that filed nothing from Needs you",
+        "description": "It leaves Needs you for good, and the audit trail records who dismissed it. The email is kept as it arrived. Only the person it came from dismisses it (#59, ADR-0035). Dismissing one already dismissed changes nothing.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "emailId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Dismissed."
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or the email is someone else’s, or the caller is an auditor, who changes nothing (not_yours).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such email that filed nothing, or emails that filed nothing are switched off there.",
             "content": {
               "application/problem+json": {
                 "schema": {

@@ -3,6 +3,8 @@ import { DomainError } from '@expensewise/domain';
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { Hono, type Context, type ErrorHandler, type NotFoundHandler } from 'hono';
 import type { ProviderKeyVerifier } from './ai-providers.ts';
+import type { ApprovalStore } from './approval.ts';
+import { registerApprovalRoutes } from './approval-routes.ts';
 import type { AuditStore } from './audit.ts';
 import { registerAuditRoutes } from './audit-routes.ts';
 import { callerScope, notYours, recordingCaller } from './caller.ts';
@@ -43,8 +45,24 @@ import type { RouteKeyStore, RouteKeyVerifier, RouteMileageStore } from './route
 import { registerRouteMileageRoutes } from './route-mileage-routes.ts';
 import { registerTripRoutes } from './trip-routes.ts';
 import type { TripStore } from './trips.ts';
+import { registerUnfiledEmailRoutes } from './unfiled-email-routes.ts';
+import type { UnfiledEmailStore } from './unfiled-emails.ts';
+import { listFeaturesRoute } from './routes/workspace.ts';
+import { beforeTheCode, secondFactorEverywhere } from './second-factor.ts';
 import { registerWorkspaceRoutes } from './workspace-routes.ts';
 import type { WorkspaceStore } from './workspace.ts';
+
+/**
+ * The only routes a session that hasn't passed the code may use while the second factor holds
+ * everything else (#85): the organization's switches, which the code screen and the check that
+ * sends someone to it read. An email held until it adds its own authenticator (#88) uses the
+ * same list: Settings › Sign-ins adds one through Supabase Auth in the browser and reads only
+ * the switches from us; so does an email that isn't let in (#90), whose screen says so and
+ * offers signing out. `GET /v1/me` names who is signed in and nothing of an organization, so it
+ * is never held; the health checks and the email webhook carry no person's token, so an email
+ * from an address that isn't let in is still filed.
+ */
+export const BEFORE_THE_CODE = [listFeaturesRoute] as const;
 
 export interface ApiOptions
   extends
@@ -83,10 +101,20 @@ export interface ApiOptions
   readonly home?: HomeStore;
   /** Expense reports. Without it, those routes answer 503 and Needs you shows no reports. */
   readonly reports?: ReportStore;
+  /**
+   * Approval (#24). Without it, those routes answer 503, and Needs you shows nothing to approve
+   * and no returned report.
+   */
+  readonly approvals?: ApprovalStore;
   /** The audit trail and its chain check. Without it, those routes answer 503. */
   readonly audit?: AuditStore;
   /** Categories and types (FR-EXP-11). Without it, those routes answer 503 and expenses show none. */
   readonly categories?: CategoryStore;
+  /**
+   * Emails that filed nothing (#59). Without it, Needs you lists none and dismissing one
+   * answers 503.
+   */
+  readonly emails?: UnfiledEmailStore;
   /** Receipts' itemized lines and expenses' splits. Without it, those routes answer 503. */
   readonly itemized?: ItemizedStore;
   /** Which AI models read receipts (FR-INT-16). Without it, Settings › AI models answers 503. */
@@ -128,7 +156,15 @@ export const OPENAPI_INFO = {
     version: '1.0.0',
     description:
       'The API behind the ExpenseWise web and iOS apps. Money is always integer minor units ' +
-      'plus an ISO 4217 code. Errors are RFC 9457 problem documents.',
+      'plus an ISO 4217 code. Errors are RFC 9457 problem documents. While an organization ' +
+      'has the second factor switched on, every request of a person whose sign-in has a ' +
+      'verified authenticator, from a session that has not passed it (aal1), is refused with ' +
+      '403 second_factor_required, except GET /v1/me and GET /v1/features. Once a person has ' +
+      'an authenticator, only a sign-in they let in opens the API: the first of theirs to pass ' +
+      'its code is let in, and a session of another is refused the same way with 403 ' +
+      'sign_in_not_let_in, naming its email, until they let it in from a sign-in let in that ' +
+      'passed its code. One let in with no authenticator of its own is refused with 403 ' +
+      'authenticator_required, naming its email, until it adds one and passes it.',
   },
   servers: [{ url: '/api' }],
 };
@@ -213,8 +249,21 @@ export function createApi(options: ApiOptions) {
   // One gate for every route: a feature that is off answers 404 feature_off.
   const features: FeatureGate = featureGate(options);
   // Each route resolves its caller through the workspace store, which records them as who the
-  // request acts for, so members' records are read and changed as them (ADR-0035).
-  const workspace = options.workspace && recordingCaller(options.workspace);
+  // request acts for, so members' records are read and changed as them (ADR-0035). Resolving
+  // them first, while their organization has the second factor on, refuses an email of a person
+  // with an authenticator that they haven't let in, holds one let in until it adds its own, and
+  // asks one with an authenticator for its code, so every route asks it; the first of a person's
+  // emails to pass its code is let in there (#85, #88, #90, ADR-0044).
+  const store = options.workspace;
+  const workspace =
+    store &&
+    recordingCaller(
+      store,
+      secondFactorEverywhere(features, (caller, actor) => store.recordPassedCode(caller, actor)),
+    );
+  // What the code screen, and the check in front of it, need before the code: the switch. Who is
+  // signed in (GET /v1/me) never resolves an organization, so it needs no mark.
+  for (const route of BEFORE_THE_CODE) app.use(route.getRoutingPath(), beforeTheCode(route.method));
   const routes = { ...options, workspace, features };
   registerWorkspaceRoutes(app, routes);
   registerOrganizationRoutes(app, routes);
@@ -226,6 +275,7 @@ export function createApi(options: ApiOptions) {
   registerRouteMileageRoutes(app, routes);
   registerHomeRoutes(app, routes);
   registerReportRoutes(app, routes);
+  registerApprovalRoutes(app, routes);
   registerReportExportRoutes(app, routes);
   registerReimbursementRoutes(app, routes);
   registerInboundRoutes(app, routes);
@@ -234,6 +284,7 @@ export function createApi(options: ApiOptions) {
   registerItemizedRoutes(app, routes);
   registerModelSettingsRoutes(app, routes);
   registerPeopleRoutes(app, routes);
+  registerUnfiledEmailRoutes(app, routes);
 
   app.doc31('/v1/openapi.json', OPENAPI_INFO);
 

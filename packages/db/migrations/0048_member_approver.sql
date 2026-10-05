@@ -1,0 +1,1 @@
+ALTER TABLE "members" ADD CONSTRAINT "members_manager_not_self" CHECK ("members"."manager_member_id" IS NULL OR "members"."manager_member_id" <> "members"."id");

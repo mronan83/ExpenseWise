@@ -1,7 +1,6 @@
 import type {
   AiProvider,
   LinkResult,
-  Membership,
   OrgFeature,
   SignIn,
   StoredProviderKey,
@@ -11,7 +10,7 @@ import type { ProviderKeyVerifier, ProviderVerdict } from '../src/ai-providers.t
 import { createApi } from '../src/app.ts';
 import { AuthError, type Identity } from '../src/auth.ts';
 import { createSecretBox } from '../src/secret-box.ts';
-import type { WorkspaceStore } from '../src/workspace.ts';
+import type { CallerMembership, WorkspaceStore } from '../src/workspace.ts';
 
 const ORG = '0192f7a0-0000-7000-8000-0000000000a1';
 const MEMBER = '0192f7a0-0000-7000-8000-0000000000b1';
@@ -19,6 +18,11 @@ const NOW = new Date('2026-10-02T12:00:00.000Z');
 
 const OTHER_ORG = '0192f7a0-0000-7000-8000-0000000000a2';
 const SIGN_IN = '0192f7a0-0000-7000-8000-0000000000c1';
+const SECURE_MEMBER = '0192f7a0-0000-7000-8000-0000000000b9';
+const SECURE_SIGN_IN = '0192f7a0-0000-7000-8000-0000000000d1';
+const SECURE_OTHER = '0192f7a0-0000-7000-8000-0000000000d2';
+/** When letting an email in from another lapses, in the fake: 24 hours on (#90). */
+const LAPSES = new Date('2026-10-03T12:00:00.000Z');
 
 const identities: Record<string, Identity> = {
   owner: {
@@ -64,14 +68,40 @@ const identities: Record<string, Identity> = {
     sessionId: 's',
     issuedAt: NOW,
   },
+  // The owner's email let in, with its authenticator, past its code (#90); and the same at aal1.
+  secure: {
+    userId: 'u-secure',
+    email: 'secure@example.com',
+    assuranceLevel: 'aal2',
+    sessionId: 's',
+    issuedAt: NOW,
+  },
+  password: {
+    userId: 'u-secure',
+    email: 'secure@example.com',
+    assuranceLevel: 'aal1',
+    sessionId: 's',
+    issuedAt: NOW,
+  },
 };
 
 /** An in-memory store with one organization: an owner and a plain member. */
 function fakeStore() {
-  const memberships: Record<string, Membership> = {
+  const memberships: Record<string, CallerMembership> = {
     'u-owner': { orgId: ORG, memberId: MEMBER, role: 'owner' },
     'u-member': { orgId: ORG, memberId: MEMBER, role: 'member' },
+    'u-secure': {
+      orgId: ORG,
+      memberId: SECURE_MEMBER,
+      role: 'owner',
+      authenticator: true,
+      personAuthenticator: true,
+      letIn: 'yes',
+      personLetIn: 'with_authenticator',
+    },
   };
+  /** Which sign-ins are let in (#90), by id. */
+  const letIn = new Map<string, 'yes' | 'waiting'>([[SECURE_SIGN_IN, 'yes']]);
   const keys = new Map<AiProvider, StoredProviderKey>();
   const switched = new Map<string, OrgFeature>();
   const audit: string[] = [];
@@ -82,6 +112,21 @@ function fakeStore() {
       email: 'owner@example.com',
       createdAt: NOW,
       memberId: MEMBER,
+    },
+    // Another person, who signs in with two emails: one let in, with its authenticator (#90).
+    {
+      id: SECURE_SIGN_IN,
+      userId: 'u-secure',
+      email: 'secure@example.com',
+      createdAt: NOW,
+      memberId: SECURE_MEMBER,
+    },
+    {
+      id: SECURE_OTHER,
+      userId: 'u-secure-work',
+      email: 'secure@work.example',
+      createdAt: NOW,
+      memberId: SECURE_MEMBER,
     },
   ];
   // u-busy has an organization of its own with work in it.
@@ -119,7 +164,13 @@ function fakeStore() {
     },
     listSignIns: (member) =>
       Promise.resolve(
-        signIns.filter((s) => s.memberId === member.memberId).map(({ memberId: _m, ...s }) => s),
+        signIns
+          .filter((s) => s.memberId === member.memberId)
+          .map(({ memberId: _m, ...s }) => ({
+            ...s,
+            letIn: letIn.get(s.id) ?? 'no',
+            letInLapsesAt: letIn.get(s.id) === 'waiting' ? LAPSES : null,
+          })),
       ),
     linkSignIn: (member, other): Promise<LinkResult> => {
       const existing = signIns.find((s) => s.userId === other.userId);
@@ -148,6 +199,42 @@ function fakeStore() {
       delete memberships[gone!.userId];
       audit.push(`unlinked:${gone!.email}`);
       return Promise.resolve('removed' as const);
+    },
+    recordPassedCode: () => Promise.resolve('let_in' as const),
+    letSignInIn: (member, signInId, actor) => {
+      const mine = signIns.filter((s) => s.memberId === member.memberId);
+      const target = mine.find((s) => s.id === signInId);
+      const own = mine.find((s) => s.userId === actor.userId);
+      if (!target) return Promise.resolve({ status: 'not_found' as const });
+      if (target === own) return Promise.resolve({ status: 'current' as const });
+      if (!own || letIn.get(own.id) !== 'yes') {
+        return Promise.resolve({ status: 'actor_not_let_in' as const });
+      }
+      const { memberId: _m, ...signIn } = target;
+      const was = letIn.get(target.id);
+      if (was) {
+        return Promise.resolve({
+          status: 'already_let_in' as const,
+          signIn: { ...signIn, letIn: was, letInLapsesAt: was === 'waiting' ? LAPSES : null },
+        });
+      }
+      letIn.set(target.id, 'waiting');
+      audit.push(`let in:${target.email}`);
+      return Promise.resolve({
+        status: 'let_in' as const,
+        signIn: { ...signIn, letIn: 'waiting' as const, letInLapsesAt: LAPSES },
+      });
+    },
+    withdrawSignIn: (member, signInId, actor) => {
+      const mine = signIns.filter((s) => s.memberId === member.memberId);
+      const target = mine.find((s) => s.id === signInId);
+      const own = mine.find((s) => s.userId === actor.userId);
+      if (!target) return Promise.resolve('not_found' as const);
+      if (target === own) return Promise.resolve('current' as const);
+      if (!own || letIn.get(own.id) !== 'yes') return Promise.resolve('actor_not_let_in' as const);
+      if (!letIn.delete(target.id)) return Promise.resolve('not_let_in' as const);
+      audit.push(`withdrawn:${target.email}`);
+      return Promise.resolve('withdrawn' as const);
     },
     listFeatures: () => Promise.resolve([...switched.values()]),
     featureOn: (_org, flag) => Promise.resolve(switched.get(flag)?.enabled ?? false),
@@ -542,6 +629,100 @@ describe('sign-ins', () => {
     expect((await call('DELETE', `/v1/me/sign-ins/${id}`, 'owner')).status).toBe(404);
     expect(audit).toEqual(['linked:o@work.example', 'unlinked:o@work.example']);
     expect((await call('GET', '/v1/me/sign-ins', 'work')).status).toBe(403);
+  });
+});
+
+describe('letting emails in (#90)', () => {
+  const ON = 'security.second-factor=on';
+  const letInPath = (id: string) => `/v1/me/sign-ins/${id}/let-in`;
+
+  it('says which emails are let in, and that this session may let another in, while the second factor is on', async () => {
+    const { call } = setup(undefined, ON);
+    const res = await call('GET', '/v1/me/sign-ins', 'secure');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({
+      signIns: [
+        {
+          id: SECURE_SIGN_IN,
+          email: 'secure@example.com',
+          linkedAt: NOW.toISOString(),
+          current: true,
+          letIn: 'yes',
+          letInLapsesAt: null,
+        },
+        {
+          id: SECURE_OTHER,
+          email: 'secure@work.example',
+          linkedAt: NOW.toISOString(),
+          current: false,
+          letIn: 'no',
+          letInLapsesAt: null,
+        },
+      ],
+      canLetIn: true,
+    });
+    // Someone with no authenticator lets no one in.
+    const plain = (await (await call('GET', '/v1/me/sign-ins', 'owner')).json()) as {
+      canLetIn: boolean;
+    };
+    expect(plain.canLetIn).toBe(false);
+  });
+
+  it('lets another email in from one let in that passed its code, to wait for its own, and withdraws it, each once', async () => {
+    const { call, audit } = setup(undefined, ON);
+    const res = await call('PUT', letInPath(SECURE_OTHER), 'secure');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({
+      id: SECURE_OTHER,
+      current: false,
+      letIn: 'waiting',
+      letInLapsesAt: LAPSES.toISOString(),
+    });
+    // Again: already let in, nothing more recorded.
+    expect((await call('PUT', letInPath(SECURE_OTHER), 'secure')).status).toBe(200);
+    expect((await call('DELETE', letInPath(SECURE_OTHER), 'secure')).status).toBe(204);
+    expect((await call('DELETE', letInPath(SECURE_OTHER), 'secure')).status).toBe(204);
+    expect(audit).toEqual(['let in:secure@work.example', 'withdrawn:secure@work.example']);
+  });
+
+  it('never lets an email in, or withdraws one, from a session that skipped the code, or an email without an authenticator', async () => {
+    const { call, audit } = setup(undefined, ON);
+    for (const method of ['PUT', 'DELETE']) {
+      const password = await call(method, letInPath(SECURE_OTHER), 'password');
+      expect(password.status).toBe(403);
+      expect(await password.json()).toMatchObject({ code: 'second_factor_required' });
+      // Someone with no authenticator isn't asked for a code they don't have.
+      const plain = await call(method, letInPath(SIGN_IN), 'owner');
+      expect(plain.status).toBe(409);
+      expect(await plain.json()).toMatchObject({ code: 'let_in_not_allowed' });
+    }
+    expect(audit).toEqual([]);
+  });
+
+  it('refuses the email making the request, and an email that isn’t the person’s', async () => {
+    const { call } = setup(undefined, ON);
+    for (const method of ['PUT', 'DELETE']) {
+      const self = await call(method, letInPath(SECURE_SIGN_IN), 'secure');
+      expect(self.status).toBe(409);
+      expect(await self.json()).toMatchObject({ code: 'current_sign_in' });
+      const theirs = await call(method, letInPath(SIGN_IN), 'secure');
+      expect(theirs.status).toBe(404);
+    }
+  });
+
+  it('leaves sign-ins as they were while the second factor is off, and answers feature_off', async () => {
+    const { call } = setup();
+    const list = (await (await call('GET', '/v1/me/sign-ins', 'secure')).json()) as Record<
+      string,
+      unknown
+    > & { signIns: Record<string, unknown>[] };
+    expect(list).not.toHaveProperty('canLetIn');
+    expect(list.signIns[0]).not.toHaveProperty('letIn');
+    for (const method of ['PUT', 'DELETE']) {
+      const res = await call(method, letInPath(SECURE_OTHER), 'secure');
+      expect(res.status).toBe(404);
+      expect(await res.json()).toMatchObject({ code: 'feature_off' });
+    }
   });
 });
 

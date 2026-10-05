@@ -1,6 +1,6 @@
 'use client';
 
-import { journeyLine, showDate, stayLine } from '@expensewise/domain';
+import { APPROVAL_NOTE_MAX, journeyLine, showDate, stayLine } from '@expensewise/domain';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
@@ -27,6 +27,7 @@ import {
   type Stay,
   type TravelField,
 } from '../../../lib/expenses';
+import { APPROVAL_FLAG } from '../../../lib/approval';
 import { useFeatures } from '../../../lib/features';
 import { describeRate, distanceOf, MILEAGE_FLAG, type MileageEntry } from '../../../lib/mileage';
 import { ROUTE_MILEAGE_FLAG } from '../../../lib/route-mileage';
@@ -119,6 +120,15 @@ export default function ExpensePage() {
                 onSaved={(next) => setLoad({ state: 'ready', expense: next })}
               />
             )}
+            {/* Sent only while approval is switched on for the organization (FR-EXP-10). */}
+            {expense.claim && featureOn(APPROVAL_FLAG) ? (
+              <ClaimLess
+                key={`claim-${expense.updatedAt}`}
+                expense={expense}
+                claim={expense.claim}
+                onSaved={(next) => setLoad({ state: 'ready', expense: next })}
+              />
+            ) : null}
             {/* Sent only while each is switched on for the organization (FR-INT-22, FR-EXP-15). */}
             <ItemizedLines
               expense={expense}
@@ -997,6 +1007,134 @@ const JUSTIFICATION_MAX = 500;
  * Why a local expense, one on no trip, was for business (FR-EXP-14). Its report can't close
  * without it.
  */
+/**
+ * How the expense holds up against its receipt, for submitting and review (FR-EXP-10, Q6): it
+ * may claim less with a reason, never more. Shown while approval is on, where it differs or
+ * says why it claims less.
+ */
+function ClaimLess({
+  expense,
+  claim,
+  onSaved,
+}: {
+  expense: ExpenseDetail;
+  claim: NonNullable<ExpenseDetail['claim']>;
+  onSaved: (expense: ExpenseDetail) => void;
+}) {
+  const { check } = claim;
+  const asked =
+    check.needsReason || (check.state === 'explained' && check.explainedBy === 'reason');
+  const [editing, setEditing] = useState(check.needsReason && expense.editable);
+  const [text, setText] = useState(claim.reason ?? '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  if (check.state === 'matches' || check.state === 'no_receipt') return null;
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/v1/expenses/${expense.id}/claim-reason`, {
+        method: 'PUT',
+        body: JSON.stringify({ reason: text }),
+      });
+      onSaved(await api<ExpenseDetail>(`/v1/expenses/${expense.id}`));
+    } catch (e) {
+      setError(describeError(e));
+      setBusy(false);
+    }
+  }
+
+  const warn = check.state === 'differs';
+  return (
+    <section
+      aria-labelledby="less-title"
+      className={`flex flex-col gap-3 rounded-xl border bg-sheet p-4 text-sm ${warn ? 'border-warn' : 'border-rule'}`}
+    >
+      <h2 id="less-title" className="text-base font-semibold">
+        Against its receipt
+      </h2>
+      {check.over ? (
+        <p className="text-warn">
+          It claims more than its receipt, which an expense never may. Change its amount to the
+          receipt’s total or less, or its report can’t be submitted.
+        </p>
+      ) : check.explainedBy === 'lines' ? (
+        <p>It claims less than its receipt: the lines left out say why, each with its reason.</p>
+      ) : asked ? (
+        <p className={warn ? 'text-warn' : ''}>
+          {warn
+            ? 'It claims less than its receipt. Say why, or its report can’t be submitted.'
+            : 'It claims less than its receipt, and says why.'}
+        </p>
+      ) : (
+        <p className="text-warn">
+          {check.text} Fix it, or its report can’t be submitted; at review it would be rejected.
+        </p>
+      )}
+      {asked && editing ? (
+        <form onSubmit={(e) => void save(e)} className="flex flex-col gap-3">
+          <label className="flex flex-col gap-1 text-xs font-medium text-ink-2">
+            Why it claims less, such as a personal item left out
+            <textarea
+              name="claimReason"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              maxLength={APPROVAL_NOTE_MAX}
+              rows={2}
+              required
+              className="rounded-lg border border-rule bg-paper px-3 py-2 text-base text-ink"
+            />
+          </label>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="submit"
+              disabled={busy || text.trim() === ''}
+              className="rounded-lg bg-carbon px-4 py-2 text-sm font-semibold text-carbon-ink disabled:opacity-60"
+            >
+              {busy ? 'Saving…' : 'Save the reason'}
+            </button>
+            {claim.reason ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditing(false);
+                  setText(claim.reason ?? '');
+                  setError(null);
+                }}
+                className="rounded-lg border border-rule px-4 py-2 text-sm font-semibold"
+              >
+                Cancel
+              </button>
+            ) : null}
+          </div>
+        </form>
+      ) : asked && claim.reason ? (
+        <>
+          <p className="break-words">{claim.reason}</p>
+          {expense.editable ? (
+            <div>
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="rounded-lg border border-rule px-4 py-2 text-sm font-semibold"
+              >
+                Change the reason
+              </button>
+            </div>
+          ) : null}
+        </>
+      ) : null}
+      {error ? (
+        <p role="alert" className="text-sm text-warn">
+          {error}
+        </p>
+      ) : null}
+    </section>
+  );
+}
+
 function Justification({
   expense,
   onSaved,

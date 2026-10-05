@@ -16,6 +16,11 @@ export interface Home {
     spent: ExpenseAmount[];
     trips: number;
     notOnTrip: { expenses: number; spent: ExpenseAmount[] };
+    /**
+     * Business miles: the person's drives dated this month, added up exactly as a plain
+     * decimal such as "79.4". Only while mileage is on, and only when a drive claims miles.
+     */
+    miles?: { total: string; drives: number };
   };
   reading: number;
   /** Reports to finish: open and closed ones, newest first. */

@@ -30,7 +30,15 @@ import { listReportExpenses, type ReportExpenseRecord } from './expenses.ts';
 import { organizationTimeZone } from './organizations.ts';
 import type { ReportAmount } from './report-amounts.ts';
 import { reopenChangedReports, reportsOfExpenses } from './report-touch.ts';
-import { expenses, members, mileageLogs, organizations, reports, trips } from './schema.ts';
+import {
+  approvalSteps,
+  expenses,
+  members,
+  mileageLogs,
+  organizations,
+  reports,
+  trips,
+} from './schema.ts';
 import { tallyTrips, tripsWithOwner, type TripRecord, type TripTally } from './trips.ts';
 
 const SCHEDULE: AuditEntry['actor'] = { type: 'system', id: 'report-schedule' };
@@ -399,16 +407,29 @@ async function moveItems(
   }
 }
 
+/** Whether a report has been through approval (#24): then it is kept, as its history. */
+export async function hasApprovalHistory(tx: Transaction, reportId: string): Promise<boolean> {
+  const [step] = await tx
+    .select({ id: approvalSteps.id })
+    .from(approvalSteps)
+    .where(eq(approvalSteps.reportId, reportId))
+    .limit(1);
+  return step !== undefined;
+}
+
 /**
  * Deletes an open report with nothing to claim on it, with its audit event. A trip left on it
- * with no expenses comes off, and joins again once something is on it.
+ * with no expenses comes off, and joins again once something is on it. A report that has been
+ * through approval stays, empty, since its steps and rejections are its history. Returns
+ * whether it was dropped.
  */
 async function dropReport(
   tx: Transaction,
   orgId: string,
   reportId: string,
   actor: AuditEntry['actor'],
-) {
+): Promise<boolean> {
+  if (await hasApprovalHistory(tx, reportId)) return false;
   await tx.update(trips).set({ reportId: null }).where(eq(trips.reportId, reportId));
   await tx.delete(reports).where(and(eq(reports.id, reportId), eq(reports.status, 'open')));
   await appendAuditEvent(tx, orgId, {
@@ -418,6 +439,7 @@ async function dropReport(
     action: 'report.dropped',
     payload: { reason: 'nothing on it' },
   });
+  return true;
 }
 
 /** Whether a report has nothing to claim: no trip with expenses, and no local expense. */
@@ -449,8 +471,7 @@ export async function closeDueReports(
     const contents = await getReport(tx, row.id);
     if (!contents) continue;
     if (holdsNothing(contents)) {
-      await dropReport(tx, orgId, row.id, actor);
-      dropped++;
+      if (await dropReport(tx, orgId, row.id, actor)) dropped++;
       continue;
     }
     if (row.closesAt > now) continue;
@@ -681,8 +702,7 @@ export async function moveToReport(
   let dropped: string | null = null;
   if (from) {
     const left = await getReport(tx, from);
-    if (left && holdsNothing(left)) {
-      await dropReport(tx, orgId, from, actor);
+    if (left && holdsNothing(left) && (await dropReport(tx, orgId, from, actor))) {
       dropped = from;
     }
   }

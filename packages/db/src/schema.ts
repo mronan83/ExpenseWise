@@ -1,4 +1,5 @@
 import {
+  APPROVAL_NOTE_MAX,
   DISTANCE_UNITS,
   EXCLUSION_NOTE_MAX,
   EXCLUSION_REASONS,
@@ -123,6 +124,11 @@ export const members = pgTable(
     email: text('email').notNull(),
     displayName: text('display_name').notNull(),
     role: memberRole('role').notNull().default('member'),
+    /**
+     * The approver an owner chose for their reports in Settings › People (#86): someone else
+     * in the organization. Empty means Automatic. While this person can't approve, routing
+     * passes them over and finds one as built (ADR-0043).
+     */
     managerMemberId: uuid('manager_member_id'),
     /**
      * The currency the member is reimbursed in, chosen in Settings (FR-EXP-13, Q23). Null until
@@ -147,6 +153,10 @@ export const members = pgTable(
     check(
       'members_reimbursement_currency_iso',
       sql`${t.reimbursementCurrency} IS NULL OR ${isoCurrency(t.reimbursementCurrency)}`,
+    ),
+    check(
+      'members_manager_not_self',
+      sql`${t.managerMemberId} IS NULL OR ${t.managerMemberId} <> ${t.id}`,
     ),
   ],
 );
@@ -177,6 +187,50 @@ export const memberSignIns = pgTable(
       foreignColumns: [members.orgId, members.id],
     }),
     index('member_sign_ins_member_idx').on(t.orgId, t.memberId),
+  ],
+);
+
+/**
+ * The sign-ins a person has let in (#90, Q44, ADR-0044). While their organization has the
+ * second factor on and they have an authenticator, only an email let in opens the app; the
+ * others still forward receipts. The first of their emails to pass its code is let in then,
+ * having passed it; another is let in from an email let in that passed its code, and waits,
+ * until it passes its own or the time runs out. Removing the sign-in removes it too. Only the
+ * person, from a session that passed the code, changes it (trigger `enforce_let_in`).
+ */
+export const letInSignIns = pgTable(
+  'let_in_sign_ins',
+  {
+    id: id(),
+    orgId: orgId(),
+    /** The sign-in let in. */
+    signInId: uuid('sign_in_id').notNull(),
+    /** When it was let in. */
+    letInAt: timestamp('let_in_at', { withTimezone: true }).notNull().defaultNow(),
+    /**
+     * When it passed its own code while let in: as it was let in for the first, later for one
+     * let in from another email. Empty while it waits.
+     */
+    passedAt: timestamp('passed_at', { withTimezone: true }),
+    /**
+     * When letting it in lapses unless it passes its own code first, 24 hours on
+     * (`LET_IN_HOURS`); empty once it has. A lapsed one counts for nothing.
+     */
+    lapsesAt: timestamp('lapses_at', { withTimezone: true }),
+  },
+  (t) => [
+    unique('let_in_sign_ins_org_id_id_key').on(t.orgId, t.id),
+    unique('let_in_sign_ins_sign_in_key').on(t.orgId, t.signInId),
+    foreignKey({
+      name: 'let_in_sign_ins_sign_in_fk',
+      columns: [t.orgId, t.signInId],
+      foreignColumns: [memberSignIns.orgId, memberSignIns.id],
+    }).onDelete('cascade'),
+    // Passed for good, or waiting until it lapses: one or the other.
+    check(
+      'let_in_sign_ins_passed_or_waiting',
+      sql`(${t.passedAt} IS NULL) <> (${t.lapsesAt} IS NULL)`,
+    ),
   ],
 );
 
@@ -483,6 +537,18 @@ export const expenses = pgTable(
      */
     justification: text('justification'),
     /**
+     * Why it claims less than its receipt, in the person's words (FR-EXP-10, Q6). A report
+     * can't be submitted while an expense claims less without a reason, its own or the lines it
+     * leaves out (FR-GOV-13).
+     */
+    claimReason: text('claim_reason'),
+    /**
+     * Its category's and type's names as they were when its report was last submitted, so
+     * renaming either later never changes a submitted claim or its export (NFR-DAT-04, #70).
+     */
+    categoryName: text('category_name'),
+    typeName: text('type_name'),
+    /**
      * When a person last edited the values. From then on a reading of the receipt never
      * overwrites them (ADR-0022); a difference from the receipt shows instead.
      */
@@ -546,6 +612,10 @@ export const expenses = pgTable(
       foreignColumns: [t.orgId, t.id],
     }),
     check('expenses_currency_iso', sql`${t.currency} IS NULL OR ${isoCurrency(t.currency)}`),
+    check(
+      'expenses_claim_reason_length',
+      sql`${t.claimReason} IS NULL OR char_length(${t.claimReason}) BETWEEN 1 AND ${sql.raw(String(APPROVAL_NOTE_MAX))}`,
+    ),
     // From Ready onward an expense is complete: amount, currency and date are known.
     check(
       'expenses_complete_when_ready',
@@ -755,6 +825,12 @@ export const expenseParts = pgTable(
     typeId: uuid('type_id'),
     amountMinor: bigint('amount_minor', { mode: 'number' }).notNull(),
     currency: char('currency', { length: 3 }).notNull(),
+    /**
+     * Its category's and type's names as they were when its expense's report was last
+     * submitted (NFR-DAT-04, #70); null for a part of the lines left with the expense's own.
+     */
+    categoryName: text('category_name'),
+    typeName: text('type_name'),
     createdAt: createdAt(),
   },
   (t) => [
@@ -984,6 +1060,18 @@ export const inboundEmailStatus = pgEnum('inbound_email_status', [
 ]);
 
 /**
+ * Why an email from a member's address wasn't proved to be theirs (ADR-0026): no DKIM
+ * signature; none that checks out, often because a mail system changed it after signing; a
+ * good one by a domain other than the From address's; or one that leaves part of it unsigned.
+ */
+export const inboundEmailProblem = pgEnum('inbound_email_problem', [
+  'unsigned',
+  'signature_failed',
+  'not_aligned',
+  'partly_signed',
+]);
+
+/**
  * An email a member sent to the receipts address (FR-CAP-02, ADR-0026): who sent it, what it
  * was about, and what came of it. Kept once per provider message, so a retried delivery adds
  * nothing. Mail from anyone who doesn't sign in here is never kept.
@@ -1006,10 +1094,20 @@ export const inboundEmails = pgTable(
      * signature proved the sender, so nothing was filed and no body kept.
      */
     status: inboundEmailStatus('status').notNull(),
+    /**
+     * unverified: why its sender wasn't proved, shown in Needs you (#59). Null for a proved
+     * sender, and for one kept before the reason was.
+     */
+    senderProblem: inboundEmailProblem('sender_problem'),
     /** The email's own text as read, at most 64 KiB, kept only for a proved sender. */
     bodyText: text('body_text'),
     /** How many receipts it filed; a file already filed before is not counted again. */
     receiptCount: integer('receipt_count').notNull().default(0),
+    /**
+     * When its member dismissed it from Needs you, where an email that filed nothing shows
+     * (#59). Set once, by them, and never cleared; the row is otherwise as it arrived.
+     */
+    dismissedAt: timestamp('dismissed_at', { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => [
@@ -1021,6 +1119,14 @@ export const inboundEmails = pgTable(
       foreignColumns: [members.orgId, members.id],
     }),
     check('inbound_emails_receipt_count', sql`${t.receiptCount} >= 0`),
+    check(
+      'inbound_emails_problem_unverified',
+      sql`${t.senderProblem} is null or ${t.status} = 'unverified'`,
+    ),
+    check(
+      'inbound_emails_dismissed_unfiled',
+      sql`${t.dismissedAt} is null or ${t.status} <> 'filed'`,
+    ),
     index('inbound_emails_member_idx').on(t.orgId, t.memberId, t.createdAt),
   ],
 );
@@ -1199,6 +1305,11 @@ export const savedPlaces = pgTable(
   ],
 );
 
+/**
+ * One step of a report's approval (FR-GOV-02, #24): the approver it went to, then the decision,
+ * when and with what comment; a return needs one. Single-step in Phase 1, so each submission adds
+ * one step, numbered by `sequence`; the steps of earlier rounds stay as they were decided.
+ */
 export const approvalSteps = pgTable(
   'approval_steps',
   {
@@ -1213,6 +1324,7 @@ export const approvalSteps = pgTable(
     createdAt: createdAt(),
   },
   (t) => [
+    unique('approval_steps_org_id_id_key').on(t.orgId, t.id),
     unique('approval_steps_report_sequence_key').on(t.orgId, t.reportId, t.sequence),
     foreignKey({
       name: 'approval_steps_report_fk',
@@ -1228,6 +1340,45 @@ export const approvalSteps = pgTable(
       'approval_steps_return_needs_comment',
       sql`${t.decision} <> 'returned' OR length(trim(coalesce(${t.comment}, ''))) > 0`,
     ),
+  ],
+);
+
+/**
+ * An expense rejected when its report was returned (FR-GOV-10 to FR-GOV-12, #24), with why: one
+ * that differs from its receipt, rejected on its own, or one the approver rejected in their own
+ * words. Kept with the step that returned it, so each round's rejections stay as they were. It
+ * goes with its expense.
+ */
+export const expenseRejections = pgTable(
+  'expense_rejections',
+  {
+    id: id(),
+    orgId: orgId(),
+    stepId: uuid('step_id').notNull(),
+    expenseId: uuid('expense_id').notNull(),
+    reason: text('reason').notNull(),
+    /** True when the review rejected it on its own, because it differs from its receipt. */
+    automatic: boolean('automatic').notNull().default(false),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('expense_rejections_org_id_id_key').on(t.orgId, t.id),
+    unique('expense_rejections_step_expense_key').on(t.orgId, t.stepId, t.expenseId),
+    foreignKey({
+      name: 'expense_rejections_step_fk',
+      columns: [t.orgId, t.stepId],
+      foreignColumns: [approvalSteps.orgId, approvalSteps.id],
+    }),
+    foreignKey({
+      name: 'expense_rejections_expense_fk',
+      columns: [t.orgId, t.expenseId],
+      foreignColumns: [expenses.orgId, expenses.id],
+    }).onDelete('cascade'),
+    check(
+      'expense_rejections_reason_length',
+      sql`char_length(trim(${t.reason})) BETWEEN 1 AND ${sql.raw(String(APPROVAL_NOTE_MAX))}`,
+    ),
+    index('expense_rejections_expense_idx').on(t.orgId, t.expenseId),
   ],
 );
 

@@ -5,7 +5,7 @@ import {
   type SignIn,
   type StoredProviderKey,
 } from '@expensewise/db';
-import type { MemberRole } from '@expensewise/domain';
+import { mayLetIn, type MemberRole } from '@expensewise/domain';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import {
   isPlausibleKey,
@@ -24,6 +24,12 @@ import { featureGate, featureState, type FeatureGate } from './features.ts';
 import { ProblemError } from './problem.ts';
 import { sealContext } from './provider-keys.ts';
 import {
+  requireAdminSecondFactor,
+  requireCodeToLink,
+  requireSecondFactor,
+  SECOND_FACTOR_FLAG,
+} from './second-factor.ts';
+import {
   deleteAiKeyRoute,
   ensureWorkspaceRoute,
   listAiKeysRoute,
@@ -32,9 +38,15 @@ import {
   switchFeatureRoute,
   testAiKeyRoute,
 } from './routes/workspace.ts';
-import { linkSignInRoute, listSignInsRoute, unlinkSignInRoute } from './routes/sign-ins.ts';
+import {
+  letInSignInRoute,
+  linkSignInRoute,
+  listSignInsRoute,
+  unlinkSignInRoute,
+  withdrawSignInRoute,
+} from './routes/sign-ins.ts';
 import { keyHint, SecretBoxError, type SecretBox } from './secret-box.ts';
-import type { WorkspaceStore } from './workspace.ts';
+import type { CallerMembership, WorkspaceStore } from './workspace.ts';
 
 export interface WorkspaceRouteOptions {
   readonly verifyToken?: TokenVerifier;
@@ -96,12 +108,37 @@ export function keyStatus(provider: AiProvider, stored: StoredProviderKey | unde
 /** How recent the other sign-in's token must be to link it: it should come from signing in now. */
 const LINK_TOKEN_MAX_AGE_MS = 10 * 60 * 1000;
 
-const signInView = (signIn: SignIn, caller: Identity) => ({
+/**
+ * A sign-in as the API shows it; while the second factor is on, with whether it is let in
+ * (#90). Off, it is as it was.
+ */
+const signInView = (signIn: SignIn, caller: Identity, secondFactorOn = false) => ({
   id: signIn.id,
   email: signIn.email,
   linkedAt: signIn.createdAt.toISOString(),
   current: signIn.userId === caller.userId,
+  ...(secondFactorOn
+    ? {
+        letIn: signIn.letIn ?? ('no' as const),
+        letInLapsesAt: signIn.letInLapsesAt?.toISOString() ?? null,
+      }
+    : {}),
 });
+
+/** A refusal to let in, or withdraw, from a sign-in that isn't let in with an authenticator. */
+const notLetInYourself = () =>
+  new ProblemError(409, 'let-in-not-allowed', 'Only an email let in lets another in', {
+    code: 'let_in_not_allowed',
+    detail:
+      'Sign in with the email that has your authenticator app and enter its code, then let ' +
+      'this one in, or withdraw it, from Settings › Sign-ins there.',
+  });
+
+const theSignInYouUse = (doing: string) =>
+  new ProblemError(409, 'current-sign-in', `You cannot ${doing} the sign-in you are using`, {
+    code: 'current_sign_in',
+    detail: 'It is let in already. Choose another of your emails.',
+  });
 
 export function registerWorkspaceRoutes(
   app: OpenAPIHono<{ Variables: AuthVariables }>,
@@ -120,6 +157,8 @@ export function registerWorkspaceRoutes(
       listSignInsRoute,
       linkSignInRoute,
       unlinkSignInRoute,
+      letInSignInRoute,
+      withdrawSignInRoute,
       listFeaturesRoute,
       switchFeatureRoute,
     ].map((r) => r.getRoutingPath()),
@@ -158,7 +197,7 @@ export function registerWorkspaceRoutes(
     });
 
   /** The caller's membership. */
-  const member = async (userId: string): Promise<Membership> => {
+  const member = async (userId: string): Promise<CallerMembership> => {
     const membership = await store().findMembership(userId);
     if (!membership) {
       throw new ProblemError(
@@ -182,6 +221,13 @@ export function registerWorkspaceRoutes(
         code: 'forbidden_role',
       });
     }
+    return membership;
+  };
+
+  /** The caller, when they may change keys: a manager, past the second factor when it is on. */
+  const admin = async (identity: Identity): Promise<Membership> => {
+    const membership = await manager(identity.userId);
+    await requireAdminSecondFactor(features, membership.orgId, identity);
     return membership;
   };
 
@@ -213,7 +259,7 @@ export function registerWorkspaceRoutes(
   });
 
   app.openapi(setAiKeyRoute, async (c) => {
-    const who = await manager(c.var.identity.userId);
+    const who = await admin(c.var.identity);
     const { secrets, verify } = keyTools();
     const { provider } = c.req.valid('param');
     const apiKey = normalizeProviderKey(c.req.valid('json').apiKey);
@@ -252,7 +298,7 @@ export function registerWorkspaceRoutes(
   });
 
   app.openapi(testAiKeyRoute, async (c) => {
-    const who = await manager(c.var.identity.userId);
+    const who = await admin(c.var.identity);
     const { secrets, verify } = keyTools();
     const { provider } = c.req.valid('param');
     const keys = store();
@@ -307,7 +353,7 @@ export function registerWorkspaceRoutes(
   });
 
   app.openapi(deleteAiKeyRoute, async (c) => {
-    const who = await manager(c.var.identity.userId);
+    const who = await admin(c.var.identity);
     const { provider } = c.req.valid('param');
     const removed = await store().deleteKey(who.orgId, provider, c.var.identity.userId);
     if (!removed) throw notStored(provider);
@@ -318,12 +364,79 @@ export function registerWorkspaceRoutes(
     const caller = c.var.identity;
     const who = await member(caller.userId);
     const signIns = await store().listSignIns(who);
-    return c.json({ signIns: signIns.map((s) => signInView(s, caller)) }, 200);
+    // While the second factor is on, each says whether it is let in, and the list whether this
+    // session may let another in (#90). Off, it is as it was.
+    const on = await features.isOn(who.orgId, SECOND_FACTOR_FLAG);
+    const own = signIns.find((s) => s.userId === caller.userId);
+    const standing = { authenticator: who.authenticator === true, letIn: own?.letIn ?? 'no' };
+    return c.json(
+      {
+        signIns: signIns.map((s) => signInView(s, caller, on)),
+        ...(on ? { canLetIn: mayLetIn(standing, caller.assuranceLevel) } : {}),
+      },
+      200,
+    );
+  });
+
+  /**
+   * The caller, when their session may change who is let in (#90): behind the switch, from an
+   * email with an authenticator of its own, at aal2. Someone with none isn't asked for a code
+   * they don't have; they are told only an email let in lets another in.
+   */
+  const letInCaller = async (identity: Identity): Promise<CallerMembership> => {
+    const who = await member(identity.userId);
+    await features.require(who.orgId, SECOND_FACTOR_FLAG);
+    if (who.authenticator !== true) throw notLetInYourself();
+    requireSecondFactor(
+      identity,
+      'Letting your emails in needs the code from your authenticator app, so a password alone ' +
+        'never lets one in. Enter it, then try again.',
+    );
+    return who;
+  };
+  const noSuchSignIn = () =>
+    new ProblemError(404, 'not-found', 'You have no such sign-in', { code: 'not_found' });
+
+  app.openapi(letInSignInRoute, async (c) => {
+    const caller = c.var.identity;
+    const who = await letInCaller(caller);
+    const { signInId } = c.req.valid('param');
+    const result = await store().letSignInIn(who, signInId, caller);
+    switch (result.status) {
+      case 'let_in':
+      case 'already_let_in':
+        return c.json(signInView(result.signIn, caller, true), 200);
+      case 'not_found':
+        throw noSuchSignIn();
+      case 'current':
+        throw theSignInYouUse('let in');
+      case 'actor_not_let_in':
+        throw notLetInYourself();
+    }
+  });
+
+  app.openapi(withdrawSignInRoute, async (c) => {
+    const caller = c.var.identity;
+    const who = await letInCaller(caller);
+    const { signInId } = c.req.valid('param');
+    switch (await store().withdrawSignIn(who, signInId, caller)) {
+      case 'withdrawn':
+      case 'not_let_in':
+        return c.body(null, 204);
+      case 'not_found':
+        throw noSuchSignIn();
+      case 'current':
+        throw theSignInYouUse('withdraw');
+      case 'actor_not_let_in':
+        throw notLetInYourself();
+    }
   });
 
   app.openapi(linkSignInRoute, async (c) => {
     const caller = c.var.identity;
     const who = await member(caller.userId);
+    // Before the other sign-in is even looked at, whatever the switch (#85).
+    requireCodeToLink(who, caller);
     const { accessToken } = c.req.valid('json');
     const invalid = (code: string, title: string, detail: string) =>
       new ProblemError(422, code.replaceAll('_', '-'), title, { code, detail });
@@ -431,6 +544,7 @@ export function registerWorkspaceRoutes(
         code: 'forbidden_role',
       });
     }
+    await requireAdminSecondFactor(features, who.orgId, caller);
     const { key } = c.req.valid('param');
     const { enabled } = c.req.valid('json');
     if (features.overridden(key)) {
@@ -440,6 +554,14 @@ export function registerWorkspaceRoutes(
           'FLAG_OVERRIDES on the server decides it, so a switch here would have no effect. ' +
           'Remove it from FLAG_OVERRIDES first.',
       });
+    }
+    if (key === SECOND_FACTOR_FLAG && enabled) {
+      // No lockout: only an owner who has enrolled and passed it can ask it of everyone.
+      requireSecondFactor(
+        caller,
+        'Switching the second factor on needs your own first, so no one is locked out: add an ' +
+          'authenticator app in Settings › Sign-ins and enter its code, then switch it on.',
+      );
     }
     await store().switchFeature(who, { flag: key, enabled }, caller.userId);
     const switched = (await store().listFeatures(who.orgId)).find((f) => f.flag === key);

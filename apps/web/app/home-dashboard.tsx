@@ -24,9 +24,10 @@ const totals = (amounts: readonly ExpenseAmount[]) =>
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 /**
- * Home (FR-INS-01): Needs you first, then the trip under way or next, this month, and the
- * last trips. Every figure opens the list behind it, and a section with nothing to say is
- * left out. Home asks for the person's own day, so a trip starts on their calendar.
+ * Home (FR-INS-01): Needs you first, then the trip under way or next, this month with its
+ * business miles while mileage is on, and the last trips. Every figure opens the list behind
+ * it, and a section with nothing to say is left out. Home asks for the person's own day, so a
+ * trip starts on their calendar.
  */
 export function HomeDashboard() {
   const [load, setLoad] = useState<Load>({ state: 'loading' });
@@ -82,18 +83,22 @@ export function HomeDashboard() {
           {load.message}
         </p>
       ) : null}
-      {load.state === 'ready' ? <Dashboard home={load.home} /> : null}
+      {load.state === 'ready' ? <Dashboard home={load.home} onChanged={refresh} /> : null}
     </>
   );
 }
 
-function Dashboard({ home }: { home: Home }) {
+function Dashboard({ home, onChanged }: { home: Home; onChanged: () => Promise<void> }) {
   const { month } = home;
   const range = `from=${month.from}&to=${monthEnd(month.from)}`;
   const name = monthName(month.from);
   return (
     <>
-      <NeedsYouList items={home.needsYou.items} count={home.needsYou.count} />
+      <NeedsYouList
+        items={home.needsYou.items}
+        count={home.needsYou.count}
+        onChanged={() => void onChanged()}
+      />
       {home.trip ? <TripCard trip={home.trip} /> : null}
       {month.expenses > 0 || month.trips > 0 ? (
         <Section
@@ -134,6 +139,17 @@ function Dashboard({ home }: { home: Home }) {
                   : `${month.expenses - month.ready} not Ready yet`
               }
             />
+            {/* Sent only while mileage is switched on and a drive this month claims miles. */}
+            {month.miles ? (
+              <div className="col-span-2 grid">
+                <Figure
+                  href={`/expenses?${range}`}
+                  label="Business miles"
+                  value={`${month.miles.total} mi`}
+                  note={`${plural(month.miles.drives, 'drive')} in ${name}`}
+                />
+              </div>
+            ) : null}
           </div>
         </Section>
       ) : null}

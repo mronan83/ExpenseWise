@@ -271,7 +271,7 @@ export const SECURITY_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Anyone who can run the server can decrypt every key. Until a second factor at sign-in exists (F-11), a stolen password lets someone replace or remove keys (ADR-0015).',
+    note: 'Anyone who can run the server can decrypt every key. While the organization has the second factor switched on, saving, testing or removing a key also needs the code from an authenticator app (F-11, US-ACC-12); while it is off, a stolen password lets someone replace or remove keys (ADR-0015).',
   },
   {
     id: 'US-SEC-05',
@@ -440,7 +440,7 @@ export const SECURITY_STORIES: readonly Story[] = [
     soThat: 'text printed on a receipt can never make the app do something, only be read',
     feature: 'F-06',
     requirements: ['NFR-SEC-07'],
-    status: 'Partial',
+    status: 'Delivered',
     criteria: [
       {
         id: 'AC1',
@@ -459,8 +459,12 @@ export const SECURITY_STORIES: readonly Story[] = [
         when: 'it is sent',
         then: 'it offers the model no tools, so nothing a receipt says can make it act',
         decided: ARCH_65,
-        checks: [],
-        untested: 66,
+        checks: [
+          'extraction/no-tools › offers Claude no tools',
+          'extraction/no-tools › offers OpenAI no tools',
+          'extraction/no-tools › is built for every addition, on, off and left out',
+          'extraction/no-tools › finds a tool wherever one is added, so the checks above can fail',
+        ],
       },
       {
         id: 'AC3',
@@ -474,7 +478,7 @@ export const SECURITY_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'No tools are sent today, but nothing fails if one is ever added (GAP-15, #38).',
+    note: 'Since PR #60 (#38, GAP-15 closed) every request a reader can build is checked as it leaves for Anthropic or OpenAI: every model, with source lines and journeys each on, off and left out, a photo and a PDF. A tool, a tool choice, a function or any new field fails CI, and a new kind of addition fails to compile in the test until it is checked too.',
   },
   {
     id: 'US-SEC-08',
@@ -936,16 +940,17 @@ export const SECURITY_STORIES: readonly Story[] = [
       },
       {
         id: 'AC6',
-        given: 'an approver, while approval isn’t built (#24) and no report is routed to them',
+        given: 'an approver with no report routed to them',
         when: 'they work in the app',
-        then: 'they see and change only their own records, as a member does',
+        then: 'they see and change only their own records, as a member does; one routed to them they see with what is on it (US-GOV-06)',
         decided: CLAUDE,
         checks: [
           "db/own-records.int › can't see another member's receipts, expenses or trips, or their readings",
+          'db/approval.int › shows a report routed to an approver, and what is on it, and nothing else of its member’s',
         ],
       },
     ],
-    note: 'Your choice of Oct 4: #50 before anyone is invited (GAP-20). Approvers see the reports they approve once approval routes them (#24).',
+    note: 'Your choice of Oct 4: #50 before anyone is invited (GAP-20). Since PR #60, with approval on, an approver sees the reports routed to them (#24, US-GOV-06).',
   },
   {
     id: 'US-SEC-15',

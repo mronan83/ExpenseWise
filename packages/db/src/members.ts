@@ -1,4 +1,10 @@
-import { newId, type MemberRole } from '@expensewise/domain';
+import {
+  newId,
+  type LetIn,
+  type MemberRole,
+  type PersonLetIn,
+  type SignInStanding,
+} from '@expensewise/domain';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { appendAuditEvent } from './audit.ts';
 import { seedStarterCatalog } from './categories.ts';
@@ -11,25 +17,147 @@ export interface Membership {
   readonly role: MemberRole;
 }
 
+const MEMBERSHIP = { orgId: members.orgId, memberId: members.id, role: members.role };
+/** A sign-in's member, in the same organization. */
+const SIGN_IN_MEMBER = and(
+  eq(members.orgId, memberSignIns.orgId),
+  eq(members.id, memberSignIns.memberId),
+);
+/** A user's sign-ins to members an owner hasn't removed. */
+const activeSignInsOf = (userId: string) =>
+  and(eq(memberSignIns.userId, userId), isNull(members.deactivatedAt));
+
 /**
  * The members a user signs in as, oldest sign-in first. A member an owner removed is not one.
  * Needs app.user_id set.
  */
 export function membershipsOf(tx: Transaction, userId: string): Promise<Membership[]> {
   return tx
-    .select({ orgId: members.orgId, memberId: members.id, role: members.role })
+    .select(MEMBERSHIP)
     .from(memberSignIns)
-    .innerJoin(
-      members,
-      and(eq(members.orgId, memberSignIns.orgId), eq(members.id, memberSignIns.memberId)),
-    )
-    .where(and(eq(memberSignIns.userId, userId), isNull(members.deactivatedAt)))
+    .innerJoin(members, SIGN_IN_MEMBER)
+    .where(activeSignInsOf(userId))
     .orderBy(asc(memberSignIns.createdAt));
 }
 
 /** The signed-in user's memberships. Row-level security limits it to their own sign-ins. */
 export async function findMemberships(db: Database, userId: string): Promise<Membership[]> {
   return withUser(db, userId, (tx) => membershipsOf(tx, userId));
+}
+
+/**
+ * Whether a sign-in, a Supabase Auth user, has a verified second factor such as an
+ * authenticator app, read from Supabase Auth's own record of factors as it is asked (#85,
+ * ADR-0044). Nothing the app writes changes it. Plain Postgres has no Supabase Auth: false.
+ */
+const authenticatorOf = (userId: string) => sql<boolean>`sign_in_has_authenticator(${userId})`;
+
+/**
+ * Whether the person a sign-in belongs to has a verified second factor on any email they sign
+ * in with, this one or another linked to the same member (#88, Q43, ADR-0044): read through
+ * `sign_in_has_authenticator`, so it answers as that does. False for a sign-in no member has.
+ */
+const personAuthenticatorOf = (userId: string) => sql<boolean>`person_has_authenticator(${userId})`;
+
+/**
+ * Whether a sign-in is let in (#90, Q44, ADR-0044): 'yes', 'waiting' until it passes its own
+ * code, or 'no', lapsed included. Read through `sign_in_let_in`, an owner-run function, since
+ * before an organization is chosen the app sees no let-in row.
+ */
+const letInOf = (userId: string) => sql<string>`sign_in_let_in(${userId})`;
+
+/**
+ * The emails the person a sign-in belongs to has let in, and whether one has a second factor
+ * now: 'none', 'without_authenticator' or 'with_authenticator' (#90), through `person_let_in`.
+ */
+const personLetInOf = (userId: string) => sql<string>`person_let_in(${userId})`;
+
+const LET_IN: readonly string[] = ['no', 'waiting', 'yes'] satisfies LetIn[];
+const PERSON_LET_IN: readonly string[] = [
+  'none',
+  'without_authenticator',
+  'with_authenticator',
+] satisfies PersonLetIn[];
+
+/**
+ * A member a sign-in reaches, and where that sign-in stands for the second factor: whether it,
+ * and its person, have one, and whether it, and any email of the person's, is let in (#85, #88,
+ * #90).
+ */
+export interface SignedInMember extends Membership, SignInStanding {}
+
+/** The four answers as the functions give them, read strictly. */
+function standingOf(row: {
+  authenticator?: unknown;
+  personAuthenticator?: unknown;
+  letIn?: unknown;
+  personLetIn?: unknown;
+}): SignInStanding {
+  return {
+    authenticator: row.authenticator === true,
+    personAuthenticator: row.personAuthenticator === true,
+    letIn: LET_IN.includes(row.letIn as string) ? (row.letIn as LetIn) : 'no',
+    personLetIn: PERSON_LET_IN.includes(row.personLetIn as string)
+      ? (row.personLetIn as PersonLetIn)
+      : 'none',
+  };
+}
+
+/** The four questions, asked of one sign-in in the same query. */
+const standingQuestions = (userId: string) => ({
+  authenticator: authenticatorOf(userId),
+  personAuthenticator: personAuthenticatorOf(userId),
+  letIn: letInOf(userId),
+  personLetIn: personLetInOf(userId),
+});
+
+/**
+ * The signed-in user's first membership, as `findMemberships` finds it, and where their sign-in
+ * stands for the second factor, in one query: how the API learns who is calling, and how far
+ * their session may act for them (#85, #88, #90).
+ */
+export async function findSignedInMember(
+  db: Database,
+  userId: string,
+): Promise<SignedInMember | undefined> {
+  return withUser(db, userId, async (tx) => {
+    const [found] = await tx
+      .select({ ...MEMBERSHIP, ...standingQuestions(userId) })
+      .from(memberSignIns)
+      .innerJoin(members, SIGN_IN_MEMBER)
+      .where(activeSignInsOf(userId))
+      .orderBy(asc(memberSignIns.createdAt))
+      .limit(1);
+    if (!found) return undefined;
+    const { orgId, memberId, role } = found;
+    return { orgId, memberId, role, ...standingOf(found) };
+  });
+}
+
+/** Whether a sign-in has a verified second factor, as above. Call inside a transaction. */
+export async function signInHasAuthenticator(tx: Transaction, userId: string): Promise<boolean> {
+  const { rows } = await tx.execute<{ has: boolean }>(
+    sql`select sign_in_has_authenticator(${userId}) as has`,
+  );
+  return rows[0]?.has === true;
+}
+
+/**
+ * Where a sign-in stands for the second factor, as `findSignedInMember` reads it (#88, #90).
+ * Call inside a transaction.
+ */
+export async function signInStanding(tx: Transaction, userId: string): Promise<SignInStanding> {
+  const q = standingQuestions(userId);
+  const { rows } = await tx.execute<{
+    authenticator: unknown;
+    personAuthenticator: unknown;
+    letIn: unknown;
+    personLetIn: unknown;
+  }>(
+    sql`select ${q.authenticator} as "authenticator", ${q.personAuthenticator} as "personAuthenticator",
+               ${q.letIn} as "letIn", ${q.personLetIn} as "personLetIn"`,
+  );
+  return standingOf(rows[0] ?? {});
 }
 
 /** Serializes everything that decides which member a sign-in belongs to. */

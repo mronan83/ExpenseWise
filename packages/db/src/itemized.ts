@@ -30,6 +30,12 @@ import { conversionRecord, onItsReport, recordColumns, tripOf } from './conversi
 import { heldAsDuplicate } from './duplicates.ts';
 import { reopenChangedReports, reportsOfExpenses } from './report-touch.ts';
 import {
+  shownCategoryName,
+  shownPartCategoryName,
+  shownPartTypeName,
+  shownTypeName,
+} from './submitted-names.ts';
+import {
   categories,
   expenseConversions,
   expenseItemizations,
@@ -140,13 +146,18 @@ export async function partsOf(
       position: expenseParts.position,
       basis: expenseParts.basis,
       categoryId: expenseParts.categoryId,
-      category: categories.name,
+      // As submitted, once its expense's report is (NFR-DAT-04, #70).
+      category: shownPartCategoryName,
       typeId: expenseParts.typeId,
-      type: expenseTypes.name,
+      type: shownPartTypeName,
       amountMinor: expenseParts.amountMinor,
       currency: expenseParts.currency,
     })
     .from(expenseParts)
+    .innerJoin(
+      expenses,
+      and(eq(expenses.orgId, expenseParts.orgId), eq(expenses.id, expenseParts.expenseId)),
+    )
     .leftJoin(
       categories,
       and(eq(categories.orgId, expenseParts.orgId), eq(categories.id, expenseParts.categoryId)),
@@ -698,9 +709,10 @@ export async function reportCategories(
       expenseId: expenses.id,
       reportId: reports.id,
       categoryId: expenses.categoryId,
-      category: categories.name,
+      // As submitted, once its report is (NFR-DAT-04, #70).
+      category: shownCategoryName,
       typeId: expenses.typeId,
-      type: expenseTypes.name,
+      type: shownTypeName,
       amount: expenses.amountMinor,
       expenseCurrency: expenses.currency,
       transactionDate: expenses.transactionDate,

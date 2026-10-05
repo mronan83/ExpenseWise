@@ -1,6 +1,7 @@
 import { createRoute, z } from '@hono/zod-openapi';
 import {
   ChangeRoleSchema,
+  ChooseApproverSchema,
   CreatedInviteSchema,
   CreateInviteSchema,
   InviteAcceptedSchema,
@@ -10,6 +11,7 @@ import {
   PersonSchema,
 } from '../people-schemas.ts';
 import { ProblemSchema } from '../schemas.ts';
+import { SECOND_FACTOR_REFUSAL } from '../second-factor.ts';
 
 const problem = (description: string) => ({
   description,
@@ -23,6 +25,14 @@ const ownerOnly = {
   403: problem('Only an owner manages people, or the caller has no organization yet.'),
   404: problem('Inviting people is not switched on (feature_off), or no such person or invite.'),
   503: problem('Sign-in or the database is not configured on this server.'),
+};
+
+/** A change to people or links: an admin action (FR-GOV-04). */
+const ownerActing = {
+  ...ownerOnly,
+  403: problem(
+    'Only an owner manages people, or the caller has no organization yet.' + SECOND_FACTOR_REFUSAL,
+  ),
 };
 
 const json = <T>(description: string, schema: T) => ({
@@ -62,7 +72,7 @@ export const createInviteRoute = createRoute({
   request: {
     body: { content: { 'application/json': { schema: CreateInviteSchema } }, required: true },
   },
-  responses: { 201: json('The invite and its link.', CreatedInviteSchema), ...ownerOnly },
+  responses: { 201: json('The invite and its link.', CreatedInviteSchema), ...ownerActing },
 });
 
 export const revokeInviteRoute = createRoute({
@@ -81,7 +91,7 @@ export const revokeInviteRoute = createRoute({
   },
   responses: {
     204: { description: 'The link no longer works.' },
-    ...ownerOnly,
+    ...ownerActing,
     409: problem('The invite was already used.'),
   },
 });
@@ -98,8 +108,37 @@ export const changeRoleRoute = createRoute({
   },
   responses: {
     200: json('The person, with their new role.', PersonSchema),
-    ...ownerOnly,
+    ...ownerActing,
     409: problem('They are the last owner: the organization always has one.'),
+  },
+});
+
+export const chooseApproverRoute = createRoute({
+  method: 'put',
+  path: '/v1/settings/people/{memberId}/approver',
+  tags: ['Settings'],
+  summary: 'Choose who approves someone’s reports',
+  description:
+    'Someone else here whose role may approve, or null for Automatic: the longest-standing ' +
+    'approver, then finance admin, then owner (ADR-0043). A report they submit goes to the one ' +
+    'chosen while they can approve it, and otherwise as Automatic finds; one already submitted ' +
+    'keeps the approver it went to. Owners only, behind team.invites and reports.approval; ' +
+    'each change is audited.',
+  ...secured,
+  request: {
+    params: memberParam,
+    body: { content: { 'application/json': { schema: ChooseApproverSchema } }, required: true },
+  },
+  responses: {
+    200: json('The person, with who approves their reports.', PersonSchema),
+    ...ownerActing,
+    404: problem(
+      'Inviting people or approval is not switched on (feature_off), or no such person here.',
+    ),
+    422: problem(
+      'The one chosen is the person themselves (own_approver), or not someone here whose role ' +
+        'may approve (not_an_approver).',
+    ),
   },
 });
 
@@ -115,7 +154,7 @@ export const removePersonRoute = createRoute({
   request: { params: memberParam },
   responses: {
     204: { description: 'They are removed.' },
-    ...ownerOnly,
+    ...ownerActing,
     409: problem('They are the last owner, or the caller.'),
   },
 });

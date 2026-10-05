@@ -50,10 +50,10 @@ export const PRINCIPLES: readonly Principle[] = [
     id: 'AP4',
     name: 'Append-only history',
     built:
-      'Every state change appends a hash-chained audit event in its own transaction. The database refuses to change or remove one. Confirmations of readings are append-only too. Settings › Audit trail recomputes the chain from every stored event each time it opens (FR-GOV-06).',
+      'Every state change appends a hash-chained audit event in its own transaction. The database refuses to change or remove one. Confirmations of readings are append-only too. Settings › Audit trail recomputes the chain from every stored event each time it opens (FR-GOV-06). An approved expense is locked: the database refuses any change to it but settling it, whoever asks, and each round of a report’s approval keeps its step and rejections (ADR-0043).',
     short:
-      'Locking approved expenses is an application rule; the database doesn’t enforce it until approval exists (FR-EXP-03, #24).',
-    refs: ['ADR-0008'],
+      'Correcting an approved expense, with a reversal and a new version, isn’t built (GAP-34, #87).',
+    refs: ['ADR-0008', 'ADR-0043', 'GAP-34', '#87'],
   },
   {
     id: 'AP5',
@@ -67,10 +67,10 @@ export const PRINCIPLES: readonly Principle[] = [
     id: 'AP6',
     name: 'Isolation in the database',
     built:
-      'Every tenant table has `org_id`, a forced row-level security policy and composite foreign keys. The app connects as a role that can’t bypass it, and refuses to start if it could. Inside an organization, each request names its caller’s membership to the database, and policies and triggers keep a member to their own receipts, expenses, trips and reports; owners, finance admins and auditors see everyone’s, and an auditor changes nothing (ADR-0035). Background work names no member and acts for the system.',
+      'Every tenant table has `org_id`, a forced row-level security policy and composite foreign keys. The app connects as a role that can’t bypass it, and refuses to start if it could. Inside an organization, each request names its caller’s membership to the database, and policies and triggers keep a member to their own receipts, expenses, trips and reports; owners, finance admins and auditors see everyone’s, and an auditor changes nothing (ADR-0035). An approver also sees each report routed to them and what is on it, and whoever decides a report changes only its status and its expenses’ (ADR-0043). Background work names no member and acts for the system.',
     short:
-      'An approver sees only their own records until approval routes reports to them (#24). The audit trail and the outbox are kept to the organization, not to each member (GAP-31, #74).',
-    refs: ['ADR-0001', 'ADR-0013', 'ADR-0035', 'GAP-31', '#74', '#24'],
+      'The audit trail and the outbox are kept to the organization, not to each member (GAP-31, #74).',
+    refs: ['ADR-0001', 'ADR-0013', 'ADR-0035', 'ADR-0043', 'GAP-31', '#74'],
   },
   {
     id: 'AP7',
@@ -103,42 +103,42 @@ export const COMPONENTS: readonly Component[] = [
     name: 'Web app',
     technology: 'Next.js 16, React 19, Tailwind CSS 4',
     responsibility:
-      'Every screen, as client components that call the API with the person’s token, expense reports among them. Hosts the API at `/api` and the workflow endpoint at `/api/inngest`.',
+      'Every screen, as client components that call the API with the person’s token, expense reports among them. Signs in, and handles the second factor, through Supabase Auth in the browser, for authentication only: adding and removing authenticator apps, the code screen before anything else while the organization has it on, and the code asked for in the middle of an admin action, or of any read or change the API holds for someone with an authenticator, which is then sent again, the prompt giving way to the code screen when it opens; a screen of its own, never the code, for an email that needs its own authenticator or isn’t let in, and in Settings › Sign-ins, which of the person’s emails are let in, letting another in and withdrawing one (ADR-0042, ADR-0044, #90). Hosts the API at `/api` and the workflow endpoint at `/api/inngest`.',
     where: ['apps/web'],
   },
   {
     name: 'API',
     technology: 'Hono with zod-openapi; jose for tokens; pdf-lib for report PDFs',
     responsibility:
-      'Verifies the sign-in token, finds the caller’s membership and runs each member-facing store’s transaction as that member, so the database shows them only what their role allows (ADR-0035); a change the database refuses answers 403 `not_yours`. Serves Settings › People: invite links, roles and removing someone, and accepting a link. Serves every operation, including Home, read in one transaction: the Needs you inbox, which says why each item needs the person, then their trip, month and recent trips. Takes Bird’s signed email webhook, checked against the exact bytes before anything parses them. Settles possible duplicates as the person decides, removing a deleted receipt’s file only after the deletion commits. Serves expense reports: closing, reopening, moving a trip or local expense, and justifying one; Needs you adds reports to act on and local expenses needing a reason. Serves the audit trail to owners, finance admins and auditors, a page at a time, and recomputes its hash chain when asked. Exports a closed report as CSV, and as a PDF summary laid out in the request with pdf-lib: a database read and a layout in memory, with no other service. Serves Settings › Organization: the details and the duplicate time window, which every member reads and only the owner changes. Logs, quotes and corrects drives, each only the caller’s own, behind the mileage flag, and serves the rate a mile they are paid at, which every member reads and only owners and finance admins set from a day (Q28); behind route mileage, logs a drive by its stops and hands the request to measure it on, changes its stops or the miles it claims with a reason, keeps each person’s saved places, and keeps the organization’s OpenRouteService key, checked with one short route as it is saved and stored encrypted, the one call to that service made in a request (ADR-0039). Serves the categories and types an organization keeps, which only owners and finance admins change, and shows each expense its own, or a suggestion worked out in the request by rules, with no model call; while they are on, Needs you also lists the person’s Ready expenses that have neither, with that suggestion (Q27). While currency conversion is on, serves each person’s reimbursement currency and shows reports, Home and Needs you in it, beside the amounts as spent. While itemized lines are on, shows each expense its receipt’s lines, with their shares and whether they add up, and leaves a line out of the claim with a reason; while splits are on, splits an expense into parts by line or by amount and totals a report by category and type, and the export writes a row per part and the lines left out (ADR-0041). Generates the OpenAPI contract and answers errors as problem documents.',
+      'Verifies the sign-in token, finds the caller’s membership and runs each member-facing store’s transaction as that member, so the database shows them only what their role allows (ADR-0035); a change the database refuses answers 403 `not_yours`. While the organization has the second factor on, every admin action needs a session that passed it (aal2), checked by one helper after the role check, and switching it on needs the owner’s own (ADR-0042); and a session of someone whose sign-in has a verified authenticator, until it passes the code, gets nothing but who they are and the switches, checked once as each request finds its caller, from Supabase Auth’s own record of factors read in the same query; once a person has an authenticator, only a sign-in they let in opens it, the first of theirs to pass its code let in then and another let in from one that passed its code, each change kept in `let_in_sign_ins` with its audit event, and the others refused while still filing the receipts they email (#90); linking a sign-in needs the code from anyone with one, whatever the switch (ADR-0044). Serves Settings › People: invite links, roles and removing someone, and accepting a link; while approval is on, who approves each person’s reports, which only an owner chooses (#86). Serves every operation, including Home, read in one transaction: the Needs you inbox, which says why each item needs the person, then their trip, month and recent trips, the month with the person’s business miles while mileage is on. Takes Bird’s signed email webhook, checked against the exact bytes before anything parses them. Settles possible duplicates as the person decides, removing a deleted receipt’s file only after the deletion commits. Serves expense reports: closing, reopening, moving a trip or local expense, and justifying one; Needs you adds reports to act on and local expenses needing a reason. While approval is on, submits a closed report to its approver, judging each expense against what its receipt shows, and approves it, asking for the second factor to approve someone else’s, or returns it with a comment and each rejected expense; Needs you adds reports to approve and those that came back, with each rejected expense and why (ADR-0043). Serves the audit trail to owners, finance admins and auditors, a page at a time, and recomputes its hash chain when asked. Exports a closed report, or once approval is on a submitted or approved one (Q29), as CSV, and as a PDF summary laid out in the request with pdf-lib: a database read and a layout in memory, with no other service. In the PDF a column of figures is never narrower than its widest value, so a date or an amount is never broken however many columns a report adds; while Journeys and stays is on, a report with a journey or a stay adds From and to, or Stay. Serves Settings › Organization: the details and the duplicate time window, which every member reads and only the owner changes. Logs, quotes and corrects drives, each only the caller’s own, behind the mileage flag, and serves the rate a mile they are paid at, which every member reads and only owners and finance admins set from a day (Q28); behind route mileage, logs a drive by its stops and hands the request to measure it on, changes its stops or the miles it claims with a reason, keeps each person’s saved places, and keeps the organization’s OpenRouteService key, checked with one short route as it is saved and stored encrypted, the one call to that service made in a request (ADR-0039). Serves the categories and types an organization keeps, which only owners and finance admins change, and shows each expense its own, or a suggestion worked out in the request by rules, with no model call; while they are on, Needs you also lists the person’s Ready expenses that have neither, with that suggestion (Q27). While emails that filed nothing are on, Needs you lists the person’s own, with why, and dismisses one for them alone (#59). While currency conversion is on, serves each person’s reimbursement currency and shows reports, Home and Needs you in it, beside the amounts as spent. While itemized lines are on, shows each expense its receipt’s lines, with their shares and whether they add up, and leaves a line out of the claim with a reason; while splits are on, splits an expense into parts by line or by amount and totals a report by category and type, and the export writes a row per part and the lines left out (ADR-0041). Generates the OpenAPI contract and answers errors as problem documents.',
     where: ['packages/api'],
   },
   {
     name: 'Domain',
     technology: 'TypeScript, no I/O',
     responsibility:
-      'The rules: money, dates, lifecycles, editing an expense and its time and place, filing to trips, when two receipts are the same purchase, exactly or possibly, and how two expenses merge, when something joins a report and what day 28 does, counted in an organization’s time zone or at UTC−12, what a report’s export holds and who may export it, an organization’s details and the duplicate window’s bounds, which reference rate a purchase date takes and what a report adds up to in the reimbursement currency, approvals, what a drive pays: the organization’s latest change on or before its date, its own rate a mile or the IRS rate again, else the IRS business rate, held as a table with the last day it is known for (ADR-0038, Q28), all through one function, and a drive by its route: its stops, the miles in hundredths from whole metres in integer arithmetic, and when other miles need a reason (ADR-0039), how categories and types nest and which pairs can be chosen, and the rules that suggest a type from a person’s past choices, the reading and the merchant’s name, and a hotel stay’s nights, worked out from its dates and not sure past 31 (ADR-0040); whether a receipt’s lines add up, each item’s share of the tax, tip and fees, spread in proportion with the largest share taking what is left, what leaving a line out leaves claimed, and the parts a split makes, always adding up to the claim (ADR-0041). Tested to 90% coverage or more.',
+      'The rules: money, dates, lifecycles, editing an expense and its time and place, filing to trips, when two receipts are the same purchase, exactly or possibly, and how two expenses merge, when something joins a report and what day 28 does, counted in an organization’s time zone or at UTC−12, what a report’s export holds and who may export it, approvals: who a report goes to, the approver an owner chose while they can approve it (#86), whom an owner may choose, who may decide it and when the second factor is needed, and whether an expense holds up against its receipt, claiming less only with a reason (ADR-0043), an organization’s details and the duplicate window’s bounds, which reference rate a purchase date takes and what a report adds up to in the reimbursement currency, approvals, what a drive pays: the organization’s latest change on or before its date, its own rate a mile or the IRS rate again, else the IRS business rate, held as a table with the last day it is known for (ADR-0038, Q28), all through one function, and a drive by its route: its stops, the miles in hundredths from whole metres in integer arithmetic, and when other miles need a reason (ADR-0039), and drives’ miles added up exactly for Home, how categories and types nest and which pairs can be chosen, and the rules that suggest a type from a person’s past choices, the reading and the merchant’s name, and a hotel stay’s nights, worked out from its dates and not sure past 31 (ADR-0040); whether a receipt’s lines add up, each item’s share of the tax, tip and fees, spread in proportion with the largest share taking what is left, what leaving a line out leaves claimed, and the parts a split makes, always adding up to the claim (ADR-0041); the second factor’s own rules: a code of 6 digits, when sign-in asks for it, who is offered an authenticator app, up to 10 (ADR-0042), and how far a session of each of a person’s emails gets, by whether it is let in and has its own authenticator, and who may let another in, for 24 hours until it passes its own code (`admission`, ADR-0044, #90). Tested to 90% coverage or more.',
     where: ['packages/domain'],
   },
   {
     name: 'Data access',
     technology: 'Drizzle ORM on node-postgres',
     responsibility:
-      'The schema and migrations, `withOrg()`, which can name the member a transaction acts for (ADR-0035), and every query and write, each with its audit event. Makes, accepts and revokes invite links, keeping only each token’s hash, and changes roles and removes people, never the last owner. Runs migrations and the data steps on release: one takes back anything Supabase’s Data API roles hold, another compares each receipt read before duplicates were looked for, once. Compares each receipt as its reading settles and holds a later copy, and keeps when its first reading settled; corrects a Ready receipt’s field with its expense in one transaction; deletes a receipt only through `delete_receipt()`. Joins trips and local expenses to reports and closes them on day 28, by the organization’s days when it keeps a time zone; any change to a closed report reopens it. Reads a report with every expense on it for its export. Keeps the organization’s details and duplicate window, each change audited. Writes a drive as an expense and its mileage log together, with the rate copied on, reading the organization’s own rates a mile in the same transaction, and keeps those rates, each change audited; a drive by its route with its stops and the request to measure it, and records a measurement only for the request it was made for. Keeps each member’s saved places and the organization’s routing key, as ciphertext. Lists a member’s Ready expenses with no category and type for Needs you, leaving out any held as a possible duplicate. Seeds each new organization’s ready-made categories and types through `seed_starter_catalog()`, and keeps the lists and each expense’s choice. Converts a report’s amounts with the rates it is given, records each conversion with its rate, and asks for conversion in the transaction of any change that leaves something to convert. Copies a reading’s itemized lines onto its expense while the expense follows its receipt, and keeps the lines left out and the parts of a split, worked out again on each change and audited; an expense’s lines and parts go just before it (ADR-0041). Holds the restore drill’s database checks.',
+      'The schema and migrations, `withOrg()`, which can name the member a transaction acts for (ADR-0035), and every query and write, each with its audit event. Makes, accepts and revokes invite links, keeping only each token’s hash, and changes roles and removes people, never the last owner, and keeps the approver an owner chose for each member, never themselves. Runs migrations and the data steps on release: one takes back anything Supabase’s Data API roles hold, another compares each receipt read before duplicates were looked for, once. Compares each receipt as its reading settles and holds a later copy, and keeps when its first reading settled; corrects a Ready receipt’s field with its expense in one transaction; deletes a receipt only through `delete_receipt()`. Joins trips and local expenses to reports and closes them on day 28, by the organization’s days when it keeps a time zone; any change to a closed report reopens it. Reads a report with every expense on it for its export, with the category and type names copied on when it was submitted. Submits a report to its approver, copying those names on, and approves or returns it with each rejection, naming the report it decides so the database lets the person deciding change only its status and its expenses’ (ADR-0043). Keeps the organization’s details and duplicate window, each change audited. Writes a drive as an expense and its mileage log together, with the rate copied on, reading the organization’s own rates a mile in the same transaction, and keeps those rates, each change audited; a drive by its route with its stops and the request to measure it, and records a measurement only for the request it was made for. Keeps each member’s saved places and the organization’s routing key, as ciphertext. Lists a member’s Ready expenses with no category and type for Needs you, leaving out any held as a possible duplicate, and their emails that filed nothing, never with their text; records a dismissal once, audited. Seeds each new organization’s ready-made categories and types through `seed_starter_catalog()`, and keeps the lists and each expense’s choice. Converts a report’s amounts with the rates it is given, records each conversion with its rate, and asks for conversion in the transaction of any change that leaves something to convert. Copies a reading’s itemized lines onto its expense while the expense follows its receipt, and keeps the lines left out and the parts of a split, worked out again on each change and audited; an expense’s lines and parts go just before it (ADR-0041). Holds the restore drill’s database checks.',
     where: ['packages/db'],
   },
   {
     name: 'Receipt reading',
     technology: 'Anthropic SDK; OpenAI over HTTPS',
     responsibility:
-      'Turns an image or PDF into fields with a confidence each, through one prompt and one schema, the time of purchase and the merchant’s address among them; each organization is asked the additions it switched on, composed independently, each adding its own instructions, structure and version: the line of the receipt behind each field (GAP-14), and where a ride, flight or train went and a folio’s stay (ADR-0040); with none on, the request is byte for byte what it always was. Works out a time zone from the city, region and country offline (city-timezones), so no address leaves ExpenseWise. Compares two Claude models and falls back to OpenAI; checks that a reading’s sums make its total, counting fees as well as tax and tip, that its date is plausible and that it isn’t a purchase summary before it can be Ready; checks a reading against the expense; turns a reading’s itemized lines into minor units for its expense to keep, or none when any can’t be read exactly.',
+      'Turns an image or PDF into fields with a confidence each, through one prompt and one schema, the time of purchase and the merchant’s address among them; each organization is asked the additions it switched on, composed independently, each adding its own instructions, structure and version: the line of the receipt behind each field (GAP-14), and where a ride, flight or train went and a folio’s stay (ADR-0040); with none on, the request is byte for byte what it always was. No request offers the model a tool, a tool choice or a function, and a test of every request, as it leaves, holds it to that (NFR-SEC-07). Works out a time zone from the city, region and country offline (city-timezones), so no address leaves ExpenseWise. Compares two Claude models and falls back to OpenAI; checks that a reading’s sums make its total, counting fees as well as tax and tip, that its date is plausible and that it isn’t a purchase summary before it can be Ready; checks a reading against the expense; turns a reading’s itemized lines into minor units for its expense to keep, or none when any can’t be read exactly.',
     where: ['packages/extraction'],
   },
   {
     name: 'Workflows',
     technology: 'Inngest',
     responsibility:
-      'Reads receipts, with the models each organization chose or side by side, reads emailed receipts, relays the outbox, keeps expense reports on time, converts their amounts with the ECB’s reference rates, fetched over HTTPS, and measures drives by their route with OpenRouteService: Pelias search for each stop, then driving-car directions, on the organization’s own key. Reads an organization’s feature switches inside its transaction where it has no request to ask, the server’s override first, as the API does (ADR-0032). An email is fetched as it arrived, its sender proved by a DKIM signature aligned with the From domain (mailauth), its parts read (postal-mime) and its attachments filed like uploads; with nothing attached, its HTML becomes text (html-to-text) laid out as a PDF (pdf-lib) and filed instead. Each step retries on its own; a failed run still settles its receipt.',
+      'Reads receipts, with the models each organization chose or side by side, reads emailed receipts, relays the outbox, keeps expense reports on time, converts their amounts with the ECB’s reference rates, fetched over HTTPS, and measures drives by their route with OpenRouteService: Pelias search for each stop, then driving-car directions, on the organization’s own key. Reads an organization’s feature switches inside its transaction where it has no request to ask, the server’s override first, as the API does (ADR-0032). An email is fetched as it arrived, its sender proved by a DKIM signature aligned with the From domain (mailauth), or kept with why it wasn’t, its parts read (postal-mime) and its attachments filed like uploads; with nothing attached, its HTML becomes text (html-to-text) laid out as a PDF (pdf-lib) and filed instead. Each step retries on its own; a failed run still settles its receipt.',
     where: ['packages/workflows'],
   },
   {
@@ -303,7 +303,7 @@ export const FLOWS: readonly Flow[] = [
     id: 'email-in',
     title: 'An emailed receipt',
     about:
-      'The webhook only checks Bird’s signature and hands the email on; who sent it is proved in the workflow, from the message as it arrived. Nothing is kept unless the From address is a member’s sign-in, and nothing is filed unless a DKIM signature aligned with that address’s domain covers the whole message. An email with nothing attached, such as a ride receipt, is filed as its own text laid out as a PDF (ADR-0027). Every id comes from the message, so a repeat delivery or a retried step files nothing twice.',
+      'The webhook only checks Bird’s signature and hands the email on; who sent it is proved in the workflow, from the message as it arrived. Nothing is kept unless the From address is a member’s sign-in, and nothing is filed unless a DKIM signature aligned with that address’s domain covers the whole message. An email with nothing attached, such as a ride receipt, is filed as its own text laid out as a PDF (ADR-0027). Every id comes from the message, so a repeat delivery or a retried step files nothing twice. A member’s email that files nothing, unproved with why or with nothing in it to read, is kept so that, while the feature is on, their Needs you shows it until they dismiss it (#59).',
     diagram: `sequenceDiagram
   actor P as Member
   participant B as Bird mailbox
@@ -329,8 +329,9 @@ export const FLOWS: readonly Flow[] = [
     A->>DB: One transaction: email, receipts, expenses, outbox events, audit
     A->>I: receipt.uploaded for each, as an upload sends
   else A member, not proved
-    A->>DB: Email kept as unverified, nothing filed
-  end`,
+    A->>DB: Email kept as unverified, with why; nothing filed
+  end
+  Note over P,DB: An email that filed nothing shows in the member’s Needs you`,
     refs: ['ADR-0024', 'ADR-0026', 'ADR-0027', 'FR-CAP-02'],
   },
   {
@@ -381,6 +382,31 @@ export const FLOWS: readonly Flow[] = [
   A->>DB: Refused while anything needs review or a reason; else closed, with its audit event
   Note over DB: Any later change to it reopens it, until it is submitted`,
     refs: ['FR-EXP-05', 'FR-EXP-12', 'FR-EXP-14', 'ADR-0029'],
+  },
+  {
+    id: 'approval',
+    title: 'A report approved, or returned',
+    about:
+      'The person submits their own closed report; it goes in one step to one approver, who approves it or returns it. Every write is the database’s to allow: the submitter changes their own records, and the person deciding changes only the decided report’s status and its expenses’, while its step is pending (ADR-0043).',
+    diagram: `sequenceDiagram
+  actor M as Member
+  actor R as Approver
+  participant A as API
+  participant DB as Postgres
+  M->>A: POST /v1/reports/{id}/submit
+  A->>DB: As the member: closed? each expense against its receipt; who it goes to (the one chosen in People, else Automatic)
+  A->>DB: Expenses submitted, names copied on, a pending step, report.submitted
+  R->>A: GET /v1/approvals, GET /v1/reports/{id}/approval
+  A->>DB: As the approver: the report and what is on it, routed to them
+  alt Approve
+    R->>A: POST /v1/reports/{id}/approve (aal2 for someone else's)
+    A->>DB: Expenses approved and locked, report approved, step decided, report.approved
+  else Return
+    R->>A: POST /v1/reports/{id}/return, a comment and rejections
+    A->>DB: Expenses Ready again, rejections kept, report open, step returned, report.returned
+    A-->>M: Needs you: the returned report and each rejected expense, with why
+  end`,
+    refs: ['FR-GOV-02', 'FR-GOV-03', 'FR-GOV-04', 'FR-GOV-11', 'FR-GOV-12', 'ADR-0043'],
   },
   {
     id: 'conversion',
@@ -451,12 +477,62 @@ export const FLOWS: readonly Flow[] = [
   W->>A: Request, bearer token
   A->>AU: Project public keys (cached)
   A->>A: Verify an ES256 or RS256 signature, issuer, audience, expiry
-  A->>DB: Find the caller’s membership (app.user_id)
+  A->>DB: Find the caller’s membership, whether their sign-in, or any other of theirs, has a second factor, and whether it, or any of theirs, is let in (app.user_id)
+  A->>A: Refuse an email not let in, hold one that needs its own authenticator or skipped the code, if it is owed; let in the first to pass its code
   A->>DB: withOrg: set app.org_id, run the work
   Note over DB: Every row checked against app_current_org()
   DB-->>A: Only this organization’s rows
   A-->>W: JSON, or a problem document`,
     refs: ['NFR-SEC-01', 'NFR-SEC-09', 'ADR-0013'],
+  },
+  {
+    id: 'second-factor',
+    title: 'The second factor at sign-in, and before an admin action',
+    about:
+      'Supabase Auth keeps each authenticator’s secret and checks each code; the API trusts the token’s `aal` claim, and learns whether its sign-in has an authenticator from Supabase Auth’s own record, through `sign_in_has_authenticator`, whether any other email of the person’s has one, through `person_has_authenticator`, and which of them are let in, through `sign_in_let_in` and `person_let_in`, as it finds the caller. While the organization has it switched on, a password-only session of someone with an authenticator is asked for the code before anything else, and the API holds every request of theirs but who they are and the switches until it passes; the first of their emails to pass its code is let in, and another opens nothing, told it isn’t let in, until they let it in from one that passed its code (#90); one let in with none of its own is held until it adds its own, told which email needs one rather than asked for a code (#88); an admin action at aal1 is asked for it, then sent again (ADR-0042, ADR-0044).',
+    diagram: `sequenceDiagram
+  actor P as Person
+  participant W as Web app
+  participant AU as Supabase Auth
+  participant A as API
+  P->>W: Email and password
+  W->>AU: Sign in
+  AU-->>W: Session at aal1, next level aal2 when an authenticator is verified
+  W->>A: GET /v1/features
+  A-->>W: security.second-factor on
+  opt Any other request before the code
+    W->>A: GET /v1/…, token at aal1
+    A->>A: Find the caller, and whether their sign-in has an authenticator
+    A-->>W: 403 second_factor_required
+  end
+  opt Another email of theirs, not let in
+    W->>A: GET /v1/…, its token
+    A-->>W: 403 sign_in_not_let_in, naming the email
+    W->>P: This email isn’t let in; its receipts are still filed; let it in from the email with the code
+  end
+  opt Another email, let in from one that passed its code (PUT …/let-in), with none of its own
+    W->>A: GET /v1/…, its token
+    A-->>W: 403 authenticator_required, naming the email
+    W->>P: This email needs its own authenticator: Settings › Sign-ins
+    P->>W: Add an authenticator app, and its first code
+    W->>AU: Enroll, challenge and verify
+    AU-->>W: Session at aal2
+  end
+  W->>P: The code screen, before anything else
+  P->>W: 6-digit code
+  W->>AU: Challenge and verify
+  AU-->>W: Session at aal2
+  P->>W: An admin change
+  W->>A: PUT /v1/settings/…, bearer token
+  alt Token at aal1 and the switch on
+    A-->>W: 403 second_factor_required
+    W->>P: The code, the page kept underneath
+    P->>W: 6-digit code
+    W->>AU: Challenge and verify
+    W->>A: The same request, token at aal2
+  end
+  A-->>W: Done, with its audit event`,
+    refs: ['FR-PLT-03', 'FR-GOV-04', 'ADR-0042', 'ADR-0044', 'ADR-0013'],
   },
   {
     id: 'release',
@@ -550,7 +626,7 @@ export const SETTINGS: readonly Setting[] = [
     names: ['NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY'],
     kind: 'Public build variable',
     where: 'Vercel',
-    use: 'Sign-in in the browser, and where the API fetches the public keys to verify tokens.',
+    use: 'Sign-in and the second factor in the browser, and where the API fetches the public keys to verify tokens.',
   },
   {
     names: ['SUPABASE_SECRET_KEY'],
@@ -717,10 +793,10 @@ export interface Quality {
 export const QUALITY: readonly Quality[] = [
   {
     attribute: 'Security',
-    how: 'Forced row-level security, members kept to their own records inside an organization, a runtime role that can’t bypass it, Supabase’s Data API roles stripped on every release, verified tokens, encrypted provider keys, a private bucket, invite-only sign-in, security headers, and production credentials in production builds only.',
+    how: 'Forced row-level security, members kept to their own records inside an organization, a runtime role that can’t bypass it, Supabase’s Data API roles stripped on every release, verified tokens, a second factor once switched on, before anything else for someone with an authenticator, only on emails they let in, and before every admin action, encrypted provider keys, a private bucket, invite-only sign-in, security headers, and production credentials in production builds only.',
     short:
-      'No second factor (#8). The audit trail and the outbox are kept to the organization, not to each member (GAP-31).',
-    refs: ['NFR-SEC-01', 'NFR-SEC-13', 'FR-GOV-01', 'GAP-31', '#8'],
+      'Before any of a person’s emails is let in, whoever has the password of one can add an authenticator to it and be let in first (GAP-37). The audit trail and the outbox are kept to the organization, not to each member (GAP-31).',
+    refs: ['NFR-SEC-01', 'NFR-SEC-13', 'FR-GOV-01', 'FR-GOV-04', 'FR-PLT-03', 'GAP-31', 'GAP-37'],
   },
   {
     attribute: 'Integrity',

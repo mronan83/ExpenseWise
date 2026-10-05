@@ -18,7 +18,7 @@ const TABS = [
 ] as const;
 
 /** Screens that stand alone, without the tab bar. */
-const WITHOUT_TABS = ['/sign-in'];
+const WITHOUT_TABS = ['/sign-in', '/sign-in/code'];
 
 /**
  * The tab bar on every screen, held at the bottom while the page scrolls. Each destination is
