@@ -939,6 +939,10 @@ export const QUESTIONS: readonly Question[] = [
     why: 'Linking a second email now needs the code, but the email linked starts with no authenticator, so a stolen password for it still opens the person’s receipts, and an owner’s everyone’s.',
     recommendation: 'A, before anyone links a second email with the second factor on.',
     affects: ['FR-PLT-03', 'FR-PLT-04', 'GAP-35', 'F-11'],
+    answer: {
+      date: '2026-10-05',
+      text: 'A: hold a person’s other email until it adds its own authenticator and enters its code, the app saying which email needs one (#88).',
+    },
   },
 ];
 
@@ -953,7 +957,7 @@ export const CHANGE_LOG: readonly ChangeLogEntry[] = [
   {
     date: '2026-10-05',
     change:
-      'PR #60, built behind its own switches, each off until you switch it on in Settings › Features. Single-step approval (#24, F-18, ADR-0043): a closed report is submitted to one approver, never while an expense differs from its receipt without a reason, and approved, or returned with a comment and each rejected expense and why, in Needs you; a one-person organization self-attests, and approving someone else’s spend needs the second factor. A submitted claim keeps its category and type names (#70, GAP-27 closed). The second factor (#8, F-11, ADR-0042): an authenticator app in Settings › Sign-ins, its code at sign-in, and before every admin action, with switching it on refused until your own session has passed it (GAP-03 closed). Emails from your address that filed nothing show in Needs you with why, for 30 days or until dismissed (#59). A report’s export adds From and to, and Stay (#83); Home shows the month’s business miles (#73, GAP-30 closed); a test proves no tools ever reach a model (#38, GAP-15 closed). At your answers to Q41 and Q42, also in PR #60: while the second factor is on, someone with an authenticator gets nothing from the API until they enter the code, and linking a sign-in always needs it (#85, ADR-0044, GAP-33 closed); an owner chooses each member’s approver in Settings › People (#86). New: Q43 for you, with GAP-35 and #88; GAP-34 with #87; #89.',
+      'PR #60, built behind its own switches, each off until you switch it on in Settings › Features. Single-step approval (#24, F-18, ADR-0043): a closed report is submitted to one approver, never while an expense differs from its receipt without a reason, and approved, or returned with a comment and each rejected expense and why, in Needs you; a one-person organization self-attests, and approving someone else’s spend needs the second factor. A submitted claim keeps its category and type names (#70, GAP-27 closed). The second factor (#8, F-11, ADR-0042): an authenticator app in Settings › Sign-ins, its code at sign-in, and before every admin action, with switching it on refused until your own session has passed it (GAP-03 closed). Emails from your address that filed nothing show in Needs you with why, for 30 days or until dismissed (#59). A report’s export adds From and to, and Stay (#83); Home shows the month’s business miles (#73, GAP-30 closed); a test proves no tools ever reach a model (#38, GAP-15 closed). At your answers to Q41 and Q42, also in PR #60: while the second factor is on, someone with an authenticator gets nothing from the API until they enter the code, and linking a sign-in always needs it (#85, ADR-0044, GAP-33 closed); an owner chooses each member’s approver in Settings › People (#86). Your answer to Q43, also in PR #60: once a person has an authenticator, their other emails are held until each adds its own (#88). New: GAP-34 with #87; #89.',
     by: 'Claude, at your direction',
   },
   {
