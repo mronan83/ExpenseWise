@@ -91,6 +91,7 @@ export const FEATURES: readonly Feature[] = [
     status: 'Planned',
     decisions: ['ADR-0013'],
     backlog: 8,
+    flags: ['security.second-factor'],
   },
   {
     id: 'F-23',
@@ -365,6 +366,7 @@ export const FEATURES: readonly Feature[] = [
     phase: 'P1',
     status: 'Verified',
     delivered: 'PR #44, PR #45',
+    flags: ['receipts.unfiled-emails'],
     decisions: ['ADR-0011', 'ADR-0024', 'ADR-0026', 'ADR-0027'],
     code: [
       'packages/api/src/inbound-routes.ts',
@@ -978,6 +980,7 @@ export const FEATURES: readonly Feature[] = [
     phase: 'P1',
     status: 'Planned',
     backlog: 24,
+    flags: ['reports.approval'],
   },
   {
     id: 'F-19',
