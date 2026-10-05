@@ -378,4 +378,28 @@ export const RULES: readonly Rule[] = [
     },
     note: 'A month, about as long as a report stays open (R-REPORT-WINDOW) and as long as Bird keeps the message as it arrived (ADR-0026): by then its receipt has been attached or it no longer matters. Claude’s, yours to confirm.',
   },
+  {
+    id: 'R-SECOND-FACTOR-CODE',
+    name: 'The code from an authenticator app',
+    value: '6 digits, a new one every 30 seconds; spaces and a dash in what is typed are ignored',
+    decided: { by: 'blueprint', source: 'ADR-0013' },
+    code: {
+      file: 'packages/domain/src/second-factor.ts',
+      constant: 'SECOND_FACTOR_CODE_LENGTH',
+      literal: '6',
+    },
+    note: 'TOTP as Supabase Auth issues and checks it (RFC 6238); the app only reads what is typed before sending it.',
+  },
+  {
+    id: 'R-AUTHENTICATORS-MAX',
+    name: 'Most authenticator apps one person keeps',
+    value: '10',
+    decided: { by: 'claude', source: 'ADR-0042' },
+    code: {
+      file: 'packages/domain/src/second-factor.ts',
+      constant: 'MAX_AUTHENTICATORS',
+      literal: '10',
+    },
+    note: 'Supabase Auth’s own default limit on a person’s factors. Settings › Sign-ins stops offering another at 10.',
+  },
 ];

@@ -26,6 +26,7 @@ export * from './people.ts';
 export * from './reports.ts';
 export * from './result.ts';
 export * from './route-mileage.ts';
+export * from './second-factor.ts';
 export * from './time-zones.ts';
 export * from './trips.ts';
 export * from './unfiled-emails.ts';

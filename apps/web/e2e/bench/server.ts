@@ -311,7 +311,9 @@ const app = createHttpApp({
     Promise.resolve({
       userId: token,
       email: `${token}@example.com`,
-      assuranceLevel: 'aal1',
+      // Past the second factor, as the owner who switched it on must be (F-11): every feature
+      // is switched on below, the second factor too, and admin changes then need it.
+      assuranceLevel: 'aal2',
       sessionId: 'bench',
       issuedAt: new Date(),
     }),

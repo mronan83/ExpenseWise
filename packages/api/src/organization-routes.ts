@@ -1,10 +1,11 @@
 import type { Membership, OrganizationRecord } from '@expensewise/db';
 import { DUPLICATE_TIME_WINDOW_MINUTES, DUPLICATE_WINDOW_MAX_MINUTES } from '@expensewise/domain';
 import type { OpenAPIHono } from '@hono/zod-openapi';
-import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
+import { requireIdentity, type AuthVariables, type Identity, type TokenVerifier } from './auth.ts';
 import { featureGate, type FeatureGate } from './features.ts';
 import type { OrganizationStore } from './organization.ts';
 import { ProblemError } from './problem.ts';
+import { requireAdminSecondFactor } from './second-factor.ts';
 import {
   editOrganizationRoute,
   getDuplicateWindowRoute,
@@ -88,12 +89,14 @@ export function registerOrganizationRoutes(
     }
     return membership;
   };
-  const ownerOnly = (who: Membership, what: string) => {
+  /** The owner alone changes these, past the second factor while it is on (FR-GOV-04). */
+  const ownerOnly = async (who: Membership, identity: Identity, what: string) => {
     if (who.role !== 'owner') {
       throw new ProblemError(403, 'forbidden', `Only the owner can change ${what}`, {
         code: 'forbidden_role',
       });
     }
+    await requireAdminSecondFactor(features, who.orgId, identity);
   };
   const organizationOf = async (orgId: string) => {
     const org = await stores().organization.get(orgId);
@@ -110,7 +113,7 @@ export function registerOrganizationRoutes(
   app.openapi(editOrganizationRoute, async (c) => {
     const who = await member(c.var.identity.userId);
     await features.require(who.orgId, 'settings.organization');
-    ownerOnly(who, 'the organization’s details');
+    await ownerOnly(who, c.var.identity, 'the organization’s details');
     const result = await stores().organization.update(
       who.orgId,
       c.req.valid('json'),
@@ -141,7 +144,7 @@ export function registerOrganizationRoutes(
   app.openapi(setDuplicateWindowRoute, async (c) => {
     const who = await member(c.var.identity.userId);
     await features.require(who.orgId, 'settings.duplicate-window');
-    ownerOnly(who, 'the duplicate time window');
+    await ownerOnly(who, c.var.identity, 'the duplicate time window');
     const { minutes } = c.req.valid('json');
     const result = await stores().organization.setDuplicateWindow(
       who.orgId,

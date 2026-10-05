@@ -30,10 +30,34 @@ const fill =
     page.getByLabel(label, { exact: true }).first().fill(value);
 
 /**
- * Each screen and state: what it shows, where it is, what a person does to get there, and,
- * where the day decides what shows, the day it is on the person's clock.
+ * The API asks for the second factor before changes at `pattern`, as it does while the second
+ * factor is switched on and the session hasn't passed it; reads go through as before.
  */
-const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
+const asksForTheCode =
+  (pattern: string): Step =>
+  (page) =>
+    page.route(pattern, (route) =>
+      route.request().method() === 'GET'
+        ? route.fallback()
+        : route.fulfill({
+            status: 403,
+            contentType: 'application/problem+json',
+            body: JSON.stringify({
+              type: 'https://expensewise.app/problems/second-factor-required',
+              title: 'This needs your second factor',
+              status: 403,
+              code: 'second_factor_required',
+              detail: 'Enter the code from your authenticator app, then try again.',
+            }),
+          }),
+    );
+
+/**
+ * Each screen and state: what it shows, where it is, what a person does to get there, where
+ * the day decides what shows, the day it is on the person's clock, and the one console error
+ * the state means to cause, such as the browser logging a refusal the screen then handles.
+ */
+const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
   ['Home', () => '/', []],
   ['Home during a trip', () => '/', [], '2026-10-21T12:00:00'],
   ['Home with a trip coming up', () => '/', [], '2026-11-01T12:00:00'],
@@ -207,6 +231,37 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
   ['organization settings', () => '/settings/organization', []],
   ['AI provider settings', () => '/settings/ai', []],
   ['sign-in settings', () => '/settings/sign-ins', []],
+  [
+    'adding an authenticator app',
+    () => '/settings/sign-ins',
+    [
+      (page) => expect(page.getByText('Password manager', { exact: true })).toBeVisible(),
+      press('Add an authenticator app'),
+      (page) => expect(page.getByRole('img', { name: /^QR code/ })).toBeVisible(),
+      (page) => expect(page.getByText('JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP')).toBeVisible(),
+    ],
+  ],
+  [
+    'the code asked for after signing in',
+    () => '/sign-in/code',
+    [
+      (page) => expect(page.getByLabel('Which authenticator app')).toBeVisible(),
+      (page) => expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible(),
+    ],
+  ],
+  [
+    'the code asked for before an admin change',
+    () => '/settings/features',
+    [
+      asksForTheCode('**/api/v1/settings/features/**'),
+      (page) => page.getByRole('switch', { name: 'Report export' }).click(),
+      (page) =>
+        expect(page.getByRole('heading', { name: 'Enter your code to continue' })).toBeVisible(),
+      (page) => expect(page.getByRole('heading', { name: 'Features', level: 1 })).toBeHidden(),
+    ],
+    undefined,
+    /status of 403/,
+  ],
   ['feature settings', () => '/settings/features', []],
   ['the audit trail, with its chain checked', () => '/settings/audit', []],
   ['the audit trail, older changes shown', () => '/settings/audit', [press('Show older changes')]],
@@ -271,6 +326,36 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?][] = [
   ['a revoked invite link', (s) => `/invite/${s.invites.revoked}`, []],
 ];
 
+/** The bench user's two authenticator apps (F-11), as Supabase Auth lists them. */
+const factors = (
+  [
+    ['0192f7a0-0000-7000-8000-00000000f001', 'iPhone', '2026-10-05T09:00:00Z'],
+    ['0192f7a0-0000-7000-8000-00000000f002', 'Password manager', '2026-10-05T09:05:00Z'],
+  ] as const
+).map(([id, name, at]) => ({
+  id,
+  friendly_name: name,
+  factor_type: 'totp',
+  status: 'verified',
+  created_at: at,
+  updated_at: at,
+}));
+
+/** What Supabase Auth answers to adding one: a QR code to scan and the key to type. */
+const enrollment = {
+  id: '0192f7a0-0000-7000-8000-00000000f003',
+  type: 'totp',
+  friendly_name: 'Authenticator 3',
+  totp: {
+    qr_code:
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 21 21" width="168" height="168">' +
+      '<rect width="21" height="21" fill="white"/><path d="M1 1h7v7H1zM13 1h7v7h-7zM1 13h7v7H1z"/>' +
+      '</svg>',
+    secret: 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP',
+    uri: 'otpauth://totp/ExpenseWise:riley@example.com?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP&issuer=ExpenseWise',
+  },
+};
+
 const session = {
   access_token: E2E_USER,
   refresh_token: E2E_USER,
@@ -306,6 +391,14 @@ test.beforeEach(async ({ context }) => {
   });
   await context.route(`${E2E_SUPABASE_URL}/**`, (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }),
+  );
+  // Registered later, so they answer first: the user with their authenticator apps, and
+  // adding one (F-11).
+  await context.route(`${E2E_SUPABASE_URL}/auth/v1/user`, (route) =>
+    route.fulfill({ json: { ...session.user, factors } }),
+  );
+  await context.route(`${E2E_SUPABASE_URL}/auth/v1/factors`, (route) =>
+    route.request().method() === 'POST' ? route.fulfill({ json: enrollment }) : route.fallback(),
   );
 });
 
@@ -373,7 +466,7 @@ function rawDates(page: Page): Promise<string[]> {
   });
 }
 
-for (const [title, path, steps, at] of SCREENS) {
+for (const [title, path, steps, at, expected] of SCREENS) {
   test(`${title}: fits the screen and passes WCAG 2.2 AA, in light and dark`, async ({
     page,
   }, testInfo) => {
@@ -381,7 +474,9 @@ for (const [title, path, steps, at] of SCREENS) {
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('console', (message) => {
-      if (message.type() === 'error') errors.push(message.text());
+      if (message.type() === 'error' && !expected?.test(message.text())) {
+        errors.push(message.text());
+      }
     });
     const settled = requestsInFlight(page);
     const size = page.viewportSize()!;

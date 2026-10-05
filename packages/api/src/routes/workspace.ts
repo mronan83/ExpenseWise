@@ -12,6 +12,7 @@ import {
   SwitchFeatureSchema,
   WorkspaceSchema,
 } from '../schemas.ts';
+import { SECOND_FACTOR_REFUSAL } from '../second-factor.ts';
 
 const problem = (description: string) => ({
   description,
@@ -54,6 +55,13 @@ const managerOnly = {
   403: problem('Only an owner or finance admin can manage AI provider keys.'),
 };
 
+/** A change to the keys: an admin action (FR-GOV-04). */
+const adminOnly = {
+  403: problem(
+    'Only an owner or finance admin can manage AI provider keys.' + SECOND_FACTOR_REFUSAL,
+  ),
+};
+
 export const listAiKeysRoute = createRoute({
   method: 'get',
   path: '/v1/settings/ai-providers',
@@ -94,7 +102,7 @@ export const setAiKeyRoute = createRoute({
     },
     400: problem('The request is not valid.'),
     401: problem('Sign in required.'),
-    ...managerOnly,
+    ...adminOnly,
     422: problem('The provider rejected the key.'),
     502: problem('The provider could not be reached; nothing was stored.'),
     503: problem('Sign-in, the database or encryption is not configured on this server.'),
@@ -114,7 +122,7 @@ export const testAiKeyRoute = createRoute({
       content: { 'application/json': { schema: AiProviderKeyTestSchema } },
     },
     401: problem('Sign in required.'),
-    ...managerOnly,
+    ...adminOnly,
     404: problem('No key is stored for this provider.'),
     503: problem('Sign-in, the database or encryption is not configured on this server.'),
   },
@@ -130,7 +138,7 @@ export const deleteAiKeyRoute = createRoute({
   responses: {
     204: { description: 'The key is removed.' },
     401: problem('Sign in required.'),
-    ...managerOnly,
+    ...adminOnly,
     404: problem('No key is stored for this provider.'),
     503: problem('Sign-in or the database is not configured on this server.'),
   },
@@ -178,7 +186,11 @@ export const switchFeatureRoute = createRoute({
     },
     400: problem('The request is not valid.'),
     401: problem('Sign in required.'),
-    403: problem('Only the owner can switch features.'),
+    403: problem(
+      'Only the owner can switch features.' +
+        SECOND_FACTOR_REFUSAL +
+        ' Switching the second factor itself on always needs it, so no one is locked out.',
+    ),
     409: problem('The server overrides this feature, so a switch here would have no effect.'),
     503: problem('Sign-in or the database is not configured on this server.'),
   },

@@ -2,9 +2,10 @@ import { ROUTE_MILEAGE_FLAG, type CommittedEvent, type Membership } from '@expen
 import type { MemberRole, MileageProblem, RouteProblem } from '@expensewise/domain';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { isPlausibleKey, normalizeProviderKey } from './ai-providers.ts';
-import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
+import { requireIdentity, type AuthVariables, type Identity, type TokenVerifier } from './auth.ts';
 import { featureGate, type FeatureGate } from './features.ts';
 import { ProblemError } from './problem.ts';
+import { requireAdminSecondFactor } from './second-factor.ts';
 import {
   routeSealContext,
   type RouteKeyStore,
@@ -125,6 +126,12 @@ export function registerRouteMileageRoutes(
         code: 'forbidden_role',
       });
     }
+    return membership;
+  };
+  /** A manager changing the key, past the second factor while it is on (FR-GOV-04). */
+  const admin = async (identity: Identity): Promise<Membership> => {
+    const membership = await manager(identity.userId);
+    await requireAdminSecondFactor(features, membership.orgId, identity);
     return membership;
   };
   const today = () => (options.now?.() ?? new Date()).toISOString().slice(0, 10);
@@ -284,7 +291,7 @@ export function registerRouteMileageRoutes(
 
   app.openapi(setRouteKeyRoute, async (c) => {
     const caller = c.var.identity;
-    const who = await manager(caller.userId);
+    const who = await admin(caller);
     if (!options.secrets || !options.verifyRouteKey) {
       throw new ProblemError(
         503,
@@ -349,7 +356,7 @@ export function registerRouteMileageRoutes(
 
   app.openapi(deleteRouteKeyRoute, async (c) => {
     const caller = c.var.identity;
-    const who = await manager(caller.userId);
+    const who = await admin(caller);
     if (!(await keys().remove(who.orgId, caller.userId))) {
       throw new ProblemError(404, 'not-found', 'No OpenRouteService key is stored', {
         code: 'not_configured',

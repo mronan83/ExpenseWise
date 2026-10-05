@@ -24,6 +24,11 @@ import { featureGate, featureState, type FeatureGate } from './features.ts';
 import { ProblemError } from './problem.ts';
 import { sealContext } from './provider-keys.ts';
 import {
+  requireAdminSecondFactor,
+  requireSecondFactor,
+  SECOND_FACTOR_FLAG,
+} from './second-factor.ts';
+import {
   deleteAiKeyRoute,
   ensureWorkspaceRoute,
   listAiKeysRoute,
@@ -185,6 +190,13 @@ export function registerWorkspaceRoutes(
     return membership;
   };
 
+  /** The caller, when they may change keys: a manager, past the second factor when it is on. */
+  const admin = async (identity: Identity): Promise<Membership> => {
+    const membership = await manager(identity.userId);
+    await requireAdminSecondFactor(features, membership.orgId, identity);
+    return membership;
+  };
+
   app.openapi(ensureWorkspaceRoute, async (c) => {
     const { userId, email } = c.var.identity;
     if (!email) {
@@ -213,7 +225,7 @@ export function registerWorkspaceRoutes(
   });
 
   app.openapi(setAiKeyRoute, async (c) => {
-    const who = await manager(c.var.identity.userId);
+    const who = await admin(c.var.identity);
     const { secrets, verify } = keyTools();
     const { provider } = c.req.valid('param');
     const apiKey = normalizeProviderKey(c.req.valid('json').apiKey);
@@ -252,7 +264,7 @@ export function registerWorkspaceRoutes(
   });
 
   app.openapi(testAiKeyRoute, async (c) => {
-    const who = await manager(c.var.identity.userId);
+    const who = await admin(c.var.identity);
     const { secrets, verify } = keyTools();
     const { provider } = c.req.valid('param');
     const keys = store();
@@ -307,7 +319,7 @@ export function registerWorkspaceRoutes(
   });
 
   app.openapi(deleteAiKeyRoute, async (c) => {
-    const who = await manager(c.var.identity.userId);
+    const who = await admin(c.var.identity);
     const { provider } = c.req.valid('param');
     const removed = await store().deleteKey(who.orgId, provider, c.var.identity.userId);
     if (!removed) throw notStored(provider);
@@ -431,6 +443,7 @@ export function registerWorkspaceRoutes(
         code: 'forbidden_role',
       });
     }
+    await requireAdminSecondFactor(features, who.orgId, caller);
     const { key } = c.req.valid('param');
     const { enabled } = c.req.valid('json');
     if (features.overridden(key)) {
@@ -440,6 +453,14 @@ export function registerWorkspaceRoutes(
           'FLAG_OVERRIDES on the server decides it, so a switch here would have no effect. ' +
           'Remove it from FLAG_OVERRIDES first.',
       });
+    }
+    if (key === SECOND_FACTOR_FLAG && enabled) {
+      // No lockout: only an owner who has enrolled and passed it can ask it of everyone.
+      requireSecondFactor(
+        caller,
+        'Switching the second factor on needs your own first, so no one is locked out: add an ' +
+          'authenticator app in Settings › Sign-ins and enter its code, then switch it on.',
+      );
     }
     await store().switchFeature(who, { flag: key, enabled }, caller.userId);
     const switched = (await store().listFeatures(who.orgId)).find((f) => f.flag === key);

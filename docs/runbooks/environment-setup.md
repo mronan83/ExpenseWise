@@ -96,6 +96,28 @@ Phase 1 signs in with email and password plus TOTP, and has no custom email doma
 
 Supabase's built-in email covers password resets and the owner's own notifications. It is rate-limited and delivers only to members of the Supabase team. Before a second person is invited, add a sender domain or create their account the same way as step 2.
 
+### The second factor (TOTP)
+
+Supabase's docs say TOTP multi-factor authentication "is enabled on all Supabase projects by default", so there is nothing to turn on in Supabase. Check it once: **Authentication → Multi-Factor** should show TOTP (authenticator app) as enabled, not disabled or verify-only. If it was turned off, adding an authenticator in the app fails with Supabase's own message.
+
+To switch it on for your organization ([ADR-0042](../adr/0042-second-factor.md)):
+
+1. **Settings → Sign-ins → Authenticator apps:** name it and choose **Add an authenticator app**. Scan the QR code with your authenticator app, or type the key into it, and enter the 6-digit code it shows. Anywhere else you were signed in is signed out.
+2. **Add a second one** the same way, on another phone or in a password manager that keeps codes, so losing one phone doesn't lock you out.
+3. **Settings → Features → Second factor → On.** It is refused unless this session has passed your code, so you can't lock yourself out.
+
+From then on, everyone who adds an authenticator is asked for its code when they sign in, and every owner's and finance admin's change to settings, people and keys needs it. Someone without one is told to add one in Settings → Sign-ins first.
+
+#### If someone loses their authenticator
+
+1. **They have another one:** they sign in with it, remove the lost one in **Settings → Sign-ins**, and add the new phone.
+2. **They have no other:** remove theirs in Supabase. **Authentication → Users**, open the person, and choose **Remove MFA factors** where the dashboard offers it. Otherwise copy their user UID there and run this in the **SQL Editor**:
+   ```sql
+   delete from auth.mfa_factors where user_id = '<their user UID>' and factor_type = 'totp';
+   ```
+   They then sign in with their password alone and add a new authenticator. The same works for the owner: the Supabase dashboard is reached with your Supabase account, which the app's second factor doesn't touch.
+3. **Nobody can pass the code** (Supabase Auth failing, or the dashboard out of reach): set `FLAG_OVERRIDES` = `security.second-factor=off` for Production in Vercel and redeploy (add it after a comma if the variable already holds other flags). Sign-in stops asking for the code and admin changes stop needing it, for every organization; authenticators stay as they were, and Settings → Features shows the switch as set on the server. Remove it from `FLAG_OVERRIDES` and redeploy to turn the second factor back on.
+
 ## 5. Off-site backups (Backblaze B2)
 
 The Free plan keeps no backups, so a nightly workflow keeps our own ([ADR-0014](../adr/0014-supabase-free-plan.md)): **Nightly backup** (`.github/workflows/backup.yml`, running `scripts/backup/backup.sh`) at 02:17 California time. It needs the secrets below and nothing else; it works out the Backblaze and Supabase S3 addresses itself.

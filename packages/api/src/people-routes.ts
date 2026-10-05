@@ -1,9 +1,10 @@
 import type { InviteRecord, Membership, PersonRecord } from '@expensewise/db';
 import type { OpenAPIHono } from '@hono/zod-openapi';
-import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
+import { requireIdentity, type AuthVariables, type Identity, type TokenVerifier } from './auth.ts';
 import { featureGate, type FeatureGate } from './features.ts';
 import type { PeopleStore } from './people.ts';
 import { ProblemError } from './problem.ts';
+import { requireAdminSecondFactor } from './second-factor.ts';
 import {
   acceptInviteRoute,
   changeRoleRoute,
@@ -101,6 +102,12 @@ export function registerPeopleRoutes(
     }
     return who;
   };
+  /** An owner changing people or links, past the second factor while it is on (FR-GOV-04). */
+  const ownerActing = async (identity: Identity): Promise<Membership> => {
+    const who = await owner(identity.userId);
+    await requireAdminSecondFactor(features, who.orgId, identity);
+    return who;
+  };
   const noSuchPerson = () =>
     new ProblemError(404, 'not-found', 'No such person here', { code: 'not_found' });
   const lastOwner = () =>
@@ -123,7 +130,7 @@ export function registerPeopleRoutes(
   });
 
   app.openapi(createInviteRoute, async (c) => {
-    const who = await owner(c.var.identity.userId);
+    const who = await ownerActing(c.var.identity);
     const { role, label } = c.req.valid('json');
     const at = now();
     const { invite, token } = await stores().people.invite(
@@ -136,7 +143,7 @@ export function registerPeopleRoutes(
   });
 
   app.openapi(revokeInviteRoute, async (c) => {
-    const who = await owner(c.var.identity.userId);
+    const who = await ownerActing(c.var.identity);
     const { inviteId } = c.req.valid('param');
     const result = await stores().people.revokeInvite(
       who.orgId,
@@ -157,7 +164,7 @@ export function registerPeopleRoutes(
   });
 
   app.openapi(changeRoleRoute, async (c) => {
-    const who = await owner(c.var.identity.userId);
+    const who = await ownerActing(c.var.identity);
     const { memberId } = c.req.valid('param');
     const { role } = c.req.valid('json');
     const { people } = stores();
@@ -170,7 +177,7 @@ export function registerPeopleRoutes(
   });
 
   app.openapi(removePersonRoute, async (c) => {
-    const who = await owner(c.var.identity.userId);
+    const who = await ownerActing(c.var.identity);
     const { memberId } = c.req.valid('param');
     if (memberId === who.memberId) {
       throw new ProblemError(409, 'cannot-remove-self', 'You can’t remove yourself', {
