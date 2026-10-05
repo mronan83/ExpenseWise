@@ -800,13 +800,17 @@ export const FUNCTIONAL: readonly Requirement[] = [
     checks: [
       'domain/approvals › sends a report to an approver first, then a finance admin, then the owner, never its own member',
       'domain/approvals › sends it to the member’s manager when they can approve it',
+      'domain/approvals › sends a report to the approver an owner chose, over the routing as built',
+      'domain/approvals › passes over a chosen approver whose role changed, finding one as built',
       'db/approval.int › submits a closed report to its approver in one step, each expense submitted with its names copied',
+      'db/approval.int › sends a report to the approver chosen for its member, and keeps one already submitted with the approver it went to',
+      'api/approval.int › sends a member’s report to the approver the owner chose, keeping one already submitted where it went',
       'db/approval.int › returns the whole report for one rejected expense, each rejection kept with why, and opens it again',
       'api/approval.int › shows the approver what is routed to them, and asks for the second factor to approve it',
       'api/approval.int › returns the whole report with a rejected expense, shown with why on it and in Needs you',
       'e2e/signed-in',
     ],
-    note: 'Since PR #60, behind Approval (ADR-0043). A closed report goes in one step to the member’s manager when they can approve it, otherwise the longest-standing approver, then finance admin, then owner, never the member themselves: Claude’s order, yours to change (Q42). The approver it went to approves it, or returns it with a comment; an owner or finance admin may decide in their place, so a report never waits on someone who has left. Nothing routes on to a second step until Phase 2.',
+    note: 'Since PR #60, behind Approval (ADR-0043). A closed report goes in one step to the approver an owner chose for its member in Settings › People, while they can approve it, otherwise the longest-standing approver, then finance admin, then owner, never the member themselves: Claude’s order, kept by your answer to Q42, which also asked for the choice (#86). People says when the one chosen can’t approve now, and a report already submitted keeps the approver it went to. The approver it went to approves it, or returns it with a comment; an owner or finance admin may decide in their place, so a report never waits on someone who has left. Nothing routes on to a second step until Phase 2.',
   },
   {
     id: 'FR-GOV-03',
@@ -1177,7 +1181,7 @@ export const FUNCTIONAL: readonly Requirement[] = [
       'api/people › changes a role and removes a member, never leaving the organization without an owner',
       'db/people.int › joins a person with the link’s role, once',
     ],
-    note: 'Settings › People, behind `team.invites` (ADR-0035): invite by link with a role, change a role, remove someone. No email is sent, by your choice of Oct 4.',
+    note: 'Settings › People, behind `team.invites` (ADR-0035): invite by link with a role, change a role, remove someone, and, while approval is on, choose who approves each person’s reports (#86). No email is sent, by your choice of Oct 4.',
   },
   {
     id: 'FR-PLT-08',

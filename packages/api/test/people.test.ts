@@ -5,7 +5,13 @@ import type {
   Membership,
   PersonRecord,
 } from '@expensewise/db';
-import { inviteExpiresAt, leavesNoOwner, type MemberRole } from '@expensewise/domain';
+import {
+  inviteExpiresAt,
+  leavesNoOwner,
+  mayChooseApprover,
+  routeReport,
+  type MemberRole,
+} from '@expensewise/domain';
 import { describe, expect, it } from 'vitest';
 import { createApi } from '../src/app.ts';
 import { AuthError, type Identity } from '../src/auth.ts';
@@ -15,6 +21,7 @@ import type { WorkspaceStore } from '../src/workspace.ts';
 const ORG = '0192f7a0-0000-7000-8000-0000000000a1';
 const OWNER = '0192f7a0-0000-7000-8000-0000000000b1';
 const SAM = '0192f7a0-0000-7000-8000-0000000000b2';
+const CASEY = '0192f7a0-0000-7000-8000-0000000000b3';
 const INVITE = '0192f7a0-0000-7000-8000-0000000000d1';
 const NOW = new Date('2026-10-04T12:00:00.000Z');
 const TOKEN = 'A'.repeat(43);
@@ -29,14 +36,33 @@ const identity = (userId: string, email: string | null = `${userId}@example.com`
 const identities: Record<string, Identity> = {
   riley: identity('riley'),
   sam: identity('sam'),
+  casey: identity('casey'),
+  /** Riley, in a session that passed the second factor. */
+  'riley-aal2': { ...identity('riley'), assuranceLevel: 'aal2' },
   newcomer: identity('newcomer'),
   noemail: identity('noemail', null),
 };
 
-function setup(flagOverrides: string | undefined = 'team.invites=on') {
+/** Casey, an approver who joined after Sam, for a test that asks for a third person. */
+const casey: PersonRecord = {
+  memberId: CASEY,
+  displayName: 'casey',
+  email: 'casey@example.com',
+  role: 'approver',
+  joinedAt: new Date(NOW.getTime() + 60_000),
+  removedAt: null,
+};
+
+function setup(
+  flagOverrides: string | undefined = 'team.invites=on',
+  others: readonly PersonRecord[] = [],
+) {
   const memberships: Record<string, Membership> = {
     riley: { orgId: ORG, memberId: OWNER, role: 'owner' },
     sam: { orgId: ORG, memberId: SAM, role: 'member' },
+    ...Object.fromEntries(
+      others.map((p) => [p.displayName, { orgId: ORG, memberId: p.memberId, role: p.role }]),
+    ),
   };
   const people: PersonRecord[] = [
     {
@@ -55,7 +81,10 @@ function setup(flagOverrides: string | undefined = 'team.invites=on') {
       joinedAt: NOW,
       removedAt: null,
     },
+    ...others,
   ];
+  /** Each member's chosen approver, as members.manager_member_id keeps it. */
+  const managers = new Map<string, string>();
   const invites: InviteRecord[] = [];
   const audit: string[] = [];
   const workspace = {
@@ -106,6 +135,44 @@ function setup(flagOverrides: string | undefined = 'team.invites=on') {
       people[i] = { ...people[i]!, removedAt: now };
       audit.push(`removed:${memberId}`);
       return Promise.resolve('removed' as const);
+    },
+    approvers: () => {
+      const active = people
+        .filter((p) => !p.removedAt)
+        .map((p) => ({
+          memberId: p.memberId,
+          role: p.role,
+          joinedAt: p.joinedAt,
+          managerMemberId: managers.get(p.memberId) ?? null,
+        }));
+      return Promise.resolve(
+        active.map((m) => {
+          const route = routeReport(m, active);
+          return {
+            memberId: m.memberId,
+            chosenMemberId: m.managerMemberId,
+            goesToMemberId: route.goesTo,
+            passedOver: route.passedOver,
+            choices: active.filter((c) => mayChooseApprover(c, m.memberId)).map((c) => c.memberId),
+          };
+        }),
+      );
+    },
+    chooseApprover: (_org, memberId, approverId) => {
+      const active = people.filter((p) => !p.removedAt);
+      if (!active.some((p) => p.memberId === memberId)) return Promise.resolve('missing' as const);
+      if (approverId === memberId) return Promise.resolve('own_approver' as const);
+      const approver = active.find((p) => p.memberId === approverId);
+      if (approverId !== null && !(approver && mayChooseApprover(approver, memberId))) {
+        return Promise.resolve('not_an_approver' as const);
+      }
+      if ((managers.get(memberId) ?? null) === approverId) {
+        return Promise.resolve('unchanged' as const);
+      }
+      if (approverId === null) managers.delete(memberId);
+      else managers.set(memberId, approverId);
+      audit.push(`approver:${memberId}:${approverId}`);
+      return Promise.resolve('changed' as const);
     },
     lookUp: (token) => Promise.resolve(token === TOKEN ? lookup : undefined),
     accept: (token, caller) => {
@@ -264,6 +331,148 @@ describe('Settings › People (#29)', () => {
         body: { code: 'feature_off' },
       });
     }
+  });
+});
+
+describe('choosing who approves each member’s reports (#86)', () => {
+  const ON = 'team.invites=on,reports.approval=on';
+  const ref = (id: string, name: string) => ({ id, name });
+  type Listed = { id: string; approver?: Record<string, unknown> }[];
+  const approverOf = (body: Record<string, unknown>, id: string) =>
+    (body.people as Listed).find((p) => p.id === id)?.approver;
+
+  it('shows who approves each person’s reports while approval is on, and whom an owner may choose', async () => {
+    const { call } = setup(ON, [casey]);
+    const res = await call('GET', '/v1/settings/people', 'riley');
+    expect(res.status).toBe(200);
+    expect(approverOf(res.body, SAM)).toEqual({
+      chosen: null,
+      goesTo: ref(CASEY, 'casey'),
+      passedOver: false,
+      choices: [ref(OWNER, 'riley'), ref(CASEY, 'casey')],
+    });
+    expect(approverOf(res.body, CASEY)).toEqual({
+      chosen: null,
+      goesTo: ref(OWNER, 'riley'),
+      passedOver: false,
+      choices: [ref(OWNER, 'riley')],
+    });
+    expect(approverOf(res.body, OWNER)).toMatchObject({ goesTo: ref(CASEY, 'casey') });
+  });
+
+  it('chooses a member’s approver, and goes back to Automatic, each change audited once', async () => {
+    const { call, audit } = setup(ON, [casey]);
+    const chosen = await call('PUT', `/v1/settings/people/${SAM}/approver`, 'riley', {
+      approverId: OWNER,
+    });
+    expect(chosen).toMatchObject({
+      status: 200,
+      body: {
+        id: SAM,
+        approver: { chosen: ref(OWNER, 'riley'), goesTo: ref(OWNER, 'riley'), passedOver: false },
+      },
+    });
+    const again = await call('PUT', `/v1/settings/people/${SAM}/approver`, 'riley', {
+      approverId: OWNER,
+    });
+    expect(again.status).toBe(200);
+    const automatic = await call('PUT', `/v1/settings/people/${SAM}/approver`, 'riley', {
+      approverId: null,
+    });
+    expect(automatic).toMatchObject({
+      status: 200,
+      body: { approver: { chosen: null, goesTo: ref(CASEY, 'casey'), passedOver: false } },
+    });
+    expect(audit).toEqual([`approver:${SAM}:${OWNER}`, `approver:${SAM}:null`]);
+  });
+
+  it('refuses a member as their own approver, and anyone who can’t approve', async () => {
+    const { call, audit } = setup(ON, [casey]);
+    const own = await call('PUT', `/v1/settings/people/${CASEY}/approver`, 'riley', {
+      approverId: CASEY,
+    });
+    expect(own).toMatchObject({ status: 422, body: { code: 'own_approver' } });
+    for (const approverId of [SAM, INVITE]) {
+      const res = await call('PUT', `/v1/settings/people/${CASEY}/approver`, 'riley', {
+        approverId,
+      });
+      expect(res, approverId).toMatchObject({ status: 422, body: { code: 'not_an_approver' } });
+    }
+    const nobody = await call('PUT', `/v1/settings/people/${INVITE}/approver`, 'riley', {
+      approverId: null,
+    });
+    expect(nobody).toMatchObject({ status: 404, body: { code: 'not_found' } });
+    expect(audit).toEqual([]);
+  });
+
+  it('says when the approver chosen can no longer approve, and finds one as Automatic does', async () => {
+    const { call } = setup(ON, [casey]);
+    await call('PUT', `/v1/settings/people/${SAM}/approver`, 'riley', { approverId: CASEY });
+    await call('PATCH', `/v1/settings/people/${CASEY}`, 'riley', { role: 'member' });
+    const demoted = await call('GET', '/v1/settings/people', 'riley');
+    expect(approverOf(demoted.body, SAM)).toEqual({
+      chosen: ref(CASEY, 'casey'),
+      goesTo: ref(OWNER, 'riley'),
+      passedOver: true,
+      choices: [ref(OWNER, 'riley')],
+    });
+    await call('PATCH', `/v1/settings/people/${CASEY}`, 'riley', { role: 'approver' });
+    await call('DELETE', `/v1/settings/people/${CASEY}`, 'riley');
+    const removed = await call('GET', '/v1/settings/people', 'riley');
+    expect(approverOf(removed.body, SAM)).toMatchObject({
+      chosen: ref(CASEY, 'casey'),
+      goesTo: ref(OWNER, 'riley'),
+      passedOver: true,
+    });
+    // Someone removed has no approver to show.
+    expect(approverOf(removed.body, CASEY)).toBeUndefined();
+  });
+
+  it('lets only an owner choose', async () => {
+    const { call, audit } = setup(ON, [casey]);
+    for (const who of ['sam', 'casey']) {
+      const res = await call('PUT', `/v1/settings/people/${SAM}/approver`, who, {
+        approverId: CASEY,
+      });
+      expect(res, who).toMatchObject({ status: 403, body: { code: 'forbidden_role' } });
+    }
+    expect(audit).toEqual([]);
+  });
+
+  it('asks the owner for the second factor while it is on', async () => {
+    const { call, audit } = setup(`${ON},security.second-factor=on`, [casey]);
+    const refused = await call('PUT', `/v1/settings/people/${SAM}/approver`, 'riley', {
+      approverId: CASEY,
+    });
+    expect(refused).toMatchObject({ status: 403, body: { code: 'second_factor_required' } });
+    expect(audit).toEqual([]);
+    const passed = await call('PUT', `/v1/settings/people/${SAM}/approver`, 'riley-aal2', {
+      approverId: CASEY,
+    });
+    expect(passed.status).toBe(200);
+    expect(audit).toEqual([`approver:${SAM}:${CASEY}`]);
+  });
+
+  it('leaves People exactly as it was while approval is off, and answers 404 feature_off', async () => {
+    const { call, audit } = setup('team.invites=on', [casey]);
+    const listed = await call('GET', '/v1/settings/people', 'riley');
+    expect(listed.status).toBe(200);
+    for (const person of listed.body.people as Listed)
+      expect(person).not.toHaveProperty('approver');
+    const changed = await call('PATCH', `/v1/settings/people/${SAM}`, 'riley', {
+      role: 'approver',
+    });
+    expect(changed.body).not.toHaveProperty('approver');
+    for (const flags of ['team.invites=on', 'reports.approval=on']) {
+      const res = await setup(flags, [casey]).call(
+        'PUT',
+        `/v1/settings/people/${SAM}/approver`,
+        'riley',
+        { approverId: CASEY },
+      );
+      expect(res, flags).toMatchObject({ status: 404, body: { code: 'feature_off' } });
+    }
+    expect(audit).toEqual([`role:${SAM}:approver`]);
   });
 });
 

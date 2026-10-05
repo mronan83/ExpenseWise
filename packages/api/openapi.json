@@ -7352,6 +7352,9 @@
           "you": {
             "type": "boolean",
             "description": "Whether this is the caller."
+          },
+          "approver": {
+            "$ref": "#/components/schemas/PersonApprover"
           }
         },
         "required": [
@@ -7374,6 +7377,63 @@
           "auditor"
         ],
         "description": "member and approver see and change their own records; finance_admin and owner see everyone’s and change their own; auditor reads everyone’s and changes nothing. Owners and finance admins take admin actions; only owners manage people."
+      },
+      "PersonApprover": {
+        "type": "object",
+        "properties": {
+          "chosen": {
+            "$ref": "#/components/schemas/PersonRef"
+          },
+          "goesTo": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PersonRef"
+              },
+              {
+                "description": "Who a report they submit now goes to: the one chosen while they can approve it, otherwise the longest-standing approver, then finance admin, then owner; in a one-person organization, its owner. Null when no one else can approve it."
+              }
+            ]
+          },
+          "passedOver": {
+            "type": "boolean",
+            "description": "The approver chosen can’t approve it now (their role changed, or they were removed), so goesTo is found as Automatic finds it."
+          },
+          "choices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PersonRef"
+            },
+            "description": "Whom an owner may choose: everyone else here whose role may approve."
+          }
+        },
+        "required": [
+          "chosen",
+          "goesTo",
+          "passedOver",
+          "choices"
+        ],
+        "description": "While approval is on, who approves their reports (#86). Absent for someone removed, and for everyone while approval is off."
+      },
+      "PersonRef": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "casey"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "description": "The approver an owner chose for their reports; null for Automatic."
       },
       "Invite": {
         "type": "object",
@@ -7462,6 +7522,22 @@
         },
         "required": [
           "role"
+        ]
+      },
+      "ChooseApprover": {
+        "type": "object",
+        "properties": {
+          "approverId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "Who approves their reports: someone else here whose role may approve. Null for Automatic, the routing as built."
+          }
+        },
+        "required": [
+          "approverId"
         ]
       },
       "InvitePreview": {
@@ -15524,6 +15600,103 @@
           },
           "409": {
             "description": "They are the last owner, or the caller.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/settings/people/{memberId}/approver": {
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "summary": "Choose who approves someone’s reports",
+        "description": "Someone else here whose role may approve, or null for Automatic: the longest-standing approver, then finance admin, then owner (ADR-0043). A report they submit goes to the one chosen while they can approve it, and otherwise as Automatic finds; one already submitted keeps the approver it went to. Owners only, behind team.invites and reports.approval; each change is audited.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "memberId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChooseApprover"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The person, with who approves their reports.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Person"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only an owner manages people, or the caller has no organization yet. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Inviting people or approval is not switched on (feature_off), or no such person here.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The one chosen is the person themselves (own_approver), or not someone here whose role may approve (not_an_approver).",
             "content": {
               "application/problem+json": {
                 "schema": {

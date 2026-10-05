@@ -3,6 +3,8 @@ import { asc, eq, inArray, sql } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import {
   approvalOf,
+  approverFor,
+  approverRouting,
   decideReport,
   returnedReports,
   reportsToApprove,
@@ -15,6 +17,7 @@ import {
 import { withMember, withOrg, type Transaction } from '../src/client.ts';
 import { seedStarterCatalog } from '../src/categories.ts';
 import { editExpense } from '../src/expenses.ts';
+import { changeMemberRole, chooseMemberApprover, removeMember } from '../src/people.ts';
 import { reportCategories } from '../src/itemized.ts';
 import { reportForExport } from '../src/report-export.ts';
 import { closeDueReports, moveToReport } from '../src/reports.ts';
@@ -313,6 +316,108 @@ describe('submitting a report for approval (FR-GOV-02, FR-GOV-13)', () => {
     const own = await closedReport(t.riley!);
     expect(await submit(t.riley!, own.reportId)).toEqual({ status: 'no_approver' });
     expect((await statusOf(t.riley!, own.reportId)).report.status).toBe('closed');
+  });
+});
+
+describe('the approver an owner chose (#86)', () => {
+  const choose = (owner: Person, memberId: string, approverId: string | null) =>
+    withOrg(app.db, owner.orgId, (tx) =>
+      chooseMemberApprover(tx, owner.orgId, memberId, approverId, owner.userId),
+    );
+  /** A member's routing, with whom an owner may choose in no particular order. */
+  const routingOf = (owner: Person, memberId: string) =>
+    withOrg(app.db, owner.orgId, async (tx) => {
+      const found = (await approverRouting(tx)).find((r) => r.memberId === memberId);
+      return found && { ...found, choices: [...found.choices].sort() };
+    });
+  const sorted = (...ids: string[]) => ids.sort();
+
+  it('sends a report to the approver chosen for its member, and keeps one already submitted with the approver it went to', async () => {
+    const t = await team('approval-chosen', [
+      ['alex', 'member'],
+      ['casey', 'approver'],
+      ['fin', 'finance_admin'],
+    ]);
+    const first = await closedReport(t.alex!);
+    expect(await submit(t.alex!, first.reportId)).toMatchObject({
+      status: 'submitted',
+      approverMemberId: t.casey!.memberId,
+    });
+    expect(await choose(t.riley!, t.alex!.memberId, t.fin!.memberId)).toBe('changed');
+    expect(await withMember(app.db, t.alex!, (tx) => approverFor(tx, t.alex!.memberId))).toEqual({
+      memberId: t.fin!.memberId,
+      name: 'fin',
+    });
+    const second = await closedReport(t.alex!);
+    expect(await submit(t.alex!, second.reportId)).toMatchObject({
+      status: 'submitted',
+      approverMemberId: t.fin!.memberId,
+    });
+    // The one already submitted keeps the approver it went to, who still decides it.
+    const before = await withMember(app.db, t.alex!, (tx) => approvalOf(tx, first.reportId));
+    expect(before.steps).toEqual([
+      expect.objectContaining({ approver: 'casey', decision: 'pending' }),
+    ]);
+    expect(await decide(t.casey!, first.reportId, { kind: 'approve' })).toMatchObject({
+      status: 'approved',
+    });
+    // The new one went to Fin: Casey doesn't even see it.
+    expect(await decide(t.casey!, second.reportId, { kind: 'approve' })).toEqual({
+      status: 'missing',
+    });
+    expect(await decide(t.fin!, second.reportId, { kind: 'approve' })).toMatchObject({
+      status: 'approved',
+    });
+  });
+
+  it('passes over a chosen approver whose role changed or who was removed, routing as built', async () => {
+    const t = await team('approval-passed-over', [
+      ['alex', 'member'],
+      ['casey', 'approver'],
+      ['fin', 'finance_admin'],
+    ]);
+    const { riley } = t;
+    await choose(riley!, t.alex!.memberId, t.fin!.memberId);
+    expect(await routingOf(riley!, t.alex!.memberId)).toEqual({
+      memberId: t.alex!.memberId,
+      chosenMemberId: t.fin!.memberId,
+      goesToMemberId: t.fin!.memberId,
+      passedOver: false,
+      choices: sorted(riley!.memberId, t.casey!.memberId, t.fin!.memberId),
+    });
+    await withOrg(app.db, riley!.orgId, (tx) =>
+      changeMemberRole(tx, riley!.orgId, t.fin!.memberId, 'member', riley!.userId),
+    );
+    expect(await routingOf(riley!, t.alex!.memberId)).toMatchObject({
+      chosenMemberId: t.fin!.memberId,
+      goesToMemberId: t.casey!.memberId,
+      passedOver: true,
+    });
+    const demoted = await closedReport(t.alex!);
+    expect(await submit(t.alex!, demoted.reportId)).toMatchObject({
+      approverMemberId: t.casey!.memberId,
+    });
+    // Given the role back, they are the one again; removed, they are passed over for good.
+    await withOrg(app.db, riley!.orgId, (tx) =>
+      changeMemberRole(tx, riley!.orgId, t.fin!.memberId, 'finance_admin', riley!.userId),
+    );
+    expect(await routingOf(riley!, t.alex!.memberId)).toMatchObject({
+      goesToMemberId: t.fin!.memberId,
+      passedOver: false,
+    });
+    await withOrg(app.db, riley!.orgId, (tx) =>
+      removeMember(tx, riley!.orgId, t.fin!.memberId, riley!.userId, NOW),
+    );
+    const removed = await closedReport(t.alex!);
+    expect(await submit(t.alex!, removed.reportId)).toMatchObject({
+      approverMemberId: t.casey!.memberId,
+    });
+    expect(await routingOf(riley!, t.alex!.memberId)).toMatchObject({
+      chosenMemberId: t.fin!.memberId,
+      goesToMemberId: t.casey!.memberId,
+      passedOver: true,
+      choices: sorted(riley!.memberId, t.casey!.memberId),
+    });
   });
 });
 

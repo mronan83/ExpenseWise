@@ -3,11 +3,14 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { api, ApiProblem } from '../../../lib/api';
+import { useFeatures } from '../../../lib/features';
 import { formText } from '../../../lib/form';
 import {
+  approverNote,
   ROLES,
   roleName,
   shortDate,
+  whose,
   type CreatedInvite,
   type People,
   type Person,
@@ -32,9 +35,12 @@ const describeError = (error: unknown) =>
 
 /**
  * The people in the organization (FR-PLT-07, #29): their roles, invite links, and removing
- * someone. Owners only, while Invite people is switched on.
+ * someone; while approval is on, who approves each person's reports (#86). Owners only, while
+ * Invite people is switched on.
  */
 export default function PeoplePage() {
+  const on = useFeatures();
+  const approvalOn = on('reports.approval');
   const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [message, setMessage] = useState<Message>(null);
   const [busy, setBusy] = useState(false);
@@ -113,6 +119,22 @@ export default function PeoplePage() {
       return `${person.name} is now ${roleName(role).toLowerCase()}.`;
     });
 
+  const chooseApprover = (person: Person, approverId: string) =>
+    void run(async () => {
+      const after = await api<Person>(`/v1/settings/people/${person.id}/approver`, {
+        method: 'PUT',
+        body: JSON.stringify({ approverId: approverId || null }),
+      });
+      const goesTo = after.approver?.goesTo?.name;
+      const reports = `${whose(person)} reports`;
+      if (!approverId) {
+        return goesTo
+          ? `Automatic: ${reports} go to ${goesTo}.`
+          : `Automatic: no one else can approve ${reports} yet.`;
+      }
+      return `${goesTo ?? 'The one you chose'} approves ${reports} from now on. Any already submitted stay with whoever has them.`;
+    });
+
   const remove = (person: Person) =>
     void run(async () => {
       await api(`/v1/settings/people/${person.id}`, { method: 'DELETE' });
@@ -137,6 +159,42 @@ export default function PeoplePage() {
 
   const active = load.state === 'ready' ? load.people.filter((p) => !p.removedAt) : [];
   const gone = load.state === 'ready' ? load.people.filter((p) => p.removedAt) : [];
+  const you = active.find((p) => p.you)?.id;
+
+  /** Who approves this person's reports (#86): Automatic, or someone else who can approve. */
+  const approverChoice = (person: Person, a: NonNullable<Person['approver']>) => {
+    const note = approverNote(person);
+    const lost = a.chosen && !a.choices.some((c) => c.id === a.chosen!.id) ? a.chosen : null;
+    return (
+      <span className="flex flex-col gap-1">
+        <label className="flex flex-col gap-1 text-sm font-medium">
+          Who approves {whose(person)} reports
+          <select
+            value={a.chosen?.id ?? ''}
+            disabled={busy}
+            onChange={(e) => chooseApprover(person, e.target.value)}
+            className="min-h-11 rounded-lg border border-rule bg-paper px-3 text-base text-ink"
+          >
+            <option value="">Automatic</option>
+            {a.choices.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+                {c.id === you ? ' (you)' : ''}
+              </option>
+            ))}
+            {lost ? (
+              <option value={lost.id} disabled>
+                {lost.name}, who can’t approve now
+              </option>
+            ) : null}
+          </select>
+        </label>
+        {note ? (
+          <span className={`text-xs ${note.warn ? 'text-warn' : 'text-ink-2'}`}>{note.text}</span>
+        ) : null}
+      </span>
+    );
+  };
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]">
@@ -177,6 +235,13 @@ export default function PeoplePage() {
               <h2 id="people-title" className="font-semibold">
                 In your organization
               </h2>
+              {approvalOn && active.some((p) => p.approver) ? (
+                <p className="text-sm text-ink-2">
+                  Choose who approves each person&apos;s reports, or leave it on Automatic: the
+                  longest-standing approver, then a finance admin, then an owner. No one approves
+                  their own.
+                </p>
+              ) : null}
               <ul className="flex flex-col divide-y divide-rule">
                 {active.map((p) => (
                   <li key={p.id} className="flex flex-col gap-2 py-3">
@@ -239,6 +304,7 @@ export default function PeoplePage() {
                         stay.
                       </span>
                     ) : null}
+                    {approvalOn && p.approver ? approverChoice(p, p.approver) : null}
                   </li>
                 ))}
               </ul>

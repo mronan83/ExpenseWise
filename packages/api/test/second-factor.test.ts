@@ -121,6 +121,7 @@ function setup(switchedOn: readonly string[] = [], flagOverrides?: string) {
         'settings.organization',
         'settings.duplicate-window',
         'team.invites',
+        'reports.approval',
         'expenses.categories',
         'expenses.mileage',
         'expenses.route-mileage',
@@ -174,6 +175,7 @@ const ADMIN_ACTIONS: [string, string, unknown?][] = [
   ['POST', '/v1/settings/people/invites', { role: 'member' }],
   ['DELETE', `/v1/settings/people/invites/${ID}`],
   ['PATCH', `/v1/settings/people/${OTHER_MEMBER}`, { role: 'approver' }],
+  ['PUT', `/v1/settings/people/${OTHER_MEMBER}/approver`, { approverId: OWNER_MEMBER }],
   ['DELETE', `/v1/settings/people/${OTHER_MEMBER}`],
 ];
 

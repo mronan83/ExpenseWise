@@ -6,6 +6,7 @@ import { ensureOwnerOrganization, findMemberships } from '../src/members.ts';
 import {
   acceptInvite,
   changeMemberRole,
+  chooseMemberApprover,
   createInvite,
   inviteTokenHash,
   listOpenInvites,
@@ -16,7 +17,7 @@ import {
   revokeInvite,
 } from '../src/people.ts';
 import { auditEvents, memberInvites, memberSignIns, members, trips } from '../src/schema.ts';
-import { connectAs, seedOrg } from './helpers.ts';
+import { connectAs, expectDbError, seedOrg } from './helpers.ts';
 
 const app = connectAs('app');
 afterAll(async () => {
@@ -248,5 +249,87 @@ describe('roles and removing people (#29)', () => {
       'member.removed',
       'member.joined',
     ]);
+  });
+});
+
+describe('choosing who approves each member’s reports (#86)', () => {
+  /** An organization of its owner and those who joined by link, by name. */
+  async function team(name: string, roles: Record<string, MemberRole>) {
+    const org = await seedOrg(app.db, name);
+    const ids: Record<string, string> = { owner: org.memberId };
+    for (const [who, role] of Object.entries(roles)) {
+      const joined = await accept((await invite(org, role)).token, user());
+      if (joined.status !== 'joined') throw new Error(joined.status);
+      ids[who] = joined.membership.memberId;
+    }
+    const inOrg = <T>(run: Parameters<typeof withOrg<T>>[2]) => withOrg(app.db, org.orgId, run);
+    const choose = (memberId: string, approverId: string | null) =>
+      inOrg((tx) => chooseMemberApprover(tx, org.orgId, memberId, approverId, org.userId));
+    return { org, ids, inOrg, choose };
+  }
+
+  it('chooses a member’s approver, and Automatic again, each change audited once', async () => {
+    const { org, ids, inOrg, choose } = await team('people-approver', {
+      sam: 'member',
+      casey: 'approver',
+    });
+    expect(await choose(ids.sam!, ids.casey!)).toBe('changed');
+    expect(await choose(ids.sam!, ids.casey!)).toBe('unchanged');
+    expect(await choose(ids.sam!, ids.owner!)).toBe('changed');
+    expect(await choose(ids.sam!, null)).toBe('changed');
+    expect(await choose(ids.sam!, null)).toBe('unchanged');
+    const [row] = await inOrg((tx) => tx.select().from(members).where(eq(members.id, ids.sam!)));
+    expect(row?.managerMemberId).toBeNull();
+    const audit = await inOrg((tx) =>
+      tx
+        .select({
+          actor: auditEvents.actorId,
+          entityId: auditEvents.entityId,
+          payload: auditEvents.payload,
+        })
+        .from(auditEvents)
+        .where(eq(auditEvents.action, 'member.approver_chosen'))
+        .orderBy(asc(auditEvents.sequence)),
+    );
+    expect(audit).toEqual([
+      { actor: org.userId, entityId: ids.sam, payload: { from: null, to: ids.casey } },
+      { actor: org.userId, entityId: ids.sam, payload: { from: ids.casey, to: ids.owner } },
+      { actor: org.userId, entityId: ids.sam, payload: { from: ids.owner, to: null } },
+    ]);
+  });
+
+  it('never chooses a member themselves, or anyone who can’t approve, and changes nothing', async () => {
+    const { org, ids, inOrg, choose } = await team('people-approver-refused', {
+      sam: 'member',
+      casey: 'approver',
+      audrey: 'auditor',
+      gone: 'approver',
+    });
+    await inOrg((tx) => removeMember(tx, org.orgId, ids.gone!, org.userId, NOW));
+    expect(await choose(ids.casey!, ids.casey!)).toBe('own_approver');
+    for (const who of [ids.sam!, ids.audrey!, ids.gone!, newId()]) {
+      expect(await choose(ids.casey!, who)).toBe('not_an_approver');
+    }
+    expect(await choose(ids.gone!, ids.casey!)).toBe('missing');
+    expect(await choose(newId(), ids.casey!)).toBe('missing');
+    expect((await actions(org.orgId)).filter((a) => a === 'member.approver_chosen')).toEqual([]);
+  });
+
+  it('keeps the choice to the member’s own organization and never to themselves, in the database too', async () => {
+    const { org, ids, inOrg } = await team('people-approver-db', { sam: 'member' });
+    const other = await seedOrg(app.db, 'people-approver-elsewhere');
+    await expectDbError(
+      inOrg((tx) =>
+        tx.update(members).set({ managerMemberId: ids.sam }).where(eq(members.id, ids.sam!)),
+      ),
+      /members_manager_not_self/,
+    );
+    await expectDbError(
+      inOrg((tx) =>
+        tx.update(members).set({ managerMemberId: other.memberId }).where(eq(members.id, ids.sam!)),
+      ),
+      /members_manager_fk/,
+    );
+    expect(org.orgId).not.toBe(other.orgId);
   });
 });

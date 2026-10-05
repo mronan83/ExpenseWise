@@ -1,7 +1,9 @@
 import {
   acceptInvite,
+  approverRouting,
   assertRowSecurityApplies,
   changeMemberRole,
+  chooseMemberApprover,
   createInvite,
   inviteTokenHash,
   listOpenInvites,
@@ -12,7 +14,9 @@ import {
   revokeInvite,
   withOrg,
   type AcceptInviteResult,
+  type ApproverRouting,
   type ChangeRoleResult,
+  type ChooseApproverResult,
   type Database,
   type InviteLookup,
   type InviteRecord,
@@ -56,6 +60,15 @@ export interface PeopleStore {
     actorUserId: string,
     now: Date,
   ): Promise<RemoveMemberResult>;
+  /** Who approves each active member's reports, and whom an owner may choose (#86). */
+  approvers(orgId: string): Promise<ApproverRouting[]>;
+  /** Chooses a member's approver, or Automatic with null (#86). */
+  chooseApprover(
+    orgId: string,
+    memberId: string,
+    approverMemberId: string | null,
+    actorUserId: string,
+  ): Promise<ChooseApproverResult>;
   /** The invite a token names, for the signed-in person holding it. */
   lookUp(token: string, userId: string, now: Date): Promise<InviteLookup | undefined>;
   accept(
@@ -111,6 +124,9 @@ export function dbPeopleStore(db: Database): PeopleStore {
       inOrg(orgId, (tx) => changeMemberRole(tx, orgId, memberId, role, actor)),
     remove: (orgId, memberId, actor, now) =>
       inOrg(orgId, (tx) => removeMember(tx, orgId, memberId, actor, now)),
+    approvers: (orgId) => inOrg(orgId, (tx) => approverRouting(tx)),
+    chooseApprover: (orgId, memberId, approverMemberId, actor) =>
+      inOrg(orgId, (tx) => chooseMemberApprover(tx, orgId, memberId, approverMemberId, actor)),
     lookUp: async (token, userId, now) => {
       await safe();
       return lookUpInvite(db, inviteTokenHash(token), userId, now);
