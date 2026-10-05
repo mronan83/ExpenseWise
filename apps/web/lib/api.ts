@@ -1,4 +1,11 @@
-import { authenticatorRequired, isAuthenticatorRequired, isStepUp, stepUp } from './step-up';
+import {
+  authenticatorRequired,
+  isAuthenticatorRequired,
+  isNotLetIn,
+  isStepUp,
+  notLetIn,
+  stepUp,
+} from './step-up';
 import { supabase } from './supabase';
 
 /** Requests being sent again after the code, so one is never asked about twice. */
@@ -19,17 +26,26 @@ export class ApiProblem extends Error {
   }
 }
 
-/** Tells the app this email needs its own authenticator, by the email the API named (#88). */
-const heldEmail = (body: Record<string, unknown>) =>
-  authenticatorRequired(typeof body.email === 'string' ? body.email : null);
+/** The email the API named in a refusal, if any. */
+const named = (body: Record<string, unknown>) =>
+  typeof body.email === 'string' ? body.email : null;
+
+/**
+ * Tells the app this email needs its own authenticator (#88), or isn't let in (#90), by the
+ * email the API named: neither is ever asked for a code.
+ */
+function heldEmail(status: number, body: { code?: string } & Record<string, unknown>): void {
+  if (isAuthenticatorRequired(status, body.code)) authenticatorRequired(named(body));
+  if (isNotLetIn(status, body.code)) notLetIn(named(body));
+}
 
 /**
  * Calls our API as the signed-in user. A request that needs the second factor, an admin action
  * (FR-GOV-04) or, for someone with an authenticator whose organization asks it before anything
  * else, any read or change (#85), asks for the code where the app shows its prompt, then is
  * sent again, once, as the session that passed it; without the code it fails as any refusal
- * does. One refused because this email needs its own authenticator (#88) asks for no code: the
- * app says which email needs one, and it fails as any refusal does.
+ * does. One refused because this email needs its own authenticator (#88), or isn't let in (#90),
+ * asks for no code: the app says so, naming the email, and it fails as any refusal does.
  */
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const session = (await supabase()?.auth.getSession())?.data.session;
@@ -47,7 +63,7 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     detail?: string;
   } & Record<string, unknown>;
   if (!res.ok) {
-    if (isAuthenticatorRequired(res.status, body.code)) heldEmail(body);
+    heldEmail(res.status, body);
     // Only a body that can be sent twice; the retry carries the new session's token.
     const resendable = init.body === undefined || typeof init.body === 'string';
     if (isStepUp(res.status, body.code) && resendable && !stepping.has(init) && (await stepUp())) {
@@ -92,7 +108,7 @@ export async function apiDownload(
     if (isStepUp(res.status, body.code) && !afterCode && (await stepUp())) {
       return apiDownload(path, fallbackName, true);
     }
-    if (isAuthenticatorRequired(res.status, body.code)) heldEmail(body);
+    heldEmail(res.status, body);
     throw new ApiProblem(
       res.status,
       body.code,

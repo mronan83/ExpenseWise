@@ -1,3 +1,4 @@
+import type { LetIn } from '@expensewise/domain';
 import { and, asc, eq, isNotNull, sql } from 'drizzle-orm';
 import { appendAuditEvent } from './audit.ts';
 import { switchOrg, withOrg, type Database, type Transaction } from './client.ts';
@@ -7,6 +8,7 @@ import {
   categories,
   expenses,
   expenseTypes,
+  letInSignIns,
   memberInvites,
   memberSignIns,
   members,
@@ -21,6 +23,10 @@ export interface SignIn {
   readonly userId: string;
   readonly email: string;
   readonly createdAt: Date;
+  /** Whether it is let in (#90): 'waiting' until it passes its own code. Lapsed is 'no'. */
+  readonly letIn?: LetIn;
+  /** When letting it in lapses, while it waits; null otherwise. */
+  readonly letInLapsesAt?: Date | null;
 }
 
 const columns = {
@@ -30,13 +36,29 @@ const columns = {
   createdAt: memberSignIns.createdAt,
 };
 
-/** A member's sign-ins, oldest first. Call inside withOrg(). */
-export function listSignIns(tx: Transaction, memberId: string): Promise<SignIn[]> {
-  return tx
-    .select(columns)
+/** A let-in row that counts now: passed its code, or waiting and not yet lapsed. */
+export const letInCounts = sql<boolean>`(${letInSignIns.passedAt} is not null or ${letInSignIns.lapsesAt} > now())`;
+
+/** A member's sign-ins, oldest first, each with whether it is let in. Call inside withOrg(). */
+export async function listSignIns(tx: Transaction, memberId: string): Promise<SignIn[]> {
+  const rows = await tx
+    .select({
+      ...columns,
+      passedAt: letInSignIns.passedAt,
+      lapsesAt: letInSignIns.lapsesAt,
+      counts: letInCounts,
+    })
     .from(memberSignIns)
+    .leftJoin(
+      letInSignIns,
+      and(eq(letInSignIns.orgId, memberSignIns.orgId), eq(letInSignIns.signInId, memberSignIns.id)),
+    )
     .where(eq(memberSignIns.memberId, memberId))
     .orderBy(asc(memberSignIns.createdAt));
+  return rows.map(({ passedAt, lapsesAt, counts, ...signIn }) => {
+    const letIn: LetIn = counts !== true ? 'no' : passedAt ? 'yes' : 'waiting';
+    return { ...signIn, letIn, letInLapsesAt: letIn === 'waiting' ? lapsesAt : null };
+  });
 }
 
 /**

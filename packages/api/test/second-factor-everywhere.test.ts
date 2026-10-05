@@ -1,12 +1,12 @@
-import type { OrgFeature } from '@expensewise/db';
-import type { MemberRole } from '@expensewise/domain';
+import type { OrgFeature, PassedCode } from '@expensewise/db';
+import type { LetIn, MemberRole, PersonLetIn } from '@expensewise/domain';
 import { SignJWT, createLocalJWKSet, exportJWK, generateKeyPair } from 'jose';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { BEFORE_THE_CODE, createApi, openApiDocument, type ApiOptions } from '../src/app.ts';
 import { supabaseTokenVerifier, type TokenVerifier } from '../src/auth.ts';
 import { featureGate } from '../src/features.ts';
 import { ProblemError } from '../src/problem.ts';
-import { requireCodeOfTheEnrolled, requireOwnAuthenticator } from '../src/second-factor.ts';
+import { admitSignIn } from '../src/second-factor.ts';
 import { createSecretBox } from '../src/secret-box.ts';
 import type { CallerMembership, WorkspaceStore } from '../src/workspace.ts';
 
@@ -14,9 +14,10 @@ import type { CallerMembership, WorkspaceStore } from '../src/workspace.ts';
  * The second factor locks everything for someone with an authenticator (#85, Q41, ADR-0044):
  * with tokens signed as Supabase Auth signs them, aal1 (password alone) and aal2 (passed the
  * code), for a person whose sign-in has a verified authenticator and one whose hasn't, with the
- * organization's switch on and off, across every operation in the API contract. And a person's
- * other email, with none of its own while another of theirs has one, held until it adds its own
- * (#88, Q43).
+ * organization's switch on and off, across every operation in the API contract. A person's other
+ * email let in, with none of its own while another of theirs has one, held until it adds its own
+ * (#88, Q43); and, once a person has an authenticator, an email they haven't let in refused
+ * (#90, Q44).
  */
 
 const PROJECT = 'https://test-project.supabase.co';
@@ -26,31 +27,84 @@ const NOW = new Date('2026-10-05T12:00:00.000Z');
 const FLAG = 'security.second-factor';
 
 /**
- * Who signs in, by the token's subject, whether their sign-in has an authenticator, and whether
- * any of the person's sign-ins has one (#88).
+ * Who signs in, by the token's subject, whether their sign-in has an authenticator, whether
+ * any of the person's sign-ins has one (#88), and whether it, and any of theirs, is let in
+ * (#90).
  */
 const PEOPLE: Record<
   string,
-  { role: MemberRole; authenticator: boolean; personAuthenticator: boolean; member: string }
+  {
+    role: MemberRole;
+    authenticator: boolean;
+    personAuthenticator: boolean;
+    letIn: LetIn;
+    personLetIn: PersonLetIn;
+    member: string;
+  }
 > = {
+  // An email let in, with its authenticator.
   'u-enrolled': {
     role: 'owner',
     authenticator: true,
     personAuthenticator: true,
+    letIn: 'yes',
+    personLetIn: 'with_authenticator',
     member: '0192f7a0-0000-7000-8000-0000000000b1',
   },
   'u-plain': {
     role: 'member',
     authenticator: false,
     personAuthenticator: false,
+    letIn: 'no',
+    personLetIn: 'none',
     member: '0192f7a0-0000-7000-8000-0000000000b2',
   },
-  // The same person as u-enrolled, by another email that has no authenticator of its own.
+  // The same person as u-enrolled, by another email they let in that has no authenticator of
+  // its own yet (#88, #90).
   'u-other-email': {
     role: 'owner',
     authenticator: false,
     personAuthenticator: true,
+    letIn: 'waiting',
+    personLetIn: 'with_authenticator',
     member: '0192f7a0-0000-7000-8000-0000000000b1',
+  },
+  // The same person again, by emails they haven't let in: one with no authenticator, one that
+  // added its own, which counts for nothing (#90).
+  'u-not-let-in': {
+    role: 'owner',
+    authenticator: false,
+    personAuthenticator: true,
+    letIn: 'no',
+    personLetIn: 'with_authenticator',
+    member: '0192f7a0-0000-7000-8000-0000000000b1',
+  },
+  'u-not-let-in-own': {
+    role: 'owner',
+    authenticator: true,
+    personAuthenticator: true,
+    letIn: 'no',
+    personLetIn: 'with_authenticator',
+    member: '0192f7a0-0000-7000-8000-0000000000b1',
+  },
+  // Someone with an authenticator, none of whose emails is let in yet: the first to pass its
+  // code is (#90).
+  'u-first': {
+    role: 'owner',
+    authenticator: true,
+    personAuthenticator: true,
+    letIn: 'no',
+    personLetIn: 'none',
+    member: '0192f7a0-0000-7000-8000-0000000000b3',
+  },
+  // An email let in from another, that added its own authenticator and waits to pass its code.
+  'u-waiting': {
+    role: 'owner',
+    authenticator: true,
+    personAuthenticator: true,
+    letIn: 'waiting',
+    personLetIn: 'with_authenticator',
+    member: '0192f7a0-0000-7000-8000-0000000000b3',
   },
 };
 
@@ -84,19 +138,27 @@ const membershipOf = (userId: string): CallerMembership | undefined => {
         role: person.role,
         authenticator: person.authenticator,
         personAuthenticator: person.personAuthenticator,
+        letIn: person.letIn,
+        personLetIn: person.personLetIn,
       }
     : undefined;
 };
 
 /**
- * One stand-in for every store. It knows each caller's membership, with whether their sign-in
- * has an authenticator, and the organization's switches; any other call means the request got
- * past every check, and answers 409 reached_store with what it reached.
+ * One stand-in for every store. It knows each caller's membership, with where their sign-in
+ * stands for the second factor, and the organization's switches, and records who passed their
+ * code (#90), answering `passed` as told; any other call means the request got past every
+ * check, and answers 409 reached_store with what it reached.
  */
-function setup(switchedOn: readonly string[], flagOverrides = '') {
+function setup(switchedOn: readonly string[], flagOverrides = '', passed: PassedCode = 'passed') {
   const switched = new Set(switchedOn);
   const reached: string[] = [];
+  const recorded: string[] = [];
   const known: Record<string, (...args: never[]) => Promise<unknown>> = {
+    recordPassedCode: (_member: CallerMembership, actor: { userId: string }) => {
+      recorded.push(actor.userId);
+      return Promise.resolve(passed);
+    },
     findMembership: (userId: string) => Promise.resolve(membershipOf(userId)),
     ensureOrganization: (owner: { userId: string }) =>
       Promise.resolve({
@@ -160,6 +222,7 @@ function setup(switchedOn: readonly string[], flagOverrides = '') {
   const api = createApi(options);
   return {
     reached,
+    recorded,
     async call(user: string, aal: 'aal1' | 'aal2', method: string, path: string, body?: unknown) {
       const res = await api.request(path, {
         method,
@@ -414,32 +477,39 @@ describe('linking another sign-in (FR-PLT-04, #85)', () => {
   });
 });
 
-describe('requireCodeOfTheEnrolled', () => {
-  const counting = (on: boolean) => {
-    let reads = 0;
-    const workspace = {
-      featureOn: () => {
-        reads += 1;
-        return Promise.resolve(on);
-      },
-    } as unknown as WorkspaceStore;
-    return { gate: featureGate({ workspace }), reads: () => reads };
-  };
+/** A feature gate that counts how often the switch is read. */
+const counting = (on: boolean) => {
+  let reads = 0;
+  const workspace = {
+    featureOn: () => {
+      reads += 1;
+      return Promise.resolve(on);
+    },
+  } as unknown as WorkspaceStore;
+  return { gate: featureGate({ workspace }), reads: () => reads };
+};
+const session = (assuranceLevel: 'aal1' | 'aal2', email: string | null = 'work@example.com') => ({
+  userId: 'u-1',
+  email,
+  assuranceLevel,
+});
+const member = { orgId: ORG, memberId: ORG, role: 'owner' as const };
 
+describe('admitSignIn, for someone with an authenticator (#85)', () => {
   it('reads the switch only for an enrolled person’s session that skipped the code', async () => {
     const on = counting(true);
-    const enrolled = { orgId: ORG, authenticator: true };
-    await requireCodeOfTheEnrolled(on.gate, { orgId: ORG }, { assuranceLevel: 'aal1' });
-    await requireCodeOfTheEnrolled(on.gate, enrolled, { assuranceLevel: 'aal2' });
+    const enrolled = { ...member, authenticator: true, letIn: 'yes' as const };
+    const letIn = { ...enrolled, personLetIn: 'with_authenticator' as const };
+    await admitSignIn(on.gate, member, session('aal1'));
+    await admitSignIn(on.gate, letIn, session('aal2'));
     expect(on.reads()).toBe(0);
-    await expect(
-      requireCodeOfTheEnrolled(on.gate, enrolled, { assuranceLevel: 'aal1' }),
-    ).rejects.toMatchObject({ status: 403, extra: { code: 'second_factor_required' } });
+    await expect(admitSignIn(on.gate, letIn, session('aal1'))).rejects.toMatchObject({
+      status: 403,
+      extra: { code: 'second_factor_required' },
+    });
     expect(on.reads()).toBe(1);
     const off = counting(false);
-    await expect(
-      requireCodeOfTheEnrolled(off.gate, enrolled, { assuranceLevel: 'aal1' }),
-    ).resolves.toBe(undefined);
+    await expect(admitSignIn(off.gate, letIn, session('aal1'))).resolves.toBe(undefined);
   });
 });
 
@@ -526,48 +596,174 @@ describe('a person’s other email, until it adds its own authenticator (#88)', 
   });
 });
 
-describe('requireOwnAuthenticator', () => {
-  const counting = (on: boolean) => {
-    let reads = 0;
-    const workspace = {
-      featureOn: () => {
-        reads += 1;
-        return Promise.resolve(on);
-      },
-    } as unknown as WorkspaceStore;
-    return { gate: featureGate({ workspace }), reads: () => reads };
+describe('admitSignIn, for an email let in without its own authenticator (#88)', () => {
+  const waiting = {
+    ...member,
+    personAuthenticator: true,
+    letIn: 'waiting' as const,
+    personLetIn: 'with_authenticator' as const,
   };
-  const email = { email: 'work@example.com' };
 
   it('reads the switch only for an email with none of its own, of a person with one', async () => {
     const on = counting(true);
-    await requireOwnAuthenticator(on.gate, { orgId: ORG }, email);
-    await requireOwnAuthenticator(on.gate, { orgId: ORG, personAuthenticator: false }, email);
-    await requireOwnAuthenticator(
+    await admitSignIn(on.gate, member, session('aal1'));
+    await admitSignIn(on.gate, { ...member, personAuthenticator: false }, session('aal1'));
+    await admitSignIn(
       on.gate,
-      { orgId: ORG, authenticator: true, personAuthenticator: true },
-      email,
+      { ...waiting, authenticator: true, letIn: 'yes' as const },
+      session('aal2'),
     );
     expect(on.reads()).toBe(0);
-    await expect(
-      requireOwnAuthenticator(on.gate, { orgId: ORG, personAuthenticator: true }, email),
-    ).rejects.toMatchObject({
+    await expect(admitSignIn(on.gate, waiting, session('aal1'))).rejects.toMatchObject({
       status: 403,
       extra: { code: 'authenticator_required', email: 'work@example.com' },
     });
     expect(on.reads()).toBe(1);
     const off = counting(false);
-    await expect(
-      requireOwnAuthenticator(off.gate, { orgId: ORG, personAuthenticator: true }, email),
-    ).resolves.toBe(undefined);
+    await expect(admitSignIn(off.gate, waiting, session('aal1'))).resolves.toBe(undefined);
   });
 
   it('says which email when the token names none', async () => {
     const on = counting(true);
-    await expect(
-      requireOwnAuthenticator(on.gate, { orgId: ORG, personAuthenticator: true }, { email: null }),
-    ).rejects.toMatchObject({
+    await expect(admitSignIn(on.gate, waiting, session('aal1', null))).rejects.toMatchObject({
       extra: { code: 'authenticator_required', detail: /^The email you signed in with has no/ },
     });
+  });
+});
+
+/* Only an email a person lets in signs in, once they have an authenticator (#90, Q44). */
+
+const NOT_LET_IN = ['u-not-let-in', 'u-not-let-in-own'] as const;
+const notLetIn = (res: { status: number; body: { code?: string } | null }) =>
+  res.status === 403 && res.body?.code === 'sign_in_not_let_in';
+
+describe('an email not let in, once a person has an authenticator (#90)', () => {
+  it.each(HELD.map((o) => [o.name, o] as const))(
+    'refuses every request of an email not let in, while it is on, whatever its session says, its own authenticator included, and reaches nothing: %s',
+    async (_name, op) => {
+      const s = setup([FLAG]);
+      for (const user of NOT_LET_IN) {
+        for (const aal of ['aal1', 'aal2'] as const) {
+          const res = await s.call(user, aal, op.method, op.url, op.body);
+          expect(res, `${user} ${aal}: ${res.body?.detail}`).toMatchObject({
+            status: 403,
+            body: { code: 'sign_in_not_let_in', email: `${user}@example.com` },
+          });
+        }
+      }
+      expect(s.reached).toEqual([]);
+      expect(s.recorded).toEqual([]);
+    },
+  );
+
+  it('names the email that isn’t let in, says its receipts are still filed, and never asks it for a code or an authenticator', async () => {
+    const s = setup([FLAG]);
+    const res = await s.call('u-not-let-in-own', 'aal1', 'GET', '/v1/reports');
+    expect(res.body?.code).toBe('sign_in_not_let_in');
+    expect(res.body?.detail).toMatch(/^u-not-let-in-own@example\.com isn't let in to sign in/);
+    expect(res.body?.detail).toMatch(/receipts you send from this one are still filed/);
+    expect(res.body?.detail).toMatch(/let this one in from Settings › Sign-ins/);
+  });
+
+  it('still answers who is signed in, and the organization’s switches, which the screen that says it isn’t let in reads', async () => {
+    const s = setup([FLAG]);
+    for (const user of NOT_LET_IN) {
+      expect(await s.call(user, 'aal1', 'GET', '/v1/me')).toMatchObject({
+        status: 200,
+        body: { userId: user },
+      });
+      expect((await s.call(user, 'aal2', 'GET', '/v1/features')).status).toBe(200);
+    }
+    expect(s.reached).toEqual([]);
+  });
+
+  it.each(SIGNED_IN.map((o) => [o.name, o] as const))(
+    'changes nothing for an email not let in while the second factor is switched off: %s',
+    async (_name, op) => {
+      const s = setup([]);
+      for (const user of NOT_LET_IN) {
+        const res = await s.call(user, 'aal1', op.method, op.url, op.body);
+        expect(notLetIn(res) || held(res), user).toBe(false);
+      }
+      expect(s.recorded).toEqual([]);
+    },
+  );
+
+  it('changes nothing for an email not let in while the server’s override has it off, whatever the switch says', async () => {
+    const s = setup([FLAG], `${FLAG}=off`);
+    for (const op of SIGNED_IN.filter((o) => o.name !== LINK)) {
+      for (const user of NOT_LET_IN) {
+        const res = await s.call(user, 'aal1', op.method, op.url, op.body);
+        expect(notLetIn(res) || held(res), `${user} ${op.name}`).toBe(false);
+      }
+    }
+    expect(s.recorded).toEqual([]);
+  });
+
+  it('carries no one’s token on the email webhook, so email from any address is still filed', () => {
+    const webhook = OPERATIONS.find((o) => o.name === 'POST /v1/inbound/bird');
+    expect(webhook?.signedIn).toBe(false);
+  });
+});
+
+describe('the first email to pass its code, and one let in passing its own (#90)', () => {
+  it('lets in the first of a person’s emails to pass its own code while none is let in, then lets it through', async () => {
+    const s = setup([FLAG], '', 'let_in_first');
+    const before = await s.call('u-first', 'aal1', 'GET', '/v1/reports');
+    expect(before.body?.code).toBe('second_factor_required');
+    expect(s.recorded).toEqual([]);
+    const after = await s.call('u-first', 'aal2', 'GET', '/v1/reports');
+    expect(after.body?.code).toBe('reached_store');
+    expect(s.recorded).toEqual(['u-first']);
+  });
+
+  it('refuses it after all when another of the person’s emails became the first just before', async () => {
+    const s = setup([FLAG], '', 'not_let_in');
+    const res = await s.call('u-first', 'aal2', 'GET', '/v1/reports');
+    expect(res).toMatchObject({ status: 403, body: { code: 'sign_in_not_let_in' } });
+    expect(s.reached).toEqual([]);
+  });
+
+  it('keeps an email let in from another let in once it passes its own code', async () => {
+    const s = setup([FLAG]);
+    expect((await s.call('u-waiting', 'aal1', 'GET', '/v1/reports')).body?.code).toBe(
+      'second_factor_required',
+    );
+    expect((await s.call('u-waiting', 'aal2', 'GET', '/v1/reports')).body?.code).toBe(
+      'reached_store',
+    );
+    expect(s.recorded).toEqual(['u-waiting']);
+  });
+
+  it('records nothing for an email let in already, or while the second factor is off', async () => {
+    const on = setup([FLAG]);
+    await on.call('u-enrolled', 'aal2', 'GET', '/v1/reports');
+    expect(on.recorded).toEqual([]);
+    const off = setup([]);
+    await off.call('u-first', 'aal2', 'GET', '/v1/reports');
+    expect(off.recorded).toEqual([]);
+  });
+
+  it('reads the switch only when it would refuse or record something', async () => {
+    const on = counting(true);
+    const first = {
+      ...member,
+      authenticator: true,
+      personAuthenticator: true,
+      letIn: 'no' as const,
+      personLetIn: 'none' as const,
+    };
+    const record = () => Promise.resolve('let_in_first' as const);
+    await admitSignIn(on.gate, { ...member, letIn: 'no' as const }, session('aal2'), record);
+    expect(on.reads()).toBe(0);
+    await admitSignIn(on.gate, first, session('aal2'), record);
+    expect(on.reads()).toBe(1);
+    const off = counting(false);
+    let recorded = 0;
+    await admitSignIn(off.gate, first, session('aal2'), () => {
+      recorded += 1;
+      return record();
+    });
+    expect(recorded).toBe(0);
   });
 });

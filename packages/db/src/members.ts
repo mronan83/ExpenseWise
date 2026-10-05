@@ -1,4 +1,10 @@
-import { newId, type MemberRole } from '@expensewise/domain';
+import {
+  newId,
+  type LetIn,
+  type MemberRole,
+  type PersonLetIn,
+  type SignInStanding,
+} from '@expensewise/domain';
 import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { appendAuditEvent } from './audit.ts';
 import { seedStarterCatalog } from './categories.ts';
@@ -53,21 +59,62 @@ const authenticatorOf = (userId: string) => sql<boolean>`sign_in_has_authenticat
  */
 const personAuthenticatorOf = (userId: string) => sql<boolean>`person_has_authenticator(${userId})`;
 
-/** Whether a sign-in, and the person it belongs to, have a verified second factor. */
-export interface SignInAuthenticators {
-  /** This sign-in has one of its own (#85). */
-  readonly authenticator: boolean;
-  /** A sign-in of the person's has one, this one or another (#88). */
-  readonly personAuthenticator: boolean;
-}
-
-/** A member a sign-in reaches, and whether that sign-in, and its person, have a second factor. */
-export interface SignedInMember extends Membership, SignInAuthenticators {}
+/**
+ * Whether a sign-in is let in (#90, Q44, ADR-0044): 'yes', 'waiting' until it passes its own
+ * code, or 'no', lapsed included. Read through `sign_in_let_in`, an owner-run function, since
+ * before an organization is chosen the app sees no let-in row.
+ */
+const letInOf = (userId: string) => sql<string>`sign_in_let_in(${userId})`;
 
 /**
- * The signed-in user's first membership, as `findMemberships` finds it, and whether their
- * sign-in, and any other of theirs, has a verified second factor, in one query: how the API
- * learns who is calling, and whether their password alone may act for them (#85, #88).
+ * The emails the person a sign-in belongs to has let in, and whether one has a second factor
+ * now: 'none', 'without_authenticator' or 'with_authenticator' (#90), through `person_let_in`.
+ */
+const personLetInOf = (userId: string) => sql<string>`person_let_in(${userId})`;
+
+const LET_IN: readonly string[] = ['no', 'waiting', 'yes'] satisfies LetIn[];
+const PERSON_LET_IN: readonly string[] = [
+  'none',
+  'without_authenticator',
+  'with_authenticator',
+] satisfies PersonLetIn[];
+
+/**
+ * A member a sign-in reaches, and where that sign-in stands for the second factor: whether it,
+ * and its person, have one, and whether it, and any email of the person's, is let in (#85, #88,
+ * #90).
+ */
+export interface SignedInMember extends Membership, SignInStanding {}
+
+/** The four answers as the functions give them, read strictly. */
+function standingOf(row: {
+  authenticator?: unknown;
+  personAuthenticator?: unknown;
+  letIn?: unknown;
+  personLetIn?: unknown;
+}): SignInStanding {
+  return {
+    authenticator: row.authenticator === true,
+    personAuthenticator: row.personAuthenticator === true,
+    letIn: LET_IN.includes(row.letIn as string) ? (row.letIn as LetIn) : 'no',
+    personLetIn: PERSON_LET_IN.includes(row.personLetIn as string)
+      ? (row.personLetIn as PersonLetIn)
+      : 'none',
+  };
+}
+
+/** The four questions, asked of one sign-in in the same query. */
+const standingQuestions = (userId: string) => ({
+  authenticator: authenticatorOf(userId),
+  personAuthenticator: personAuthenticatorOf(userId),
+  letIn: letInOf(userId),
+  personLetIn: personLetInOf(userId),
+});
+
+/**
+ * The signed-in user's first membership, as `findMemberships` finds it, and where their sign-in
+ * stands for the second factor, in one query: how the API learns who is calling, and how far
+ * their session may act for them (#85, #88, #90).
  */
 export async function findSignedInMember(
   db: Database,
@@ -75,23 +122,15 @@ export async function findSignedInMember(
 ): Promise<SignedInMember | undefined> {
   return withUser(db, userId, async (tx) => {
     const [found] = await tx
-      .select({
-        ...MEMBERSHIP,
-        authenticator: authenticatorOf(userId),
-        personAuthenticator: personAuthenticatorOf(userId),
-      })
+      .select({ ...MEMBERSHIP, ...standingQuestions(userId) })
       .from(memberSignIns)
       .innerJoin(members, SIGN_IN_MEMBER)
       .where(activeSignInsOf(userId))
       .orderBy(asc(memberSignIns.createdAt))
       .limit(1);
-    return (
-      found && {
-        ...found,
-        authenticator: found.authenticator === true,
-        personAuthenticator: found.personAuthenticator === true,
-      }
-    );
+    if (!found) return undefined;
+    const { orgId, memberId, role } = found;
+    return { orgId, memberId, role, ...standingOf(found) };
   });
 }
 
@@ -104,17 +143,21 @@ export async function signInHasAuthenticator(tx: Transaction, userId: string): P
 }
 
 /**
- * Whether a sign-in, and the person it belongs to, have a verified second factor, as
- * `findSignedInMember` reads them (#88). Call inside a transaction.
+ * Where a sign-in stands for the second factor, as `findSignedInMember` reads it (#88, #90).
+ * Call inside a transaction.
  */
-export async function signInAuthenticators(
-  tx: Transaction,
-  userId: string,
-): Promise<SignInAuthenticators> {
-  const { rows } = await tx.execute<{ own: boolean; person: boolean }>(
-    sql`select ${authenticatorOf(userId)} as own, ${personAuthenticatorOf(userId)} as person`,
+export async function signInStanding(tx: Transaction, userId: string): Promise<SignInStanding> {
+  const q = standingQuestions(userId);
+  const { rows } = await tx.execute<{
+    authenticator: unknown;
+    personAuthenticator: unknown;
+    letIn: unknown;
+    personLetIn: unknown;
+  }>(
+    sql`select ${q.authenticator} as "authenticator", ${q.personAuthenticator} as "personAuthenticator",
+               ${q.letIn} as "letIn", ${q.personLetIn} as "personLetIn"`,
   );
-  return { authenticator: rows[0]?.own === true, personAuthenticator: rows[0]?.person === true };
+  return standingOf(rows[0] ?? {});
 }
 
 /** Serializes everything that decides which member a sign-in belongs to. */

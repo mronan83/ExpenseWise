@@ -1,6 +1,6 @@
 'use client';
 
-import { SECOND_FACTOR_CODE_LENGTH } from '@expensewise/domain';
+import { LET_IN_HOURS, SECOND_FACTOR_CODE_LENGTH } from '@expensewise/domain';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
@@ -12,7 +12,7 @@ import {
   SecondFactorError,
   type Authenticator,
 } from '../lib/second-factor';
-import { onAuthenticatorRequired, onStepUp } from '../lib/step-up';
+import { onAuthenticatorRequired, onNotLetIn, onStepUp } from '../lib/step-up';
 import { supabase } from '../lib/supabase';
 
 const explain = (error: unknown) =>
@@ -296,6 +296,90 @@ export function AuthenticatorRequiredScreen() {
             >
               Add one in Settings › Sign-ins
             </Link>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+/**
+ * An email that isn't let in (#90, Q44): once a person has an authenticator, only the emails they
+ * let in open ExpenseWise while their organization has the second factor on; the others still
+ * forward receipts. The API refuses this email's every read, so this says so in plain words,
+ * naming it: that receipts sent from it are still filed, and how to let it in, from the email
+ * that has the code. It offers signing out and nothing else: never the code prompt, and never
+ * adding an authenticator, which only an email let in may do. Like the prompt it is the only
+ * thing on screen (globals.css), Settings › Sign-ins included. It belongs to the screen whose
+ * reads were refused: moving on clears it, and the next screen's refused reads bring it back.
+ * The sign-in screens never show it.
+ */
+export function NotLetInScreen() {
+  const path = usePathname();
+  const router = useRouter();
+  const [refused, setRefused] = useState<{ email: string | null } | null>(null);
+  const [refusedOn, setRefusedOn] = useState(path);
+
+  useEffect(() => {
+    onNotLetIn((email) => setRefused({ email }));
+    return () => onNotLetIn(null);
+  }, []);
+
+  // Another screen: whatever it reads says afresh whether this email is still refused.
+  if (refusedOn !== path) {
+    setRefusedOn(path);
+    setRefused(null);
+  }
+
+  if (!refused || beforeTheCode(path)) return null;
+
+  async function signOut() {
+    await supabase()?.auth.signOut();
+    setRefused(null);
+    router.replace('/sign-in');
+  }
+
+  return (
+    <div
+      data-step-up
+      className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]"
+    >
+      <header className="py-3">
+        <span className="font-mono text-xs tracking-widest text-ink-2 uppercase">ExpenseWise</span>
+      </header>
+      <main className="flex flex-1 flex-col gap-4 pb-8">
+        <h1 className="text-2xl font-bold">This email isn’t let in to sign in</h1>
+        <section
+          aria-labelledby="not-let-in-title"
+          className="flex flex-col gap-3 rounded-xl border border-rule bg-sheet p-5"
+        >
+          <h2 id="not-let-in-title" className="font-semibold break-all">
+            {refused.email ?? 'The email you signed in with'}
+          </h2>
+          <p className="text-sm text-ink-2">
+            An email you sign in with has an authenticator app, and your organization asks for it
+            before anything else, so only the emails you let in open ExpenseWise. This one
+            isn&apos;t let in.
+          </p>
+          <p className="text-sm">Receipts you send from this email are still filed.</p>
+          <p className="text-sm text-ink-2">
+            To let it in, sign in with the email that has your authenticator app and enter its code.
+            In Settings › Sign-ins there, choose Let in beside this email. Then sign in with this
+            one again within {LET_IN_HOURS} hours, add an authenticator app to it, and enter its
+            code.
+          </p>
+          <p className="text-sm text-ink-2">
+            If you never added an authenticator app to another of your emails, someone else may
+            have: tell your organization&apos;s owner.
+          </p>
+          <div>
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              className="rounded-lg bg-carbon px-4 py-2 text-sm font-semibold text-carbon-ink"
+            >
+              Sign out
+            </button>
           </div>
         </section>
       </main>

@@ -57,8 +57,10 @@ import type { WorkspaceStore } from './workspace.ts';
  * everything else (#85): the organization's switches, which the code screen and the check that
  * sends someone to it read. An email held until it adds its own authenticator (#88) uses the
  * same list: Settings › Sign-ins adds one through Supabase Auth in the browser and reads only
- * the switches from us. `GET /v1/me` names who is signed in and nothing of an organization,
- * so it is never held; the health checks and the email webhook carry no person's token.
+ * the switches from us; so does an email that isn't let in (#90), whose screen says so and
+ * offers signing out. `GET /v1/me` names who is signed in and nothing of an organization, so it
+ * is never held; the health checks and the email webhook carry no person's token, so an email
+ * from an address that isn't let in is still filed.
  */
 export const BEFORE_THE_CODE = [listFeaturesRoute] as const;
 
@@ -157,10 +159,12 @@ export const OPENAPI_INFO = {
       'plus an ISO 4217 code. Errors are RFC 9457 problem documents. While an organization ' +
       'has the second factor switched on, every request of a person whose sign-in has a ' +
       'verified authenticator, from a session that has not passed it (aal1), is refused with ' +
-      '403 second_factor_required, except GET /v1/me and GET /v1/features. Of a person ' +
-      'with an authenticator on one of their sign-ins, a session of another that has none of ' +
-      'its own is refused the same way with 403 authenticator_required, naming its email, ' +
-      'until it adds one and passes it.',
+      '403 second_factor_required, except GET /v1/me and GET /v1/features. Once a person has ' +
+      'an authenticator, only a sign-in they let in opens the API: the first of theirs to pass ' +
+      'its code is let in, and a session of another is refused the same way with 403 ' +
+      'sign_in_not_let_in, naming its email, until they let it in from a sign-in let in that ' +
+      'passed its code. One let in with no authenticator of its own is refused with 403 ' +
+      'authenticator_required, naming its email, until it adds one and passes it.',
   },
   servers: [{ url: '/api' }],
 };
@@ -246,11 +250,17 @@ export function createApi(options: ApiOptions) {
   const features: FeatureGate = featureGate(options);
   // Each route resolves its caller through the workspace store, which records them as who the
   // request acts for, so members' records are read and changed as them (ADR-0035). Resolving
-  // them first asks for the code of someone with an authenticator who hasn't passed it, and
-  // holds a person's other email until it adds its own, while their organization has the second
-  // factor on, so every route asks it (#85, #88, ADR-0044).
+  // them first, while their organization has the second factor on, refuses an email of a person
+  // with an authenticator that they haven't let in, holds one let in until it adds its own, and
+  // asks one with an authenticator for its code, so every route asks it; the first of a person's
+  // emails to pass its code is let in there (#85, #88, #90, ADR-0044).
+  const store = options.workspace;
   const workspace =
-    options.workspace && recordingCaller(options.workspace, secondFactorEverywhere(features));
+    store &&
+    recordingCaller(
+      store,
+      secondFactorEverywhere(features, (caller, actor) => store.recordPassedCode(caller, actor)),
+    );
   // What the code screen, and the check in front of it, need before the code: the switch. Who is
   // signed in (GET /v1/me) never resolves an organization, so it needs no mark.
   for (const route of BEFORE_THE_CODE) app.use(route.getRoutingPath(), beforeTheCode(route.method));

@@ -98,6 +98,65 @@ const holdsThisEmail =
         : route.fallback(),
     );
 
+/**
+ * The API refuses this email as not let in, at `pattern` for `method`, as it does once a person
+ * has an authenticator and hasn't let this email in, while the second factor is on (#90).
+ */
+const refusesThisEmail =
+  (pattern: string, method = 'GET'): Step =>
+  (page) =>
+    page.route(pattern, (route) =>
+      route.request().method() === method
+        ? route.fulfill({
+            status: 403,
+            contentType: 'application/problem+json',
+            body: JSON.stringify({
+              type: 'https://expensewise.dev/problems/sign-in-not-let-in',
+              title: 'This email isn’t let in to sign in',
+              status: 403,
+              code: 'sign_in_not_let_in',
+              detail: `${E2E_USER}@example.com isn't let in to sign in.`,
+              email: `${E2E_USER}@example.com`,
+            }),
+          })
+        : route.fallback(),
+    );
+
+/**
+ * The person's sign-ins as the API lists them once they let emails in (#90): this one let in,
+ * past its code, so it may let the others in; one let in waiting for its own authenticator, and
+ * one not let in. Letting one in answers as the API does.
+ */
+const listsEmailsLetIn: Step = async (page) => {
+  const signIn = (id: string, email: string, current: boolean, letIn: string, lapses?: string) => ({
+    id: `0192f7a0-0000-7000-8000-0000000000e${id}`,
+    email,
+    linkedAt: '2026-10-01T09:00:00Z',
+    current,
+    letIn,
+    letInLapsesAt: lapses ?? null,
+  });
+  await page.route('**/api/v1/me/sign-ins', (route) =>
+    route.request().method() === 'GET'
+      ? route.fulfill({
+          json: {
+            signIns: [
+              signIn('1', `${E2E_USER}@example.com`, true, 'yes'),
+              signIn('2', 'riley@work.example', false, 'waiting', '2026-10-06T15:00:00Z'),
+              signIn('3', 'riley.old@example.net', false, 'no'),
+            ],
+            canLetIn: true,
+          },
+        })
+      : route.fallback(),
+  );
+  await page.route('**/api/v1/me/sign-ins/*/let-in', (route) =>
+    route.fulfill({
+      json: signIn('3', 'riley.old@example.net', false, 'waiting', '2026-10-06T15:00:00Z'),
+    }),
+  );
+};
+
 /** Supabase Auth lists no authenticator app for this email, as for one held until it adds one. */
 const noAuthenticatorsOfItsOwn: Step = (page) =>
   page.route(`${E2E_SUPABASE_URL}/auth/v1/user`, (route) =>
@@ -404,6 +463,46 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
     ],
     undefined,
     /status of 403/,
+  ],
+  [
+    'an email that isn’t let in, refused before a read',
+    () => '/settings/organization',
+    [
+      refusesThisEmail('**/api/v1/settings/organization'),
+      (page) => page.reload({ waitUntil: 'networkidle' }),
+      (page) =>
+        expect(
+          page.getByRole('heading', { name: 'This email isn’t let in to sign in', level: 1 }),
+        ).toBeVisible(),
+      (page) =>
+        expect(page.getByRole('heading', { name: `${E2E_USER}@example.com` })).toBeVisible(),
+      (page) =>
+        expect(page.getByText('Receipts you send from this email are still filed.')).toBeVisible(),
+      (page) => expect(page.getByRole('button', { name: 'Sign out' })).toBeVisible(),
+      // Never asked for a code, or offered an authenticator.
+      (page) =>
+        expect(page.getByRole('heading', { name: 'Enter your code to continue' })).toHaveCount(0),
+      (page) => expect(page.getByRole('link', { name: /Settings › Sign-ins/ })).toHaveCount(0),
+    ],
+    undefined,
+    /status of 403/,
+  ],
+  [
+    'letting another email in, in Settings › Sign-ins',
+    () => '/settings/sign-ins',
+    [
+      listsEmailsLetIn,
+      (page) => page.reload({ waitUntil: 'networkidle' }),
+      (page) =>
+        expect(page.getByText(/^Let in until .+, to add its own authenticator app$/)).toBeVisible(),
+      (page) =>
+        expect(page.getByText('Not let in: receipts sent from it are still filed')).toBeVisible(),
+      (page) =>
+        expect(page.getByRole('button', { name: 'Withdraw riley@work.example' })).toBeVisible(),
+      (page) => page.getByRole('button', { name: 'Let in riley.old@example.net' }).click(),
+      (page) =>
+        expect(page.getByText(/^riley\.old@example\.net is let in for 24 hours/)).toBeVisible(),
+    ],
   ],
   ['feature settings', () => '/settings/features', []],
   ['the audit trail, with its chain checked', () => '/settings/audit', []],

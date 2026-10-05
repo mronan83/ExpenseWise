@@ -358,6 +358,20 @@
       "when": 1791167416492,
       "tag": "0050_person_has_authenticator",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1791169962356,
+      "tag": "0051_let_in_sign_ins",
+      "breakpoints": true
+    },
+    {
+      "idx": 52,
+      "version": "7",
+      "when": 1791169977986,
+      "tag": "0052_let_in_rls",
+      "breakpoints": true
     }
   ]
 }

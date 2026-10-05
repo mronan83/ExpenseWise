@@ -18,11 +18,12 @@ export const DOMAINS: readonly Domain[] = [
   {
     name: 'Organizations and people',
     about:
-      'Who is in which organization and what its owner keeps about it, with what role, how they sign in and the links that let someone join, the AI keys and the routing key an organization brings, the AI models it reads receipts with, and the features its owner has switched on.',
+      'Who is in which organization and what its owner keeps about it, with what role, how they sign in and which of their emails they let in, the links that let someone join, the AI keys and the routing key an organization brings, the AI models it reads receipts with, and the features its owner has switched on.',
     tables: [
       'organizations',
       'members',
       'member_sign_ins',
+      'let_in_sign_ins',
       'member_invites',
       'ai_provider_keys',
       'route_service_keys',
@@ -94,7 +95,11 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   member_sign_ins: {
     about:
-      'The sign-ins that reach a member. One person can have several, such as a personal and a work email, and approvals still see one person (ADR-0016).',
+      'The sign-ins that reach a member. One person can have several, such as a personal and a work email, and approvals still see one person (ADR-0016). Every one of them files the receipts emailed from its address, let in or not (#90).',
+  },
+  let_in_sign_ins: {
+    about:
+      'The sign-ins a person has let in (#90, Q44, ADR-0044). While their organization has the second factor on and they have an authenticator, only an email let in opens the app; the others still forward receipts. The first of their emails to pass its code is let in then, having passed it. Another is let in from an email let in that passed its code, and waits, with when it lapses, 24 hours on (`LET_IN_HOURS`), until it adds its own authenticator and passes its code; then it is let in for good, with when it passed. A lapsed one counts for nothing and stays until it is let in again. Withdrawing one deletes it, and removing its sign-in removes it too. Only the person, from a session of an email with its own authenticator that passed the code, changes it (`enforce_let_in`); each change is in the audit trail.',
   },
   member_invites: {
     about:
@@ -275,7 +280,13 @@ export const FUNCTIONS: Readonly<Record<string, string>> = {
   sign_in_has_authenticator:
     'Whether a sign-in, a Supabase Auth user, has a verified second factor such as an authenticator app, read from Supabase Auth’s own `auth.mfa_factors` as it is asked: yes or no, and nothing else of Supabase’s. The API asks it in the query that finds each request’s caller, so the second factor holds every request of someone with one (ADR-0044). Runs as its owner, which can read Supabase’s auth schema, where the app has no right; only the app may call it. No if the id isn’t a UUID, and on plain Postgres, which has no Supabase Auth. Nothing the app writes changes the answer, so removing an authenticator in Supabase takes effect on the next request.',
   person_has_authenticator:
-    'Whether the person a sign-in belongs to has a verified second factor on any email they sign in with: this sign-in, or another linked to the same member. Asked beside `sign_in_has_authenticator` in the query that finds each request’s caller, it tells the API that one of a person’s emails still needs its own, so that email is held until it adds one (#88, ADR-0044). Yes or no, and nothing else: not which email has one, or any email. It reads Supabase Auth only through `sign_in_has_authenticator`, and runs as its owner because, before an organization is chosen, the app sees only its own sign-in; only the app may call it. No for a sign-in no member has, and on plain Postgres. Removing a person’s only authenticator in Supabase frees their other emails on the next request.',
+    'Whether the person a sign-in belongs to has a verified second factor on any email they sign in with: this sign-in, or another linked to the same member. Asked beside `sign_in_has_authenticator` in the query that finds each request’s caller, it tells the API, before any of the person’s emails is let in, that an email of theirs isn’t let in while another has an authenticator (#88, #90, ADR-0044). Yes or no, and nothing else: not which email has one, or any email. It reads Supabase Auth only through `sign_in_has_authenticator`, and runs as its owner because, before an organization is chosen, the app sees only its own sign-in; only the app may call it. No for a sign-in no member has, and on plain Postgres. Removing a person’s only authenticator in Supabase frees their other emails on the next request.',
+  sign_in_let_in:
+    'Whether a sign-in is let in (#90, ADR-0044): `yes`, let in and past its own code; `waiting`, let in from another of the person’s emails until it passes its own code or lapses; `no`, a lapsed one included. Asked in the query that finds each request’s caller, beside the authenticator questions. Nothing else. Runs as its owner because, before an organization is chosen, the app sees no let-in row; only the app may call it.',
+  person_let_in:
+    'The emails the person a sign-in belongs to has let in (#90, ADR-0044): `none`; `without_authenticator`, some, none of which has a verified factor now; `with_authenticator`. With the other three answers it decides how far a session gets: once one let in has an authenticator, an email not let in is refused. Reads Supabase Auth only through `sign_in_has_authenticator`, so removing every authenticator of the emails let in frees all the person’s emails on the next request. Nothing else: not which email, how many, or any email. Runs as its owner, as `person_has_authenticator` does; only the app may call it. `none` for a sign-in no member has.',
+  enforce_let_in:
+    'Fires before every insert, update and delete of `let_in_sign_ins` by the app, and refuses, with an error, a change that isn’t the person’s own, from a session of an email with an authenticator of its own that passed the code (`app.assurance_level` aal2, set by the API from the verified token for that transaction only): the first of their emails lets itself in, past its code, only while none of theirs counts as let in; an email let in that passed its code lets another in, to wait, or withdraws one, never itself; an email waiting marks only itself passed, before it lapses; a lapsed one may be cleared. One change to a person’s emails at a time, by an advisory lock, so two can’t each be the first. The schema owner, as for the runbook’s reset, and the cascade when a sign-in is removed are not held to it (#90).',
   seed_starter_catalog:
     'Gives an organization the ready-made categories and types, and which types each allows, unless it has a category or type already, so running it again adds nothing. Runs as its caller: the release ran it for every organization as the owner, and the app runs it inside `withOrg()` as an organization is created, where row-level security keeps it to that one (ADR-0036).',
   delete_expense_conversion:
@@ -677,9 +688,28 @@ export const RULES: readonly Rule[] = [
   {
     rule: 'The app learns whether a person has a second factor on any of their emails, and none of their other emails.',
     mechanism:
-      'A second owner-run function asks the first of every sign-in of the member a sign-in belongs to and answers yes or no, so an email with none of its own, of a person with one, is held until it adds its own (#88). It adds no right on Supabase’s auth schema, and the app, before an organization is chosen, still sees only its own sign-in (ADR-0044).',
+      'A second owner-run function asks the first of every sign-in of the member a sign-in belongs to and answers yes or no, so, before any of the person’s emails is let in, one without an authenticator of its own is refused while another has one (#88, #90). It adds no right on Supabase’s auth schema, and the app, before an organization is chosen, still sees only its own sign-in (ADR-0044).',
     objects: ['person_has_authenticator', 'own_sign_ins'],
     refs: ['FR-PLT-03', 'FR-PLT-04', 'ADR-0044', 'ADR-0016'],
+  },
+  {
+    rule: 'Only the person, from a session that passed the code, changes which of their emails are let in.',
+    mechanism:
+      'A sign-in is let in once, by a composite key to its sign-in in the same organization, which takes it away when the sign-in goes; it has passed its code or waits until it lapses, one or the other. A trigger refuses any change by the app that isn’t the person’s own, from an email with an authenticator of its own whose session passed the code: the first lets itself in only while none of theirs is, another is let in, or withdrawn, only from an email let in that passed its code, and one waiting marks only itself passed. Each change is audited in the same transaction (#90, ADR-0044).',
+    objects: [
+      'let_in_sign_ins_sign_in_fk',
+      'let_in_sign_ins_sign_in_key',
+      'let_in_sign_ins_passed_or_waiting',
+      'enforce_let_in',
+    ],
+    refs: ['FR-PLT-03', 'FR-PLT-04', 'ADR-0044'],
+  },
+  {
+    rule: 'The app learns whether a sign-in is let in, and none of the person’s other emails.',
+    mechanism:
+      'Two owner-run functions answer, for the token’s own sign-in, whether it is let in and whether the person has let in an email with an authenticator, in the query that finds the caller; before an organization is chosen the app still sees only its own sign-in and no let-in row (#90, ADR-0044).',
+    objects: ['sign_in_let_in', 'person_let_in', 'own_sign_ins'],
+    refs: ['FR-PLT-03', 'FR-PLT-04', 'ADR-0044'],
   },
   {
     rule: 'An email is kept once, and only for a member.',

@@ -1399,7 +1399,7 @@ export const ACCESS_STORIES: readonly Story[] = [
         untested: 66,
       },
     ],
-    note: 'Your answer of Oct 5 (Q41). Which two requests stay open before the code, that linking needs it while the switch is off too, and that the API asks Supabase Auth’s own record rather than keeping one of its own are Claude’s (ADR-0044), yours to confirm. Each email is asked for the code of its own authenticators, as Supabase Auth keeps them; since #88, by your answer to Q43, a person’s other email with none is held until it adds its own (US-ACC-14). No test talks to Supabase itself: the tests stand in for its record of factors, and the prompt carrying a refused read on is owed to #66.',
+    note: 'Your answer of Oct 5 (Q41). Which two requests stay open before the code, that linking needs it while the switch is off too, and that the API asks Supabase Auth’s own record rather than keeping one of its own are Claude’s (ADR-0044), yours to confirm. Each email is asked for the code of its own authenticators, as Supabase Auth keeps them; since #88, by your answer to Q43, a person’s other email with none is held until it adds its own (US-ACC-14), and since #90, by your answer to Q44, only an email they let in signs in (US-ACC-15). No test talks to Supabase itself: the tests stand in for its record of factors, and the prompt carrying a refused read on is owed to #66.',
   },
   {
     id: 'US-TEAM-06',
@@ -1525,7 +1525,7 @@ export const ACCESS_STORIES: readonly Story[] = [
     id: 'US-ACC-14',
     title: 'Each email I sign in with needs its own authenticator',
     as: 'Alex, who signs in with a personal and a work email',
-    want: 'my other email to open nothing until it has an authenticator app of its own, once one of my emails has one and my organization has the second factor on, and the app to tell me which email needs one',
+    want: 'another email of mine that I let in to open nothing until it has an authenticator app of its own, once one of my emails has one and my organization has the second factor on, and the app to tell me which email needs one',
     soThat:
       'a stolen password for the email I protect less can’t open my receipts, or everyone’s if I am an owner or finance admin',
     feature: 'F-11',
@@ -1535,7 +1535,7 @@ export const ACCESS_STORIES: readonly Story[] = [
       {
         id: 'AC1',
         given:
-          'one email I sign in with has an authenticator app, another has none of its own, and my organization has the second factor switched on',
+          'one email I sign in with has an authenticator app, another I let in from it has none of its own yet, and my organization has the second factor switched on',
         when: 'a session of the email with none asks for anything, a read or a change, from the app or straight with its token',
         then: 'it is refused as needing that email’s own authenticator, naming the email, before anything is read or changed',
         decided: { by: 'owner', source: 'Q43' },
@@ -1572,11 +1572,12 @@ export const ACCESS_STORIES: readonly Story[] = [
         id: 'AC4',
         given: 'that email is held',
         when: 'it adds its own authenticator and enters its code',
-        then: 'everything answers it; from then on it is asked for its own code before anything else, like the email that had one, which is still asked for its own',
+        then: 'everything answers it, and it stays let in (US-ACC-15); from then on it is asked for its own code before anything else, like the email that had one, which is still asked for its own',
         decided: { by: 'owner', source: 'Q43' },
         checks: [
           'api/second-factor-everywhere.int › holds the email with no authenticator of its own until it adds one and passes it, while it is on',
           'api/second-factor-everywhere › asks the email with the authenticator for its code, not for another, and lets it through once passed',
+          'api/second-factor-everywhere › keeps an email let in from another let in once it passes its own code',
         ],
       },
       {
@@ -1608,9 +1609,9 @@ export const ACCESS_STORIES: readonly Story[] = [
       },
       {
         id: 'AC8',
-        given: 'one email of mine has an authenticator and another is held',
+        given: 'one email of mine has an authenticator and another, let in, is held',
         when: 'my only authenticator is removed, by me or by the owner in Supabase for a lost phone, or the held email is unlinked',
-        then: 'my other emails open on their passwords again at once: nothing of ExpenseWise’s needs clearing, and a held email can always add its own with its password alone, so no one is locked out',
+        then: 'my other emails open on their passwords again at once, those not let in too: nothing of ExpenseWise’s needs clearing, and a held email can always add its own with its password alone, so no one is locked out',
         decided: { by: 'claude', source: 'ADR-0044' },
         checks: [
           'api/second-factor-everywhere.int › frees the other emails at once when the person’s only authenticator is removed',
@@ -1643,6 +1644,206 @@ export const ACCESS_STORIES: readonly Story[] = [
         ],
       },
     ],
-    note: 'Your answer of Oct 5 (Q43). That a held email’s session is held whatever it says it passed, that it may read only what the code screen may, what Settings › Sign-ins shows it, and that the API asks one function over the person’s sign-ins are Claude’s (ADR-0044), yours to confirm. Supabase Auth lets an email with no authenticator add one on its password alone, so whoever has that password can add their own and get past the hold: GAP-36, asked as Q44. No test talks to Supabase itself: the tests stand in for its record of factors, and the screens stand in for the API’s refusal; the page opening once a held email’s code is in is owed to #66.',
+    note: 'Your answer of Oct 5 (Q43). That a held email’s session is held whatever it says it passed, that it may read only what the code screen may, what Settings › Sign-ins shows it, and that the API asks one function over the person’s sign-ins are Claude’s (ADR-0044), yours to confirm. Supabase Auth lets an email with no authenticator add one on its password alone, so whoever had that password could add their own and get past the hold (GAP-36); by your answer to Q44 an email is held this way only once I let it in from one that passed its code, and any other is refused as not let in (#90, US-ACC-15). No test talks to Supabase itself: the tests stand in for its record of factors, and the screens stand in for the API’s refusal; the page opening once a held email’s code is in is owed to #66.',
+  },
+  {
+    id: 'US-ACC-15',
+    title: 'Only the emails I let in sign in, once I have an authenticator',
+    as: 'Alex, who signs in with a personal and a work email',
+    want: 'once I have an authenticator app and my organization has the second factor on, only the emails I let in to open ExpenseWise, the first being the one I pass my code on, and to let another in from an email that has passed its code, after which it adds its own authenticator',
+    soThat:
+      'a stolen password for another of my emails can’t open my receipts, or everyone’s if I am an owner or finance admin, even by adding an authenticator app of its own, while the receipts I forward from it are still filed',
+    feature: 'F-11',
+    requirements: ['FR-PLT-03', 'FR-PLT-04'],
+    status: 'Partial',
+    criteria: [
+      {
+        id: 'AC1',
+        given:
+          'I have an authenticator app, none of my emails is let in yet, and my organization has the second factor switched on',
+        when: 'an email of mine with an authenticator of its own passes its code',
+        then: 'it is let in, the first, recorded in the audit trail; until then a session of it that hasn’t passed the code is asked for it, as before (US-ACC-13)',
+        decided: { by: 'owner', source: 'Q44' },
+        checks: [
+          'domain/second-factor › lets in the first of a person’s emails to pass its own code, while none is let in',
+          'api/second-factor-everywhere › lets in the first of a person’s emails to pass its own code while none is let in, then lets it through',
+          'db/authenticators.int › lets in the first of a person’s emails to pass its code, once, with its audit event',
+          'api/second-factor-everywhere.int › lets in only the first of a person’s emails to pass its code',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'I have an authenticator app, and my organization has the second factor switched on',
+        when: 'a session of an email of mine that isn’t let in asks for anything, a read or a change, from the app or straight with its token, whatever its session says, even once that email has added an authenticator app of its own',
+        then: 'it is refused as not let in, naming the email, before anything is read or changed: its own authenticator counts for nothing',
+        decided: { by: 'owner', source: 'Q44' },
+        checks: [
+          'domain/second-factor › refuses an email not let in, whatever its session says, once the person has an authenticator that counts',
+          'api/second-factor-everywhere › refuses every request of an email not let in, while it is on, whatever its session says, its own authenticator included, and reaches nothing',
+          'api/second-factor-everywhere.int › refuses an email not let in, whatever its session says, its own authenticator included, until it is let in from one that passed its code',
+        ],
+      },
+      {
+        id: 'AC3',
+        given: 'an email of mine that isn’t let in',
+        when: 'I email a receipt from it to ExpenseWise',
+        then: 'it is filed, as from any of my emails',
+        decided: { by: 'owner', source: 'Q44' },
+        checks: [
+          'db/authenticators.int › files email from an address not let in, as from any of the person’s',
+          'api/second-factor-everywhere › carries no one’s token on the email webhook, so email from any address is still filed',
+        ],
+      },
+      {
+        id: 'AC4',
+        given: 'an email of mine that isn’t let in',
+        when: 'it asks who is signed in, or which features my organization has switched on',
+        then: 'those are answered, for the screen that says it isn’t let in; nothing else is, it is never asked for a code by the API, and it is never offered an authenticator',
+        decided: { by: 'claude', source: 'ADR-0044' },
+        checks: [
+          'api/second-factor-everywhere › still answers who is signed in, and the organization’s switches, which the screen that says it isn’t let in reads',
+          'api/second-factor-everywhere › names the email that isn’t let in, says its receipts are still filed, and never asks it for a code or an authenticator',
+        ],
+      },
+      {
+        id: 'AC5',
+        given: 'a screen whose reads were refused because this email isn’t let in',
+        when: 'it hears so',
+        then: 'the app says in plain words, on a screen of its own, that this email, named, isn’t let in to sign in, that receipts sent from it are still filed, and how to let it in from the email that has the code, with Sign out; it never asks for a code or offers an authenticator',
+        decided: { by: 'claude', source: 'ADR-0044' },
+        checks: ['e2e/signed-in › an email that isn’t let in, refused before a read'],
+      },
+      {
+        id: 'AC6',
+        given:
+          'an email of mine let in, with its authenticator, whose session passed the code, and the second factor switched on',
+        when: 'I open Settings › Sign-ins and let another of my emails in',
+        then: 'it is let in, to add its own authenticator app and enter its code, recorded in the audit trail; the page says which of my emails are let in, which waits and until when, and which aren’t, and that those still forward receipts',
+        decided: { by: 'owner', source: 'Q44' },
+        checks: [
+          'api/workspace › says which emails are let in, and that this session may let another in, while the second factor is on',
+          'api/workspace › lets another email in from one let in that passed its code, to wait for its own, and withdraws it, each once',
+          'db/authenticators.int › lets another email in from one let in that passed its code, to wait 24 hours for its own, and keeps it let in once it passes it',
+          'e2e/signed-in › letting another email in, in Settings › Sign-ins',
+        ],
+      },
+      {
+        id: 'AC7',
+        given: 'an email I let in',
+        when: 'it adds its own authenticator and enters its code',
+        then: 'it signs in, and stays let in until I withdraw it; until then it is held as needing its own authenticator (US-ACC-14)',
+        decided: { by: 'owner', source: 'Q44' },
+        checks: [
+          'api/second-factor-everywhere › keeps an email let in from another let in once it passes its own code',
+          'db/authenticators.int › lets another email in from one let in that passed its code, to wait 24 hours for its own, and keeps it let in once it passes it',
+          'api/second-factor-everywhere.int › refuses an email not let in, whatever its session says, its own authenticator included, until it is let in from one that passed its code',
+        ],
+      },
+      {
+        id: 'AC8',
+        given: 'an email I let in that hasn’t passed its own code',
+        when: '24 hours pass',
+        then: 'letting it in lapses: it is refused as not let in again, until I let it in again',
+        decided: { by: 'claude', source: 'ADR-0044' },
+        checks: [
+          'db/authenticators.int › lets letting in lapse after 24 hours unless it passes its own code, and lets it in again',
+          'domain/second-factor › gives an email let in from another 24 hours to pass its own code',
+        ],
+        rules: ['R-LET-IN-HOURS'],
+      },
+      {
+        id: 'AC9',
+        given: 'an email of mine let in',
+        when: 'I withdraw it in Settings › Sign-ins, from an email let in whose session passed the code',
+        then: 'it is refused as not let in again, still forwarding receipts, recorded in the audit trail; an email never withdraws itself',
+        decided: { by: 'claude', source: 'ADR-0044' },
+        checks: [
+          'api/workspace › lets another email in from one let in that passed its code, to wait for its own, and withdraws it, each once',
+          'db/authenticators.int › withdraws an email let in, from one let in that passed its code, and never itself',
+          'api/second-factor-everywhere.int › refuses an email not let in, whatever its session says, its own authenticator included, until it is let in from one that passed its code',
+        ],
+      },
+      {
+        id: 'AC10',
+        given:
+          'a session that hasn’t passed the code, or an email that isn’t let in or has no authenticator of its own',
+        when: 'it tries to let one of my emails in, or withdraw one, through the app, the API or ExpenseWise’s database role',
+        then: 'it is refused and nothing changes',
+        decided: { by: 'owner', source: 'Q44' },
+        checks: [
+          'domain/second-factor › lets only an email let in, with its own authenticator, past its code, let another in or withdraw one',
+          'api/workspace › never lets an email in, or withdraws one, from a session that skipped the code, or an email without an authenticator',
+          'db/authenticators.int › never lets a session that skipped the code change who is let in, in the database too',
+          'db/authenticators.int › keeps every change to the person themselves, from an email let in with its own authenticator, in the database too',
+        ],
+      },
+      {
+        id: 'AC11',
+        given:
+          'every email I let in has lost its authenticator, removed by me or by the owner in Supabase for a lost phone',
+        when: 'I next use any of my emails',
+        then: 'nothing more is asked of any of them until one I let in adds an authenticator again, so no one is locked out; an email not let in can’t become the first meanwhile',
+        decided: { by: 'claude', source: 'ADR-0044' },
+        checks: [
+          'domain/second-factor › asks nothing more of anyone once every email let in has lost its authenticator, and never lets another in first then',
+          'api/second-factor-everywhere.int › frees the other emails at once when the person’s only authenticator is removed',
+        ],
+      },
+      {
+        id: 'AC12',
+        given:
+          'I can’t reach the email I let in, or an email of mine was let in first by someone else (GAP-37)',
+        when: 'the owner removes that email’s authenticator in Supabase and resets who is let in, as the runbook says',
+        then: 'none of my emails is let in, and the next of them to pass its code is the first',
+        decided: { by: 'claude', source: 'ADR-0044' },
+        checks: [
+          'db/authenticators.int › lets the schema owner reset who is let in, as the runbook does, and the next to pass its code is the first again',
+        ],
+      },
+      {
+        id: 'AC13',
+        given:
+          'my organization has the second factor switched off, or the server’s override has it off',
+        when: 'I use any of my emails',
+        then: 'nothing changes: none is refused as not let in, none is let in, Settings › Sign-ins is as before, and letting one in answers as if it weren’t there (feature_off)',
+        decided: { by: 'owner', source: 'Q5' },
+        checks: [
+          'api/second-factor-everywhere › changes nothing for an email not let in while the second factor is switched off',
+          'api/second-factor-everywhere › changes nothing for an email not let in while the server’s override has it off, whatever the switch says',
+          'api/workspace › leaves sign-ins as they were while the second factor is off, and answers feature_off',
+          'api/second-factor-everywhere.int › leaves who is let in alone while the second factor is off, and answers feature_off',
+        ],
+      },
+      {
+        id: 'AC14',
+        given: 'an email of mine let in',
+        when: 'I unlink it',
+        then: 'letting it in goes with it',
+        decided: { by: 'claude', source: 'ADR-0044' },
+        checks: [
+          'db/authenticators.int › takes letting in away with the sign-in, when it is unlinked',
+        ],
+      },
+      {
+        id: 'AC15',
+        given: 'what says which of my emails are let in',
+        when: 'ExpenseWise’s database role asks, before an organization is chosen',
+        then: 'it is told only whether this email is let in and whether I have let in one with an authenticator, and sees none of my other emails',
+        decided: { by: 'claude', source: 'ADR-0044' },
+        checks: [
+          'db/authenticators.int › tells the app where a sign-in stands and nothing of the person’s other emails',
+        ],
+      },
+      {
+        id: 'AC16',
+        given: 'an email of mine that isn’t let in but has an authenticator app of its own',
+        when: 'I sign in with it',
+        then: 'the app asks for its code first, as Supabase Auth offers it, then says it isn’t let in; its code lets it in to nothing',
+        decided: { by: 'claude', source: 'ADR-0044' },
+        checks: [],
+        untested: 66,
+      },
+    ],
+    note: 'Your answer of Oct 5 (Q44), B with the choice to add an authenticator to another email. That the first to pass its code is let in automatically is in #90 as you approved it; that letting an email in lapses after 24 hours unless it passes its own code, that it can be withdrawn, what the refused email may still read and how its screen reads, that no one is asked anything once every email let in has lost its authenticator, and the owner’s reset are Claude’s (ADR-0044), yours to confirm. Before any of my emails is let in, whoever has another’s password could add an authenticator to it and be let in first: GAP-37, asked as Q45. No test talks to Supabase itself: the tests stand in for its record of factors, and the screens stand in for the API’s refusals; the code asked of an email that isn’t let in, before its screen, is owed to #66.',
   },
 ];

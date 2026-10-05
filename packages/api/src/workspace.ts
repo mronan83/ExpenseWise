@@ -5,6 +5,7 @@ import {
   ensureOwnerOrganization,
   findSignedInMember,
   getProviderKey,
+  letSignInIn,
   linkSignIn,
   listOrgFeatures,
   listProviderKeys,
@@ -12,20 +13,27 @@ import {
   markProviderKeyVerified,
   orgFeatureOn,
   organizations,
+  recordPassedCode,
   saveProviderKey,
   setOrgFeature,
-  signInAuthenticators,
+  signInStanding,
   unlinkSignIn,
+  withdrawSignIn,
   withOrg,
   type AiProvider,
   type Database,
+  type LetInActor,
+  type LetInResult,
   type LinkResult,
   type Membership,
   type OrgFeature,
+  type PassedCode,
   type SignIn,
   type ProviderKeyWrite,
   type StoredProviderKey,
+  type WithdrawResult,
 } from '@expensewise/db';
+import type { LetIn, PersonLetIn } from '@expensewise/domain';
 
 export interface OrganizationView {
   readonly id: string;
@@ -46,6 +54,10 @@ export interface CallerMembership extends Membership {
    * it adds its own. Left out: none.
    */
   readonly personAuthenticator?: boolean;
+  /** Whether this sign-in is let in (#90, Q44). Left out: not. */
+  readonly letIn?: LetIn;
+  /** The emails the person has let in, and whether one has an authenticator. Left out: none. */
+  readonly personLetIn?: PersonLetIn;
 }
 
 /**
@@ -74,6 +86,15 @@ export interface WorkspaceStore {
     signInId: string,
     actorUserId: string,
   ): Promise<'removed' | 'not_found' | 'last'>;
+  /**
+   * Records that the caller's email passed its code (#90): the first of the person's emails to
+   * is let in, and one waiting stays let in, each audited.
+   */
+  recordPassedCode(member: Membership, actor: LetInActor): Promise<PassedCode>;
+  /** Lets another of the member's emails in, from the actor's, audited (#90). */
+  letSignInIn(member: Membership, signInId: string, actor: LetInActor): Promise<LetInResult>;
+  /** Withdraws letting one of the member's other emails in, audited (#90). */
+  withdrawSignIn(member: Membership, signInId: string, actor: LetInActor): Promise<WithdrawResult>;
   /** The features this organization has switched; the rest are off. */
   listFeatures(orgId: string): Promise<OrgFeature[]>;
   featureOn(orgId: string, flag: string): Promise<boolean>;
@@ -99,7 +120,7 @@ export function dbWorkspaceStore(db: Database): WorkspaceStore {
     async ensureOrganization(owner) {
       await safe();
       const { membership, created } = await ensureOwnerOrganization(db, owner);
-      const { organization, authenticators } = await withOrg(db, membership.orgId, async (tx) => ({
+      const { organization, standing } = await withOrg(db, membership.orgId, async (tx) => ({
         organization: (
           await tx
             .select({
@@ -109,10 +130,11 @@ export function dbWorkspaceStore(db: Database): WorkspaceStore {
             })
             .from(organizations)
         )[0],
-        authenticators: await signInAuthenticators(tx, owner.userId),
+        // Where the sign-in stands for the second factor, as finding the caller reads it.
+        standing: await signInStanding(tx, owner.userId),
       }));
       if (!organization) throw new Error('The organization is not visible to its member');
-      return { membership: { ...membership, ...authenticators }, organization, created };
+      return { membership: { ...membership, ...standing }, organization, created };
     },
     async findMembership(userId) {
       await safe();
@@ -178,6 +200,18 @@ export function dbWorkspaceStore(db: Database): WorkspaceStore {
     async unlinkSignIn(member, signInId, actorUserId) {
       await safe();
       return unlinkSignIn(db, member, signInId, actorUserId);
+    },
+    async recordPassedCode(member, actor) {
+      await safe();
+      return recordPassedCode(db, member, actor);
+    },
+    async letSignInIn(member, signInId, actor) {
+      await safe();
+      return letSignInIn(db, member, signInId, actor);
+    },
+    async withdrawSignIn(member, signInId, actor) {
+      await safe();
+      return withdrawSignIn(db, member, signInId, actor);
     },
     async listFeatures(orgId) {
       await safe();

@@ -142,10 +142,39 @@ export const SignInSchema = z
     current: z
       .boolean()
       .openapi({ description: 'Whether this is the sign-in making the request.' }),
+    letIn: z
+      .enum(['yes', 'waiting', 'no'])
+      .optional()
+      .openapi({
+        description:
+          'While the organization has the second factor switched on (#90): whether this sign-in ' +
+          'is let in. Once the person has an authenticator, only a sign-in let in opens the ' +
+          'app; the others still forward receipts. waiting: let in from another of theirs, ' +
+          'until it adds its own authenticator and passes its code, or lapses at letInLapsesAt.',
+      }),
+    letInLapsesAt: z
+      .string()
+      .datetime()
+      .nullable()
+      .optional()
+      .openapi({ description: 'When letting it in lapses, while it waits; null otherwise.' }),
   })
   .openapi('SignIn');
 
-export const SignInListSchema = z.object({ signIns: z.array(SignInSchema) }).openapi('SignInList');
+export const SignInListSchema = z
+  .object({
+    signIns: z.array(SignInSchema),
+    canLetIn: z
+      .boolean()
+      .optional()
+      .openapi({
+        description:
+          'While the organization has the second factor switched on (#90): whether this session ' +
+          'may let another of the person’s sign-ins in, or withdraw one: its own is let in, has ' +
+          'an authenticator and passed its code.',
+      }),
+  })
+  .openapi('SignInList');
 
 export const LinkSignInSchema = z
   .object({
