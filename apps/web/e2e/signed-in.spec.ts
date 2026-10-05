@@ -75,6 +75,46 @@ const asksForTheCodeToRead =
     );
 
 /**
+ * The API holds this email until it adds its own authenticator, at `pattern` for `method`, as
+ * it does for a person with one on another email while the second factor is on (#88).
+ */
+const holdsThisEmail =
+  (pattern: string, method = 'GET'): Step =>
+  (page) =>
+    page.route(pattern, (route) =>
+      route.request().method() === method
+        ? route.fulfill({
+            status: 403,
+            contentType: 'application/problem+json',
+            body: JSON.stringify({
+              type: 'https://expensewise.dev/problems/authenticator-required',
+              title: 'This email needs its own authenticator',
+              status: 403,
+              code: 'authenticator_required',
+              detail: `${E2E_USER}@example.com has no authenticator app of its own, and another email you sign in with has one.`,
+              email: `${E2E_USER}@example.com`,
+            }),
+          })
+        : route.fallback(),
+    );
+
+/** Supabase Auth lists no authenticator app for this email, as for one held until it adds one. */
+const noAuthenticatorsOfItsOwn: Step = (page) =>
+  page.route(`${E2E_SUPABASE_URL}/auth/v1/user`, (route) =>
+    route.fulfill({
+      json: {
+        id: E2E_USER,
+        aud: 'authenticated',
+        email: `${E2E_USER}@example.com`,
+        app_metadata: {},
+        user_metadata: {},
+        created_at: '2026-10-01T00:00:00Z',
+        factors: [],
+      },
+    }),
+  );
+
+/**
  * Each screen and state: what it shows, where it is, what a person does to get there, where
  * the day decides what shows, the day it is on the person's clock, and the one console error
  * the state means to cause, such as the browser logging a refusal the screen then handles.
@@ -322,6 +362,45 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
         expect(page.getByRole('heading', { name: 'Enter your code to continue' })).toBeVisible(),
       (page) => expect(page.getByText(/asks for it before anything else/)).toBeVisible(),
       (page) => expect(page.getByLabel('Which authenticator app')).toBeVisible(),
+    ],
+    undefined,
+    /status of 403/,
+  ],
+  [
+    'an email that needs its own authenticator, held before a read',
+    () => '/settings/organization',
+    [
+      holdsThisEmail('**/api/v1/settings/organization'),
+      (page) => page.reload({ waitUntil: 'networkidle' }),
+      (page) =>
+        expect(
+          page.getByRole('heading', { name: 'This email needs its own authenticator', level: 1 }),
+        ).toBeVisible(),
+      (page) =>
+        expect(page.getByRole('heading', { name: `${E2E_USER}@example.com` })).toBeVisible(),
+      (page) =>
+        expect(page.getByRole('link', { name: 'Add one in Settings › Sign-ins' })).toBeVisible(),
+      // There is no code to enter yet, so it is never asked for one.
+      (page) =>
+        expect(page.getByRole('heading', { name: 'Enter your code to continue' })).toHaveCount(0),
+    ],
+    undefined,
+    /status of 403/,
+  ],
+  [
+    'an email that needs its own authenticator, adding one in Settings › Sign-ins',
+    () => '/settings/sign-ins',
+    [
+      holdsThisEmail('**/api/v1/me/organization', 'POST'),
+      noAuthenticatorsOfItsOwn,
+      (page) => page.reload({ waitUntil: 'networkidle' }),
+      (page) =>
+        expect(
+          page.getByRole('heading', { name: 'This email needs its own authenticator', level: 2 }),
+        ).toBeVisible(),
+      (page) => expect(page.getByRole('heading', { name: 'Your sign-ins' })).toHaveCount(0),
+      press('Add an authenticator app'),
+      (page) => expect(page.getByRole('img', { name: /^QR code/ })).toBeVisible(),
     ],
     undefined,
     /status of 403/,

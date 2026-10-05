@@ -1,18 +1,23 @@
 import { randomUUID } from 'node:crypto';
 import { newId } from '@expensewise/domain';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { withOrg } from '../src/client.ts';
-import { findSignedInMember, signInHasAuthenticator } from '../src/members.ts';
+import { withOrg, withUser } from '../src/client.ts';
+import {
+  findSignedInMember,
+  signInAuthenticators,
+  signInHasAuthenticator,
+} from '../src/members.ts';
 import { members, memberSignIns, organizations } from '../src/schema.ts';
 import { connectAs, expectDbError } from './helpers.ts';
 
 /*
  * How the API learns whether a sign-in has a second factor (#85, ADR-0044): from Supabase
- * Auth's own record of factors, through one function the app may call and nothing else. These
- * tests run on plain Postgres, which has no Supabase Auth; the second half stands in for it
- * with the columns of auth.mfa_factors the function reads, as Supabase lays them out, in this
- * test's database only.
+ * Auth's own record of factors, through one function the app may call and nothing else; and
+ * whether the person it belongs to has one on any email they sign in with, so another of their
+ * emails with none is held until it adds its own (#88, Q43). These tests run on plain Postgres,
+ * which has no Supabase Auth; the second half stands in for it with the columns of
+ * auth.mfa_factors the function reads, as Supabase lays them out, in this test's database only.
  */
 
 const owner = connectAs('owner');
@@ -24,6 +29,9 @@ afterAll(async () => {
 
 /** What the app is told about a sign-in, as expensewise_app. */
 const asks = (userId: string) => app.db.transaction((tx) => signInHasAuthenticator(tx, userId));
+/** What the app is told about a sign-in and the person it belongs to, as expensewise_app. */
+const asksOfPerson = (userId: string) =>
+  app.db.transaction((tx) => signInAuthenticators(tx, userId));
 
 /** An organization whose owner signs in as a Supabase Auth user, by its UUID. */
 async function seedSignedIn(name: string) {
@@ -47,6 +55,20 @@ async function seedSignedIn(name: string) {
   return { orgId, memberId, userId };
 }
 
+/** Another email the same person signs in with, linked to their member (ADR-0016). */
+async function linkAnother(person: { orgId: string; memberId: string }, name: string) {
+  const userId = randomUUID();
+  await withOrg(owner.db, person.orgId, (tx) =>
+    tx.insert(memberSignIns).values({
+      orgId: person.orgId,
+      memberId: person.memberId,
+      userId,
+      email: `${name}@example.com`,
+    }),
+  );
+  return userId;
+}
+
 describe('on plain Postgres, with no Supabase Auth', () => {
   it('knows no authenticator, as no one could have added one', async () => {
     const { rows } = await owner.db.execute<{ found: string | null }>(
@@ -60,7 +82,18 @@ describe('on plain Postgres, with no Supabase Auth', () => {
       memberId: acme.memberId,
       role: 'owner',
       authenticator: false,
+      personAuthenticator: false,
     });
+  });
+
+  it('knows no person with an authenticator either, however many emails they sign in with', async () => {
+    const acme = await seedSignedIn('acme-plain-person');
+    const other = await linkAnother(acme, 'acme-plain-other');
+    expect(await asksOfPerson(acme.userId)).toEqual({
+      authenticator: false,
+      personAuthenticator: false,
+    });
+    expect(await asksOfPerson(other)).toEqual({ authenticator: false, personAuthenticator: false });
   });
 });
 
@@ -159,5 +192,95 @@ describe('with Supabase Auth’s record of factors', () => {
       { role: 'expensewise_relay', can: false },
       { role: 'service_role', can: false },
     ]);
+  });
+
+  it('knows a person has an authenticator from a verified factor on any email they sign in with, and only theirs', async () => {
+    const acme = await seedSignedIn('acme-person');
+    const work = await linkAnother(acme, 'acme-person-work');
+    const someoneElse = await seedSignedIn('acme-someone-else');
+    expect(await asksOfPerson(work)).toEqual({ authenticator: false, personAuthenticator: false });
+
+    // Half-added on the person's first email: not yet.
+    await addFactor(acme.userId, 'unverified');
+    expect(await asksOfPerson(work)).toEqual({ authenticator: false, personAuthenticator: false });
+
+    await addFactor(acme.userId, 'verified');
+    // The email with it, and the other with none: the one held until it adds its own (#88).
+    expect(await asksOfPerson(acme.userId)).toEqual({
+      authenticator: true,
+      personAuthenticator: true,
+    });
+    expect(await asksOfPerson(work)).toEqual({ authenticator: false, personAuthenticator: true });
+    expect(await findSignedInMember(app.db, work)).toEqual({
+      orgId: acme.orgId,
+      memberId: acme.memberId,
+      role: 'owner',
+      authenticator: false,
+      personAuthenticator: true,
+    });
+    // Someone else's is never theirs, nor theirs someone else's.
+    expect(await asksOfPerson(someoneElse.userId)).toEqual({
+      authenticator: false,
+      personAuthenticator: false,
+    });
+
+    // The other email adds its own: it has one too.
+    await addFactor(work, 'verified');
+    expect(await asksOfPerson(work)).toEqual({ authenticator: true, personAuthenticator: true });
+  });
+
+  it('frees a person’s other emails on the next question once their only authenticator is removed, or the email is unlinked', async () => {
+    const acme = await seedSignedIn('acme-person-removed');
+    const work = await linkAnother(acme, 'acme-person-removed-work');
+    const phone = await addFactor(acme.userId, 'verified');
+    expect(await findSignedInMember(app.db, work)).toMatchObject({ personAuthenticator: true });
+
+    // As when its person removes it, or the owner does for someone who lost their phone.
+    await removeFactor(phone);
+    expect(await findSignedInMember(app.db, work)).toMatchObject({
+      authenticator: false,
+      personAuthenticator: false,
+    });
+
+    // Unlinked, an email is no longer theirs, and knows nothing of their authenticator.
+    await addFactor(acme.userId, 'verified');
+    expect(await asksOfPerson(work)).toEqual({ authenticator: false, personAuthenticator: true });
+    await withOrg(owner.db, acme.orgId, (tx) =>
+      tx.delete(memberSignIns).where(eq(memberSignIns.userId, work)),
+    );
+    expect(await asksOfPerson(work)).toEqual({ authenticator: false, personAuthenticator: false });
+  });
+
+  it('gives the app one answer about the person and no sight of their other emails', async () => {
+    const acme = await seedSignedIn('acme-person-private');
+    const work = await linkAnother(acme, 'acme-person-private-work');
+    await addFactor(acme.userId, 'verified');
+    // Before an organization is chosen the app sees only the token's own sign-in, so the
+    // person's other emails are read by the owner-run function, which answers yes or no.
+    const seen = await withUser(app.db, work, (tx) =>
+      tx.select({ email: memberSignIns.email }).from(memberSignIns),
+    );
+    expect(seen).toEqual([{ email: 'acme-person-private-work@example.com' }]);
+    expect(await asksOfPerson(work)).toEqual({ authenticator: false, personAuthenticator: true });
+    const { rows } = await owner.db.execute<{ role: string; can: boolean }>(sql`
+      select r.role, has_function_privilege(r.role, 'person_has_authenticator(text)', 'EXECUTE') as can
+        from unnest(array['expensewise_app', 'expensewise_relay', 'anon', 'authenticated', 'service_role']) as r(role)
+       order by r.role`);
+    expect(rows).toEqual([
+      { role: 'anon', can: false },
+      { role: 'authenticated', can: false },
+      { role: 'expensewise_app', can: true },
+      { role: 'expensewise_relay', can: false },
+      { role: 'service_role', can: false },
+    ]);
+    // A sign-in no member has, or one that isn't a Supabase Auth user, has no person here.
+    expect(await asksOfPerson(randomUUID())).toEqual({
+      authenticator: false,
+      personAuthenticator: false,
+    });
+    expect(await asksOfPerson(`user_${newId()}`)).toEqual({
+      authenticator: false,
+      personAuthenticator: false,
+    });
   });
 });

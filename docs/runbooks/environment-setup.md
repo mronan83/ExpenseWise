@@ -106,15 +106,15 @@ To switch it on for your organization ([ADR-0042](../adr/0042-second-factor.md))
 2. **Add a second one** the same way, on another phone or in a password manager that keeps codes, so losing one phone doesn't lock you out.
 3. **Settings → Features → Second factor → On.** It is refused unless this session has passed your code, so you can't lock yourself out.
 
-From then on, everyone who adds an authenticator is asked for its code when they sign in, and every owner's and finance admin's change to settings, people and keys needs it. Someone without one is told to add one in Settings → Sign-ins first. A session of someone with an authenticator that hasn't passed the code gets nothing from the API but who they are and the organization's switches, whether it comes from the app or straight from a token ([ADR-0044](../adr/0044-second-factor-everywhere.md)); linking another email needs the code from anyone with an authenticator, even while the switch is off.
+From then on, everyone who adds an authenticator is asked for its code when they sign in, and every owner's and finance admin's change to settings, people and keys needs it. Someone without one is told to add one in Settings → Sign-ins first. A session of someone with an authenticator that hasn't passed the code gets nothing from the API but who they are and the organization's switches, whether it comes from the app or straight from a token ([ADR-0044](../adr/0044-second-factor-everywhere.md)); linking another email needs the code from anyone with an authenticator, even while the switch is off. Someone who signs in with several emails needs an authenticator on each: once one of their emails has one, another with none gets nothing but the same two answers, and the app tells them that email needs its own and sends them to Settings → Sign-ins to add it, which works with that email's password alone.
 
 The API reads who has an authenticator from Supabase Auth's own record, through the database function `sign_in_has_authenticator`, which the release creates as the schema owner. Once you have added your first authenticator, check it in the **SQL Editor** with your user UID from **Authentication → Users**:
 
 ```sql
-select sign_in_has_authenticator('<your user UID>');
+select sign_in_has_authenticator('<your user UID>'), person_has_authenticator('<your user UID>');
 ```
 
-It answers `true`. If the release ever stops at migration 0048 with `permission denied` for `auth.mfa_factors`, the schema owner can't read Supabase Auth's factors, and nothing was changed; the migration checks this so that it is found there and not on every request.
+Both answer `true`. The second, created the same way, says whether any email the person signs in with has one; it is what holds their other emails. If the release ever stops at migration 0048 with `permission denied` for `auth.mfa_factors`, the schema owner can't read Supabase Auth's factors, and nothing was changed; the migration checks this so that it is found there and not on every request.
 
 #### If someone loses their authenticator
 
@@ -124,6 +124,15 @@ It answers `true`. If the release ever stops at migration 0048 with `permission 
    delete from auth.mfa_factors where user_id = '<their user UID>' and factor_type = 'totp';
    ```
    They then sign in with their password alone and add a new authenticator. The same works for the owner: the Supabase dashboard is reached with your Supabase account, which the app's second factor doesn't touch. The API reads Supabase's record as each request arrives, so nothing of ours needs clearing: their next request is let through.
+
+   If they sign in with several emails, each is its own user in **Authentication → Users**. Find them all from any one of their user UIDs:
+   ```sql
+   select theirs.email, theirs.user_id, sign_in_has_authenticator(theirs.user_id) as has_one
+     from member_sign_ins this
+     join member_sign_ins theirs on theirs.org_id = this.org_id and theirs.member_id = this.member_id
+    where this.user_id = '<their user UID>';
+   ```
+   Remove the lost authenticator from each one whose `has_one` is `true` and that kept it on the lost phone. An email left with none while another of theirs still has one is asked to add its own before anything else, which it can do with its password alone; once none has one, all of them open on their passwords again.
 3. **Nobody can pass the code** (Supabase Auth failing, or the dashboard out of reach): set `FLAG_OVERRIDES` = `security.second-factor=off` for Production in Vercel and redeploy (add it after a comma if the variable already holds other flags). Sign-in stops asking for the code and admin changes stop needing it, for every organization; authenticators stay as they were, and Settings → Features shows the switch as set on the server. Remove it from `FLAG_OVERRIDES` and redeploy to turn the second factor back on.
 
 ## 5. Off-site backups (Backblaze B2)

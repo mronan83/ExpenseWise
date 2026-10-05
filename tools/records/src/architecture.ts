@@ -477,8 +477,8 @@ export const FLOWS: readonly Flow[] = [
   W->>A: Request, bearer token
   A->>AU: Project public keys (cached)
   A->>A: Verify an ES256 or RS256 signature, issuer, audience, expiry
-  A->>DB: Find the caller’s membership, and whether their sign-in has a second factor (app.user_id)
-  A->>A: Hold a session that skipped the code, if it is owed
+  A->>DB: Find the caller’s membership, and whether their sign-in, or any other of theirs, has a second factor (app.user_id)
+  A->>A: Hold a session that skipped the code, or an email that needs its own authenticator, if it is owed
   A->>DB: withOrg: set app.org_id, run the work
   Note over DB: Every row checked against app_current_org()
   DB-->>A: Only this organization’s rows
@@ -489,7 +489,7 @@ export const FLOWS: readonly Flow[] = [
     id: 'second-factor',
     title: 'The second factor at sign-in, and before an admin action',
     about:
-      'Supabase Auth keeps each authenticator’s secret and checks each code; the API trusts the token’s `aal` claim, and learns whether its sign-in has an authenticator from Supabase Auth’s own record, through `sign_in_has_authenticator`, as it finds the caller. While the organization has it switched on, a password-only session of someone with an authenticator is asked for the code before anything else, and the API holds every request of theirs but who they are and the switches until it passes; an admin action at aal1 is asked for it, then sent again (ADR-0042, ADR-0044).',
+      'Supabase Auth keeps each authenticator’s secret and checks each code; the API trusts the token’s `aal` claim, and learns whether its sign-in has an authenticator from Supabase Auth’s own record, through `sign_in_has_authenticator`, and whether any other email of the person’s has one, through `person_has_authenticator`, as it finds the caller. While the organization has it switched on, a password-only session of someone with an authenticator is asked for the code before anything else, and the API holds every request of theirs but who they are and the switches until it passes; an email of theirs with none of its own is held the same way until it adds its own, told which email needs one rather than asked for a code (#88); an admin action at aal1 is asked for it, then sent again (ADR-0042, ADR-0044).',
     diagram: `sequenceDiagram
   actor P as Person
   participant W as Web app
@@ -504,6 +504,14 @@ export const FLOWS: readonly Flow[] = [
     W->>A: GET /v1/…, token at aal1
     A->>A: Find the caller, and whether their sign-in has an authenticator
     A-->>W: 403 second_factor_required
+  end
+  opt Another email of theirs, with none of its own
+    W->>A: GET /v1/…, its token
+    A-->>W: 403 authenticator_required, naming the email
+    W->>P: This email needs its own authenticator: Settings › Sign-ins
+    P->>W: Add an authenticator app, and its first code
+    W->>AU: Enroll, challenge and verify
+    AU-->>W: Session at aal2
   end
   W->>P: The code screen, before anything else
   P->>W: 6-digit code
@@ -780,10 +788,10 @@ export interface Quality {
 export const QUALITY: readonly Quality[] = [
   {
     attribute: 'Security',
-    how: 'Forced row-level security, members kept to their own records inside an organization, a runtime role that can’t bypass it, Supabase’s Data API roles stripped on every release, verified tokens, a second factor once switched on, before anything else for someone with an authenticator and before every admin action, encrypted provider keys, a private bucket, invite-only sign-in, security headers, and production credentials in production builds only.',
+    how: 'Forced row-level security, members kept to their own records inside an organization, a runtime role that can’t bypass it, Supabase’s Data API roles stripped on every release, verified tokens, a second factor once switched on, before anything else for someone with an authenticator, on each of their emails, and before every admin action, encrypted provider keys, a private bucket, invite-only sign-in, security headers, and production credentials in production builds only.',
     short:
-      'A person’s other email with no authenticator of its own still opens on its password (GAP-35). The audit trail and the outbox are kept to the organization, not to each member (GAP-31).',
-    refs: ['NFR-SEC-01', 'NFR-SEC-13', 'FR-GOV-01', 'FR-GOV-04', 'FR-PLT-03', 'GAP-31', 'GAP-35'],
+      'Whoever has the password of a person’s email held until it adds its own authenticator can add one themselves (GAP-36). The audit trail and the outbox are kept to the organization, not to each member (GAP-31).',
+    refs: ['NFR-SEC-01', 'NFR-SEC-13', 'FR-GOV-01', 'FR-GOV-04', 'FR-PLT-03', 'GAP-31', 'GAP-36'],
   },
   {
     attribute: 'Integrity',

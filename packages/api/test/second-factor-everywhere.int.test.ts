@@ -4,8 +4,9 @@
  * factors, read as each request resolves its caller. Plain Postgres has no Supabase Auth, so
  * this stands in for its auth.mfa_factors in this run's database, and leaves it there: the
  * other tests' users aren't Supabase users and have no factor. A bearer token signs in as the
- * user it names; one ending in "@aal2" is a session that passed the code. Run with
- * `pnpm test:integration`.
+ * user it names; one ending in "@aal2" is a session that passed the code. A person's other
+ * email, with no authenticator of its own while another of theirs has one, is held until it adds
+ * its own (#88). Run with `pnpm test:integration`.
  */
 import { randomUUID } from 'node:crypto';
 import { createDatabase } from '@expensewise/db';
@@ -64,7 +65,10 @@ const call = async (
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const text = await res.text();
-  return { status: res.status, body: (text ? JSON.parse(text) : null) as { code?: string } | null };
+  return {
+    status: res.status,
+    body: (text ? JSON.parse(text) : null) as { code?: string; email?: string } | null,
+  };
 };
 
 const addFactor = async (userId: string) => {
@@ -145,5 +149,69 @@ describe('the second factor everywhere, on a real database (#85)', () => {
     const signIns = await call(off, `${riley}${AAL2}`, 'GET', '/v1/me/sign-ins');
     expect(signIns.body).toMatchObject({ signIns: [{ current: true }] });
     expect((await link(`${riley}${AAL2}`)).status).toBe(201);
+  });
+});
+
+describe('a person’s other email, on a real database (#88)', () => {
+  /** A person who signs in with two emails, the second linked to the first's member. */
+  const twoEmails = async () => {
+    const first = randomUUID();
+    const second = randomUUID();
+    expect((await call(off, first, 'POST', '/v1/me/organization')).status).toBe(201);
+    expect(
+      (await call(off, first, 'POST', '/v1/me/sign-ins', { accessToken: second })).status,
+    ).toBe(201);
+    return { first, second };
+  };
+
+  it('holds the email with no authenticator of its own until it adds one and passes it, while it is on', async () => {
+    const { first, second } = await twoEmails();
+    // Neither has one yet: nothing is held.
+    expect((await call(on, second, 'GET', '/v1/me/sign-ins')).status).toBe(200);
+
+    await addFactor(first);
+    // The other email: held, whatever its session says, naming it.
+    for (const token of [second, `${second}${AAL2}`]) {
+      expect(await call(on, token, 'GET', '/v1/me/sign-ins')).toMatchObject({
+        status: 403,
+        body: { code: 'authenticator_required', email: `${second}@example.com` },
+      });
+    }
+    expect(await call(on, second, 'POST', '/v1/me/organization')).toMatchObject({
+      status: 403,
+      body: { code: 'authenticator_required' },
+    });
+    // What adding one in Settings › Sign-ins reads still answers.
+    expect((await call(on, second, 'GET', '/v1/features')).status).toBe(200);
+    expect((await call(on, second, 'GET', '/v1/me')).status).toBe(200);
+    // The email with it is asked for its code, as before (#85).
+    expect(await call(on, first, 'GET', '/v1/me/sign-ins')).toMatchObject({
+      status: 403,
+      body: { code: 'second_factor_required' },
+    });
+    expect((await call(on, `${first}${AAL2}`, 'GET', '/v1/me/sign-ins')).status).toBe(200);
+
+    // Off: nothing changes.
+    expect((await call(off, second, 'GET', '/v1/me/sign-ins')).status).toBe(200);
+
+    // It adds its own: now it is asked for its code, and opens once it is in.
+    await addFactor(second);
+    expect(await call(on, second, 'GET', '/v1/me/sign-ins')).toMatchObject({
+      status: 403,
+      body: { code: 'second_factor_required' },
+    });
+    expect((await call(on, `${second}${AAL2}`, 'GET', '/v1/me/sign-ins')).status).toBe(200);
+  });
+
+  it('frees the other emails at once when the person’s only authenticator is removed', async () => {
+    const { first, second } = await twoEmails();
+    const phone = await addFactor(first);
+    expect((await call(on, second, 'GET', '/v1/me/sign-ins')).body?.code).toBe(
+      'authenticator_required',
+    );
+    // Removed in Supabase Auth, by its person or by the owner for a lost phone.
+    await removeFactor(phone);
+    expect((await call(on, second, 'GET', '/v1/me/sign-ins')).status).toBe(200);
+    expect((await call(on, first, 'GET', '/v1/me/sign-ins')).status).toBe(200);
   });
 });

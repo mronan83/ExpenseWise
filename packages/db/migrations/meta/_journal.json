@@ -351,6 +351,13 @@
       "when": 1791166764467,
       "tag": "0049_sign_in_has_authenticator",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1791167416492,
+      "tag": "0050_person_has_authenticator",
+      "breakpoints": true
     }
   ]
 }

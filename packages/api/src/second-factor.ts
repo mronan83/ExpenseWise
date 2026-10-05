@@ -61,15 +61,51 @@ export async function requireCodeOfTheEnrolled(
   }
 }
 
+/** The refusal of an email that needs its own authenticator, naming that email (#88). */
+export function authenticatorRequired(email: string | null): ProblemError {
+  const which = email ?? 'The email you signed in with';
+  return new ProblemError(403, 'authenticator-required', 'This email needs its own authenticator', {
+    code: 'authenticator_required',
+    detail:
+      `${which} has no authenticator app of its own, and another email you sign in with has ` +
+      'one. Your organization asks each of your emails for its own before anything else: add ' +
+      'one to this email in Settings › Sign-ins and enter its code, then try again.',
+    ...(email ? { email } : {}),
+  });
+}
+
+/**
+ * A person's other emails (#88, Q43): while their organization has the second factor switched
+ * on, a session of an email with no authenticator of its own, of a person who has one on
+ * another of their emails, is refused on every request, whatever its session says, until that
+ * email adds its own and passes it. It has no code to enter yet, so it is told which email needs
+ * one rather than asked for a code. Someone with none on any email isn't asked. The switch is
+ * read only for an email held this way.
+ */
+export async function requireOwnAuthenticator(
+  features: FeatureGate,
+  caller: Pick<CallerMembership, 'orgId' | 'authenticator' | 'personAuthenticator'>,
+  identity: Pick<Identity, 'email'>,
+): Promise<void> {
+  if (caller.authenticator === true || caller.personAuthenticator !== true) return;
+  if (await features.isOn(caller.orgId, SECOND_FACTOR_FLAG)) {
+    throw authenticatorRequired(identity.email);
+  }
+}
+
 /**
  * The check, run once as every request resolves its caller (`recordingCaller`), before anything
- * of the organization is read or changed: no route can forget it. A request the code screen
- * needs (`beforeTheCode`) is let through, and so is a lookup that isn't the token's own person.
+ * of the organization is read or changed: no route can forget it. An email with no authenticator
+ * of a person who has one is held until it adds its own (#88); an email with one, until its
+ * session passes the code (#85); each reads the switch only in its own case, so at most once. A
+ * request the code screen, or adding an authenticator, needs (`beforeTheCode`) is let through,
+ * and so is a lookup that isn't the token's own person.
  */
 export function secondFactorEverywhere(features: FeatureGate): AdmitCaller {
   return async (caller, userId) => {
     const identity = requestIdentity();
     if (!identity || identity.userId !== userId || isBeforeTheCode()) return;
+    await requireOwnAuthenticator(features, caller, identity);
     await requireCodeOfTheEnrolled(features, caller, identity);
   };
 }

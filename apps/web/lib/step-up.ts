@@ -23,3 +23,28 @@ export function stepUp(): Promise<boolean> {
 /** Whether an answer from our API asks for the second factor. */
 export const isStepUp = (status: number, code: string | undefined) =>
   status === 403 && code === 'second_factor_required';
+
+/*
+ * An email that needs its own authenticator (#88): a person with an authenticator on another
+ * of their emails, signed in with one that has none, while their organization has the second
+ * factor on. There is no code to enter yet, so it is never asked for one: `api()` tells the
+ * screen that says so, which sends them to Settings › Sign-ins to add one.
+ */
+
+type Held = (email: string | null) => void;
+
+let held: Held | null = null;
+
+/** The screen that says this email needs its own authenticator; null when it goes away. */
+export function onAuthenticatorRequired(screen: Held | null): void {
+  held = screen;
+}
+
+/** Says this email, or the one signed in when the API didn't name it, needs its own. */
+export function authenticatorRequired(email: string | null): void {
+  held?.(email);
+}
+
+/** Whether an answer from our API holds this email until it adds its own authenticator. */
+export const isAuthenticatorRequired = (status: number, code: string | undefined) =>
+  status === 403 && code === 'authenticator_required';
