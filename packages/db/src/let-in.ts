@@ -3,15 +3,16 @@ import { and, eq, sql } from 'drizzle-orm';
 import { appendAuditEvent } from './audit.ts';
 import { withOrg, type Database, type Transaction } from './client.ts';
 import type { Membership } from './members.ts';
-import { letInSignIns } from './schema.ts';
+import { letInSignIns, members } from './schema.ts';
 import { letInCounts, listSignIns, type SignIn } from './sign-ins.ts';
 
 /*
  * Which of a person's emails are let in (#90, Q44, ADR-0044). While their organization has the
- * second factor on and they have an authenticator, only an email let in opens the app. The API
- * decides when (`admission` in @expensewise/domain); these keep the record, each change with its
- * audit event, and the trigger `enforce_let_in` holds every change to the person themselves,
- * from a session of an email with an authenticator of its own that passed the code.
+ * second factor on and they have an authenticator, only an email let in opens the app, and only
+ * the one they first signed in with is let in on its own (#91, Q45). The API decides when
+ * (`admission` in @expensewise/domain); these keep the record, each change with its audit event,
+ * and the trigger `enforce_let_in` holds every change to the person themselves, from a session of
+ * an email with an authenticator of its own that passed the code.
  */
 
 /** Who is changing who is let in: the token's sign-in, and whether its session passed the code. */
@@ -84,14 +85,27 @@ export type PassedCode =
   | 'passed'
   /** It was let in already. */
   | 'let_in'
-  /** Another of the person's emails is let in and this one isn't: nothing changes. */
+  /**
+   * It isn't let in: another of the person's emails is and this one isn't, or none is and this
+   * isn't the one they first signed in with (#91). Nothing changes.
+   */
   | 'not_let_in';
+
+/** Whether the sign-in is the one the member was made with: the email first signed in with. */
+async function isFirstSignIn(tx: Transaction, member: Membership, userId: string) {
+  const [made] = await tx
+    .select({ userId: members.userId })
+    .from(members)
+    .where(eq(members.id, member.memberId));
+  return made?.userId === userId;
+}
 
 /**
  * Records that the actor's email passed its code, from a session that did, as the API sees it on
- * a request (#90): the first of the person's emails to, while none of theirs is let in, is let
- * in then; one let in and waiting stays let in. Each is audited. Checked again under the lock, so
- * of two emails passing at once only one is the first.
+ * a request (#90): the email the person first signed in with, while none of theirs is let in, is
+ * let in then, the first (#91); one let in and waiting stays let in. Each is audited. Any other
+ * email is let in only from one let in. Checked again under the lock, so a change to the
+ * person's emails in between is seen.
  */
 export async function recordPassedCode(
   db: Database,
@@ -111,6 +125,7 @@ export async function recordPassedCode(
       return 'passed';
     }
     if (all.some((s) => s.letIn !== 'no')) return 'not_let_in';
+    if (!(await isFirstSignIn(tx, member, own.userId))) return 'not_let_in';
     await clearLapsed(tx, own.id);
     await tx
       .insert(letInSignIns)

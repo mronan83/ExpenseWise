@@ -160,11 +160,13 @@ export const OPENAPI_INFO = {
       'has the second factor switched on, every request of a person whose sign-in has a ' +
       'verified authenticator, from a session that has not passed it (aal1), is refused with ' +
       '403 second_factor_required, except GET /v1/me and GET /v1/features. Once a person has ' +
-      'an authenticator, only a sign-in they let in opens the API: the first of theirs to pass ' +
-      'its code is let in, and a session of another is refused the same way with 403 ' +
-      'sign_in_not_let_in, naming its email, until they let it in from a sign-in let in that ' +
-      'passed its code. One let in with no authenticator of its own is refused with 403 ' +
-      'authenticator_required, naming its email, until it adds one and passes it.',
+      'an authenticator, only a sign-in they let in opens the API: the one they first signed ' +
+      'in with is let in once it passes its code, and a session of another is refused the same ' +
+      'way with 403 sign_in_not_let_in, naming its email, until they let it in from a sign-in ' +
+      'let in that passed its code. One let in with no authenticator of its own, or the one ' +
+      'first signed in with while none of theirs is let in, is refused with 403 ' +
+      'authenticator_required, naming its email, until it adds one and passes it. While none ' +
+      'of their sign-ins is let in, both refusals carry noneLetIn: true.',
   },
   servers: [{ url: '/api' }],
 };

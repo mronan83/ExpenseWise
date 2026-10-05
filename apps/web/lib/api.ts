@@ -32,11 +32,13 @@ const named = (body: Record<string, unknown>) =>
 
 /**
  * Tells the app this email needs its own authenticator (#88), or isn't let in (#90), by the
- * email the API named: neither is ever asked for a code.
+ * email the API named, and whether none of the person's emails is let in yet (#91): neither is
+ * ever asked for a code.
  */
 function heldEmail(status: number, body: { code?: string } & Record<string, unknown>): void {
-  if (isAuthenticatorRequired(status, body.code)) authenticatorRequired(named(body));
-  if (isNotLetIn(status, body.code)) notLetIn(named(body));
+  const noneLetIn = body.noneLetIn === true;
+  if (isAuthenticatorRequired(status, body.code)) authenticatorRequired(named(body), noneLetIn);
+  if (isNotLetIn(status, body.code)) notLetIn(named(body), noneLetIn);
 }
 
 /**

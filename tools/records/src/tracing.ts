@@ -142,6 +142,10 @@ export const GAPS: readonly Gap[] = [
       'Found building #90 on Oct 5. By your answer to Q44, the first of a person’s emails to pass its code is let in. Supabase Auth lets an email with no authenticator add one on its password alone, so until the person’s own email passes its code, for instance before they ever add an authenticator, whoever holds the password of another email linked to them can add theirs to it, pass its code and be let in first. The person’s own email is then refused and says it isn’t let in, which tells them; the owner removes that authenticator in Supabase and resets who is let in (the runbook).',
     fix: 'If your answer to Q45 asks for it: let in automatically only the email the person first signed in with, which until then may add its own authenticator, and refuse any other until it is let in from it (#91).',
     backlog: 91,
+    closed: {
+      date: '2026-10-05',
+      note: 'PR #61, at your answer to Q45 (ADR-0044, Which email is let in first): while the second factor is on and none of a person’s emails is let in, only the one they first signed in with is let in on its own, once it passes its code; with no authenticator of its own while another of theirs has one, it is asked to add its own, never refused. Any other is refused with 403 `sign_in_not_let_in`, its own authenticator and code included, nothing recorded, and waits to be let in from the first; the app says so. The first is the sign-in the person’s membership was made with, on their first sign-in or by accepting their invite (`members.user_id`): never one linked later, and no other when it is unlinked, until the owner names another (the runbook). The app never changes it, in the database too, and switching the second factor on from an email it would refuse is refused. Emails let in before this release stay let in.',
+    },
   },
   {
     id: 'GAP-38',

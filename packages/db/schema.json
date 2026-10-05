@@ -3258,7 +3258,12 @@
           "check": "(org_id = app_current_org())"
         }
       ],
-      "triggers": [],
+      "triggers": [
+        {
+          "name": "keep_first_sign_in",
+          "definition": "CREATE TRIGGER keep_first_sign_in BEFORE UPDATE OF user_id ON public.members FOR EACH ROW WHEN ((old.user_id IS DISTINCT FROM new.user_id)) EXECUTE FUNCTION keep_first_sign_in()"
+        }
+      ],
       "grants": {
         "expensewise_app": [
           "DELETE",
@@ -6109,6 +6114,14 @@
     },
     {
       "name": "inbound_email_dismissed_once",
+      "arguments": "",
+      "returns": "trigger",
+      "security": "invoker",
+      "volatility": "volatile",
+      "executableBy": []
+    },
+    {
+      "name": "keep_first_sign_in",
       "arguments": "",
       "returns": "trigger",
       "security": "invoker",

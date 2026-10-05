@@ -58,6 +58,11 @@ export interface CallerMembership extends Membership {
   readonly letIn?: LetIn;
   /** The emails the person has let in, and whether one has an authenticator. Left out: none. */
   readonly personLetIn?: PersonLetIn;
+  /**
+   * Whether this is the email the person first signed in with, the only one let in on its own
+   * while none of theirs is (#91, Q45). Left out: it isn't.
+   */
+  readonly firstSignIn?: boolean;
 }
 
 /**
@@ -87,8 +92,8 @@ export interface WorkspaceStore {
     actorUserId: string,
   ): Promise<'removed' | 'not_found' | 'last'>;
   /**
-   * Records that the caller's email passed its code (#90): the first of the person's emails to
-   * is let in, and one waiting stays let in, each audited.
+   * Records that the caller's email passed its code (#90): the one the person first signed in
+   * with is let in, while none of theirs is (#91), and one waiting stays let in, each audited.
    */
   recordPassedCode(member: Membership, actor: LetInActor): Promise<PassedCode>;
   /** Lets another of the member's emails in, from the actor's, audited (#90). */

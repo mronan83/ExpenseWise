@@ -112,6 +112,7 @@ const standing = (over: Partial<SignInStanding> = {}): SignInStanding => ({
   personAuthenticator: false,
   letIn: 'no',
   personLetIn: 'none',
+  firstSignIn: false,
   ...over,
 });
 const both = (s: SignInStanding) => [admission(s, 'aal1'), admission(s, 'aal2')];
@@ -122,13 +123,63 @@ describe('which emails sign in, once a person has an authenticator', () => {
     expect(hasAuthenticatorThatCounts(standing())).toBe(false);
   });
 
-  it('lets in the first of a person’s emails to pass its own code, while none is let in', () => {
-    const first = standing({ authenticator: true, personAuthenticator: true });
+  it('lets in the email a person first signed in with once it passes its own code, while none is let in', () => {
+    const first = standing({ authenticator: true, personAuthenticator: true, firstSignIn: true });
     expect(both(first)).toEqual(['code', 'let_in_first']);
   });
 
+  it('refuses another of a person’s emails that passes its own code while none is let in: it waits to be let in from the first (#91)', () => {
+    // Before #91 the first of their emails to pass its code was let in, whichever it was.
+    const another = standing({ authenticator: true, personAuthenticator: true });
+    expect(both(another)).toEqual(['not_let_in', 'not_let_in']);
+  });
+
+  it('asks the email a person first signed in with to add its own authenticator while another has one and none is let in, then lets it in (#91)', () => {
+    const first = standing({ personAuthenticator: true, firstSignIn: true });
+    expect(both(first)).toEqual(['own_authenticator', 'own_authenticator']);
+    expect(both({ ...first, authenticator: true })).toEqual(['code', 'let_in_first']);
+  });
+
+  it('lets no email in on its own once none of a person’s emails is the one they first signed in with, as when it was unlinked (#91)', () => {
+    for (const authenticator of [false, true]) {
+      expect(both(standing({ authenticator, personAuthenticator: true }))).toEqual([
+        'not_let_in',
+        'not_let_in',
+      ]);
+    }
+    // With no authenticator on any of them, nothing is asked, as before.
+    expect(both(standing())).toEqual(['open', 'open']);
+  });
+
+  it('asks the same of a person with only one email as before: it is the one they first signed in with (#91)', () => {
+    const only = { firstSignIn: true };
+    expect(both(standing(only))).toEqual(['open', 'open']);
+    const enrolled = standing({ ...only, authenticator: true, personAuthenticator: true });
+    expect(both(enrolled)).toEqual(['code', 'let_in_first']);
+    expect(both({ ...enrolled, letIn: 'yes', personLetIn: 'with_authenticator' as const })).toEqual(
+      ['code', 'open'],
+    );
+  });
+
+  it('cares which email was first only while none is let in: once one is, another is let in from it, the first included', () => {
+    const letInElsewhere = {
+      personAuthenticator: true,
+      personLetIn: 'with_authenticator' as const,
+    };
+    for (const firstSignIn of [false, true]) {
+      expect(both(standing({ ...letInElsewhere, firstSignIn, authenticator: true }))).toEqual([
+        'not_let_in',
+        'not_let_in',
+      ]);
+      expect(
+        both(standing({ ...letInElsewhere, firstSignIn, authenticator: true, letIn: 'waiting' })),
+      ).toEqual(['code', 'passed']);
+    }
+  });
+
   it('refuses an email not let in, whatever its session says, once the person has an authenticator that counts', () => {
-    // Before any is let in, an email with none of its own isn't offered a way in.
+    // Before any is let in, an email other than the first, with none of its own, isn't offered
+    // a way in.
     expect(both(standing({ personAuthenticator: true }))).toEqual(['not_let_in', 'not_let_in']);
     // Once one is let in, an authenticator added to another email counts for nothing.
     for (const authenticator of [false, true]) {

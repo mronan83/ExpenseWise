@@ -1,11 +1,17 @@
 import { randomUUID } from 'node:crypto';
-import { newId } from '@expensewise/domain';
+import { inviteExpiresAt, newId } from '@expensewise/domain';
 import { and, asc, eq, like, sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withOrg, withUser, type Transaction } from '../src/client.ts';
 import { memberForSender, recordInboundEmail } from '../src/inbound.ts';
 import { letSignInIn, recordPassedCode, withdrawSignIn } from '../src/let-in.ts';
-import { findSignedInMember, signInHasAuthenticator, signInStanding } from '../src/members.ts';
+import {
+  ensureOwnerOrganization,
+  findSignedInMember,
+  signInHasAuthenticator,
+  signInStanding,
+} from '../src/members.ts';
+import { acceptInvite, createInvite, inviteTokenHash, newInviteToken } from '../src/people.ts';
 import { auditEvents, letInSignIns, members, memberSignIns, organizations } from '../src/schema.ts';
 import { listSignIns, unlinkSignIn } from '../src/sign-ins.ts';
 import { connectAs, expectDbError } from './helpers.ts';
@@ -14,8 +20,9 @@ import { connectAs, expectDbError } from './helpers.ts';
  * How the API learns whether a sign-in has a second factor (#85, ADR-0044): from Supabase
  * Auth's own record of factors, through one function the app may call and nothing else; and
  * whether the person it belongs to has one on any email they sign in with, so another of their
- * emails with none is held until it adds its own (#88, Q43); and which of their emails they let
- * in, the only ones that sign in once they have one (#90, Q44). These tests run on plain Postgres,
+ * emails with none is held until it adds its own (#88, Q43); which of their emails they let in,
+ * the only ones that sign in once they have one (#90, Q44); and which they first signed in with,
+ * the only one let in on its own (#91, Q45). These tests run on plain Postgres,
  * which has no Supabase Auth; the second half stands in for it with the columns of
  * auth.mfa_factors the function reads, as Supabase lays them out, in this test's database only.
  */
@@ -35,6 +42,8 @@ const asksOfPerson = (userId: string) =>
     const { authenticator, personAuthenticator } = await signInStanding(tx, userId);
     return { authenticator, personAuthenticator };
   });
+/** Where a sign-in stands, as the app is told it on that sign-in's own request. */
+const standing = (userId: string) => withUser(app.db, userId, (tx) => signInStanding(tx, userId));
 
 /** An organization whose owner signs in as a Supabase Auth user, by its UUID. */
 async function seedSignedIn(name: string) {
@@ -88,6 +97,7 @@ describe('on plain Postgres, with no Supabase Auth', () => {
       personAuthenticator: false,
       letIn: 'no',
       personLetIn: 'none',
+      firstSignIn: true,
     });
   });
 
@@ -224,6 +234,7 @@ describe('with Supabase Auth’s record of factors', () => {
       personAuthenticator: true,
       letIn: 'no',
       personLetIn: 'none',
+      firstSignIn: false,
     });
     // Someone else's is never theirs, nor theirs someone else's.
     expect(await asksOfPerson(someoneElse.userId)).toEqual({
@@ -295,8 +306,6 @@ describe('with Supabase Auth’s record of factors', () => {
   describe('letting a person’s emails in (#90)', () => {
     const passed = { assuranceLevel: 'aal2' };
     const password = { assuranceLevel: 'aal1' };
-    /** Where a sign-in stands, as the app is told it. */
-    const standing = (userId: string) => app.db.transaction((tx) => signInStanding(tx, userId));
     const membership = (p: { orgId: string; memberId: string }) => ({
       orgId: p.orgId,
       memberId: p.memberId,
@@ -351,13 +360,14 @@ describe('with Supabase Auth’s record of factors', () => {
         { userId },
       );
 
-    it('lets in the first of a person’s emails to pass its code, once, with its audit event', async () => {
+    it('lets in the email a person first signed in with once it passes its code, once, with its audit event', async () => {
       const p = await twoEmails('let-in-first');
       expect(await standing(p.userId)).toEqual({
         authenticator: true,
         personAuthenticator: true,
         letIn: 'no',
         personLetIn: 'none',
+        firstSignIn: true,
       });
       const actor = { userId: p.userId, ...passed };
       expect(await recordPassedCode(app.db, p.member, actor)).toBe('let_in_first');
@@ -409,6 +419,7 @@ describe('with Supabase Auth’s record of factors', () => {
         personAuthenticator: true,
         letIn: 'waiting',
         personLetIn: 'with_authenticator',
+        firstSignIn: false,
       });
       // It adds its own and passes its code: let in for good.
       await addFactor(p.work, 'verified');
@@ -515,11 +526,26 @@ describe('with Supabase Auth’s record of factors', () => {
         ),
         /let_in: an email lets itself in only as the first/,
       );
-      // An email not let in lets no one in.
+      // While none is let in, no email but the one the person first signed in with lets itself
+      // in, even with an authenticator of its own (#91).
       await withOrg(owner.db, p.orgId, (tx) =>
         tx.delete(letInSignIns).where(eq(letInSignIns.signInId, p.firstId)),
       );
-      await recordPassedCode(app.db, p.member, { userId: p.work, ...passed });
+      await expectDbError(
+        asApp(p.orgId, p.work, 'aal2', (tx) =>
+          tx
+            .insert(letInSignIns)
+            .values({ orgId: p.orgId, signInId: p.workId, passedAt: new Date() }),
+        ),
+        /let_in: only the email the person first signed in with is let in first/,
+      );
+      // An email not let in lets no one in. (Before #91 the other email let itself in here;
+      // now only the schema owner can put it there.)
+      await withOrg(owner.db, p.orgId, (tx) =>
+        tx
+          .insert(letInSignIns)
+          .values({ orgId: p.orgId, signInId: p.workId, passedAt: new Date() }),
+      );
       const third = await linkAnother(p, 'let-in-rules-third');
       const [thirdRow] = await withOrg(owner.db, p.orgId, (tx) =>
         tx
@@ -552,20 +578,166 @@ describe('with Supabase Auth’s record of factors', () => {
       );
     });
 
-    it('lets the schema owner reset who is let in, as the runbook does, and the next to pass its code is the first again', async () => {
-      const p = await twoEmails('let-in-reset');
-      await recordPassedCode(app.db, p.member, { userId: p.userId, ...passed });
-      await addFactor(p.work, 'verified');
-      await owner.db.execute(sql`
+    /** The runbook's reset of who is let in, as the schema owner, from any of the person's UIDs. */
+    const resetLetIn = (userId: string) =>
+      owner.db.execute(sql`
         delete from let_in_sign_ins
          where sign_in_id in (
            select theirs.id from member_sign_ins this
              join member_sign_ins theirs on theirs.org_id = this.org_id and theirs.member_id = this.member_id
-            where this.user_id = ${p.userId})`);
+            where this.user_id = ${userId})`);
+    /** The runbook's naming of the email a person first signed in with, as the schema owner. */
+    const nameFirst = (userId: string) =>
+      owner.db.execute(sql`
+        update members m set user_id = s.user_id, email = s.email
+          from member_sign_ins s
+         where s.user_id = ${userId} and m.org_id = s.org_id and m.id = s.member_id`);
+
+    it('lets the schema owner reset who is let in, as the runbook does, and the email first signed in with is let in first again', async () => {
+      const p = await twoEmails('let-in-reset');
+      await recordPassedCode(app.db, p.member, { userId: p.userId, ...passed });
+      await addFactor(p.work, 'verified');
+      await resetLetIn(p.userId);
       expect(await standing(p.userId)).toMatchObject({ letIn: 'no', personLetIn: 'none' });
+      // Before #91 the next of their emails to pass its code was the first; now only theirs is.
+      expect(await recordPassedCode(app.db, p.member, { userId: p.work, ...passed })).toBe(
+        'not_let_in',
+      );
+      expect(await recordPassedCode(app.db, p.member, { userId: p.userId, ...passed })).toBe(
+        'let_in_first',
+      );
+    });
+
+    it('lets in only the email a person first signed in with, never another that passes its code first, and records nothing for it (#91)', async () => {
+      const p = await twoEmails('first-only');
+      await addFactor(p.work, 'verified');
+      expect(await standing(p.work)).toEqual({
+        authenticator: true,
+        personAuthenticator: true,
+        letIn: 'no',
+        personLetIn: 'none',
+        firstSignIn: false,
+      });
+      expect(await recordPassedCode(app.db, p.member, { userId: p.work, ...passed })).toBe(
+        'not_let_in',
+      );
+      expect(await standing(p.work)).toMatchObject({ letIn: 'no', personLetIn: 'none' });
+      expect(await letInEvents(p.orgId)).toEqual([]);
+      // The email they first signed in with is let in once it passes its code, then lets the
+      // other in, which keeps its own authenticator and stays let in once it passes it.
+      expect(await recordPassedCode(app.db, p.member, { userId: p.userId, ...passed })).toBe(
+        'let_in_first',
+      );
+      await letSignInIn(app.db, p.member, p.workId, { userId: p.userId, ...passed });
+      expect(await recordPassedCode(app.db, p.member, { userId: p.work, ...passed })).toBe(
+        'passed',
+      );
+      expect((await letInEvents(p.orgId)).map((e) => [e.action, e.entityId])).toEqual([
+        ['member_sign_in.let_in', p.firstId],
+        ['member_sign_in.let_in', p.workId],
+        ['member_sign_in.let_in_confirmed', p.workId],
+      ]);
+    });
+
+    it('knows which email a person first signed in with: the one their member was made with, on their first sign-in or by an invite, never one linked later (#91)', async () => {
+      // On their first sign-in, which makes their organization.
+      const alex = randomUUID();
+      await ensureOwnerOrganization(app.db, { userId: alex, email: 'first-alex@example.com' });
+      expect(await findSignedInMember(app.db, alex)).toMatchObject({ firstSignIn: true });
+      expect(await standing(alex)).toMatchObject({ firstSignIn: true });
+
+      // By an invite link, from an empty organization of their own made on an earlier sign-in.
+      const sam = randomUUID();
+      await ensureOwnerOrganization(app.db, { userId: sam, email: 'first-sam@example.com' });
+      const token = newInviteToken();
+      const at = new Date();
+      const inviter = (await findSignedInMember(app.db, alex))!;
+      await withOrg(app.db, inviter.orgId, (tx) =>
+        createInvite(
+          tx,
+          inviter.orgId,
+          {
+            role: 'member',
+            label: null,
+            tokenHash: inviteTokenHash(token),
+            madeAt: at,
+            expiresAt: inviteExpiresAt(at),
+            memberId: inviter.memberId,
+          },
+          alex,
+        ),
+      );
+      const joined = await acceptInvite(
+        app.db,
+        inviteTokenHash(token),
+        { userId: sam, email: 'first-sam@example.com' },
+        at,
+      );
+      expect(joined).toMatchObject({ status: 'joined' });
+      const samAsMember = (await findSignedInMember(app.db, sam))!;
+      expect(samAsMember).toMatchObject({
+        orgId: inviter.orgId,
+        role: 'member',
+        firstSignIn: true,
+      });
+
+      // An email linked later is never the first, for either.
+      const samWork = await linkAnother(samAsMember, 'first-sam-work');
+      expect(await findSignedInMember(app.db, samWork)).toMatchObject({ firstSignIn: false });
+      expect(await standing(samWork)).toMatchObject({ firstSignIn: false });
+      const alexWork = await linkAnother(inviter, 'first-alex-work');
+      expect(await standing(alexWork)).toMatchObject({ firstSignIn: false });
+    });
+
+    it('lets no other email be let in first once the one first signed in with is unlinked, until the schema owner names another, as the runbook does (#91)', async () => {
+      const p = await twoEmails('first-unlinked');
+      await addFactor(p.work, 'verified');
+      // Unlinked from the other email, before either was let in.
+      expect(await unlinkSignIn(app.db, p.member, p.firstId, p.work)).toBe('removed');
+      expect(await standing(p.work)).toEqual({
+        authenticator: true,
+        personAuthenticator: true,
+        letIn: 'no',
+        personLetIn: 'none',
+        firstSignIn: false,
+      });
+      expect(await recordPassedCode(app.db, p.member, { userId: p.work, ...passed })).toBe(
+        'not_let_in',
+      );
+      await expectDbError(
+        asApp(p.orgId, p.work, 'aal2', (tx) =>
+          tx
+            .insert(letInSignIns)
+            .values({ orgId: p.orgId, signInId: p.workId, passedAt: new Date() }),
+        ),
+        /let_in: only the email the person first signed in with is let in first/,
+      );
+      // The owner names the email they still use, and resets who is let in.
+      await nameFirst(p.work);
+      await resetLetIn(p.work);
+      expect(await standing(p.work)).toMatchObject({ firstSignIn: true });
       expect(await recordPassedCode(app.db, p.member, { userId: p.work, ...passed })).toBe(
         'let_in_first',
       );
+    });
+
+    it('never lets the app change which email a member first signed in with, whatever its session, in the database too (#91)', async () => {
+      const p = await twoEmails('first-kept');
+      await recordPassedCode(app.db, p.member, { userId: p.userId, ...passed });
+      for (const level of ['aal1', 'aal2']) {
+        await expectDbError(
+          asApp(p.orgId, p.userId, level, (tx) =>
+            tx.update(members).set({ userId: p.work }).where(eq(members.id, p.memberId)),
+          ),
+          /first_sign_in: only the schema owner changes which email a member first signed in with/,
+        );
+      }
+      // Anything else of the member the app changes as before.
+      await asApp(p.orgId, p.userId, 'aal1', (tx) =>
+        tx.update(members).set({ displayName: 'Still first' }).where(eq(members.id, p.memberId)),
+      );
+      expect(await standing(p.userId)).toMatchObject({ firstSignIn: true, letIn: 'yes' });
+      expect(await standing(p.work)).toMatchObject({ firstSignIn: false });
     });
 
     it('takes letting in away with the sign-in, when it is unlinked', async () => {
@@ -648,6 +820,7 @@ describe('with Supabase Auth’s record of factors', () => {
         personAuthenticator: false,
         letIn: 'no',
         personLetIn: 'none',
+        firstSignIn: false,
       });
     });
   });
