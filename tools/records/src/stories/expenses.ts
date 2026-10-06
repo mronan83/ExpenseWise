@@ -1596,6 +1596,61 @@ export const EXPENSE_STORIES: readonly Story[] = [
     ],
     note: 'Built in PR #59 behind `expenses.itemized` (#82). It is how FR-EXP-10 claims less than a receipt with a reason, line by line; a lower amount with a reason in the person’s own words, and the check before submission, came with approval in PR #60 (#24, US-RPT-07).',
   },
+  {
+    id: 'US-EXP-10',
+    title: 'Claim a ticket without the seat upgrade I paid for myself',
+    as: 'Alex, who travels for work',
+    want: 'each purchase on a receipt read as its own group of lines, with its own taxes, fees, date and card',
+    soThat:
+      'I can leave out an upgrade I bought later on my own card, and claim the fare with only its own taxes',
+    feature: 'F-64',
+    requirements: ['FR-INT-23', 'FR-EXP-20'],
+    status: 'Planned',
+    criteria: [
+      {
+        id: 'AC1',
+        given:
+          'an airline receipt with the ticket and a seat upgrade bought on another day with another card',
+        when: 'it is read',
+        then: 'each purchase is its own group, with its own lines, taxes, fees, date and card, and the groups add up to the receipt’s total',
+        decided: { by: 'owner', source: 'Q49' },
+        checks: [],
+      },
+      {
+        id: 'AC2',
+        given: 'a receipt read as several purchases',
+        when: 'I leave the seat upgrade’s purchase out as personal',
+        then: 'the claim drops by that purchase and its own taxes and fees, never by a share of the ticket’s',
+        decided: { by: 'owner', source: 'Q49' },
+        checks: [],
+      },
+      {
+        id: 'AC3',
+        given: 'a receipt read as several purchases',
+        when: 'it becomes an expense',
+        then: 'the expense takes the date and card of the first purchase, the one the receipt is for',
+        decided: { by: 'claude' },
+        checks: [],
+      },
+      {
+        id: 'AC4',
+        given: 'a purchase with its own tax and fee lines',
+        when: 'the claim is worked out',
+        then: 'its taxes and fees spread only over its own items',
+        decided: { by: 'claude', source: 'ADR-0041' },
+        checks: [],
+      },
+      {
+        id: 'AC5',
+        given: 'a receipt with a single purchase',
+        when: 'it is read',
+        then: 'it reads and claims exactly as before',
+        decided: { by: 'claude' },
+        checks: [],
+      },
+    ],
+    note: 'Reported on Oct 6: two forwarded flight receipts listed a seat upgrade paid later on a personal card, and the reading mixed its taxes and fees into the fare (GAP-41, #96). Until #96 ships, Edit the expense to the base fare and its taxes, dated the day the fare was bought.',
+  },
 
   // Needs you: emails that filed nothing
   {

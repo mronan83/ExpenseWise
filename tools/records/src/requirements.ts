@@ -472,6 +472,17 @@ export const FUNCTIONAL: readonly Requirement[] = [
     note: 'Your requirement of Oct 4, for folios and every receipt that itemizes, built in PR #59 behind `expenses.itemized` (#80, ADR-0041). The expense keeps a copy of its receipt’s lines, taken from each reading until a person changes it, so a submitted claim never changes under a re-read; one filed before shows its reading’s lines. Claude’s rule, yours to confirm: lines are used only when they add up, the items to the subtotal and with tax, tip and fees to the total, within a cent a line; otherwise the section says what they come to beside what they should. Since PR #61 (#92, your report of Oct 5, GAP-38), every line is read each time it is printed, so a folio’s room and taxes for each night are all there, and a credit, refund or reversal is a line of its own with a negative amount, as printed, never netted into the charges it reverses: an item, as a discount is, taking a negative share of the tax that offsets theirs. A credit can’t be left out of a claim, and is in a part of a split only with lines that come to more than it (Claude’s, yours to confirm). A receipt read before shows its lines as they were read; Read again reads them the new way while its expense still follows its receipt.',
   },
   {
+    id: 'FR-INT-23',
+    text: 'A receipt that holds several separate purchases, such as an airline ticket and a seat bought later on another card, is read as one expense with each purchase as its own group of lines: its items, its own taxes and fees, its date and its card. The groups add up to what the receipt charged, and no purchase’s taxes or fees are read into another’s.',
+    sources: ['owner 2026-10-06'],
+    priority: 'Should',
+    phase: 'P1',
+    status: 'Planned',
+    features: ['F-64'],
+    backlog: [96],
+    note: 'Your report of Oct 6 and your answer to Q49: two flight receipts each held the ticket, bought on one day on one card, and a seat upgrade bought later on your personal card, and the reading took the upgrade’s taxes and fees with the ticket (GAP-41).',
+  },
+  {
     id: 'FR-INT-18',
     text: 'A receipt from the same vendor, on the same date, at the same time and place as another of the same person’s is a duplicate when its total matches too, and a possible duplicate when the total differs, as with a tip added or an amended receipt. Either waits in Needs you, never Ready on its own, until the person decides; a possible duplicate may need a merge or a replacement. Delete removes the copy, its expense and its file. Merge: the person chooses which is primary; the other fills the primary’s missing fields, or the person picks which of its fields to take, and is then deleted the same way. Not a duplicate keeps both and never flags the pair again. Each deletion leaves a record in the audit trail; a submitted or approved expense is never deleted.',
     sources: ['owner 2026-10-03', 'owner 2026-10-04'],
@@ -837,6 +848,17 @@ export const FUNCTIONAL: readonly Requirement[] = [
       'api/journeys › show and correct the day a ticket departs, refusing one that isn’t a date (FR-EXP-19)',
     ],
     note: 'Your goal of Oct 6, the full picture of each trip’s expenses, built in PR #64 (#94, GAP-40 closed) behind Journeys and stays, which asks for the departure. Expenses file to trips by date (FR-EXP-04, ADR-0023); a ticket now files by the day it departs, and its date stays the day it was charged. A fare with no trip yet waits for a report until it departs, so its trip can still be made. A ride files by its date, as before. A receipt read before needs Read again to gain its departure, or it can be typed in.',
+  },
+  {
+    id: 'FR-EXP-20',
+    text: 'A whole purchase on a receipt can be left out of the claim with a reason, as a line can: its items with its own taxes and fees, never a share of another purchase’s. What stays is claimed as before.',
+    sources: ['owner 2026-10-06'],
+    priority: 'Should',
+    phase: 'P1',
+    status: 'Planned',
+    features: ['F-64'],
+    backlog: [96],
+    note: 'Your answer to Q49: one expense, each purchase a group of lines that can be left out, such as a seat upgrade you paid for yourself, as Personal (FR-EXP-16’s reasons).',
   },
 
   // Governance

@@ -191,6 +191,16 @@ export const GAPS: readonly Gap[] = [
     },
   },
   {
+    id: 'GAP-41',
+    title: 'A receipt that holds several purchases is read as one, mixing their taxes and fees.',
+    affects: ['FR-INT-22', 'FR-INT-23', 'FR-INT-04', 'F-55'],
+    severity: 'Medium',
+    evidence:
+      'Your report of Oct 6: two flight receipts you forwarded each listed the ticket, its fare and taxes bought on one day on one card, and a seat upgrade bought later on your personal card with its own taxes and fees, which isn’t to be expensed. The reading took the upgrade’s taxes and fees with the ticket. Its instructions treat a document as one purchase: they say a payment is never a line, and nothing of a document charged on different days to different cards, so a later purchase’s charges merge into one reading.',
+    fix: 'Read each purchase on a receipt as its own group of lines, with its own taxes, fees, date and card, and let a whole purchase be left out of the claim with a reason (#96).',
+    backlog: 96,
+  },
+  {
     id: 'GAP-25',
     title: 'Photos emailed in are stored with their location.',
     affects: ['NFR-PRV-03'],
@@ -1081,10 +1091,28 @@ export const QUESTIONS: readonly Question[] = [
       text: 'A: every expense not yet on a submitted report follows it, except one switched by hand (#95).',
     },
   },
+  {
+    id: 'Q49',
+    title: 'How a receipt holding several purchases is read',
+    ask: 'Your report of Oct 6: a receipt held a ticket and a seat upgrade bought later on another card, and the reading mixed their taxes. A: the expense is the first purchase, with the later ones listed as not included, each addable as its own expense. B: each purchase becomes its own expense from the same receipt. C: one expense, each purchase its own group of lines, with its own taxes, that can be left out.',
+    why: 'An airline receipt, and a folio with later charges, gather purchases made on different days to different cards; only some are the trip’s.',
+    recommendation: 'A.',
+    affects: ['FR-INT-23', 'FR-EXP-20', 'GAP-41', 'F-64'],
+    answer: {
+      date: '2026-10-06',
+      text: 'C: one expense, each purchase its own group of lines that can be left out (#96).',
+    },
+  },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-06',
+    change:
+      'Your report of Oct 6, after the release of PR #64: two flight receipts each held the ticket and a seat upgrade bought later on your personal card, and the reading took the upgrade’s taxes and fees with the ticket (GAP-41). By your answer to Q49, a receipt holding several purchases will read as one expense with each purchase its own group of lines, with its own taxes, fees, date and card, and a whole purchase can be left out of the claim, as Personal (FR-INT-23, FR-EXP-20, F-64, #96).',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-06',
     change:
