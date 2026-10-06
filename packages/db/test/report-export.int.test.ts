@@ -215,12 +215,27 @@ describe('a report as its export lists it (FR-SET-01)', () => {
     });
     const found = await r.inOrg((tx) => reportForExport(tx, r.reportId));
     expect(found?.expenses.map((e) => [e.merchant, e.travel])).toEqual([
-      ['Uber', { journeyFrom: 'Hilton Omaha', journeyTo: null, checkIn: null, checkOut: null }],
+      [
+        'Uber',
+        {
+          journeyFrom: 'Hilton Omaha',
+          journeyTo: null,
+          departsOn: null,
+          checkIn: null,
+          checkOut: null,
+        },
+      ],
       ['Uber', undefined],
       ['Zuni Café', undefined],
       [
         'Hotel Lindley',
-        { journeyFrom: null, journeyTo: null, checkIn: '2026-09-01', checkOut: '2026-09-03' },
+        {
+          journeyFrom: null,
+          journeyTo: null,
+          departsOn: null,
+          checkIn: '2026-09-01',
+          checkOut: '2026-09-03',
+        },
       ],
     ]);
   });

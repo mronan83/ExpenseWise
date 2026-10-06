@@ -13,6 +13,7 @@ import type { ReceiptWithReadings } from './receipts.ts';
 const kept = (e: Partial<ExpenseTravel>): ExpenseTravel => ({
   journeyFrom: e.journeyFrom ?? null,
   journeyTo: e.journeyTo ?? null,
+  departsOn: e.departsOn ?? null,
   checkIn: e.checkIn ?? null,
   checkOut: e.checkOut ?? null,
 });
@@ -21,7 +22,7 @@ const kept = (e: Partial<ExpenseTravel>): ExpenseTravel => ({
 export function travelView(travel: ExpenseTravel) {
   const nights = stayNights(travel);
   return {
-    journey: { from: travel.journeyFrom, to: travel.journeyTo },
+    journey: { from: travel.journeyFrom, to: travel.journeyTo, departsOn: travel.departsOn },
     stay: {
       checkIn: travel.checkIn,
       checkOut: travel.checkOut,
@@ -77,6 +78,7 @@ export function withJourneys<
         ...reading.fields,
         from: textView(n?.journey?.from),
         to: textView(n?.journey?.to),
+        departs: textView(n?.journey?.departs),
         checkIn: textView(n?.stay?.checkIn),
         checkOut: textView(n?.stay?.checkOut),
       },

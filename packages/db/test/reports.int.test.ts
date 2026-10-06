@@ -42,7 +42,12 @@ async function workspace(name: string) {
   };
   const expense = (
     date: string | null,
-    over: { status?: ExpenseStatus; amountMinor?: number; memberId?: string } = {},
+    over: {
+      status?: ExpenseStatus;
+      amountMinor?: number;
+      memberId?: string;
+      departsOn?: string;
+    } = {},
   ) =>
     inOrg(async (tx) => {
       const id = newId();
@@ -54,6 +59,7 @@ async function workspace(name: string) {
         source: 'manual',
         merchant: 'Uber',
         transactionDate: date,
+        departsOn: over.departsOn ?? null,
         currency: 'USD',
         amountMinor: over.amountMinor ?? 3145,
       });
@@ -166,6 +172,24 @@ describe('trips and local expenses joining a report (FR-EXP-05, FR-EXP-14)', () 
     expect(await w.reportOfExpense(lunch)).toBe(reportId);
     expect(await w.reportOfExpense(tooSoon)).toBeNull();
     expect(await w.reportOfExpense(undated)).toBeNull();
+  });
+
+  it('leaves a fare bought ahead off a report until it departs, so its trip can be made (FR-EXP-19)', async () => {
+    const w = await workspace('rep-fare-ahead');
+    const fare = await w.expense('2026-09-12', { departsOn: '2026-10-20' });
+    const lunch = await w.expense('2026-09-14');
+    await w.run(at('2026-09-30T12:00:00Z'));
+    expect(await w.reportOfExpense(lunch)).not.toBeNull();
+    expect(await w.reportOfExpense(fare)).toBeNull();
+    // Its trip is made before it flies: it files to it, and goes with the trip's report.
+    const chicago = await w.trip({
+      name: 'Chicago',
+      startDate: '2026-10-20',
+      endDate: '2026-10-23',
+    });
+    expect(
+      (await w.inOrg((tx) => tx.select().from(expenses).where(eq(expenses.id, fare))))[0]?.tripId,
+    ).toBe(chicago);
   });
 
   it('tells the schedule which organizations have work due, and no more than their ids', async () => {

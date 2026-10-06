@@ -1,5 +1,6 @@
 import type { Membership } from '@expensewise/db';
 import {
+  paidByOf,
   mayDecide,
   needsSecondFactor,
   receiptDifferenceText,
@@ -25,6 +26,7 @@ export function checkView(check: ReceiptCheck) {
 function expenseView(
   { expense, proof, check }: ReviewedExpense,
   rejection: { reason: string; automatic: boolean } | undefined,
+  companyPaid: boolean,
 ) {
   const shown = proof ? proofOf(proof).values : null;
   return {
@@ -45,6 +47,8 @@ function expenseView(
     claimReason: expense.claimReason ?? null,
     excludedLines: expense.excludedLines,
     rejection: rejection ?? null,
+    // Who paid it, while Paid by the company is on: one the company paid is never claimed.
+    ...(companyPaid ? { paidBy: paidByOf(expense.companyPaid ?? false) } : {}),
   };
 }
 
@@ -68,11 +72,13 @@ type Why = keyof typeof WHY;
 /**
  * A report's approval as the caller sees it (#24): who it is with, each expense against its
  * receipt, a return's comment and rejections while it is back, and what the caller may do.
+ * With `companyPaid`, each expense says who paid it (FR-EXP-17).
  */
 export function approvalView(
   data: ApprovalData,
   caller: Membership,
   identity: Pick<Identity, 'assuranceLevel'>,
+  companyPaid = false,
 ) {
   const { report } = data.contents;
   const mine = report.memberId === caller.memberId;
@@ -143,7 +149,7 @@ export function approvalView(
       createdAt: s.createdAt.toISOString(),
     })),
     returned,
-    expenses: data.expenses.map((e) => expenseView(e, rejected.get(e.expense.id))),
+    expenses: data.expenses.map((e) => expenseView(e, rejected.get(e.expense.id), companyPaid)),
     can,
     why: why ? { code: why, detail: WHY[why] } : null,
     secondFactor,

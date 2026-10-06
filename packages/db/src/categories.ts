@@ -2,6 +2,7 @@ import {
   catalogCode,
   catalogName,
   checkChoice,
+  followPolicy,
   isTripMovable,
   nestsInItself,
   type CatalogCategory,
@@ -39,6 +40,11 @@ export interface CategoryRecord extends CatalogCategory {
 export interface TypeRecord extends CatalogNode {
   /** Some expense has it, so it can only be retired, never deleted. */
   readonly inUse: boolean;
+  /**
+   * The policy says the company pays it directly (FR-EXP-18, Q46). Read from the database; a
+   * record made elsewhere, such as a test's, may leave it out.
+   */
+  readonly companyPays?: boolean;
 }
 
 export interface CatalogRecord {
@@ -65,7 +71,7 @@ export async function listCatalog(tx: Transaction): Promise<CatalogRecord> {
     .from(categories)
     .orderBy(asc(categories.name));
   const typeRows = await tx
-    .select(node(expenseTypes))
+    .select({ ...node(expenseTypes), companyPays: expenseTypes.companyPays })
     .from(expenseTypes)
     .orderBy(asc(expenseTypes.name));
   const links = await tx
@@ -470,7 +476,14 @@ export async function classifyExpense(
 ): Promise<ClassifyResult> {
   await lockOrgWrites(tx, orgId);
   const [expense] = await tx
-    .select({ status: expenses.status, categoryId: expenses.categoryId, typeId: expenses.typeId })
+    .select({
+      status: expenses.status,
+      source: expenses.source,
+      categoryId: expenses.categoryId,
+      typeId: expenses.typeId,
+      companyPaid: expenses.companyPaid,
+      pinned: expenses.companyPaidPinned,
+    })
     .from(expenses)
     .where(eq(expenses.id, expenseId))
     .for('update');
@@ -480,12 +493,19 @@ export async function classifyExpense(
   if (expense.categoryId === choice.categoryId && expense.typeId === choice.typeId) {
     return { status: 'unchanged' };
   }
-  const checked = checkChoice(await listCatalog(tx), choice.categoryId, choice.typeId);
+  const catalog = await listCatalog(tx);
+  const checked = checkChoice(catalog, choice.categoryId, choice.typeId);
   if (!checked.ok) return { status: 'invalid', problem: checked.error };
+  // One not set by hand follows the policy for its new type (Q46); a drive never does.
+  const policy = catalog.types.find((t) => t.id === checked.value.typeId)?.companyPays ?? false;
+  const paid =
+    expense.source === 'mileage'
+      ? expense
+      : followPolicy({ companyPaid: expense.companyPaid, pinned: expense.pinned }, policy);
   const now = new Date();
   await tx
     .update(expenses)
-    .set({ ...checked.value, classifiedAt: now, updatedAt: now })
+    .set({ ...checked.value, companyPaid: paid.companyPaid, classifiedAt: now, updatedAt: now })
     .where(eq(expenses.id, expenseId));
   const actor = { type: 'user', id: actorUserId } as const;
   await appendAuditEvent(tx, orgId, {
@@ -499,6 +519,10 @@ export async function classifyExpense(
         expense.categoryId && expense.typeId
           ? { categoryId: expense.categoryId, typeId: expense.typeId }
           : null,
+      // Who paid it, when the policy for its new type changed that (FR-EXP-18).
+      ...(paid.companyPaid === expense.companyPaid
+        ? {}
+        : { companyPaid: { from: expense.companyPaid, to: paid.companyPaid } }),
     },
   });
   await reopenChangedReports(

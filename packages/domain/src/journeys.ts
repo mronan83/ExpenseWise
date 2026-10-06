@@ -12,6 +12,11 @@ export interface ExpenseTravel {
   readonly journeyFrom: string | null;
   /** Where it went to: a ride's drop-off, a flight's destination, a train's station. */
   readonly journeyTo: string | null;
+  /**
+   * The day its first leg departs, YYYY-MM-DD: for a ticket bought ahead, later than the day
+   * it was charged. A ticket files to its trip by this day (FR-EXP-19, #94).
+   */
+  readonly departsOn: string | null;
   /** A stay's check-in day, YYYY-MM-DD. */
   readonly checkIn: string | null;
   /** A stay's check-out day, YYYY-MM-DD. */
@@ -21,11 +26,18 @@ export interface ExpenseTravel {
 export const NO_TRAVEL: ExpenseTravel = {
   journeyFrom: null,
   journeyTo: null,
+  departsOn: null,
   checkIn: null,
   checkOut: null,
 };
 
-export const TRAVEL_FIELDS = ['journeyFrom', 'journeyTo', 'checkIn', 'checkOut'] as const;
+export const TRAVEL_FIELDS = [
+  'journeyFrom',
+  'journeyTo',
+  'departsOn',
+  'checkIn',
+  'checkOut',
+] as const;
 export type TravelField = (typeof TRAVEL_FIELDS)[number];
 
 /**
@@ -80,10 +92,11 @@ export interface TravelEditProblem {
 }
 
 const STAY_FIELDS: readonly TravelField[] = ['checkIn', 'checkOut'];
+const DATE_FIELDS: readonly TravelField[] = ['departsOn', ...STAY_FIELDS];
 
 /**
  * Applies a person's edit to the journey and the stay: either end of a journey up to 200
- * characters, and dates that exist. A stay the edit leaves with a check-out before its
+ * characters, and dates that exist, the day it departs among them. A stay the edit leaves with a check-out before its
  * check-in, or longer than STAY_MAX_NIGHTS, is refused, naming the date it changed. Returns
  * what changed.
  */
@@ -100,7 +113,7 @@ export function applyTravelEdit(
     const raw = edit[field];
     if (raw === undefined) continue;
     const value = raw.trim() === '' ? null : raw.trim();
-    if (value !== null && STAY_FIELDS.includes(field) && !isIsoDate(value)) {
+    if (value !== null && DATE_FIELDS.includes(field) && !isIsoDate(value)) {
       return err({ field, message: 'A date is YYYY-MM-DD, such as 2026-09-29.' });
     }
     if (value !== null && value.length > JOURNEY_MAX) {
@@ -132,16 +145,21 @@ export function applyTravelEdit(
 export const sameTravel = (a: ExpenseTravel, b: ExpenseTravel): boolean =>
   TRAVEL_FIELDS.every((f) => a[f] === b[f]);
 
-/** "SFO → ORD", where a journey went, in a line; one end alone reads "From SFO" or "To ORD". */
-export function journeyLine(travel: Pick<ExpenseTravel, 'journeyFrom' | 'journeyTo'>) {
-  const { journeyFrom: from, journeyTo: to } = travel;
-  if (from && to) return `${from} → ${to}`;
-  if (from) return `From ${from}`;
-  if (to) return `To ${to}`;
-  return null;
-}
-
 const shown = (date: string) => (isIsoDate(date) ? showDate(date) : date);
+
+/**
+ * "SFO → ORD", where a journey went, in a line; one end alone reads "From SFO" or "To ORD".
+ * With the day it departs, "SFO → ORD, departs Oct 20, 2026", or "Departs Oct 20, 2026" alone.
+ */
+export function journeyLine(
+  travel: Pick<ExpenseTravel, 'journeyFrom' | 'journeyTo'> &
+    Partial<Pick<ExpenseTravel, 'departsOn'>>,
+) {
+  const { journeyFrom: from, journeyTo: to, departsOn } = travel;
+  const went = from && to ? `${from} → ${to}` : from ? `From ${from}` : to ? `To ${to}` : null;
+  if (!departsOn) return went;
+  return went ? `${went}, departs ${shown(departsOn)}` : `Departs ${shown(departsOn)}`;
+}
 
 /**
  * "2 nights, Sep 29 – Oct 1, 2026", a stay in a line. A stay whose nights aren't sure says why

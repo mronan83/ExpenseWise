@@ -1,4 +1,5 @@
 import { showDate } from '@expensewise/domain';
+import type { CompanyPaidSection, PaidBy } from './company-paid';
 import type { ExpenseAmount, ExpenseStatus } from './expenses';
 import { formatMoney } from './receipts';
 import type { TripSummary } from './trips';
@@ -71,6 +72,8 @@ export interface ReportLocalItem {
   ready: boolean;
   /** In the report's currency, while conversion is on; null with no amount yet. */
   reimbursed?: Reimbursed | null;
+  /** Who paid it, while Paid by the company is on (FR-EXP-17). */
+  paidBy?: PaidBy;
 }
 
 export interface ReportDetail extends ReportSummary {
@@ -82,6 +85,8 @@ export interface ReportDetail extends ReportSummary {
   localItems: ReportLocalItem[];
   /** Each rate its amounts were converted at, while conversion is on. */
   rates?: (AppliedRate & { from: string; to: string; expenses: number })[];
+  /** What the company paid, apart from the claim, while Paid by the company is on (Q47). */
+  companyPaid?: CompanyPaidSection;
 }
 
 export const REPORT_STATUS: Record<ReportStatus, { label: string; tone: string }> = {

@@ -1,5 +1,6 @@
 import type { ReceiptCheck } from './approval';
 import type { ExpenseCategory } from './categories';
+import type { PaidBy } from './company-paid';
 import type { ExpenseSplit, Itemized } from './itemized';
 import type { ReceiptSummary } from './receipts';
 
@@ -38,6 +39,10 @@ export interface ExpenseSummary {
   reportId: string | null;
   /** Its category and type, while that feature is on (FR-EXP-11). */
   category?: ExpenseCategory;
+  /** Who paid it, while Paid by the company is on (FR-EXP-17). */
+  paidBy?: PaidBy;
+  /** A person set who paid it, so the policy for its type leaves it alone (Q46). */
+  paidByPinned?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -88,6 +93,8 @@ export interface ExpenseDetail extends ExpenseSummary {
 export interface Journey {
   from: string | null;
   to: string | null;
+  /** The day a ticket's first leg departs; it files to its trip by this day (FR-EXP-19). */
+  departsOn?: string | null;
 }
 
 export interface Stay {
@@ -99,11 +106,12 @@ export interface Stay {
 }
 
 /** The journey and stay a person can correct (FR-INT-20, FR-INT-21). */
-export type TravelField = 'journeyFrom' | 'journeyTo' | 'checkIn' | 'checkOut';
+export type TravelField = 'journeyFrom' | 'journeyTo' | 'departsOn' | 'checkIn' | 'checkOut';
 
 export const TRAVEL_LABELS: Record<TravelField, string> = {
   journeyFrom: 'From',
   journeyTo: 'To',
+  departsOn: 'Departs',
   checkIn: 'Check-in',
   checkOut: 'Check-out',
 };
@@ -112,6 +120,7 @@ export const TRAVEL_LABELS: Record<TravelField, string> = {
 export const travelOf = (journey?: Journey | null, stay?: Stay | null) => ({
   journeyFrom: journey?.from ?? null,
   journeyTo: journey?.to ?? null,
+  departsOn: journey?.departsOn ?? null,
   checkIn: stay?.checkIn ?? null,
   checkOut: stay?.checkOut ?? null,
 });

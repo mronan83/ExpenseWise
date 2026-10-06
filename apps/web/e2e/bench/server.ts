@@ -18,6 +18,7 @@ import {
   createSecretBox,
   dbAuditStore,
   dbCategoryStore,
+  dbCompanyPaidStore,
   dbExpenseStore,
   dbReceiptStore,
   dbHomeStore,
@@ -334,6 +335,7 @@ const app = createHttpApp({
   audit: dbAuditStore(db),
   categories: dbCategoryStore(db),
   itemized: dbItemizedStore(db),
+  companyPaid: dbCompanyPaidStore(db),
   modelSettings: dbModelSettingsStore(db),
   reimbursement: dbReimbursementStore(db),
   emails: dbUnfiledEmailStore(db),
@@ -671,7 +673,8 @@ await capture(
   both(
     reading('United Airlines', '2026-09-29', 'USD', '389.20', {
       documentType: 'airline_ticket',
-      journey: { from: end('SFO'), to: end('OMA') },
+      // The day it departs (FR-EXP-19, #94): the expense files to its trip by it.
+      journey: { from: end('SFO'), to: end('OMA'), departs: end('2026-09-29') },
       stay: null,
     }),
   ),
@@ -804,6 +807,14 @@ await call('PUT', `/v1/expenses/${folioLines}/split`, {
   ],
 });
 await call('PUT', `/v1/expenses/${folioLines}/lines/2/exclusion`, { reason: 'personal' });
+// Paid by the company (#95): the United flight to Omaha is Airfare, which the organization's
+// policy says the company pays directly, so it stays on the trip and its report, off the claim.
+const airfare = catalog.types.find((t) => t.name === 'Airfare')!.id;
+await call('PUT', `/v1/expenses/${await expenseOf('flight')}/category`, {
+  categoryId: catalog.categories.find((c) => c.name === 'Travel')!.id,
+  typeId: airfare,
+});
+await call('PUT', `/v1/settings/expense-types/${airfare}/company-pays`, { companyPays: true });
 
 const expenses: Record<string, string> = {};
 for (const name of Object.keys(receipts)) expenses[name] = await expenseOf(name);

@@ -2,7 +2,7 @@
 
 An expense files to the trip whose dates include its date, both ends included, with no human touch. A person can put an expense on another trip, or on none, and from then on dates never move it. On a day two trips share, the trip that ends first keeps it. A submitted expense never moves.
 
-- **Status:** Accepted (filing by date required by FR-EXP-04; the rules for a person's choice, shared days and submitted expenses recommended, no objection)
+- **Status:** Accepted (filing by date required by FR-EXP-04; the rules for a person's choice, shared days and submitted expenses recommended, no objection); point 1 amended on Oct 6: a ticket files by the day it departs, from the product owner's goal of each trip's full picture (FR-EXP-19, GAP-40, #94)
 - **Date:** 2026-10-03
 - **Deciders:** Product owner; Claude (principal architect)
 - **Decision register:** D-25
@@ -24,6 +24,7 @@ Four facts shape it:
 ## Decision
 
 1. **Filed by date, both ends included.** An expense files to the member's trip whose first and last days include its date. It files again whenever its date changes: read, read again, confirmed or edited. It also files again when a trip is made, its dates change or it is deleted. An expense with no date yet is on no trip.
+   - *Amended Oct 6 (#94, FR-EXP-19, GAP-40):* the day it files by is `filingDate` in the domain: the day a ticket's first leg departs (`expenses.departs_on`), when it was read or entered, else its date. A fare is usually bought weeks before it flies, so by its date it filed to no trip, and this ADR's own context foresaw it. Its date stays the day it was charged, for its claim, its month and its conversion. A change of departure files it again, as a change of date does. A local expense joins a report by the same day (ADR-0029), so a fare whose trip isn't made yet waits until it departs rather than joining the month it was bought. In SQL the day is `coalesce(departs_on, transaction_date)`, read as text so it can't shift with a time zone.
 2. **A person's choice wins.** `PUT /v1/expenses/{expenseId}/trip` takes `{"tripId": …}` to put it on one of its owner's trips, or `{"tripId": null}` for none. Either sets `expenses.trip_pinned`, and from then on filing by date leaves it alone. `{"byDate": true}` hands it back to filing by date. Another member's trip is refused.
 3. **On a shared day, the trip that ends first keeps it.** A hotel bill is dated the day you check out, and it is the largest item of the day. A short trip inside a longer one ends first, so it keeps its own days. Between trips that end the same day, the one that starts later wins; then the newer one. The rule is `tripFor` in the domain, and the order trips are listed in never changes the answer.
 4. **Submitted or later, it stays.** Filing moves an expense only while it is processing, needs review or is Ready. A trip that a submitted expense rests on can't be deleted (409). A trip on a report that isn't submitted can be deleted, and a closed report reopens (ADR-0029).

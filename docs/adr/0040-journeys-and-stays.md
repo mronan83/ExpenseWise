@@ -2,7 +2,7 @@
 
 An organization's reading asks the models for what it has switched on, and nothing more. Each feature that asks for more adds its own instructions, its own structure and its own version, independently of the others. Journeys and stays (`receipts.journeys`) is the second addition, after the line each field was read from (GAP-14). It reads where a ride, flight or train went, and a hotel folio's check-in and check-out. These follow the receipt onto the expense until a person edits them. The nights are worked out from the two dates and never kept.
 
-- **Status:** Accepted (what is read decided by product owner, Oct 4: a ride's pickup and drop-off, a folio's dates and nights, and flights and rail too, Q39; asking only where the feature is on, as Q5 ships every feature; the composition, the versions, the 31 nights and what a doubtful stay does recommended by Claude, no objection yet)
+- **Status:** Accepted (what is read decided by product owner, Oct 4: a ride's pickup and drop-off, a folio's dates and nights, and flights and rail too, Q39; asking only where the feature is on, as Q5 ships every feature; the composition, the versions, the 31 nights and what a doubtful stay does recommended by Claude, no objection yet); points 3 and 6 amended on Oct 6: a journey also reads the day it departs (`journeys-v2`), from the product owner's goal of each trip's full picture (FR-EXP-19, #94)
 - **Date:** 2026-10-04
 - **Deciders:** Product owner (FR-INT-20, FR-INT-21, Q39, Q5); Claude (principal architect), for the design
 - **Decision register:** D-42. Extends the reading schema of [ADR-0006](0006-receipt-extraction.md) and follows [ADR-0030](0030-receipt-time-and-place.md) for fields that follow the receipt onto the expense ([ADR-0022](0022-expense-follows-its-receipt.md)).
@@ -22,6 +22,7 @@ The document types had no rail ticket. Adding it to every request would change t
 3. **Journeys and stays add three things.** Each is offered only where they are asked for.
    - `rail_ticket` among the kinds of document.
    - `journey`: its `from` and `to`, each as printed with its confidence, or null.
+   - *Amended Oct 6 (#94):* `journey` also has `departs`, the YYYY-MM-DD date its first leg departs, a return ticket's outbound one, never the day it was bought, with its confidence, or null. The addition's version is `journeys-v2`. A reading made with `journeys-v1` has no `departs` and still reads; a date that isn't one is blank, and a journey with only a departure is kept.
    - `stay`: its `checkIn` and `checkOut`, each a YYYY-MM-DD date with its confidence, or null.
 4. **Only the right documents keep them.**
    - A journey is kept from a ride receipt, an airline ticket or a rail ticket.
@@ -30,6 +31,7 @@ The document types had no rail ticket. Adding it to every request would change t
    - Like time and place, a journey never decides Ready.
 5. **The nights are worked out, never kept.** They are the days from check-in to check-out (`nightsOf` in the domain), so Sep 29 to Oct 1 is 2. A check-out before its check-in, or a stay longer than 31 nights (R-STAY-NIGHTS), is not sure. Its reading fails the `stay` check, so the receipt needs a look. The page says why rather than showing a wrong number, and the dates still file as read for the person to correct.
 6. **The expense carries four columns:** `journey_from`, `journey_to`, `check_in` and `check_out`, all nullable.
+   - *Amended Oct 6 (#94):* and a fifth, `departs_on`, which follows the receipt and is corrected the same way. The expense files to its trip by it (ADR-0023). The expense page, and the report's From and to column, read "SFO → ORD, departs Oct 20, 2026".
    - They follow ADR-0022: a reading asked for them fills them, and once a person edits the expense, later readings leave them alone.
    - A reading not asked for them (made before the switch, or with it off) leaves them as they are. A receipt read before gains them when it is read again.
    - The person corrects them on the expense page. An edit that leaves a check-out before its check-in, or more than 31 nights, is refused. Each change is in the audit event.

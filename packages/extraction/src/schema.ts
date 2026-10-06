@@ -189,22 +189,44 @@ const JourneyEnd = (where: string) =>
     .nullable()
     .describe('Null if the document does not print it.');
 
-const Journey = z
+const journeyEnds = {
+  from: JourneyEnd(
+    "Where it started: a ride's pickup address, a flight's origin airport code or city, a " +
+      "train's departure station",
+  ),
+  to: JourneyEnd(
+    "Where it ended: a ride's drop-off address, a flight's destination airport code or city, " +
+      "a train's arrival station",
+  ),
+};
+
+const Departs = z
   .object({
-    from: JourneyEnd(
-      "Where it started: a ride's pickup address, a flight's origin airport code or city, a " +
-        "train's departure station",
-    ),
-    to: JourneyEnd(
-      "Where it ended: a ride's drop-off address, a flight's destination airport code or city, " +
-        "a train's arrival station",
-    ),
+    value: z
+      .string()
+      .describe(
+        'The date its first leg departs as YYYY-MM-DD: the day of travel, never the day it ' +
+          'was bought or the receipt was issued.',
+      ),
+    confidence: Confidence,
   })
   .nullable()
-  .describe(
-    'For a ride receipt, an airline ticket or a rail ticket: where the journey went. Null for ' +
-      'any other document, or when it prints neither end.',
-  );
+  .describe('Null if the document does not print when it departs.');
+
+const JOURNEY_DESCRIPTION =
+  'For a ride receipt, an airline ticket or a rail ticket: where the journey went. Null for ' +
+  'any other document, or when it prints neither end.';
+
+const Journey = z
+  .object({ ...journeyEnds, departs: Departs })
+  .nullable()
+  .describe(JOURNEY_DESCRIPTION);
+
+/** A journey as any reading has it: one read before `journeys-v2` has no departs. */
+const JourneyRead = z
+  .object({ ...journeyEnds, departs: Departs.optional() })
+  .nullable()
+  .describe(JOURNEY_DESCRIPTION);
 
 const StayDate = (which: string) =>
   z
@@ -230,7 +252,7 @@ export const JOURNEYS_SHAPE = {
   journey: Journey,
   stay: Stay,
 };
-export const JOURNEYS_VERSION = 'journeys-v1';
+export const JOURNEYS_VERSION = 'journeys-v2';
 
 /**
  * Any reading, as asked with any of the additions: a rail ticket among the documents, and a
@@ -238,7 +260,7 @@ export const JOURNEYS_VERSION = 'journeys-v1';
  */
 const ReadingSchema = ReceiptExtractionSchema.extend({
   documentType: z.enum(JOURNEY_DOCUMENT_TYPES),
-  journey: Journey.optional(),
+  journey: JourneyRead.optional(),
   stay: Stay.optional(),
 });
 

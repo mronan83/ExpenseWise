@@ -1,6 +1,7 @@
 import type { Membership, MoveToReportResult } from '@expensewise/db';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
+import { companyPaidShown } from './company-paid.ts';
 import { featureGate, type FeatureGate } from './features.ts';
 import { ProblemError } from './problem.ts';
 import { showConverted } from './reimbursement.ts';
@@ -78,7 +79,12 @@ export function registerReportRoutes(
   const detailOf = async (orgId: string, reportId: string) => {
     const found = await stores().reports.get(orgId, reportId);
     if (!found) throw notFound('report');
-    return reportDetail(found, now(), await showConverted(features, orgId, [found]));
+    return reportDetail(
+      found,
+      now(),
+      await showConverted(features, orgId, [found]),
+      await companyPaidShown(features, orgId, [found]),
+    );
   };
 
   app.openapi(listReportsRoute, async (c) => {
@@ -86,7 +92,8 @@ export function registerReportRoutes(
     const found = await stores().reports.list(who.orgId, who.memberId, LIST_LIMIT);
     const at = now();
     const on = await showConverted(features, who.orgId, found);
-    return c.json({ reports: found.map((r) => reportSummary(r, at, on)) }, 200);
+    const paid = await companyPaidShown(features, who.orgId, found);
+    return c.json({ reports: found.map((r) => reportSummary(r, at, on, paid)) }, 200);
   });
 
   app.openapi(getReportRoute, async (c) => {

@@ -379,6 +379,20 @@
       "when": 1791203063566,
       "tag": "0053_first_sign_in_let_in",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1791321883759,
+      "tag": "0054_expense_departs_on",
+      "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1791324031650,
+      "tag": "0055_company_paid",
+      "breakpoints": true
     }
   ]
 }

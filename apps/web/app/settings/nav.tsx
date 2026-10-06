@@ -11,7 +11,7 @@ const PAGES: readonly { href: string; label: string; flag?: string | readonly st
   {
     href: '/settings/organization',
     label: 'Organization',
-    flag: ['settings.organization', 'settings.duplicate-window'],
+    flag: ['settings.organization', 'settings.duplicate-window', 'expenses.company-paid'],
   },
   { href: '/settings/ai', label: 'AI providers' },
   { href: '/settings/ai-models', label: 'AI models', flag: 'receipts.model-settings' },

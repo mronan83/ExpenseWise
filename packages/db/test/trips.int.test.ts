@@ -51,6 +51,7 @@ async function workspace(name: string) {
       currency?: string;
       status?: ExpenseStatus;
       memberId?: string;
+      departsOn?: string;
     } = {},
   ) =>
     inOrg(async (tx) => {
@@ -63,6 +64,7 @@ async function workspace(name: string) {
         source: 'manual',
         merchant: over.merchant ?? 'Uber',
         transactionDate: date,
+        departsOn: over.departsOn ?? null,
         currency: over.currency ?? 'USD',
         amountMinor: over.amountMinor ?? 3145,
       });
@@ -97,6 +99,59 @@ async function workspace(name: string) {
   };
   return { org, inOrg, trip, expense, tripOf, audit, colleague };
 }
+
+const chicago = {
+  name: 'Chicago · Client visit',
+  purpose: 'Client visit',
+  primaryCity: 'Chicago',
+  startDate: '2026-10-20',
+  endDate: '2026-10-23',
+};
+
+describe('a ticket files by the day it departs (FR-EXP-19, #94)', () => {
+  it('files a fare bought weeks ahead to the trip it flies on, keeping the day it was charged', async () => {
+    const w = await workspace('acme-fare-departs');
+    const tripId = await w.trip(chicago);
+    const fare = await w.expense('2026-09-12', { merchant: 'United', departsOn: '2026-10-20' });
+    expect((await w.tripOf(fare)).tripId).toBe(tripId);
+    const kept = await w.inOrg((tx) => getExpense(tx, fare));
+    expect(kept).toMatchObject({ transactionDate: '2026-09-12', departsOn: '2026-10-20' });
+    const [filed] = await w.audit('expense.trip_filed');
+    expect(filed!.payload).toMatchObject({ tripId, date: '2026-10-20' });
+    // With no departure, it files by the day it was charged, as any expense does.
+    expect((await w.tripOf(await w.expense('2026-09-12'))).tripId).toBeNull();
+  });
+
+  it('files a fare when its trip is made, and moves it when its departure is corrected', async () => {
+    const w = await workspace('acme-fare-later-trip');
+    const fare = await w.expense('2026-09-12', { merchant: 'United', departsOn: '2026-10-20' });
+    expect((await w.tripOf(fare)).tripId).toBeNull();
+    const tripId = await w.trip(chicago);
+    expect((await w.tripOf(fare)).tripId).toBe(tripId);
+    const later = await w.trip({
+      ...chicago,
+      name: 'Denver · Offsite',
+      startDate: '2026-11-02',
+      endDate: '2026-11-04',
+    });
+    const moved = await w.inOrg((tx) =>
+      editExpense(tx, w.org.orgId, fare, { travel: { departsOn: '2026-11-02' } }, w.org.userId),
+    );
+    expect(moved).toMatchObject({ status: 'edited' });
+    expect((await w.tripOf(fare)).tripId).toBe(later);
+  });
+
+  it('keeps a fare a person put on a trip where they put it, whatever its departure', async () => {
+    const w = await workspace('acme-fare-pinned');
+    const houstonId = await w.trip(houston);
+    const fare = await w.expense('2026-09-12', { merchant: 'United', departsOn: '2026-10-20' });
+    await w.inOrg((tx) =>
+      setExpenseTrip(tx, w.org.orgId, fare, { tripId: houstonId }, w.org.userId),
+    );
+    await w.trip(chicago);
+    expect(await w.tripOf(fare)).toMatchObject({ tripId: houstonId, pinned: true });
+  });
+});
 
 describe('filing expenses to trips by date (FR-EXP-04, ADR-0023)', () => {
   it('files the member’s expenses dated in a new trip, start and end days included', async () => {

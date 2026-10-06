@@ -76,7 +76,9 @@ export const FLAGS = {
     description:
       'A ride, flight or train receipt reads where it went from and to, and a hotel folio its ' +
       'check-in and check-out, with the nights worked out; each shows on the expense, which can ' +
-      'correct it (FR-INT-20, FR-INT-21, #79). A receipt read before gains them when read again.',
+      'correct it (FR-INT-20, FR-INT-21, #79). A flight or train ticket also reads the day it ' +
+      'departs and files to the trip it flies on, not the day it was bought (FR-EXP-19, #94). A ' +
+      'receipt read before gains them when read again.',
   },
   'expenses.mileage': {
     name: 'Mileage',
@@ -130,6 +132,14 @@ export const FLAGS = {
     description:
       'Split an expense into parts by category and type, by line or by amount, and total ' +
       'reports by category and type. Needs categories and types on (FR-EXP-15, #81).',
+  },
+  'expenses.company-paid': {
+    name: 'Paid by the company',
+    description:
+      'An expense the company paid directly, such as airfare it books, stays on its trip and in ' +
+      'the trip’s cost but is never claimed; the report and its export list it apart, outside ' +
+      'the claim. Settings › Organization lists the types the company pays, which needs ' +
+      'categories and types on (FR-EXP-17, FR-EXP-18, #95).',
   },
   // The operator's switch per AI model (FR-INT-16, US-READ-18). Unlike a feature, it acts
   // only when FLAG_OVERRIDES turns it off: then that model reads no organization's receipts,

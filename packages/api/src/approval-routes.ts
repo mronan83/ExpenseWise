@@ -4,6 +4,7 @@ import type { ApprovalStore } from './approval.ts';
 import { approvalView } from './approval-views.ts';
 import { requireIdentity, type AuthVariables, type Identity, type TokenVerifier } from './auth.ts';
 import { notYours } from './caller.ts';
+import { companyPaidShown, readPaidBy, showCompanyPaid } from './company-paid.ts';
 import { featureGate, type FeatureGate } from './features.ts';
 import { ProblemError } from './problem.ts';
 import { showConverted } from './reimbursement.ts';
@@ -85,7 +86,13 @@ export function registerApprovalRoutes(
   const viewOf = async (who: Membership, identity: Identity, reportId: string) => {
     const data = await stores().approvals.view(who.orgId, reportId);
     if (!data) throw notFound('report');
-    return approvalView(data, who, identity);
+    // Who paid each expense, while Paid by the company is on (FR-EXP-17).
+    const paid = await showCompanyPaid(
+      features,
+      who.orgId,
+      readPaidBy(data.expenses.map((e) => e.expense)),
+    );
+    return approvalView(data, who, identity, paid);
   };
   const differences = (list: readonly { expenseId: string; reason: string }[]) =>
     list.map((d) => ({ expenseId: d.expenseId, reason: d.reason }));
@@ -223,7 +230,8 @@ export function registerApprovalRoutes(
     const found = await stores().approvals.toApprove(who.orgId, who.memberId);
     const at = now();
     const on = await showConverted(features, who.orgId, found);
-    return c.json({ reports: found.map((r) => reportSummary(r, at, on)) }, 200);
+    const paid = await companyPaidShown(features, who.orgId, found);
+    return c.json({ reports: found.map((r) => reportSummary(r, at, on, paid)) }, 200);
   });
 
   app.openapi(claimReasonRoute, async (c) => {

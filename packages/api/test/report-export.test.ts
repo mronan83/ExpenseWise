@@ -359,6 +359,7 @@ describe('the PDF’s columns', () => {
         travel: {
           journeyFrom: 'Eppley Airfield',
           journeyTo: 'Hilton Omaha',
+          departsOn: null,
           checkIn: '2026-09-28',
           checkOut: '2026-10-01',
         },

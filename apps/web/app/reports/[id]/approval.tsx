@@ -243,6 +243,10 @@ function ExpenseCheck({ expense: e }: { expense: ReviewedExpense }) {
       {e.claimReason ? (
         <p className="text-xs break-words text-ink-2">Why less: {e.claimReason}</p>
       ) : null}
+      {/* Sent only while Paid by the company is on: on the report, never in its claim. */}
+      {e.paidBy === 'company' ? (
+        <p className="text-xs text-ink-2">Paid by the company, not claimed</p>
+      ) : null}
       {e.rejection ? (
         <p className="text-sm break-words text-bad">
           <span className="font-semibold">Rejected</span>

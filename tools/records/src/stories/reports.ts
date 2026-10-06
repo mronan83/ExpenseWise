@@ -1890,7 +1890,7 @@ export const REPORT_STORIES: readonly Story[] = [
     soThat: 'I see each trip’s full cost, and a new employer or policy is one change',
     feature: 'F-62',
     requirements: ['FR-EXP-17', 'FR-EXP-18'],
-    status: 'Planned',
+    status: 'Delivered',
     criteria: [
       {
         id: 'AC1',
@@ -1898,7 +1898,12 @@ export const REPORT_STORIES: readonly Story[] = [
         when: 'an airfare expense is filed',
         then: 'it is marked paid by the company: it stays on its trip and in the trip’s cost, and is never claimed',
         decided: { by: 'owner', source: 'Q46' },
-        checks: [],
+        checks: [
+          'api/company-paid.int › marks an airfare expense paid by the company once a person gives it its type',
+          'db/company-paid.int › follows the policy for its new type unless set by hand, and with no type it is the person’s',
+          'api/company-paid.int › shows a trip’s cost in full, split into claimed and paid by the company',
+          'api/company-paid.int › leaves what the company paid out of the report’s claim and its conversion, and lists it apart with the full cost',
+        ],
       },
       {
         id: 'AC2',
@@ -1906,7 +1911,12 @@ export const REPORT_STORIES: readonly Story[] = [
         when: 'I switch it to claimed, or to paid by the company',
         then: 'it stays as I set it whatever the policy says, until I hand it back to the policy',
         decided: { by: 'owner', source: 'Q46' },
-        checks: [],
+        checks: [
+          'domain/company-paid › follows the policy for its type until a person sets it, then stays as they set it',
+          'domain/company-paid › hands it back to the policy, which applies at once',
+          'db/company-paid.int › sets it and pins it, hands it back to the policy, and refuses a drive and a submitted expense',
+          'api/company-paid.int › sets it by hand and keeps it whatever the policy says, until handed back',
+        ],
       },
       {
         id: 'AC3',
@@ -1914,7 +1924,10 @@ export const REPORT_STORIES: readonly Story[] = [
         when: 'I open it',
         then: 'its cost shows in full, split into claimed and paid by the company',
         decided: { by: 'owner', source: 'owner 2026-10-06' },
-        checks: [],
+        checks: [
+          'api/company-paid.int › shows a trip’s cost in full, split into claimed and paid by the company',
+          'domain/company-paid › totals each per currency in integer minor units, never converted, and the full cost',
+        ],
       },
       {
         id: 'AC4',
@@ -1922,7 +1935,12 @@ export const REPORT_STORIES: readonly Story[] = [
         when: 'I open it or export it as CSV or PDF',
         then: 'that expense is listed apart, below the claim and outside its total, as paid by the company, not claimed, with the trip’s full cost',
         decided: { by: 'owner', source: 'Q47' },
-        checks: [],
+        checks: [
+          'api/company-paid.int › leaves what the company paid out of the report’s claim and its conversion, and lists it apart with the full cost',
+          'api/company-paid.int › exports the claim, then what the company paid apart, saying on each CSV row who paid',
+          'api/company-paid.int › writes a PDF section of what the company paid, after the claim, with its total and the full cost',
+          'domain/company-paid › lists it apart after the claim and outside its total, with its own total and the full cost',
+        ],
       },
       {
         id: 'AC5',
@@ -1930,7 +1948,11 @@ export const REPORT_STORIES: readonly Story[] = [
         when: 'it is opened in a spreadsheet',
         then: 'each row says who paid, so a sum of the claim can leave out what the company paid',
         decided: { by: 'claude' },
-        checks: [],
+        checks: [
+          'domain/company-paid › writes who paid on every row of the CSV, the claim first, so its sum can leave out what the company paid',
+          'api/company-paid.int › exports the claim, then what the company paid apart, saying on each CSV row who paid',
+          'domain/company-paid › exports a report with nothing the company paid exactly as before',
+        ],
       },
       {
         id: 'AC6',
@@ -1938,7 +1960,9 @@ export const REPORT_STORIES: readonly Story[] = [
         when: 'the report is closed or submitted',
         then: 'it needs to be Ready like any other, since the report lists it',
         decided: { by: 'claude' },
-        checks: [],
+        checks: [
+          'api/company-paid.int › needs it Ready like any other: a local one the company paid needs its reason',
+        ],
       },
       {
         id: 'AC7',
@@ -1946,7 +1970,9 @@ export const REPORT_STORIES: readonly Story[] = [
         when: 'it is saved',
         then: 'every expense not yet on a submitted report follows it, except one I switched by hand; a submitted or approved report never changes; each switch is in the audit trail',
         decided: { by: 'owner', source: 'Q48' },
-        checks: [],
+        checks: [
+          'db/company-paid.int › follows on every unsubmitted expense of its type not set by hand, and skips pinned, submitted and approved ones, with one audit event',
+        ],
       },
       {
         id: 'AC8',
@@ -1954,9 +1980,56 @@ export const REPORT_STORIES: readonly Story[] = [
         when: 'someone changes it',
         then: 'only an owner or finance admin can, as an admin action',
         decided: { by: 'claude' },
-        checks: [],
+        checks: [
+          'api/company-paid.int › lets only owners and finance admins change it, as an admin action past the second factor',
+        ],
+      },
+      {
+        id: 'AC9',
+        given: 'a drive',
+        when: 'someone sets it paid by the company, or the policy for a type changes',
+        then: 'it stays mine: a drive is paid at miles × its rate to whoever drove, never by the company',
+        decided: { by: 'claude', source: 'ADR-0045' },
+        checks: [
+          'domain/company-paid › never lets a drive be paid by the company, and changes nothing once submitted',
+          'db/company-paid.int › reopens a closed report one of its expenses is on, and never touches a drive',
+          'api/company-paid.int › refuses another member’s expense, a drive, and one submitted, with 409 locked',
+        ],
+      },
+      {
+        id: 'AC10',
+        given: 'an expense on a submitted report',
+        when: 'I try to switch who paid it',
+        then: 'it is refused, and it stays as it went in',
+        decided: { by: 'owner', source: 'Q48' },
+        checks: [
+          'db/company-paid.int › sets it and pins it, hands it back to the policy, and refuses a drive and a submitted expense',
+          'api/company-paid.int › refuses another member’s expense, a drive, and one submitted, with 409 locked',
+        ],
+      },
+      {
+        id: 'AC11',
+        given: 'a colleague’s expense',
+        when: 'an owner or finance admin tries to switch who paid it',
+        then: 'it is refused: each person says who paid only their own, while the policy reaches everyone’s',
+        decided: { by: 'blueprint', source: 'ADR-0035' },
+        checks: [
+          'db/company-paid.int › refuses a member switching another member’s expense, as an owner too (ADR-0035)',
+          'api/company-paid.int › refuses another member’s expense, a drive, and one submitted, with 409 locked',
+          'db/company-paid.int › follows on every unsubmitted expense of its type not set by hand, and skips pinned, submitted and approved ones, with one audit event',
+        ],
+      },
+      {
+        id: 'AC12',
+        given: 'an expense on a closed report',
+        when: 'who paid it changes, by hand or by the policy',
+        then: 'the report opens again, as for any change, so it is closed again with the claim as it now is',
+        decided: { by: 'claude', source: 'ADR-0045' },
+        checks: [
+          'db/company-paid.int › reopens a closed report one of its expenses is on, and never touches a drive',
+        ],
       },
     ],
-    note: 'Planned (#95). Until it is built, a company-paid fare on a trip is claimed with the rest; leaving out its line as Paid by someone else claims nothing for it but still lists it in the claim.',
+    note: 'Built in PR #64 (#95, ADR-0045), behind `expenses.company-paid`. An expense follows the policy once a person gives it its type; a type only suggested decides nothing until it is confirmed, Claude’s reading, yours to confirm. Off, every claim reads as before, and a company-paid fare on a trip is claimed with the rest. A member can still delete a receipt whose expense the company paid.',
   },
 ];

@@ -152,15 +152,24 @@ interface Fileable {
   readonly tripId: string | null;
   readonly tripPinned: boolean;
   readonly status: ExpenseStatus;
-  readonly transactionDate: string | null;
+  /** The day it files by (`filingDate`): the day a ticket departs, else the day it was charged. */
+  readonly filedOn: string | null;
 }
+
+/**
+ * `filingDate` in SQL, so the trip windows a refiling loads match what files (FR-EXP-19). As
+ * text, never a JavaScript Date, so the day can't shift with the server's time zone.
+ */
+const filedOn = sql<
+  string | null
+>`coalesce(${expenses.departsOn}, ${expenses.transactionDate})::text`;
 
 const fileableColumns = {
   id: expenses.id,
   tripId: expenses.tripId,
   tripPinned: expenses.tripPinned,
   status: expenses.status,
-  transactionDate: expenses.transactionDate,
+  filedOn,
 };
 
 /**
@@ -198,7 +207,8 @@ const tripsOverlapping = (
 
 /**
  * Files each expense to the trip its date falls in, among `windows`, unless a person chose its
- * trip or it is submitted or later. Records each move. Returns how many moved.
+ * trip or it is submitted or later: a ticket's by the day it departs (`filingDate`). Records
+ * each move. Returns how many moved.
  */
 async function fileByDate(
   tx: Transaction,
@@ -210,7 +220,7 @@ async function fileByDate(
   let moved = 0;
   for (const expense of candidates) {
     if (expense.tripPinned || !isTripMovable(expense.status)) continue;
-    const tripId = tripFor(expense.transactionDate, windows)?.id ?? null;
+    const tripId = tripFor(expense.filedOn, windows)?.id ?? null;
     if (tripId === expense.tripId) continue;
     // The reports it leaves and joins change: a closed one reopens (ADR-0029).
     const touched = [
@@ -228,7 +238,7 @@ async function fileByDate(
       entityType: 'expense',
       entityId: expense.id,
       action: 'expense.trip_filed',
-      payload: { tripId, previous: expense.tripId, date: expense.transactionDate },
+      payload: { tripId, previous: expense.tripId, date: expense.filedOn },
     });
     moved++;
   }
@@ -253,7 +263,7 @@ export async function fileExpenseToTrip(
     .where(eq(expenses.id, expenseId))
     .for('update');
   if (!expense || expense.tripPinned || !isTripMovable(expense.status)) return;
-  const date = expense.transactionDate;
+  const date = expense.filedOn;
   const windows = date ? await tripsOverlapping(tx, expense.memberId, date, date) : [];
   await fileByDate(tx, orgId, [expense], windows, actor);
 }
@@ -279,16 +289,13 @@ async function refileAround(
         eq(expenses.memberId, memberId),
         eq(expenses.tripPinned, false),
         inArray(expenses.status, ['processing', 'needs_review', 'ready']),
-        or(
-          eq(expenses.tripId, tripId),
-          and(gte(expenses.transactionDate, from), lte(expenses.transactionDate, to)),
-        ),
+        or(eq(expenses.tripId, tripId), and(sql`${filedOn} >= ${from}`, sql`${filedOn} <= ${to}`)),
       ),
     )
-    .orderBy(expenses.transactionDate, expenses.id)
+    .orderBy(filedOn, expenses.id)
     .for('update');
   if (candidates.length === 0) return 0;
-  const dates = candidates.flatMap((e) => (e.transactionDate ? [e.transactionDate] : []));
+  const dates = candidates.flatMap((e) => (e.filedOn ? [e.filedOn] : []));
   const lo = [from, ...dates].reduce((a, b) => (a < b ? a : b));
   const hi = [to, ...dates].reduce((a, b) => (a > b ? a : b));
   const windows = await tripsOverlapping(tx, memberId, lo, hi);
@@ -438,7 +445,7 @@ export async function deleteTrip(
     .select(fileableColumns)
     .from(expenses)
     .where(eq(expenses.tripId, tripId))
-    .orderBy(expenses.transactionDate, expenses.id)
+    .orderBy(filedOn, expenses.id)
     .for('update');
   const submitted = onTrip.filter((e) => !isTripMovable(e.status)).length;
   if (submitted > 0) return { status: 'has_submitted', count: submitted };
@@ -470,7 +477,7 @@ export async function deleteTrip(
       expenses: onTrip.map((e) => e.id),
     },
   });
-  const dates = onTrip.flatMap((e) => (e.transactionDate ? [e.transactionDate] : []));
+  const dates = onTrip.flatMap((e) => (e.filedOn ? [e.filedOn] : []));
   if (dates.length === 0) return { status: 'deleted', refiled: 0 };
   const lo = dates.reduce((a, b) => (a < b ? a : b));
   const hi = dates.reduce((a, b) => (a > b ? a : b));
@@ -523,7 +530,7 @@ export async function setExpenseTrip(
   let tripId: string | null;
   let pinned: boolean;
   if ('byDate' in choice) {
-    const date = expense.transactionDate;
+    const date = expense.filedOn;
     const windows = date ? await tripsOverlapping(tx, expense.memberId, date, date) : [];
     tripId = tripFor(date, windows)?.id ?? null;
     pinned = false;

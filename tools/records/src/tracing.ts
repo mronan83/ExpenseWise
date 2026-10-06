@@ -185,6 +185,10 @@ export const GAPS: readonly Gap[] = [
       'Found answering your question of Oct 6, how best to get airfare into ExpenseWise. An expense files to the trip whose dates include its date (ADR-0023), and a fare’s date is the day it was charged, usually weeks before it flies, so nearly every fare is on no trip until it is put on one by hand. ADR-0023 foresaw this for flights and hotels and left it to a person’s choice; a hotel folio is dated its check-out, so it files, but a fare doesn’t. The reading finds a ticket’s from and to, not when it departs.',
     fix: 'Read a ticket’s first departure date and file it to the trip by that day, keeping the day it was charged as its date (#94).',
     backlog: 94,
+    closed: {
+      date: '2026-10-06',
+      note: 'PR #64 (#94): while Journeys and stays is on, an airline or rail ticket reads the day its first leg departs (`journeys-v2`), kept as `expenses.departs_on`, and files to the trip that covers that day; its date stays the day it was charged. A fare with no trip yet waits for a report until it departs. The expense and the export say “departs Oct 20, 2026”, and a person can correct it. A ticket read before needs Read again.',
+    },
   },
   {
     id: 'GAP-25',
@@ -1081,6 +1085,12 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-06',
+    change:
+      'PR #64, your requirement of Oct 6 for each trip’s full picture, built. #94 (GAP-40 closed): while Journeys and stays is on, an airline or rail ticket reads the day it departs and files to the trip it flies on, keeping the day it was charged as its date; a fare whose trip isn’t made yet waits for a report until it departs. #95: behind Paid by the company, Settings › Organization keeps the types your employer pays directly, each expense of one is marked paid by the company and can be switched by hand, the trip shows its cost split into claimed and paid by the company, and the report and its export list such expenses apart, below the claim and outside its total (Q46 to Q48, ADR-0045).',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-06',
     change:

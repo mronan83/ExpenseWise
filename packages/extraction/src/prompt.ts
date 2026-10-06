@@ -44,6 +44,6 @@ ${SOURCES_INSTRUCTIONS}`;
  * prompt's, so a stored reading says it was asked; with the switch off nothing is added.
  */
 export const JOURNEYS_INSTRUCTIONS = `- A train or rail ticket, or its receipt, is a rail_ticket.
-- For a ride receipt, an airline ticket or a rail ticket, read in journey where it went from and to, exactly as printed: a ride's pickup and drop-off, a flight's origin and destination as airport codes or cities, a train's departure and arrival stations. A ticket of several legs goes from where the first leg starts to where the outbound journey ends, so a return ticket SFO to ORD and back reads SFO to ORD.
+- For a ride receipt, an airline ticket or a rail ticket, read in journey where it went from and to, exactly as printed: a ride's pickup and drop-off, a flight's origin and destination as airport codes or cities, a train's departure and arrival stations. A ticket of several legs goes from where the first leg starts to where the outbound journey ends, so a return ticket SFO to ORD and back reads SFO to ORD. Read in departs the date the first leg departs, as YYYY-MM-DD: a ticket is often bought weeks before it flies, so this is the day of travel, never the day it was bought or the receipt was issued.
 - For a hotel folio, read in stay its check-in and check-out dates as YYYY-MM-DD. Never work a date out from the number of nights.
 - Leave journey and stay null for any other document, and leave out an end or a date the document doesn't print.`;

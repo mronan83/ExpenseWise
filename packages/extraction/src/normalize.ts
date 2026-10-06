@@ -78,10 +78,12 @@ export interface Place {
   readonly country: string | null;
 }
 
-/** Where a journey went, each end as printed. */
+/** Where a journey went, each end as printed, and the day its first leg departs. */
 export interface Journey {
   readonly from: Field<string> | null;
   readonly to: Field<string> | null;
+  /** YYYY-MM-DD; a date that isn't one is blank. */
+  readonly departs: Field<string> | null;
 }
 
 /** A stay's check-in and check-out days, and the nights worked out from both. */
@@ -266,15 +268,24 @@ const textField = (read: Read): Field<string> | null => {
   return read && value ? { value, confidence: read.confidence } : null;
 };
 
+/** A field read as a date, blank when it isn't one. */
+const dayField = (read: Read): Field<string> | null => {
+  const field = textField(read);
+  return field && isIsoDate(field.value) ? field : null;
+};
+
 /**
  * A journey is kept only from a ride receipt, an airline ticket or a rail ticket, each end
- * as printed; like time and place, an end that doesn't read is blank, never a problem.
+ * as printed, with the day it departs; like time and place, a part that doesn't read is
+ * blank, never a problem.
  */
 function journeyOf(type: DocumentType, read: ReceiptExtraction['journey']): Journey | null {
   if (!read || !JOURNEY_DOCUMENTS.includes(type)) return null;
   const from = textField(read.from);
   const to = textField(read.to);
-  return from || to ? { from, to } : null;
+  // A reading made before journeys-v2 has no departs.
+  const departs = dayField(read.departs);
+  return from || to || departs ? { from, to, departs } : null;
 }
 
 /**
@@ -283,12 +294,8 @@ function journeyOf(type: DocumentType, read: ReceiptExtraction['journey']): Jour
  */
 function stayOf(type: DocumentType, read: ReceiptExtraction['stay']): Stay | null {
   if (!read || !STAY_DOCUMENTS.includes(type)) return null;
-  const day = (r: Read): Field<string> | null => {
-    const field = textField(r);
-    return field && isIsoDate(field.value) ? field : null;
-  };
-  const checkIn = day(read.checkIn);
-  const checkOut = day(read.checkOut);
+  const checkIn = dayField(read.checkIn);
+  const checkOut = dayField(read.checkOut);
   if (!checkIn && !checkOut) return null;
   return {
     checkIn,
@@ -308,6 +315,7 @@ export function travelOf(reading: NormalizedExtraction | null): ExpenseTravel | 
   return {
     journeyFrom: reading.journey?.from?.value ?? null,
     journeyTo: reading.journey?.to?.value ?? null,
+    departsOn: reading.journey?.departs?.value ?? null,
     checkIn: reading.stay?.checkIn?.value ?? null,
     checkOut: reading.stay?.checkOut?.value ?? null,
   };

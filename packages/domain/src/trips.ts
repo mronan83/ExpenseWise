@@ -56,6 +56,16 @@ export function tripPhase(
 }
 
 /**
+ * The day an expense files to a trip by (ADR-0023): the day a ticket's first leg departs, when
+ * it was read or entered, else the day it was charged. A fare bought weeks ahead files to the
+ * trip it flies on, and keeps the day it was charged as its date (FR-EXP-19, #94).
+ */
+export const filingDate = (expense: {
+  readonly transactionDate: string | null;
+  readonly departsOn?: string | null;
+}): string | null => expense.departsOn ?? expense.transactionDate;
+
+/**
  * Date filing may move an expense to another trip only before it is submitted: while it is
  * read, needs review or is Ready. A submitted expense stays on its trip, as its report does.
  */

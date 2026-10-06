@@ -91,6 +91,7 @@ const ride: ReceiptExtraction = {
   journey: {
     from: { value: 'Hilton Omaha', confidence: 'high' },
     to: { value: '1520 Harney St', confidence: 'high' },
+    departs: null,
   },
   stay: null,
 };
@@ -133,8 +134,8 @@ describe('journeys and stays, asked for (FR-INT-20, FR-INT-21)', () => {
     expect(claude.run).toMatchObject({
       outcome: 'extracted',
       extraction: ride,
-      promptVersion: 'extract-v5+journeys-v1',
-      schemaVersion: 'receipt-v5+journeys-v1',
+      promptVersion: 'extract-v5+journeys-v2',
+      schemaVersion: 'receipt-v5+journeys-v2',
     });
     const openai = await openaiRequest({ journeys: true }, ride);
     expect(openai.body.instructions).toBe(`${SYSTEM_PROMPT}\n${JOURNEYS_INSTRUCTIONS}`);
@@ -149,7 +150,7 @@ describe('journeys and stays, asked for (FR-INT-20, FR-INT-21)', () => {
     expect(openai.run).toMatchObject({
       outcome: 'extracted',
       extraction: ride,
-      schemaVersion: 'receipt-v5+journeys-v1',
+      schemaVersion: 'receipt-v5+journeys-v2',
     });
   });
 
@@ -168,14 +169,14 @@ describe('journeys and stays, asked for (FR-INT-20, FR-INT-21)', () => {
     expect(both.system).toBe(`${SOURCES_SYSTEM_PROMPT}\n${JOURNEYS_INSTRUCTIONS}`);
     expect(both.system).toBe(`${SYSTEM_PROMPT}\n${SOURCES_INSTRUCTIONS}\n${JOURNEYS_INSTRUCTIONS}`);
     expect([both.promptVersion, both.schemaVersion]).toEqual([
-      'extract-v6+journeys-v1',
-      'receipt-v6+journeys-v1',
+      'extract-v6+journeys-v2',
+      'receipt-v6+journeys-v2',
     ]);
     expect(Object.keys(both.schema.shape).slice(-3)).toEqual(['sources', 'journey', 'stay']);
     // Made once: the same options ask the same request.
     expect(variantOf({ journeys: true, fieldSources: true })).toBe(both);
     const openai = await openaiRequest({ fieldSources: true, journeys: true });
-    expect(openai.run.schemaVersion).toBe('receipt-v6+journeys-v1');
+    expect(openai.run.schemaVersion).toBe('receipt-v6+journeys-v2');
     expect(openai.body.text.format.schema.properties).toHaveProperty('sources');
     expect(openai.body.text.format.schema.properties).toHaveProperty('stay');
     const claude = await claudeRequest({ fieldSources: true, journeys: true });

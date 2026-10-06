@@ -87,8 +87,10 @@ export async function reportForExport(
       milesReason: mileageRoutes.milesReason,
       journeyFrom: expenses.journeyFrom,
       journeyTo: expenses.journeyTo,
+      departsOn: expenses.departsOn,
       checkIn: expenses.checkIn,
       checkOut: expenses.checkOut,
+      companyPaid: expenses.companyPaid,
     })
     .from(expenses)
     .leftJoin(trips, and(eq(trips.orgId, expenses.orgId), eq(trips.id, expenses.tripId)))
@@ -155,6 +157,7 @@ export async function reportForExport(
         // Where a journey went and a stay's dates, once the expense has either (FR-INT-20/21).
         ...(r.journeyFrom === null &&
         r.journeyTo === null &&
+        r.departsOn === null &&
         r.checkIn === null &&
         r.checkOut === null
           ? {}
@@ -162,10 +165,13 @@ export async function reportForExport(
               travel: {
                 journeyFrom: r.journeyFrom,
                 journeyTo: r.journeyTo,
+                departsOn: r.departsOn,
                 checkIn: r.checkIn,
                 checkOut: r.checkOut,
               },
             }),
+        // Paid by the company directly (FR-EXP-17): listed apart from the claim while it is on.
+        ...(r.companyPaid ? { paidBy: 'company' as const } : {}),
       };
     }),
   };

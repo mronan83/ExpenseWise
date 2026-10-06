@@ -3,6 +3,7 @@ import {
   MERGE_FIELDS,
   STAY_MAX_NIGHTS,
   SUPPORTED_CURRENCIES,
+  TRAVEL_FIELDS,
   UNFILED_EMAIL_DAYS,
 } from '@expensewise/domain';
 import { CORRECTABLE_FIELDS, READING_CHECKS } from '@expensewise/extraction';
@@ -344,6 +345,11 @@ export const ReceiptReadingSchema = z
         }),
         to: JourneyEndReadSchema.openapi({
           description: 'Where it went to, as printed. Only while receipts.journeys is on.',
+        }),
+        departs: JourneyEndReadSchema.openapi({
+          description:
+            'The day a ticket’s first leg departs as read, YYYY-MM-DD. Only while ' +
+            'receipts.journeys is on.',
         }),
         checkIn: JourneyEndReadSchema.openapi({
           description:
@@ -756,6 +762,13 @@ export const ReceiptCheckSchema = z
   })
   .openapi('ReceiptCheck');
 
+export const PaidBySchema = z.enum(['claimant', 'company']).openapi('PaidBy', {
+  description:
+    'Who paid it (FR-EXP-17). claimant: the person, who claims it. company: the company paid ' +
+    'it directly, such as airfare an employer books: it stays on its trip and in the trip’s ' +
+    'cost, and is never claimed. Only while `expenses.company-paid` is on.',
+});
+
 export const ExpenseSummarySchema = z
   .object({
     id: z.string().uuid(),
@@ -797,6 +810,16 @@ export const ExpenseSummarySchema = z
     }),
     // Only while categories and types are switched on (FR-EXP-11, FR-INT-10).
     category: ExpenseCategorySchema.optional(),
+    // Only while Paid by the company is switched on (FR-EXP-17, FR-EXP-18).
+    paidBy: PaidBySchema.optional(),
+    paidByPinned: z
+      .boolean()
+      .optional()
+      .openapi({
+        description:
+          'A person set who paid it, so the policy for its type leaves it alone until it is ' +
+          'handed back (Q46). Only while `expenses.company-paid` is on.',
+      }),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
   })
@@ -809,11 +832,21 @@ const JourneySchema = z
       example: 'SFO',
     }),
     to: z.string().nullable().openapi({ description: 'Where it went to.', example: 'ORD' }),
+    departsOn: z
+      .string()
+      .nullable()
+      .openapi({
+        format: 'date',
+        description:
+          'The day its first leg departs, YYYY-MM-DD (FR-EXP-19). A ticket files to its trip by ' +
+          'this day when it is known; its date stays the day it was charged.',
+        example: '2026-10-20',
+      }),
   })
   .openapi('Journey', {
     description:
-      'Where a ride, flight or train went (FR-INT-20): read from its receipt, or corrected by a ' +
-      'person. Either end may be blank.',
+      'Where a ride, flight or train went, and when it departs (FR-INT-20, FR-EXP-19): read ' +
+      'from its receipt, or corrected by a person. Any part may be blank.',
   });
 
 const StayDoubtSchema = z
@@ -845,7 +878,7 @@ const StaySchema = z
     description: 'A hotel stay (FR-INT-21): its check-in and check-out, and the nights between.',
   });
 
-const TravelFieldSchema = z.enum(['journeyFrom', 'journeyTo', 'checkIn', 'checkOut']);
+const TravelFieldSchema = z.enum(TRAVEL_FIELDS);
 
 export const ExpenseDetailSchema = ExpenseSummarySchema.extend({
   editable: z
@@ -959,6 +992,10 @@ export const EditExpenseSchema = z
       'SFO',
     ),
     journeyTo: edited('Where it went to; blank clears it.', 'ORD'),
+    departsOn: edited(
+      'The day a ticket’s first leg departs, YYYY-MM-DD; it files to its trip by this day. Blank clears it.',
+      '2026-10-20',
+    ),
     checkIn: edited(
       'A stay’s check-in, YYYY-MM-DD; blank clears it. Only while receipts.journeys is on.',
       '2026-09-29',
@@ -1005,6 +1042,26 @@ export const ExpenseSearchSchema = z.object({
     .optional()
     .openapi({ description: 'yes: on some trip. no: on none, such as everyday spend.' }),
 });
+
+export const SetPaidBySchema = z
+  .union([
+    z
+      .object({
+        paidBy: z.enum(['claimant', 'company']).openapi({
+          description:
+            'Who paid it, set by hand: the policy for its type leaves it so from then on (Q46).',
+        }),
+      })
+      .strict(),
+    z
+      .object({
+        byPolicy: z.literal(true).openapi({
+          description: 'Hand it back to the policy for its type, which applies at once.',
+        }),
+      })
+      .strict(),
+  ])
+  .openapi('SetPaidBy');
 
 export const SetExpenseTripSchema = z
   .union([
@@ -1125,6 +1182,20 @@ const TripTotalSchema = z.object({
   decimal: z.string().openapi({ example: '1257.60' }),
 });
 
+/** A cost split by who paid it (FR-EXP-17). */
+const CostSplitSchema = z
+  .object({
+    claimed: z.array(TripTotalSchema).openapi({
+      description: 'What the person paid and claims, one total per currency, never converted.',
+    }),
+    companyPaid: z.array(TripTotalSchema).openapi({
+      description:
+        'What the company paid directly and is never claimed, one total per currency, never ' +
+        'converted.',
+    }),
+  })
+  .openapi('CostSplit');
+
 export const TripSummarySchema = z
   .object({
     id: z.string().uuid(),
@@ -1145,6 +1216,11 @@ export const TripSummarySchema = z
       description:
         'What its expenses add up to, one total per currency, never converted. Expenses with ' +
         'no amount yet count in none.',
+    }),
+    cost: CostSplitSchema.optional().openapi({
+      description:
+        'Its cost split into what is claimed and what the company paid; with `totals`, its ' +
+        'full cost. Only while `expenses.company-paid` is on (FR-EXP-17).',
     }),
     reportId: z
       .string()
@@ -1311,12 +1387,14 @@ export const ReportSummarySchema = z
     }),
     totals: z.array(TotalSchema).openapi({
       description:
-        'One total per currency, as spent, never converted; possible duplicates are left out.',
+        'One total per currency, as spent, never converted; possible duplicates are left out, ' +
+        'and, while `expenses.company-paid` is on, what the company paid (FR-EXP-17).',
     }),
     reimbursement: ReimbursementTotalSchema.optional().openapi({
       description:
         'Everything on it in `currency`, the person’s reimbursement currency, at each purchase ' +
-        'date’s reference rate; possible duplicates are left out. Only while the feature ' +
+        'date’s reference rate; possible duplicates are left out, and, while ' +
+        '`expenses.company-paid` is on, what the company paid. Only while the feature ' +
         '`reports.currency-conversion` is on (FR-EXP-13).',
     }),
   })
@@ -1350,6 +1428,7 @@ export const ReportDetailSchema = ReportSummarySchema.extend({
         description:
           'Its amount in the report’s currency, while conversion is on; null with no amount yet.',
       }),
+      paidBy: PaidBySchema.optional(),
     }),
   ),
   rates: z
@@ -1365,6 +1444,41 @@ export const ReportDetailSchema = ReportSummarySchema.extend({
       description:
         'Each rate its amounts were converted at, oldest first, while conversion is on ' +
         '(NFR-DAT-02).',
+    }),
+  companyPaid: z
+    .object({
+      expenses: z.array(
+        z.object({
+          id: z.string().uuid(),
+          status: ExpenseStatusSchema,
+          merchant: z.string().nullable(),
+          date: z.string().nullable(),
+          amount: ExpenseAmountSchema,
+          receiptId: z.string().uuid().nullable(),
+          trip: z.object({ id: z.string().uuid(), name: z.string() }).nullable(),
+          held: z.boolean().openapi({ description: 'Held as a possible duplicate (FR-INT-18).' }),
+          ready: z.boolean().openapi({
+            description:
+              'Read and, for a local expense, justified: the report closes only once it is, like ' +
+              'anything on it.',
+          }),
+        }),
+      ),
+      totals: z.array(TotalSchema).openapi({
+        description: 'What the company paid, one total per currency, never converted.',
+      }),
+      fullCost: z.array(TotalSchema).openapi({
+        description:
+          'The claim and what the company paid together, one total per currency, never ' +
+          'converted: the full cost of what is on the report.',
+      }),
+    })
+    .optional()
+    .openapi({
+      description:
+        'What the company paid directly, listed apart, below the claim and outside its total ' +
+        '(FR-EXP-17, Q47). Its expenses are on the report and need to be ready like any ' +
+        'other, but every other total leaves them out. Only while `expenses.company-paid` is on.',
     }),
 }).openapi('ReportDetail');
 
