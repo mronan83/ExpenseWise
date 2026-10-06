@@ -310,13 +310,14 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'File a fare to its trip by the day it flies',
     type: 'Gap',
     detail:
-      'GAP-40, from your question of Oct 6. A flight, rail or bus ticket reads the date of its first departure, as it already reads where it went from and to, and files to the trip that covers that day; the day it was charged stays its date. A return ticket files by its outbound departure; one whose departure can’t be read files by its date, as now; one you put on a trip by hand stays there.',
+      'GAP-40, from your question of Oct 6. An airline or rail ticket reads the date of its first departure, as it already reads where it went from and to, and files to the trip that covers that day; the day it was charged stays its date. A return ticket files by its outbound departure; one whose departure can’t be read files by its date, as now; one you put on a trip by hand stays there.',
     priority: 'P1',
     effort: 'S',
     severity: 'Medium',
     blocker: { kind: 'none' },
     source: 'GAP-40',
     affects: ['GAP-40', 'FR-EXP-19', 'FR-EXP-04', 'F-63', 'F-54'],
+    done: { date: '2026-10-06', in: 'PR #64' },
   },
   {
     num: 95,

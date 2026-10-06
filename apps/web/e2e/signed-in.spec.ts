@@ -276,7 +276,11 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
   ['editing when and where it was bought', (s) => `/expenses/${s.expenses.uber}`, [press('Edit')]],
   ['an expense still being read', (s) => `/expenses/${s.expenses.processing}`, []],
   ['a ride with where it went', (s) => `/expenses/${s.expenses.ride}`, []],
-  ['a flight with where it went', (s) => `/expenses/${s.expenses.flight}`, []],
+  [
+    'a flight with where it went and the day it departs',
+    (s) => `/expenses/${s.expenses.flight}`,
+    [(page) => expect(page.getByText('SFO → OMA, departs Sep 29, 2026')).toBeVisible()],
+  ],
   ['a hotel stay with its nights', (s) => `/expenses/${s.expenses.stay}`, []],
   ['correcting a journey and a stay', (s) => `/expenses/${s.expenses.stay}`, [press('Edit')]],
   ['a hotel stay whose nights aren’t sure', (s) => `/expenses/${s.expenses.stayUnsure}`, []],

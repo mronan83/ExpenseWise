@@ -671,7 +671,8 @@ await capture(
   both(
     reading('United Airlines', '2026-09-29', 'USD', '389.20', {
       documentType: 'airline_ticket',
-      journey: { from: end('SFO'), to: end('OMA') },
+      // The day it departs (FR-EXP-19, #94): the expense files to its trip by it.
+      journey: { from: end('SFO'), to: end('OMA'), departs: end('2026-09-29') },
       stay: null,
     }),
   ),

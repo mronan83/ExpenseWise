@@ -498,7 +498,8 @@
           "security.second-factor",
           "team.invites",
           "expenses.itemized",
-          "expenses.split"
+          "expenses.split",
+          "expenses.company-paid"
         ]
       },
       "SwitchFeature": {
@@ -2305,6 +2306,30 @@
                 ],
                 "description": "Where it went to, as printed. Only while receipts.journeys is on."
               },
+              "departs": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "properties": {
+                  "value": {
+                    "type": "string"
+                  },
+                  "confidence": {
+                    "type": "string",
+                    "enum": [
+                      "high",
+                      "medium",
+                      "low"
+                    ]
+                  }
+                },
+                "required": [
+                  "value",
+                  "confidence"
+                ],
+                "description": "The day a ticket’s first leg departs as read, YYYY-MM-DD. Only while receipts.journeys is on."
+              },
               "checkIn": {
                 "type": [
                   "object",
@@ -3452,11 +3477,21 @@
                         ],
                         "description": "Where it went to.",
                         "example": "ORD"
+                      },
+                      "departsOn": {
+                        "type": [
+                          "string",
+                          "null"
+                        ],
+                        "format": "date",
+                        "description": "The day its first leg departs, YYYY-MM-DD (FR-EXP-19). A ticket files to its trip by this day when it is known; its date stays the day it was charged.",
+                        "example": "2026-10-20"
                       }
                     },
                     "required": [
                       "from",
-                      "to"
+                      "to",
+                      "departsOn"
                     ],
                     "description": "Where the journey went, as its receipt reads; null for a reading not asked for it."
                   },
@@ -3518,6 +3553,7 @@
                       "enum": [
                         "journeyFrom",
                         "journeyTo",
+                        "departsOn",
                         "checkIn",
                         "checkOut"
                       ]
@@ -3649,11 +3685,21 @@
             ],
             "description": "Where it went to.",
             "example": "ORD"
+          },
+          "departsOn": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date",
+            "description": "The day its first leg departs, YYYY-MM-DD (FR-EXP-19). A ticket files to its trip by this day when it is known; its date stays the day it was charged.",
+            "example": "2026-10-20"
           }
         },
         "required": [
           "from",
-          "to"
+          "to",
+          "departsOn"
         ],
         "description": "Where a ride, flight or train went. Only while receipts.journeys is on."
       },
@@ -4203,6 +4249,12 @@
             "maxLength": 200,
             "description": "Where it went to; blank clears it.",
             "example": "ORD"
+          },
+          "departsOn": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "The day a ticket’s first leg departs, YYYY-MM-DD; it files to its trip by this day. Blank clears it.",
+            "example": "2026-10-20"
           },
           "checkIn": {
             "type": "string",

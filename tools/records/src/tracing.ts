@@ -185,6 +185,10 @@ export const GAPS: readonly Gap[] = [
       'Found answering your question of Oct 6, how best to get airfare into ExpenseWise. An expense files to the trip whose dates include its date (ADR-0023), and a fare’s date is the day it was charged, usually weeks before it flies, so nearly every fare is on no trip until it is put on one by hand. ADR-0023 foresaw this for flights and hotels and left it to a person’s choice; a hotel folio is dated its check-out, so it files, but a fare doesn’t. The reading finds a ticket’s from and to, not when it departs.',
     fix: 'Read a ticket’s first departure date and file it to the trip by that day, keeping the day it was charged as its date (#94).',
     backlog: 94,
+    closed: {
+      date: '2026-10-06',
+      note: 'PR #64 (#94): while Journeys and stays is on, an airline or rail ticket reads the day its first leg departs (`journeys-v2`), kept as `expenses.departs_on`, and files to the trip that covers that day; its date stays the day it was charged. A fare with no trip yet waits for a report until it departs. The expense and the export say “departs Oct 20, 2026”, and a person can correct it. A ticket read before needs Read again.',
+    },
   },
   {
     id: 'GAP-25',

@@ -105,6 +105,7 @@ export const expenseColumns = {
   country: expenses.merchantCountry,
   journeyFrom: expenses.journeyFrom,
   journeyTo: expenses.journeyTo,
+  departsOn: expenses.departsOn,
   checkIn: expenses.checkIn,
   checkOut: expenses.checkOut,
   reportId: expenses.reportId,
@@ -332,6 +333,7 @@ const detailSelection = {
 const travelSelection = {
   journeyFrom: expenses.journeyFrom,
   journeyTo: expenses.journeyTo,
+  departsOn: expenses.departsOn,
   checkIn: expenses.checkIn,
   checkOut: expenses.checkOut,
 };
@@ -339,6 +341,7 @@ const travelSelection = {
 const travelOf = (row: ExpenseTravel): ExpenseTravel => ({
   journeyFrom: row.journeyFrom,
   journeyTo: row.journeyTo,
+  departsOn: row.departsOn,
   checkIn: row.checkIn,
   checkOut: row.checkOut,
 });
@@ -474,7 +477,10 @@ export async function fileReceiptExpense(
     actor,
     'its receipt changed',
   );
-  if (refreshed) await fileExpenseToTrip(tx, orgId, receipt.expenseId, actor);
+  // A new date, or a ticket's new departure, may mean another trip (FR-EXP-19).
+  if (refreshed || travel.departsOn !== currentTravel.departsOn) {
+    await fileExpenseToTrip(tx, orgId, receipt.expenseId, actor);
+  }
 }
 
 export type EditExpenseResult =
@@ -591,7 +597,10 @@ export async function editExpense(
     { type: 'user', id: actorUserId },
     'an expense on it was edited',
   );
-  if (changes.some((c) => c.field === 'date')) {
+  if (
+    changes.some((c) => c.field === 'date') ||
+    travelChanges.some((c) => c.field === 'departsOn')
+  ) {
     await fileExpenseToTrip(tx, orgId, expenseId, { type: 'user', id: actorUserId });
   }
   return { status: 'edited', changes, detailChanges, ...travelRecord };

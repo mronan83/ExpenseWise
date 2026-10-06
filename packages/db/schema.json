@@ -2078,6 +2078,12 @@
           "type": "text",
           "nullable": true,
           "default": null
+        },
+        {
+          "name": "departs_on",
+          "type": "date",
+          "nullable": true,
+          "default": null
         }
       ],
       "primaryKey": [

@@ -353,7 +353,8 @@ export async function joinDueItems(
         isNull(expenses.reportId),
         isNotNull(expenses.transactionDate),
         inArray(expenses.status, ['needs_review', 'ready']),
-        lte(expenses.transactionDate, lastDay),
+        // By the day it files by: a fare bought ahead waits for the month it flies (#94).
+        sql`coalesce(${expenses.departsOn}, ${expenses.transactionDate}) <= ${lastDay}`,
       ),
     )
     .orderBy(asc(expenses.transactionDate), asc(expenses.id))

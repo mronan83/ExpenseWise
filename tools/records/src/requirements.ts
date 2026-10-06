@@ -798,14 +798,22 @@ export const FUNCTIONAL: readonly Requirement[] = [
   },
   {
     id: 'FR-EXP-19',
-    text: 'A flight, rail or bus ticket reads the date of its first departure and files to the trip that covers that day, while the day it was charged stays its date, so a fare bought weeks ahead files to the trip it is for.',
+    text: 'An airline or rail ticket reads the date of its first departure and files to the trip that covers that day, while the day it was charged stays its date, so a fare bought weeks ahead files to the trip it is for.',
     sources: ['owner 2026-10-06', 'ADR-0023'],
     priority: 'Should',
     phase: 'P1',
-    status: 'Planned',
+    status: 'Verified',
     features: ['F-63'],
-    backlog: [94],
-    note: 'Your goal of Oct 6, the full picture of each trip’s expenses. Expenses file to trips by date (FR-EXP-04, ADR-0023), and a fare’s date is the day it was bought, usually weeks before it flies, so until this is built a fare is put on its trip by hand (GAP-40).',
+    checks: [
+      'domain/trips › files a ticket by the day it departs, and anything else by the day it was charged (FR-EXP-19)',
+      'extraction/journeys › keeps the day a ticket departs, bought weeks before, when it is a date (FR-EXP-19)',
+      'db/trips.int › files a fare bought weeks ahead to the trip it flies on, keeping the day it was charged',
+      'db/trips.int › files a fare when its trip is made, and moves it when its departure is corrected',
+      'db/journeys.int › files a fare read weeks before its trip to the trip it departs in, and a later reading moves it',
+      'db/reports.int › leaves a fare bought ahead off a report until it departs, so its trip can be made (FR-EXP-19)',
+      'api/journeys › show and correct the day a ticket departs, refusing one that isn’t a date (FR-EXP-19)',
+    ],
+    note: 'Your goal of Oct 6, the full picture of each trip’s expenses, built in PR #64 (#94, GAP-40 closed) behind Journeys and stays, which asks for the departure. Expenses file to trips by date (FR-EXP-04, ADR-0023); a ticket now files by the day it departs, and its date stays the day it was charged. A fare with no trip yet waits for a report until it departs, so its trip can still be made. A ride files by its date, as before. A receipt read before needs Read again to gain its departure, or it can be typed in.',
   },
 
   // Governance

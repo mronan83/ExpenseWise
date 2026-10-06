@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   amountMatches,
   applyTripInput,
+  filingDate,
   isTripMovable,
   TRIP_MAX_DAYS,
   tripCovers,
@@ -77,6 +78,19 @@ describe('tripFor', () => {
         else expect(trips.some((t) => tripCovers(t, date))).toBe(false);
       }),
     );
+  });
+});
+
+describe('filingDate', () => {
+  it('files a ticket by the day it departs, and anything else by the day it was charged (FR-EXP-19)', () => {
+    const chicago = trip('chicago', '2026-10-20', '2026-10-23');
+    const fare = { transactionDate: '2026-09-12', departsOn: '2026-10-20' };
+    expect(filingDate(fare)).toBe('2026-10-20');
+    expect(tripFor(filingDate(fare), [chicago])).toBe(chicago);
+    expect(tripFor(fare.transactionDate, [chicago])).toBeNull();
+    expect(filingDate({ transactionDate: '2026-10-21', departsOn: null })).toBe('2026-10-21');
+    expect(filingDate({ transactionDate: '2026-10-21' })).toBe('2026-10-21');
+    expect(filingDate({ transactionDate: null, departsOn: null })).toBeNull();
   });
 });
 

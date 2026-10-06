@@ -55,6 +55,7 @@ const folio: ReceiptExtraction = {
 const STAY: ExpenseTravel = {
   journeyFrom: null,
   journeyTo: null,
+  departsOn: null,
   checkIn: '2026-09-29',
   checkOut: '2026-10-01',
 };
@@ -127,6 +128,7 @@ function setup(options: { flags?: string; travel?: ExpenseTravel; status?: strin
         {
           journeyFrom: expense.journeyFrom ?? null,
           journeyTo: expense.journeyTo ?? null,
+          departsOn: expense.departsOn ?? null,
           checkIn: expense.checkIn ?? null,
           checkOut: expense.checkOut ?? null,
         },
@@ -225,7 +227,13 @@ describe('journeys and stays, switched on (FR-INT-20, FR-INT-21)', () => {
   it('show a journey as kept, and where it differs from its receipt', async () => {
     const { call } = setup({
       flags: ON,
-      travel: { journeyFrom: 'SFO', journeyTo: 'ORD', checkIn: '2026-09-29', checkOut: null },
+      travel: {
+        journeyFrom: 'SFO',
+        journeyTo: 'ORD',
+        departsOn: null,
+        checkIn: '2026-09-29',
+        checkOut: null,
+      },
     });
     const res = await call('GET', `/v1/expenses/${EXPENSE}`);
     expect(res.body).toMatchObject({
@@ -238,7 +246,13 @@ describe('journeys and stays, switched on (FR-INT-20, FR-INT-21)', () => {
   it('say a stay’s nights aren’t sure rather than show a wrong number', async () => {
     const { call } = setup({
       flags: ON,
-      travel: { journeyFrom: null, journeyTo: null, checkIn: '2026-10-01', checkOut: '2026-09-29' },
+      travel: {
+        journeyFrom: null,
+        journeyTo: null,
+        departsOn: null,
+        checkIn: '2026-10-01',
+        checkOut: '2026-09-29',
+      },
     });
     const res = await call('GET', `/v1/expenses/${EXPENSE}`);
     expect(res.body.stay).toEqual({
@@ -269,6 +283,30 @@ describe('journeys and stays, switched on (FR-INT-20, FR-INT-21)', () => {
       field: 'checkOut',
       detail: 'Check-out is on or after check-in.',
     });
+  });
+
+  it('show and correct the day a ticket departs, refusing one that isn’t a date (FR-EXP-19)', async () => {
+    const { call, edits } = setup({
+      flags: ON,
+      travel: {
+        journeyFrom: 'SFO',
+        journeyTo: 'ORD',
+        departsOn: '2026-10-20',
+        checkIn: null,
+        checkOut: null,
+      },
+    });
+    const shown = await call('GET', `/v1/expenses/${EXPENSE}`);
+    expect(shown.body).toMatchObject({
+      journey: { from: 'SFO', to: 'ORD', departsOn: '2026-10-20' },
+    });
+    const res = await call('PATCH', `/v1/expenses/${EXPENSE}`, { departsOn: '2026-10-21' });
+    expect(res.status).toBe(200);
+    expect(edits).toEqual([{ travel: { departsOn: '2026-10-21' } }]);
+    expect(res.body).toMatchObject({ journey: { departsOn: '2026-10-21' } });
+    const misdated = await call('PATCH', `/v1/expenses/${EXPENSE}`, { departsOn: 'Oct 21' });
+    expect(misdated.status).toBe(422);
+    expect(misdated.body).toMatchObject({ code: 'invalid_value', field: 'departsOn' });
   });
 
   it('show each model’s journey and stay in the reading table, as read', async () => {

@@ -52,6 +52,12 @@ describe('a journey and a stay, in a line', () => {
     expect(journeyLine(NO_TRAVEL)).toBeNull();
   });
 
+  it('says the day a ticket departs, beside where it went or alone (FR-EXP-19)', () => {
+    const fare = { journeyFrom: 'SFO', journeyTo: 'ORD', departsOn: '2026-10-20' };
+    expect(journeyLine(fare)).toBe('SFO → ORD, departs Oct 20, 2026');
+    expect(journeyLine({ ...NO_TRAVEL, departsOn: '2026-10-20' })).toBe('Departs Oct 20, 2026');
+  });
+
   it('reads a stay as its nights and dates: 2 nights, Sep 29 – Oct 1, 2026', () => {
     expect(stayLine(stay)).toBe('2 nights, Sep 29 – Oct 1, 2026');
     expect(stayLine({ checkIn: '2026-09-29', checkOut: '2026-09-30' })).toBe(
@@ -86,6 +92,7 @@ describe('a person’s edit to a journey and a stay', () => {
         travel: {
           journeyFrom: null,
           journeyTo: 'MDW',
+          departsOn: null,
           checkIn: '2026-09-29',
           checkOut: '2026-10-02',
         },
@@ -99,6 +106,27 @@ describe('a person’s edit to a journey and a stay', () => {
     expect(applyTravelEdit(current, { journeyFrom: 'SFO' })).toEqual({
       ok: true,
       value: { travel: current, changes: [] },
+    });
+  });
+
+  it('sets the day a ticket departs, a date that exists, and clears it (FR-EXP-19)', () => {
+    const fare = { ...NO_TRAVEL, journeyFrom: 'SFO', journeyTo: 'ORD' };
+    const set = applyTravelEdit(fare, { departsOn: ' 2026-10-20 ' });
+    expect(set).toMatchObject({
+      ok: true,
+      value: {
+        travel: { departsOn: '2026-10-20' },
+        changes: [{ field: 'departsOn', from: null, to: '2026-10-20' }],
+      },
+    });
+    expect(applyTravelEdit(fare, { departsOn: 'Oct 20' })).toMatchObject({
+      ok: false,
+      error: { field: 'departsOn', message: 'A date is YYYY-MM-DD, such as 2026-09-29.' },
+    });
+    const flying = { ...fare, departsOn: '2026-10-20' };
+    expect(applyTravelEdit(flying, { departsOn: '' })).toMatchObject({
+      ok: true,
+      value: { travel: { departsOn: null } },
     });
   });
 

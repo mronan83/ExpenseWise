@@ -76,7 +76,9 @@ export const FLAGS = {
     description:
       'A ride, flight or train receipt reads where it went from and to, and a hotel folio its ' +
       'check-in and check-out, with the nights worked out; each shows on the expense, which can ' +
-      'correct it (FR-INT-20, FR-INT-21, #79). A receipt read before gains them when read again.',
+      'correct it (FR-INT-20, FR-INT-21, #79). A flight or train ticket also reads the day it ' +
+      'departs and files to the trip it flies on, not the day it was bought (FR-EXP-19, #94). A ' +
+      'receipt read before gains them when read again.',
   },
   'expenses.mileage': {
     name: 'Mileage',

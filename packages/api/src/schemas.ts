@@ -3,6 +3,7 @@ import {
   MERGE_FIELDS,
   STAY_MAX_NIGHTS,
   SUPPORTED_CURRENCIES,
+  TRAVEL_FIELDS,
   UNFILED_EMAIL_DAYS,
 } from '@expensewise/domain';
 import { CORRECTABLE_FIELDS, READING_CHECKS } from '@expensewise/extraction';
@@ -344,6 +345,11 @@ export const ReceiptReadingSchema = z
         }),
         to: JourneyEndReadSchema.openapi({
           description: 'Where it went to, as printed. Only while receipts.journeys is on.',
+        }),
+        departs: JourneyEndReadSchema.openapi({
+          description:
+            'The day a ticket’s first leg departs as read, YYYY-MM-DD. Only while ' +
+            'receipts.journeys is on.',
         }),
         checkIn: JourneyEndReadSchema.openapi({
           description:
@@ -809,11 +815,21 @@ const JourneySchema = z
       example: 'SFO',
     }),
     to: z.string().nullable().openapi({ description: 'Where it went to.', example: 'ORD' }),
+    departsOn: z
+      .string()
+      .nullable()
+      .openapi({
+        format: 'date',
+        description:
+          'The day its first leg departs, YYYY-MM-DD (FR-EXP-19). A ticket files to its trip by ' +
+          'this day when it is known; its date stays the day it was charged.',
+        example: '2026-10-20',
+      }),
   })
   .openapi('Journey', {
     description:
-      'Where a ride, flight or train went (FR-INT-20): read from its receipt, or corrected by a ' +
-      'person. Either end may be blank.',
+      'Where a ride, flight or train went, and when it departs (FR-INT-20, FR-EXP-19): read ' +
+      'from its receipt, or corrected by a person. Any part may be blank.',
   });
 
 const StayDoubtSchema = z
@@ -845,7 +861,7 @@ const StaySchema = z
     description: 'A hotel stay (FR-INT-21): its check-in and check-out, and the nights between.',
   });
 
-const TravelFieldSchema = z.enum(['journeyFrom', 'journeyTo', 'checkIn', 'checkOut']);
+const TravelFieldSchema = z.enum(TRAVEL_FIELDS);
 
 export const ExpenseDetailSchema = ExpenseSummarySchema.extend({
   editable: z
@@ -959,6 +975,10 @@ export const EditExpenseSchema = z
       'SFO',
     ),
     journeyTo: edited('Where it went to; blank clears it.', 'ORD'),
+    departsOn: edited(
+      'The day a ticket’s first leg departs, YYYY-MM-DD; it files to its trip by this day. Blank clears it.',
+      '2026-10-20',
+    ),
     checkIn: edited(
       'A stay’s check-in, YYYY-MM-DD; blank clears it. Only while receipts.journeys is on.',
       '2026-09-29',

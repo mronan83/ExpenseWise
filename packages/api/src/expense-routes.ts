@@ -194,6 +194,7 @@ export function registerExpenseRoutes(
       country,
       journeyFrom,
       journeyTo,
+      departsOn,
       checkIn,
       checkOut,
       ...values
@@ -205,7 +206,7 @@ export function registerExpenseRoutes(
     const given = { time, timeZone, address, city, region, country };
     const details: Partial<Record<DetailField, string>> = sent(given);
     // A journey or a stay is corrected only while Journeys and stays is on.
-    const travel: TravelEdit = sent({ journeyFrom, journeyTo, checkIn, checkOut });
+    const travel: TravelEdit = sent({ journeyFrom, journeyTo, departsOn, checkIn, checkOut });
     if (Object.keys(travel).length > 0) await features.require(who.orgId, 'receipts.journeys');
     // A new place means a new time zone, worked out again unless the person set one; a blank
     // time zone asks for it to be worked out from the place.

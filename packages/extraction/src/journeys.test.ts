@@ -51,10 +51,12 @@ describe('a journey, read (FR-INT-20)', () => {
     expect(normalizeExtraction(ride).journey).toEqual({
       from: { value: 'Hilton Omaha, 1001 Cass St', confidence: 'high' },
       to: { value: '1520 Harney St', confidence: 'medium' },
+      departs: null,
     });
     expect(travelOf(normalizeExtraction(ride))).toEqual({
       journeyFrom: 'Hilton Omaha, 1001 Cass St',
       journeyTo: '1520 Harney St',
+      departsOn: null,
       checkIn: null,
       checkOut: null,
     });
@@ -93,9 +95,35 @@ describe('a journey, read (FR-INT-20)', () => {
     expect(travelOf(normalizeExtraction(blank))).toEqual({
       journeyFrom: null,
       journeyTo: null,
+      departsOn: null,
       checkIn: null,
       checkOut: null,
     });
+  });
+
+  it('keeps the day a ticket departs, bought weeks before, when it is a date (FR-EXP-19)', () => {
+    const fare = reading({
+      documentType: 'airline_ticket',
+      date: { value: '2026-09-12', confidence: 'high' },
+      journey: { from: end('SFO'), to: end('ORD'), departs: end('2026-10-20') },
+      stay: null,
+    });
+    const read = normalizeExtraction(fare);
+    expect(read.journey?.departs).toEqual({ value: '2026-10-20', confidence: 'high' });
+    expect(read.date?.value).toBe('2026-09-12');
+    expect(travelOf(read)).toMatchObject({ journeyFrom: 'SFO', departsOn: '2026-10-20' });
+    const misread = reading({
+      documentType: 'rail_ticket',
+      journey: { from: null, to: null, departs: end('Oct 20') },
+      stay: null,
+    });
+    expect(normalizeExtraction(misread).journey).toBeNull();
+    // A reading made before journeys-v2 has no departs, and still reads.
+    const earlier = StoredReadingSchema.parse({
+      ...fare,
+      journey: { from: end('SFO'), to: end('ORD') },
+    });
+    expect(travelOf(normalizeExtraction(earlier))).toMatchObject({ departsOn: null });
   });
 
   it('is absent from a reading not asked for it, so the expense keeps what it has', () => {
@@ -127,6 +155,7 @@ describe('a stay, read (FR-INT-21)', () => {
     expect(travelOf(n)).toEqual({
       journeyFrom: null,
       journeyTo: null,
+      departsOn: null,
       checkIn: '2026-09-29',
       checkOut: '2026-10-01',
     });

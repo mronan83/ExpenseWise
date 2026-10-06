@@ -66,6 +66,7 @@ const ROWS: { key: keyof Fields; label: string; filing?: string }[] = [
 const JOURNEY_ROWS: typeof ROWS = [
   { key: 'from', label: 'From' },
   { key: 'to', label: 'To' },
+  { key: 'departs', label: 'Departs' },
   { key: 'checkIn', label: 'Check-in' },
   { key: 'checkOut', label: 'Check-out' },
 ];

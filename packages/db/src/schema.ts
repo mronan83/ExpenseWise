@@ -533,6 +533,11 @@ export const expenses = pgTable(
      */
     journeyFrom: text('journey_from'),
     journeyTo: text('journey_to'),
+    /**
+     * The day a ticket's first leg departs (FR-EXP-19, #94). The expense files to its trip by
+     * this day when it is set, else by its transaction date, which stays the day it was charged.
+     */
+    departsOn: date('departs_on', { mode: 'string' }),
     checkIn: date('check_in', { mode: 'string' }),
     checkOut: date('check_out', { mode: 'string' }),
     notes: text('notes'),

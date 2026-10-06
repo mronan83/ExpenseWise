@@ -82,6 +82,7 @@ export interface Reading {
      */
     from?: TextField | null;
     to?: TextField | null;
+    departs?: TextField | null;
     checkIn?: TextField | null;
     checkOut?: TextField | null;
   } | null;

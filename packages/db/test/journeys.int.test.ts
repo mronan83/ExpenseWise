@@ -10,6 +10,7 @@ import {
   settleReceipt,
 } from '../src/receipts.ts';
 import { auditEvents, expenses, receipts } from '../src/schema.ts';
+import { createTrip } from '../src/trips.ts';
 import { connectAs, seedOrg } from './helpers.ts';
 
 const app = connectAs('app');
@@ -74,8 +75,41 @@ const expenseOf = (org: Org, receiptId: string) =>
 const travelOf = (e: Awaited<ReturnType<typeof expenseOf>>) => ({
   journeyFrom: e?.journeyFrom,
   journeyTo: e?.journeyTo,
+  departsOn: e?.departsOn,
   checkIn: e?.checkIn,
   checkOut: e?.checkOut,
+});
+
+describe('a ticket read with the day it departs (FR-EXP-19, #94)', () => {
+  it('files a fare read weeks before its trip to the trip it departs in, and a later reading moves it', async () => {
+    const org = await seedOrg(app.db, 'journeys-departs');
+    const trip = (name: string, startDate: string, endDate: string) =>
+      withOrg(app.db, org.orgId, async (tx) => {
+        const made = await createTrip(
+          tx,
+          org.orgId,
+          org.memberId,
+          { name, startDate, endDate },
+          org.userId,
+        );
+        if (made.status !== 'saved') throw new Error('no trip');
+        return made.tripId;
+      });
+    const chicago = await trip('Chicago', '2026-10-20', '2026-10-23');
+    const denver = await trip('Denver', '2026-11-02', '2026-11-04');
+    const fare = { ...TICKET, transactionDate: '2026-09-12' };
+    const { receiptId } = await read(org, {
+      ...fare,
+      travel: { ...FLIGHT, departsOn: '2026-10-20' },
+    });
+    expect(await expenseOf(org, receiptId)).toMatchObject({
+      transactionDate: '2026-09-12',
+      departsOn: '2026-10-20',
+      tripId: chicago,
+    });
+    await read(org, { ...fare, travel: { ...FLIGHT, departsOn: '2026-11-02' } }, receiptId);
+    expect(await expenseOf(org, receiptId)).toMatchObject({ tripId: denver });
+  });
 });
 
 describe('a journey and a stay on the expense (FR-INT-20, FR-INT-21)', () => {

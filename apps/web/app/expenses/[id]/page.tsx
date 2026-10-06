@@ -238,6 +238,7 @@ const draftOf = (e: ExpenseDetail): Draft => ({
   // Blank while Journeys and stays is off, so never sent.
   journeyFrom: e.journey?.from ?? '',
   journeyTo: e.journey?.to ?? '',
+  departsOn: e.journey?.departsOn ?? '',
   checkIn: e.stay?.checkIn ?? '',
   checkOut: e.stay?.checkOut ?? '',
 });
@@ -354,6 +355,8 @@ function Claim({
                 {input('journeyFrom', { maxLength: 200, autoComplete: 'off' })}
                 {input('journeyTo', { maxLength: 200, autoComplete: 'off' })}
               </div>
+              {/* A ticket files to its trip by the day it departs (FR-EXP-19). */}
+              <div className="grid grid-cols-2 gap-3">{input('departsOn', { type: 'date' })}</div>
               <div className="grid grid-cols-2 gap-3">
                 {input('checkIn', { type: 'date' })}
                 {input('checkOut', { type: 'date' })}
@@ -575,7 +578,9 @@ function Proof({ expense }: { expense: ExpenseDetail }) {
   const stayed = stayLine(read);
   const differs = new Set(proof.travelDifferences ?? []);
   const travelDiffers = [
-    ...(differs.has('journeyFrom') || differs.has('journeyTo') ? ['journey'] : []),
+    ...(differs.has('journeyFrom') || differs.has('journeyTo') || differs.has('departsOn')
+      ? ['journey']
+      : []),
     ...(differs.has('checkIn') || differs.has('checkOut') ? ['stay'] : []),
   ];
   return (
