@@ -77,10 +77,15 @@ function uncodedItems(uncoded: UncodedNeedingYou | undefined) {
 }
 
 /** A report that came back to the person, with its approver's comment (FR-GOV-11). */
-function returnedItem(returned: ReturnedNeedingYou, now: Date, converting: boolean) {
+function returnedItem(
+  returned: ReturnedNeedingYou,
+  now: Date,
+  converting: boolean,
+  companyPaid: boolean,
+) {
   return {
     kind: 'report' as const,
-    report: reportSummary(returned.report, now, converting),
+    report: reportSummary(returned.report, now, converting, companyPaid),
     reason: { code: 'returned' as const, comment: returned.comment, by: returned.by },
   };
 }
@@ -110,10 +115,11 @@ function toApproveItem(
   contents: ReportsNeedingYou['reports'][number],
   now: Date,
   converting: boolean,
+  companyPaid: boolean,
 ) {
   return {
     kind: 'report' as const,
-    report: reportSummary(contents, now, converting),
+    report: reportSummary(contents, now, converting, companyPaid),
     reason: { code: 'to_approve' as const },
   };
 }
@@ -126,7 +132,8 @@ function toApproveItem(
  * nothing, newest first (#59), then local expenses that need a justification, oldest first,
  * then, while categories are on, expenses with no category and type, oldest first (Q27), then
  * reports ready to close. A report that came back is listed as that, not as ready to close.
- * With `converting`, reports total in their reimbursement currency (FR-EXP-13).
+ * With `converting`, reports total in their reimbursement currency (FR-EXP-13); with
+ * `companyPaid`, their totals leave out what the company paid (FR-EXP-17).
  */
 export function needsYouItems(
   receipts: ReceiptsNeedingYou,
@@ -135,6 +142,7 @@ export function needsYouItems(
   /** Whether the organization reads under its AI model settings (receipts.model-settings). */
   settingsOn = false,
   converting = false,
+  companyPaid = false,
 ) {
   const receiptItems = receipts.receipts
     .map((r) => inboxItem(r, receipts.runs, receipts.reviews, receipts.pairs, settingsOn))
@@ -142,12 +150,15 @@ export function needsYouItems(
   const returned = reports.returned ?? [];
   const back = new Set(returned.map((r) => r.report.report.id));
   const reportItems = reports.reports
-    .map((r) => reportItem(r, now, converting))
+    .map((r) => reportItem(r, now, converting, companyPaid))
     .filter((item) => item !== null);
   return [
     ...reportItems.filter((i) => i.reason.code !== 'ready_to_close'),
-    ...returned.flatMap((r) => [returnedItem(r, now, converting), ...rejectedItems(r)]),
-    ...(reports.toApprove ?? []).map((r) => toApproveItem(r, now, converting)),
+    ...returned.flatMap((r) => [
+      returnedItem(r, now, converting, companyPaid),
+      ...rejectedItems(r),
+    ]),
+    ...(reports.toApprove ?? []).map((r) => toApproveItem(r, now, converting, companyPaid)),
     ...receiptItems,
     ...(reports.emails ?? []).map(unfiledEmailItem),
     ...reports.unjustified.map(unjustifiedItem),

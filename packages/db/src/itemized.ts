@@ -692,6 +692,11 @@ export interface CategorizedExpense {
   readonly conversion: ConversionRecord | null;
   /** Its parts, when it is split; a part with no category is the expense's own. */
   readonly parts: readonly PartRecord[];
+  /**
+   * The company paid it directly (FR-EXP-17): in no claim while Paid by the company is on. Read
+   * from the database; one made elsewhere, such as a test's, may leave it out.
+   */
+  readonly companyPaid?: boolean;
 }
 
 /**
@@ -716,6 +721,7 @@ export async function reportCategories(
       amount: expenses.amountMinor,
       expenseCurrency: expenses.currency,
       transactionDate: expenses.transactionDate,
+      companyPaid: expenses.companyPaid,
       ...recordColumns,
     })
     .from(expenses)
@@ -761,6 +767,7 @@ export async function reportCategories(
     purchaseDate: r.transactionDate,
     conversion: conversionRecord(r),
     parts: parts.filter((p) => p.expenseId === r.expenseId),
+    companyPaid: r.companyPaid,
   }));
 }
 

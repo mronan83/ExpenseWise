@@ -331,6 +331,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none' },
     source: 'Product owner Oct 6',
     affects: ['FR-EXP-17', 'FR-EXP-18', 'F-62'],
+    done: { date: '2026-10-06', in: 'PR #64' },
   },
   // P2: this month
   {
@@ -1383,7 +1384,6 @@ export const SEQUENCING: readonly string[] = [
   'Your batch of Oct 5 is built in PR #60: approval (#24) with the second factor (#8), a submitted claim keeping its names (#70), emails that filed nothing (#59), journeys and stays in the export (#83), business miles on Home (#73) and proof that no tools reach a model (#38), each behind its switch and off until you switch it on.',
   'With #85, #88 and #90 in PR #60, a session that skipped the code gets nothing for someone with an authenticator, and once a person has one, only an email they let in signs in; their other emails still forward receipts (Q44). #91, letting in first only the email a person first signed in with (your answer to Q45), is next; until then, set up your authenticator soon after release.',
   'Approval in a team needs the second factor switched on too. #87 corrects an approved expense; #89 shows what awaits reimbursement on Home.',
-  'Your requirement of Oct 6 for each trip’s full picture: #94 files a fare to the trip it flies on, and #95 tracks what the company pays on the trip, apart from the claim. #94 is small and comes first.',
   '#48 needs you, not code: it keeps a leaked key from erasing the backups.',
   '#11–#15 are small, independent and each closes a gap; take them between features.',
 ];

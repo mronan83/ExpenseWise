@@ -122,6 +122,22 @@ function Overview({ trip }: { trip: TripDetail }) {
           {trip.totals.map(formatMoney).join(' + ')}
         </p>
       ) : null}
+      {/* Sent only while Paid by the company is on, and shown once the company paid any of it. */}
+      {trip.cost && trip.cost.companyPaid.length > 0 ? (
+        <dl
+          aria-label="Its cost, by who paid"
+          className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1"
+        >
+          <dt className="text-ink-2">Claimed</dt>
+          <dd className="text-right break-words tabular-nums">
+            {trip.cost.claimed.map(formatMoney).join(' + ') || 'Nothing'}
+          </dd>
+          <dt className="text-ink-2">Paid by the company</dt>
+          <dd className="text-right break-words tabular-nums">
+            {trip.cost.companyPaid.map(formatMoney).join(' + ')}
+          </dd>
+        </dl>
+      ) : null}
       {trip.reportId ? (
         <p>
           <Link href={`/reports/${trip.reportId}`} className="font-semibold text-carbon underline">
@@ -193,6 +209,7 @@ function Flags({ expense }: { expense: ExpenseSummary }) {
         <span className="text-warn"> · differs from its receipt</span>
       ) : null}
       {expense.tripFiledBy === 'person' ? ' · put here by hand' : ''}
+      {expense.paidBy === 'company' ? ' · paid by the company' : ''}
     </span>
   );
 }

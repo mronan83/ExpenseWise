@@ -1,14 +1,21 @@
-import type { CatalogDeletion, CatalogWrite, Membership } from '@expensewise/db';
+import {
+  COMPANY_PAID_FLAG,
+  type CatalogDeletion,
+  type CatalogWrite,
+  type Membership,
+} from '@expensewise/db';
 import type { MemberRole } from '@expensewise/domain';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { requireIdentity, type AuthVariables, type Identity, type TokenVerifier } from './auth.ts';
 import type { CategoryStore } from './categories.ts';
 import { catalogView, categoryView, detailWithCategory, typeView } from './category-views.ts';
+import { paidByView, readPaidBy, showCompanyPaid, type CompanyPaidStore } from './company-paid.ts';
 import type { ExpenseStore } from './expenses.ts';
 import { featureGate, type FeatureGate } from './features.ts';
 import type { ItemizedStore } from './itemized.ts';
 import { itemizedSections } from './itemized-routes.ts';
 import { ProblemError } from './problem.ts';
+import { setCompanyPaysRoute } from './routes/company-paid.ts';
 import { requireAdminSecondFactor } from './second-factor.ts';
 import {
   classifyExpenseRoute,
@@ -30,6 +37,8 @@ export interface CategoryRouteOptions {
   readonly categories?: CategoryStore;
   /** Lines and splits, shown on the expense a choice answers with while they are on. */
   readonly itemized?: ItemizedStore;
+  /** Who paid, and the policy of the types the company pays (FR-EXP-18). */
+  readonly companyPaid?: CompanyPaidStore;
   /** Which features are on. Built from `workspace` when not given. */
   readonly features?: FeatureGate;
 }
@@ -69,6 +78,7 @@ export function registerCategoryRoutes(
       updateTypeRoute,
       deleteTypeRoute,
       classifyExpenseRoute,
+      setCompanyPaysRoute,
     ].map((r) => r.getRoutingPath()),
   );
   for (const path of paths) app.use(path, auth);
@@ -91,8 +101,14 @@ export function registerCategoryRoutes(
     return options.categories;
   };
 
-  /** The caller's membership, once the feature is on for their organization. */
-  const member = async (userId: string): Promise<Membership> => {
+  /**
+   * The caller's membership, once the feature is on for their organization. With `alsoNeeds`,
+   * once that feature is on too, asked first.
+   */
+  const member = async (
+    userId: string,
+    alsoNeeds?: typeof COMPANY_PAID_FLAG,
+  ): Promise<Membership> => {
     const membership = await workspace().findMembership(userId);
     if (!membership) {
       throw new ProblemError(
@@ -105,6 +121,7 @@ export function registerCategoryRoutes(
         },
       );
     }
+    if (alsoNeeds) await features.require(membership.orgId, alsoNeeds);
     await features.require(membership.orgId, FLAG);
     return membership;
   };
@@ -112,8 +129,11 @@ export function registerCategoryRoutes(
    * The caller's membership, when they may change the lists: past the second factor while it
    * is on (FR-GOV-04).
    */
-  const manager = async (identity: Identity): Promise<Membership> => {
-    const membership = await member(identity.userId);
+  const manager = async (
+    identity: Identity,
+    alsoNeeds?: typeof COMPANY_PAID_FLAG,
+  ): Promise<Membership> => {
+    const membership = await member(identity.userId, alsoNeeds);
     if (!MANAGER_ROLES.has(membership.role)) {
       throw new ProblemError(403, 'forbidden', 'Only an owner or finance admin can do this', {
         code: 'forbidden_role',
@@ -156,7 +176,40 @@ export function registerCategoryRoutes(
   app.openapi(getCatalogRoute, async (c) => {
     const who = await member(c.var.identity.userId);
     const catalog = await store().catalog(who.orgId);
-    return c.json(catalogView(catalog, MANAGER_ROLES.has(who.role)), 200);
+    const companyPaid = await showCompanyPaid(
+      features,
+      who.orgId,
+      catalog.types.some((t) => t.companyPays !== undefined),
+    );
+    return c.json(catalogView(catalog, MANAGER_ROLES.has(who.role), companyPaid), 200);
+  });
+
+  /**
+   * The organization's policy of the types the company pays directly (FR-EXP-18, Q46): an
+   * admin action, so owners and finance admins, past the second factor while it is on. Every
+   * unsubmitted expense of the type not set by hand follows it (Q48).
+   */
+  app.openapi(setCompanyPaysRoute, async (c) => {
+    const { userId } = c.var.identity;
+    const who = await manager(c.var.identity, COMPANY_PAID_FLAG);
+    if (!options.companyPaid) throw notConfigured();
+    const { typeId } = c.req.valid('param');
+    const { companyPays } = c.req.valid('json');
+    const result = await options.companyPaid.setCompanyPays(
+      who.orgId,
+      typeId,
+      companyPays,
+      actorOf(who, userId),
+    );
+    if (result.status === 'missing') throw notFound('type');
+    const type = catalogView(await store().catalog(who.orgId), true, true).types.find(
+      (t) => t.id === typeId,
+    );
+    if (!type) throw notFound('type');
+    return c.json(
+      { ...type, switched: result.status === 'saved' ? result.switched.length : 0 },
+      200,
+    );
   });
 
   app.openapi(createCategoryRoute, async (c) => {
@@ -252,6 +305,10 @@ export function registerCategoryRoutes(
       {
         ...(await detailWithCategory(store(), who.orgId, found)),
         ...(await itemizedSections(options.itemized, features)(who.orgId, found)),
+        // Who paid it, which the policy for its new type may have changed (FR-EXP-18).
+        ...((await showCompanyPaid(features, who.orgId, readPaidBy([found.expense])))
+          ? paidByView(found.expense)
+          : {}),
       },
       200,
     );

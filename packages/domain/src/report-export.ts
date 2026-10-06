@@ -1,4 +1,5 @@
 import type { MemberRole } from './approvals.ts';
+import { PAID_BY_LABELS, type PaidBy } from './company-paid.ts';
 import { isCurrencyCode } from './currency.ts';
 import { EXCLUSION_REASON_LABELS, type ExclusionReason } from './itemized.ts';
 import { journeyLine, stayLine, type ExpenseTravel } from './journeys.ts';
@@ -38,6 +39,11 @@ export interface ExportExpense {
    * FR-INT-21): shown as on the expense, “SFO → ORD” and “2 nights, Sep 29 – Oct 1, 2026”.
    */
   readonly travel?: ExpenseTravel | null;
+  /**
+   * Who paid it, while Paid by the company is on (FR-EXP-17): one the company paid is listed
+   * apart, after the claim and outside its total (Q47).
+   */
+  readonly paidBy?: PaidBy;
 }
 
 /** A drive's miles as the export shows them. */
@@ -92,8 +98,8 @@ interface ExportRow {
 
 interface ColumnDefinition extends ExportColumn {
   readonly cell: (row: ExportRow) => string;
-  /** What it shows on a total’s row. */
-  readonly total: (total: Money) => string;
+  /** What it shows on a total’s row, whose name is `label`, such as Total. */
+  readonly total: (total: Money, label: string) => string;
 }
 
 const text = (header: string, width: number, value: (row: ExportRow) => string | null) =>
@@ -122,6 +128,18 @@ const JOURNEY = text('From and to', 14, (r) =>
  * worked out from its check-in and check-out as on the expense (FR-INT-21).
  */
 const STAY = text('Stay', 16, (r) => (r.expense.travel ? stayLine(r.expense.travel) : null));
+/**
+ * Only when the report has an expense the company paid (FR-EXP-17): who paid each row, You or
+ * The company, so a sum of the claim can leave out what the company paid (US-RPT-22 AC5).
+ */
+const PAID_BY_COLUMN: ColumnDefinition = {
+  header: 'Paid by',
+  text: false,
+  align: 'left',
+  width: 8,
+  cell: (r) => PAID_BY_LABELS[r.expense.paidBy ?? 'claimant'],
+  total: () => '',
+};
 
 /** Which of the columns that join only when a report needs them it has. */
 interface OptionalColumns {
@@ -129,6 +147,7 @@ interface OptionalColumns {
   readonly excluded: boolean;
   readonly journeys: boolean;
   readonly stays: boolean;
+  readonly paidBy: boolean;
 }
 
 /**
@@ -145,7 +164,7 @@ function columnsFor(has: OptionalColumns): readonly ColumnDefinition[] {
       align: 'left',
       width: 9,
       cell: (r) => r.expense.date ?? '',
-      total: () => 'Total',
+      total: (_t, label) => label,
     },
     text('Merchant', 17, (r) => r.expense.merchant),
     ...(has.journeys ? [JOURNEY] : []),
@@ -173,6 +192,7 @@ function columnsFor(has: OptionalColumns): readonly ColumnDefinition[] {
       cell: (r) => r.amount?.currency ?? r.expense.currency ?? '',
       total: (t) => t.currency,
     },
+    ...(has.paidBy ? [PAID_BY_COLUMN] : []),
   ];
 }
 
@@ -200,13 +220,36 @@ const MILES_COLUMNS: readonly ColumnDefinition[] = [
   text('Why the miles differ', 14, (r) => r.expense.miles?.reason ?? null),
 ];
 
+/** The name of the claim’s total rows, as the export has always written them. */
+export const TOTAL_LABEL = 'Total';
+/** The heading of what the company paid, apart from the claim (Q47), and its total rows. */
+export const COMPANY_PAID_HEADING = 'Paid by the company, not claimed';
+export const COMPANY_PAID_TOTAL_LABEL = 'Total paid by the company';
+/** The name of the rows of the claim and what the company paid together. */
+export const FULL_COST_LABEL = 'Full cost';
+
+/**
+ * What the company paid on a report, listed after the claim and outside its total (Q47), and
+ * the full cost: the claim and what the company paid together, per currency.
+ */
+export interface CompanyPaidPart {
+  readonly rows: readonly (readonly string[])[];
+  readonly totals: readonly Money[];
+  readonly totalRows: readonly (readonly string[])[];
+  readonly fullCost: readonly Money[];
+  readonly fullCostRows: readonly (readonly string[])[];
+}
+
 /** A report’s export as a table: a row per expense, then a row per currency’s total. */
 export interface ReportExportTable {
   readonly columns: readonly ExportColumn[];
+  /** The claim’s rows: every expense but those the company paid. */
   readonly rows: readonly (readonly string[])[];
-  /** Each currency’s total, never converted (until #62), in currency order. */
+  /** Each currency’s total of the claim, never converted (until #62), in currency order. */
   readonly totals: readonly Money[];
   readonly totalRows: readonly (readonly string[])[];
+  /** What the company paid, apart, when the report has any (FR-EXP-17, Q47). */
+  readonly companyPaid?: CompanyPaidPart;
   /** The first and last dates of its expenses; null when none is dated. */
   readonly dated: { readonly from: string; readonly to: string } | null;
   /** Lines written after the totals: where a measured route came from (ADR-0039). */
@@ -250,38 +293,76 @@ function rowsOf(e: ExportExpense): ExportRow[] {
   }));
 }
 
+/** Each currency’s total, in currency order. */
+const sortedTotals = (totals: ReadonlyMap<string, Money>) =>
+  [...totals.values()].sort((a, b) => a.currency.localeCompare(b.currency));
+
+const addTo = (totals: Map<string, Money>, amount: Money | null) => {
+  if (!amount) return;
+  const sofar = totals.get(amount.currency);
+  totals.set(amount.currency, sofar ? add(sofar, amount) : amount);
+};
+
 /**
  * The rows of a report’s export, in the order given, with each currency’s total. A split
  * expense is a row per part, each marked as which part of it it is; its parts add up to it, so
- * the totals are the same either way. The CSV and the PDF are both written from this table.
+ * the totals are the same either way. An expense the company paid is left out of the claim and
+ * its totals, and listed apart after them with its own totals and the full cost (Q47). The CSV
+ * and the PDF are both written from this table.
  */
 export function reportExportTable(expenses: readonly ExportExpense[]): ReportExportTable {
   const routed = expenses.some((e) => (e.miles?.measured ?? null) !== null);
+  const apart = expenses.some((e) => e.paidBy === 'company');
   const base = columnsFor({
     parts: expenses.some((e) => (e.parts?.length ?? 0) > 0),
     excluded: expenses.some((e) => (e.excluded?.length ?? 0) > 0),
     journeys: expenses.some((e) => (e.travel ? journeyLine(e.travel) : null) !== null),
     stays: expenses.some((e) => (e.travel ? stayLine(e.travel) : null) !== null),
+    paidBy: apart,
   });
   const columns = routed ? [...base, ...MILES_COLUMNS] : base;
-  const totals = new Map<string, Money>();
-  const rows = expenses.flatMap((e) =>
-    rowsOf(e).map((row) => {
-      if (row.amount) {
-        const sofar = totals.get(row.amount.currency);
-        totals.set(row.amount.currency, sofar ? add(sofar, row.amount) : row.amount);
-      }
-      return columns.map((c) => c.cell(row));
-    }),
+  const claimTotals = new Map<string, Money>();
+  const companyTotals = new Map<string, Money>();
+  const fullTotals = new Map<string, Money>();
+  const rowsFor = (list: readonly ExportExpense[], totals: Map<string, Money>) =>
+    list.flatMap((e) =>
+      rowsOf(e).map((row) => {
+        addTo(totals, row.amount);
+        addTo(fullTotals, row.amount);
+        return columns.map((c) => c.cell(row));
+      }),
+    );
+  const rows = rowsFor(
+    expenses.filter((e) => e.paidBy !== 'company'),
+    claimTotals,
   );
-  const sorted = [...totals.values()].sort((a, b) => a.currency.localeCompare(b.currency));
+  const companyRows = rowsFor(
+    expenses.filter((e) => e.paidBy === 'company'),
+    companyTotals,
+  );
+  const totalRowsOf = (totals: readonly Money[], label: string) =>
+    totals.map((t) => columns.map((c) => c.total(t, label)));
+  const sorted = sortedTotals(claimTotals);
   const dates = expenses.flatMap((e) => (e.date ? [e.date] : [])).sort();
   const [from] = dates;
+  const companySorted = sortedTotals(companyTotals);
+  const fullCost = sortedTotals(fullTotals);
   return {
     columns: columns.map(({ header, text, align, width }) => ({ header, text, align, width })),
     rows,
     totals: sorted,
-    totalRows: sorted.map((t) => columns.map((c) => c.total(t))),
+    totalRows: totalRowsOf(sorted, TOTAL_LABEL),
+    ...(apart
+      ? {
+          companyPaid: {
+            rows: companyRows,
+            totals: companySorted,
+            totalRows: totalRowsOf(companySorted, COMPANY_PAID_TOTAL_LABEL),
+            fullCost,
+            fullCostRows: totalRowsOf(fullCost, FULL_COST_LABEL),
+          },
+        }
+      : {}),
     dated: from ? { from, to: dates[dates.length - 1] ?? from } : null,
     ...(routed ? { notes: [ROUTE_ATTRIBUTION] } : {}),
   };
@@ -303,7 +384,16 @@ function csvCell(value: string, isText: boolean): string {
 export function reportCsv(table: ReportExportTable): string {
   const line = (cells: readonly string[]) =>
     cells.map((cell, i) => csvCell(cell, table.columns[i]?.text ?? true)).join(',');
-  const lines = [table.columns.map((c) => c.header), ...table.rows, ...table.totalRows].map(line);
+  // What the company paid follows the claim's totals, then the full cost (Q47).
+  const apart = table.companyPaid
+    ? [...table.companyPaid.rows, ...table.companyPaid.totalRows, ...table.companyPaid.fullCostRows]
+    : [];
+  const lines = [
+    table.columns.map((c) => c.header),
+    ...table.rows,
+    ...table.totalRows,
+    ...apart,
+  ].map(line);
   // A note is a line of its own after the totals, such as where a measured route came from.
   const notes = (table.notes ?? []).map((n) => csvCell(n, true));
   return `\uFEFF${[...lines, ...notes].join('\r\n')}\r\n`;

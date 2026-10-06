@@ -5,8 +5,12 @@ import { expenseDetail } from './expense-views.ts';
 import { filedReading } from './receipt-views.ts';
 import type { ReceiptWithReadings } from './receipts.ts';
 
-/** Both lists in tree order, each node with its depth, and whether the caller may change them. */
-export function catalogView(catalog: CatalogRecord, canManage: boolean) {
+/**
+ * Both lists in tree order, each node with its depth, and whether the caller may change them.
+ * With `companyPaid`, while Paid by the company is on, each type says whether the company pays
+ * it directly (FR-EXP-18).
+ */
+export function catalogView(catalog: CatalogRecord, canManage: boolean, companyPaid = false) {
   return {
     categories: treeOrder(catalog.categories).map(({ node, depth }) => ({
       id: node.id,
@@ -26,6 +30,7 @@ export function catalogView(catalog: CatalogRecord, canManage: boolean) {
       depth,
       active: node.active,
       inUse: node.inUse,
+      ...(companyPaid ? { companyPays: node.companyPays ?? false } : {}),
     })),
     canManage,
   };

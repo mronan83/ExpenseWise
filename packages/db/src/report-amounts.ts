@@ -17,6 +17,11 @@ export interface ReportAmount {
   readonly purchaseDate: string;
   /** Held as a possible duplicate: it counts in no total until the person decides. */
   readonly held: boolean;
+  /**
+   * The company paid it directly (FR-EXP-17): in no claim, while Paid by the company is on.
+   * Read from the database; an amount made elsewhere, such as a test's, may leave it out.
+   */
+  readonly companyPaid?: boolean;
   readonly conversion: ConversionRecord | null;
 }
 
@@ -39,6 +44,7 @@ export async function listReportAmounts(
       expenseCurrency: expenses.currency,
       date: expenses.transactionDate,
       held: sql<boolean>`${heldAsDuplicate(expenses.id)}`,
+      companyPaid: expenses.companyPaid,
       ...recordColumns,
     })
     .from(expenses)
@@ -68,6 +74,7 @@ export async function listReportAmounts(
     currency: r.expenseCurrency!,
     purchaseDate: r.date!,
     held: r.held,
+    companyPaid: r.companyPaid,
     conversion: conversionRecord(r),
   }));
 }

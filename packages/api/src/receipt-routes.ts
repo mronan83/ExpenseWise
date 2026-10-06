@@ -11,6 +11,7 @@ import { detailsOf } from '@expensewise/extraction/place';
 import { receiptPath, RECEIPT_BUCKET, type ObjectStore } from '@expensewise/storage';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
+import { companyPaidShown, reportsIn } from './company-paid.ts';
 import type { ApprovalStore } from './approval.ts';
 import type { CategoryStore } from './categories.ts';
 import { featureGate, type FeatureGate } from './features.ts';
@@ -319,7 +320,15 @@ export function registerReceiptRoutes(
         })
       : NO_REPORTS;
     const converting = await showConverted(features, who.orgId, reports.reports);
-    const items = needsYouItems(receipts, reports, now, await settingsOn(who.orgId), converting);
+    const paid = await companyPaidShown(features, who.orgId, reportsIn(reports));
+    const items = needsYouItems(
+      receipts,
+      reports,
+      now,
+      await settingsOn(who.orgId),
+      converting,
+      paid,
+    );
     return c.json({ items }, 200);
   });
 

@@ -5,8 +5,10 @@ import {
   getTrip,
   listTrips,
   listTripExpenses,
+  tallyPayers,
   tallyTrips,
   type Database,
+  type PayerTally,
   type DeleteTripResult,
   type SaveTripResult,
   type TripFilter,
@@ -17,18 +19,29 @@ import type { TripInput } from '@expensewise/domain';
 import { asCaller } from './caller.ts';
 import { withProofs, type ExpensesWithProof } from './expenses.ts';
 
-/** What the API needs from the database for trips. Tests use an in-memory fake. */
+/**
+ * What the API needs from the database for trips. Tests use an in-memory fake. `payers`, what
+ * is on each trip by who paid, is read from the database; a fake may leave it out (FR-EXP-17).
+ */
 export interface TripStore {
   list(
     orgId: string,
     limit: number,
     filter: TripFilter,
-  ): Promise<{ trips: TripRecord[]; tallies: TripTally[] }>;
+  ): Promise<{ trips: TripRecord[]; tallies: TripTally[]; payers?: PayerTally[] }>;
   /** One trip with its expenses, each with what its receipt shows. */
   get(
     orgId: string,
     tripId: string,
-  ): Promise<{ trip: TripRecord; tallies: TripTally[]; expenses: ExpensesWithProof } | undefined>;
+  ): Promise<
+    | {
+        trip: TripRecord;
+        tallies: TripTally[];
+        payers?: PayerTally[];
+        expenses: ExpensesWithProof;
+      }
+    | undefined
+  >;
   /** Makes a trip for a member and files their expenses dated in it. */
   create(
     orgId: string,
@@ -56,12 +69,11 @@ export function dbTripStore(db: Database): TripStore {
     list: (orgId, limit, filter) =>
       inOrg(orgId, async (tx) => {
         const trips = await listTrips(tx, limit, filter);
+        const tripIds = trips.map((t) => t.id);
         return {
           trips,
-          tallies: await tallyTrips(
-            tx,
-            trips.map((t) => t.id),
-          ),
+          tallies: await tallyTrips(tx, tripIds),
+          payers: await tallyPayers(tx, { tripIds }),
         };
       }),
     get: (orgId, tripId) =>
@@ -71,6 +83,7 @@ export function dbTripStore(db: Database): TripStore {
         return {
           trip,
           tallies: await tallyTrips(tx, [tripId]),
+          payers: await tallyPayers(tx, { tripIds: [tripId] }),
           expenses: await withProofs(tx, await listTripExpenses(tx, tripId)),
         };
       }),

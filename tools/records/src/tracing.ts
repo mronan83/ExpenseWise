@@ -1088,6 +1088,12 @@ export const CHANGE_LOG: readonly ChangeLogEntry[] = [
   {
     date: '2026-10-06',
     change:
+      'PR #64, your requirement of Oct 6 for each trip’s full picture, built. #94 (GAP-40 closed): while Journeys and stays is on, an airline or rail ticket reads the day it departs and files to the trip it flies on, keeping the day it was charged as its date; a fare whose trip isn’t made yet waits for a report until it departs. #95: behind Paid by the company, Settings › Organization keeps the types your employer pays directly, each expense of one is marked paid by the company and can be switched by hand, the trip shows its cost split into claimed and paid by the company, and the report and its export list such expenses apart, below the claim and outside its total (Q46 to Q48, ADR-0045).',
+    by: 'Claude, at your direction',
+  },
+  {
+    date: '2026-10-06',
+    change:
       'Your requirement of Oct 6, the full picture of each trip’s expenses: airfare your employer pays directly is tracked on the trip and kept off the claim, by a policy you change when your employer does (FR-EXP-17, FR-EXP-18, #95; your answers to Q46 to Q48). Answering how best to get airfare in, a fare was found to file to its trip by the day it was bought, not the day it flies (GAP-40, FR-EXP-19, #94). Making a trip from a forwarded itinerary stays in Phase 2.',
     by: 'Claude, at your direction',
   },

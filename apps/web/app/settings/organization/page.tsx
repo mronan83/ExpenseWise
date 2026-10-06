@@ -9,6 +9,8 @@ import {
 import Link from 'next/link';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { api, ApiProblem } from '../../../lib/api';
+import { CATEGORIES_FLAG, type Catalog } from '../../../lib/categories';
+import { COMPANY_PAID_FLAG } from '../../../lib/company-paid';
 import { timeZones } from '../../../lib/expenses';
 import type { FeatureList } from '../../../lib/features';
 import { supabase } from '../../../lib/supabase';
@@ -50,6 +52,11 @@ type Load =
       /** Null while its feature is off. */
       settings: OrganizationSettings | null;
       duplicateWindow: DuplicateWindow | null;
+      /**
+       * The types the company pays directly (FR-EXP-18): null while Paid by the company is off;
+       * 'no-categories' while it is on and categories, which the types belong to, are off.
+       */
+      companyPays: Catalog | 'no-categories' | null;
     };
 
 type Message = { tone: 'ok' | 'warn'; text: string } | null;
@@ -105,9 +112,10 @@ const inputClass = 'rounded-lg border border-rule bg-paper px-3 py-2 text-base t
 const labelClass = 'flex flex-col gap-1 text-xs font-medium text-ink-2';
 
 /**
- * Settings › Organization (FR-PLT-11, FR-INT-19): the caller's role, then the organization's
- * details and its duplicate time window, each shown only while its feature is on. Every member
- * reads them; only the owner changes them.
+ * Settings › Organization (FR-PLT-11, FR-INT-19, FR-EXP-18): the caller's role, then the
+ * organization's details, its duplicate time window and the types the company pays directly,
+ * each shown only while its feature is on. Every member reads them; only the owner changes the
+ * first two, and owners and finance admins the last.
  */
 export default function OrganizationSettingsPage() {
   const [load, setLoad] = useState<Load>({ state: 'loading' });
@@ -124,11 +132,16 @@ export default function OrganizationSettingsPage() {
       });
       const { features } = await api<FeatureList>('/v1/features');
       const on = (key: string) => features.some((f) => f.key === key && f.enabled);
-      const [settings, duplicateWindow] = await Promise.all([
+      const [settings, duplicateWindow, companyPays] = await Promise.all([
         on('settings.organization') ? api<OrganizationSettings>('/v1/settings/organization') : null,
         on('settings.duplicate-window')
           ? api<DuplicateWindow>('/v1/settings/duplicate-window')
           : null,
+        !on(COMPANY_PAID_FLAG)
+          ? null
+          : on(CATEGORIES_FLAG)
+            ? api<Catalog>('/v1/categories')
+            : ('no-categories' as const),
       ]);
       setLoad({
         state: 'ready',
@@ -136,6 +149,7 @@ export default function OrganizationSettingsPage() {
         email: session.user.email ?? null,
         settings,
         duplicateWindow,
+        companyPays,
       });
     } catch (error) {
       setLoad({ state: 'error', message: describeError(error) });
@@ -200,7 +214,8 @@ export default function OrganizationSettingsPage() {
             {load.duplicateWindow ? (
               <WindowCard setting={load.duplicateWindow} onSaved={() => void refresh()} />
             ) : null}
-            {!load.settings && !load.duplicateWindow ? (
+            {load.companyPays ? <CompanyPaysCard catalog={load.companyPays} /> : null}
+            {!load.settings && !load.duplicateWindow && !load.companyPays ? (
               <p className="text-sm text-ink-2">
                 Organization settings aren’t switched on. The owner switches them on in{' '}
                 <Link href="/settings/features" className="tap text-carbon underline">
@@ -528,6 +543,104 @@ function WindowCard({ setting, onSaved }: { setting: DuplicateWindow; onSaved: (
           {busy ? 'Saving…' : 'Save window'}
         </button>
       </form>
+      <Status message={message} />
+    </Card>
+  );
+}
+
+/**
+ * The types the company pays directly (FR-EXP-18, Q46): each active type with a checkbox. An
+ * expense of a ticked type is paid by the company, stays on its trip and is never claimed,
+ * unless a person sets it by hand. A change reaches every expense not yet on a submitted
+ * report (Q48). Owners and finance admins change it; everyone else reads it.
+ */
+function CompanyPaysCard({ catalog }: { catalog: Catalog | 'no-categories' }) {
+  const [types, setTypes] = useState(() =>
+    catalog === 'no-categories' ? [] : catalog.types.filter((t) => t.active),
+  );
+  const [busy, setBusy] = useState<string | null>(null);
+  const [message, setMessage] = useState<Message>(null);
+  const explain = (
+    <p className="text-ink-2">
+      An expense of a ticked type, such as airfare your employer books, is paid by the company: it
+      stays on its trip and in the trip’s cost, and is never claimed. Anyone can switch one expense
+      either way. A change here reaches every expense not yet on a submitted report, except one
+      switched by hand.
+    </p>
+  );
+
+  if (catalog === 'no-categories') {
+    return (
+      <Card id="company-pays" title="Paid by the company directly">
+        {explain}
+        <p className="text-ink-2">
+          It goes by expense type, which comes with categories. The owner switches Categories on in{' '}
+          <Link href="/settings/features" className="tap text-carbon underline">
+            Features
+          </Link>
+          .
+        </p>
+      </Card>
+    );
+  }
+
+  async function toggle(typeId: string, companyPays: boolean) {
+    setBusy(typeId);
+    setMessage(null);
+    try {
+      const saved = await api<{
+        id: string;
+        name: string;
+        companyPays?: boolean;
+        switched: number;
+      }>(`/v1/settings/expense-types/${typeId}/company-pays`, {
+        method: 'PUT',
+        body: JSON.stringify({ companyPays }),
+      });
+      setTypes((list) =>
+        list.map((t) => (t.id === typeId ? { ...t, companyPays: saved.companyPays } : t)),
+      );
+      const n = saved.switched;
+      setMessage({
+        tone: 'ok',
+        text:
+          `Saved: the company ${companyPays ? 'pays' : 'doesn’t pay'} ${saved.name} directly. ` +
+          (n === 0
+            ? 'No expense needed to change.'
+            : `${n} ${n === 1 ? 'expense' : 'expenses'} followed it.`),
+      });
+    } catch (error) {
+      setMessage({ tone: 'warn', text: describeError(error) });
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <Card id="company-pays" title="Paid by the company directly">
+      {explain}
+      <fieldset className="flex flex-col">
+        <legend className="sr-only">Types the company pays directly</legend>
+        {types.map((t) => (
+          <label
+            key={t.id}
+            className="flex min-h-11 items-center gap-3"
+            style={{ paddingLeft: `${t.depth * 1.25}rem` }}
+          >
+            <input
+              type="checkbox"
+              className="size-5"
+              checked={t.companyPays ?? false}
+              disabled={!catalog.canManage || busy !== null}
+              onChange={(e) => void toggle(t.id, e.target.checked)}
+            />
+            <span className="break-words">{t.name}</span>
+          </label>
+        ))}
+      </fieldset>
+      {catalog.canManage ? null : (
+        <p className="text-xs text-ink-2">Only an owner or finance admin can change it.</p>
+      )}
       <Status message={message} />
     </Card>
   );

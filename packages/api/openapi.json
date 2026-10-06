@@ -1446,7 +1446,7 @@
                 "decimal"
               ]
             },
-            "description": "One total per currency, as spent, never converted; possible duplicates are left out."
+            "description": "One total per currency, as spent, never converted; possible duplicates are left out, and, while `expenses.company-paid` is on, what the company paid (FR-EXP-17)."
           },
           "reimbursement": {
             "$ref": "#/components/schemas/ReimbursementTotal"
@@ -1527,7 +1527,7 @@
           "converting",
           "unconverted"
         ],
-        "description": "Everything on it in `currency`, the person’s reimbursement currency, at each purchase date’s reference rate; possible duplicates are left out. Only while the feature `reports.currency-conversion` is on (FR-EXP-13)."
+        "description": "Everything on it in `currency`, the person’s reimbursement currency, at each purchase date’s reference rate; possible duplicates are left out, and, while `expenses.company-paid` is on, what the company paid. Only while the feature `reports.currency-conversion` is on (FR-EXP-13)."
       },
       "ExpenseInboxItem": {
         "type": "object",
@@ -3294,6 +3294,13 @@
           "category": {
             "$ref": "#/components/schemas/ExpenseCategory"
           },
+          "paidBy": {
+            "$ref": "#/components/schemas/PaidBy"
+          },
+          "paidByPinned": {
+            "type": "boolean",
+            "description": "A person set who paid it, so the policy for its type leaves it alone until it is handed back (Q46). Only while `expenses.company-paid` is on."
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -3321,6 +3328,14 @@
           "createdAt",
           "updatedAt"
         ]
+      },
+      "PaidBy": {
+        "type": "string",
+        "enum": [
+          "claimant",
+          "company"
+        ],
+        "description": "Who paid it (FR-EXP-17). claimant: the person, who claims it. company: the company paid it directly, such as airfare an employer books: it stays on its trip and in the trip’s cost, and is never claimed. Only while `expenses.company-paid` is on."
       },
       "ExpenseDetail": {
         "allOf": [
@@ -4271,6 +4286,43 @@
         },
         "additionalProperties": false
       },
+      "SetPaidBy": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "paidBy": {
+                "type": "string",
+                "enum": [
+                  "claimant",
+                  "company"
+                ],
+                "description": "Who paid it, set by hand: the policy for its type leaves it so from then on (Q46)."
+              }
+            },
+            "required": [
+              "paidBy"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "byPolicy": {
+                "type": "boolean",
+                "enum": [
+                  true
+                ],
+                "description": "Hand it back to the policy for its type, which applies at once."
+              }
+            },
+            "required": [
+              "byPolicy"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
       "SetExpenseTrip": {
         "anyOf": [
           {
@@ -4400,6 +4452,9 @@
             },
             "description": "What its expenses add up to, one total per currency, never converted. Expenses with no amount yet count in none."
           },
+          "cost": {
+            "$ref": "#/components/schemas/CostSplit"
+          },
           "reportId": {
             "type": [
               "string",
@@ -4429,6 +4484,64 @@
           "reportId",
           "createdAt"
         ]
+      },
+      "CostSplit": {
+        "type": "object",
+        "properties": {
+          "claimed": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "amountMinor": {
+                  "type": "integer"
+                },
+                "currency": {
+                  "type": "string"
+                },
+                "decimal": {
+                  "type": "string",
+                  "example": "1257.60"
+                }
+              },
+              "required": [
+                "amountMinor",
+                "currency",
+                "decimal"
+              ]
+            },
+            "description": "What the person paid and claims, one total per currency, never converted."
+          },
+          "companyPaid": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "amountMinor": {
+                  "type": "integer"
+                },
+                "currency": {
+                  "type": "string"
+                },
+                "decimal": {
+                  "type": "string",
+                  "example": "1257.60"
+                }
+              },
+              "required": [
+                "amountMinor",
+                "currency",
+                "decimal"
+              ]
+            },
+            "description": "What the company paid directly and is never claimed, one total per currency, never converted."
+          }
+        },
+        "required": [
+          "claimed",
+          "companyPaid"
+        ],
+        "description": "Its cost split into what is claimed and what the company paid; with `totals`, its full cost. Only while `expenses.company-paid` is on (FR-EXP-17)."
       },
       "TripDetail": {
         "allOf": [
@@ -5708,6 +5821,9 @@
                         "rate"
                       ],
                       "description": "Its amount in the report’s currency, while conversion is on; null with no amount yet."
+                    },
+                    "paidBy": {
+                      "$ref": "#/components/schemas/PaidBy"
                     }
                   },
                   "required": [
@@ -5755,6 +5871,170 @@
                   ]
                 },
                 "description": "Each rate its amounts were converted at, oldest first, while conversion is on (NFR-DAT-02)."
+              },
+              "companyPaid": {
+                "type": "object",
+                "properties": {
+                  "expenses": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "processing",
+                            "needs_review",
+                            "ready",
+                            "submitted",
+                            "approved",
+                            "settled"
+                          ],
+                          "description": "processing while its receipt is read; ready when its receipt is Ready and merchant, date, currency and amount are filled in; needs_review otherwise. Submitted, approved and settled follow its report; approved is locked (FR-EXP-03)."
+                        },
+                        "merchant": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "date": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "amount": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "amountMinor": {
+                              "type": "integer",
+                              "description": "Integer minor units, e.g. cents."
+                            },
+                            "currency": {
+                              "type": "string",
+                              "example": "USD"
+                            },
+                            "decimal": {
+                              "type": "string",
+                              "example": "6.50",
+                              "description": "The same amount, for display."
+                            }
+                          },
+                          "required": [
+                            "amountMinor",
+                            "currency",
+                            "decimal"
+                          ]
+                        },
+                        "receiptId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "format": "uuid"
+                        },
+                        "trip": {
+                          "type": [
+                            "object",
+                            "null"
+                          ],
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "name": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "name"
+                          ]
+                        },
+                        "held": {
+                          "type": "boolean",
+                          "description": "Held as a possible duplicate (FR-INT-18)."
+                        },
+                        "ready": {
+                          "type": "boolean",
+                          "description": "Read and, for a local expense, justified: the report closes only once it is, like anything on it."
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "status",
+                        "merchant",
+                        "date",
+                        "amount",
+                        "receiptId",
+                        "trip",
+                        "held",
+                        "ready"
+                      ]
+                    }
+                  },
+                  "totals": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "amountMinor": {
+                          "type": "integer"
+                        },
+                        "currency": {
+                          "type": "string"
+                        },
+                        "decimal": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "amountMinor",
+                        "currency",
+                        "decimal"
+                      ]
+                    },
+                    "description": "What the company paid, one total per currency, never converted."
+                  },
+                  "fullCost": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "amountMinor": {
+                          "type": "integer"
+                        },
+                        "currency": {
+                          "type": "string"
+                        },
+                        "decimal": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "amountMinor",
+                        "currency",
+                        "decimal"
+                      ]
+                    },
+                    "description": "The claim and what the company paid together, one total per currency, never converted: the full cost of what is on the report."
+                  }
+                },
+                "required": [
+                  "expenses",
+                  "totals",
+                  "fullCost"
+                ],
+                "description": "What the company paid directly, listed apart, below the claim and outside its total (FR-EXP-17, Q47). Its expenses are on the report and need to be ready like any other, but every other total leaves them out. Only while `expenses.company-paid` is on."
               }
             },
             "required": [
@@ -6231,6 +6511,9 @@
               "automatic"
             ],
             "description": "Why its report’s latest return rejected it, while it is back."
+          },
+          "paidBy": {
+            "$ref": "#/components/schemas/PaidBy"
           }
         },
         "required": [
@@ -6762,6 +7045,10 @@
           "inUse": {
             "type": "boolean",
             "description": "Some expense has it, so it can be retired but never deleted."
+          },
+          "companyPays": {
+            "type": "boolean",
+            "description": "The organization’s policy that the company pays this type directly, such as Airfare an employer books (FR-EXP-18, Q46): an expense of it is paid by the company unless a person set it by hand. This type only, not those under it. Only while `expenses.company-paid` is on."
           }
         },
         "required": [
@@ -6772,6 +7059,38 @@
           "active",
           "inUse"
         ]
+      },
+      "CompanyPays": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ExpenseType"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "switched": {
+                "type": "integer",
+                "description": "How many expenses of this type followed the change: those not set by hand and not yet submitted (Q48). Each is named in the audit trail."
+              }
+            },
+            "required": [
+              "switched"
+            ]
+          }
+        ]
+      },
+      "SetCompanyPays": {
+        "type": "object",
+        "properties": {
+          "companyPays": {
+            "type": "boolean",
+            "description": "true: the company pays this type directly. false: the person pays and claims it."
+          }
+        },
+        "required": [
+          "companyPays"
+        ],
+        "additionalProperties": false
       },
       "NewCategory": {
         "type": "object",
@@ -10103,6 +10422,113 @@
           },
           "422": {
             "description": "A value is not valid; field names which. With approval on, an amount above its receipt’s total is refused too (over_receipt).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/expenses/{expenseId}/paid-by": {
+      "put": {
+        "tags": [
+          "Expenses"
+        ],
+        "summary": "Say who paid an expense: you, or the company directly",
+        "description": "FR-EXP-17, Q46. {\"paidBy\": \"company\"} or {\"paidBy\": \"claimant\"} sets it by hand, and the organization’s policy for its type leaves it so from then on; {\"byPolicy\": true} hands it back to the policy, which applies at once. An expense the company paid stays on its trip and in the trip’s cost, and is never claimed. Only the expense’s own member sets it (ADR-0035), and only before it is submitted. A closed report it is on opens again. Recorded in the audit log.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPaidBy"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The expense as it is now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenseDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or the expense is another member’s (not_yours).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such expense in this organization, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It is submitted or later, so who paid it stays as it went in (locked); or it is a drive, paid at miles × its rate to whoever drove, never by the company (mileage).",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -14061,6 +14487,103 @@
           },
           "404": {
             "description": "The feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/settings/expense-types/{typeId}/company-pays": {
+      "put": {
+        "tags": [
+          "Categories"
+        ],
+        "summary": "Say whether the company pays a type directly",
+        "description": "FR-EXP-18, Q46, Q48. The organization’s policy, by type: an expense of a type the company pays, such as Airfare an employer books, is paid by the company unless a person set it by hand. In the same transaction every expense of the type not set by hand and not yet submitted follows the change; a submitted, approved or settled one never changes, nor a drive. One audit event names the change and every expense that switched. Needs `expenses.categories` on too.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "typeId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetCompanyPays"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The type as it is now, and how many expenses followed the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CompanyPays"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request is not valid.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or isn’t an owner or finance admin. While the organization has the second factor switched on, a session that has not passed it is refused with second_factor_required (FR-GOV-04).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such type in this organization, or a feature is off (feature_off).",
             "content": {
               "application/problem+json": {
                 "schema": {

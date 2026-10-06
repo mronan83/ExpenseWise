@@ -26,7 +26,21 @@ const node = {
   }),
 };
 
-export const ExpenseTypeSchema = z.object(node).openapi('ExpenseType');
+export const ExpenseTypeSchema = z
+  .object({
+    ...node,
+    companyPays: z
+      .boolean()
+      .optional()
+      .openapi({
+        description:
+          'The organization’s policy that the company pays this type directly, such as Airfare ' +
+          'an employer books (FR-EXP-18, Q46): an expense of it is paid by the company unless a ' +
+          'person set it by hand. This type only, not those under it. Only while ' +
+          '`expenses.company-paid` is on.',
+      }),
+  })
+  .openapi('ExpenseType');
 
 export const CategorySchema = z
   .object({
@@ -98,6 +112,27 @@ export const ExpenseTypeChangeSchema = z
     active: z.boolean().optional().openapi({ description: 'false retires it; true restores it.' }),
   })
   .openapi('ExpenseTypeChange');
+
+export const SetCompanyPaysSchema = z
+  .object({
+    companyPays: z.boolean().openapi({
+      description:
+        'true: the company pays this type directly. false: the person pays and claims it.',
+    }),
+  })
+  .strict()
+  .openapi('SetCompanyPays');
+
+export const CompanyPaysSchema = ExpenseTypeSchema.extend({
+  switched: z
+    .number()
+    .int()
+    .openapi({
+      description:
+        'How many expenses of this type followed the change: those not set by hand and not yet ' +
+        'submitted (Q48). Each is named in the audit trail.',
+    }),
+}).openapi('CompanyPays');
 
 export const ClassifyExpenseSchema = z
   .object({ categoryId: z.string().uuid(), typeId: z.string().uuid() })
