@@ -2,7 +2,7 @@
 
 Email-in receipts arrive at a Bird agent mailbox on `inbox.ai`. We fetch each message exactly as it arrived and check its sender's DKIM signature ourselves, then file its attachments as receipts in a background workflow.
 
-- **Status:** Accepted (mailbox and allowlist set up by product owner; how it is read and checked recommended, no objection)
+- **Status:** Accepted (mailbox and allowlist set up by product owner; how it is read and checked recommended, no objection); point 1 amended on Oct 6: the webhook is a function of its own, at the product owner's word after Bird reported failing deliveries (GAP-39, #93)
 - **Date:** 2026-10-03
 - **Deciders:** Product owner (mailbox, receive policy); Claude (principal architect), for the design
 - **Decision register:** D-28. Amends [ADR-0024](0024-inbound-email-through-bird.md).
@@ -34,6 +34,7 @@ We will read email-in from the Bird agent mailbox as follows.
    - For `email_mailbox.message_received`, the webhook sends one `email/received` event to the workflow runner. The event's id is the Bird message id, so a repeat delivery within a day starts nothing. Other events are acknowledged and ignored.
    - If the hand-off fails, the webhook answers 503, and Bird's own retries keep the email from being lost.
    - This replaces ADR-0024's "store and outbox in one transaction". That needs an organization, which isn't known yet. Bird's redelivery does the job the outbox would.
+   - *Amended Oct 6 (#93, GAP-39):* the webhook is a function of its own. Bird waits 5 seconds for an answer, and in the whole API's function a cold start alone took 2.4, growing with every feature, while email arrives so rarely that nearly every delivery starts cold. The handler (`birdWebhook` in `@expensewise/api/bird-webhook`) needs nothing else of the API; the web app serves it at `app/api/v1/inbound/bird` with a setting of its own, so Vercel bundles it apart, and hands off through the workflow client alone (`@expensewise/workflows/client`). A lint rule refuses any other import there. The API keeps the operation in its contract with the same handler, and its own function leaves it unconfigured, so a delivery that ever reached it would get 503 and be sent again. The server loads error tracking only once it has a DSN. Since this change, a signed event the webhook doesn't read is acknowledged whatever else its envelope carries, and while nothing can take an email on, an arriving one is answered 503 after its signature is checked.
 2. **The workflow fetches the raw message and checks the sender.** The `email-reading` function fetches the message with `BIRD_API_KEY` (scope `mailbox:read`). It then checks DKIM with mailauth. The From address counts as proved only when all of these hold:
    - the message has exactly one From address;
    - a signature passes;

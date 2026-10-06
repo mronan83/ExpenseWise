@@ -1,3 +1,4 @@
+export * from './client.ts';
 export * from './conversions.ts';
 export * from './email.ts';
 export * from './email-ports.ts';

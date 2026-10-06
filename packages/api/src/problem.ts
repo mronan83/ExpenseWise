@@ -6,6 +6,16 @@ const PROBLEM_BASE = 'https://expensewise.dev/problems/';
 /** RFC 9457 extension members: a machine-readable code, and any ids the client needs. */
 export type ProblemExtra = { detail?: string; code?: string } & Record<string, unknown>;
 
+/** An RFC 9457 problem document's body, for a handler that answers without Hono. */
+export function problemDocument(
+  status: number,
+  slug: string,
+  title: string,
+  extra: ProblemExtra = {},
+) {
+  return { type: `${PROBLEM_BASE}${slug}`, title, status, ...extra };
+}
+
 /** Responds with an RFC 9457 problem document. */
 export function problem(
   c: Context,
@@ -15,7 +25,7 @@ export function problem(
   extra: ProblemExtra = {},
   headers: Record<string, string> = {},
 ) {
-  return c.json({ type: `${PROBLEM_BASE}${slug}`, title, status, ...extra }, status, {
+  return c.json(problemDocument(status, slug, title, extra), status, {
     ...headers,
     'Content-Type': 'application/problem+json',
   });

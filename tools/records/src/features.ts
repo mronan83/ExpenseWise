@@ -401,13 +401,16 @@ export const FEATURES: readonly Feature[] = [
     kind: 'product',
     phase: 'P1',
     status: 'Verified',
-    delivered: 'PR #44, PR #45, PR #60',
+    delivered: 'PR #44, PR #45, PR #60, PR #62',
     flags: ['receipts.unfiled-emails'],
     decisions: ['ADR-0011', 'ADR-0024', 'ADR-0026', 'ADR-0027', 'ADR-0035'],
     code: [
+      'packages/api/src/bird-webhook.ts',
       'packages/api/src/inbound-routes.ts',
       'packages/api/src/routes/inbound.ts',
       'packages/api/src/webhooks.ts',
+      'apps/web/app/api/v1/inbound/bird/route.ts',
+      'apps/web/lib/email-in.ts',
       'packages/workflows/src/email.ts',
       'packages/workflows/src/email-pdf.ts',
       'packages/workflows/src/email-ports.ts',
@@ -427,6 +430,7 @@ export const FEATURES: readonly Feature[] = [
     workflows: ['email-reading'],
     checks: [
       'api/inbound',
+      'e2e/bird-webhook',
       'workflows/email',
       'workflows/email-pdf',
       'workflows/email-ports',
@@ -1352,6 +1356,7 @@ export const FEATURES: readonly Feature[] = [
     code: [
       'packages/db/src/outbox.ts',
       'packages/workflows/src/relay.ts',
+      'packages/workflows/src/client.ts',
       'packages/workflows/src/functions.ts',
       'apps/web/app/api/inngest/route.ts',
     ],

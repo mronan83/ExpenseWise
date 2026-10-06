@@ -10,7 +10,7 @@ import {
 import { InngestTestEngine, mockCtx } from '@inngest/test';
 import { NO_DETAILS } from '@expensewise/domain';
 import { describe, expect, it } from 'vitest';
-import { createWorkflowClient } from './functions.ts';
+import { createWorkflowClient } from './client.ts';
 import {
   permanentFailure,
   readWith,

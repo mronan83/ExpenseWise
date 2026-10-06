@@ -1013,6 +1013,20 @@ export const BACKLOG: readonly BacklogItem[] = [
     affects: ['GAP-38', 'FR-INT-22', 'FR-INT-04', 'F-55'],
     done: { date: '2026-10-05', in: 'PR #61' },
   },
+  {
+    num: 93,
+    title: 'Serve Bird’s webhook from a function of its own',
+    type: 'Gap',
+    detail:
+      'Bird’s email of Oct 5 (GAP-39). The webhook ran in the whole API’s function and took 2.4 seconds to start cold, half the time Bird waits. It now has a function of its own that loads only the signature check and the hand-off; the server loads error tracking only once it has a DSN; and a signed event email-in doesn’t read is acknowledged whatever else it carries. Same address and secret; nothing to change in Bird.',
+    priority: 'P1',
+    effort: 'S',
+    severity: 'Medium',
+    blocker: { kind: 'none' },
+    source: 'Product owner Oct 6',
+    affects: ['GAP-39', 'FR-CAP-02', 'F-16'],
+    done: { date: '2026-10-06', in: 'PR #62' },
+  },
   // Done
   {
     num: 17,

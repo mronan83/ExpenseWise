@@ -1629,12 +1629,6 @@ export const BirdWebhookSchema = z
   })
   .openapi('BirdWebhook');
 
-/** The ids email-in reads from an arriving mailbox message, which go into Bird's URL. */
-export const BirdMessageReceivedSchema = z.object({
-  message_id: z.string().regex(/^rem_[0-9a-z]{1,64}$/),
-  thread_id: z.string().regex(/^thr_[0-9a-z]{1,64}$/),
-});
-
 export const WebhookReceiptSchema = z
   .object({
     status: z.enum(['accepted', 'ignored']).openapi({

@@ -10,7 +10,6 @@ import { describe, expect, it } from 'vitest';
 import {
   capText,
   checkSender,
-  EMAIL_RECEIVED,
   bodyAsFile,
   emailReadingFunction,
   keepEmail,
@@ -21,7 +20,7 @@ import {
   type EmailReadingPorts,
   type ReceivedEmail,
 } from './email.ts';
-import { createWorkflowClient } from './functions.ts';
+import { createWorkflowClient, EMAIL_RECEIVED } from './client.ts';
 import type { WorkflowEvent } from './relay.ts';
 
 const ORG = '0192f7a0-0000-7000-8000-0000000000aa';

@@ -1,5 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 import { BENCH_URL } from './e2e/bench/config';
+import { E2E_BIRD_SECRET } from './e2e/bird';
 
 const port = Number(process.env.E2E_PORT ?? 3100);
 const baseURL = process.env.E2E_BASE_URL ?? `http://127.0.0.1:${port}`;
@@ -31,6 +32,8 @@ export default defineConfig({
         {
           command: `pnpm start --port ${port}`,
           url: `${baseURL}/api/v1/health`,
+          // Lets e2e/bird-webhook sign a delivery; nothing else reads it.
+          env: { BIRD_WEBHOOK_SECRET: E2E_BIRD_SECRET },
           reuseExistingServer: !process.env.CI,
           timeout: 60_000,
         },

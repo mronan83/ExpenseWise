@@ -1,5 +1,5 @@
 import { claimOutboxBatch, markOutboxPublished, type Database } from '@expensewise/db';
-import { Inngest } from 'inngest';
+import type { Inngest } from 'inngest';
 import { relayOutbox, type RelayPorts } from './relay.ts';
 
 /** Sent after a commit that enqueued outbox events, so they don't wait for the sweep. */
@@ -10,21 +10,6 @@ export const OUTBOX_NUDGE = 'outbox/nudge';
  * plan's 50,000 executions, leaving the rest for real workflows (ADR-0014: no spend).
  */
 export const RELAY_SCHEDULE = '*/5 * * * *';
-
-export interface WorkflowClientConfig {
-  /** Sends events to Inngest. Production needs it; the Vercel integration sets it. */
-  readonly eventKey?: string;
-  /** Verifies that calls to /api/inngest come from Inngest. */
-  readonly signingKey?: string;
-  /** Talks to a local Inngest dev server instead of Inngest Cloud. */
-  readonly isDev?: boolean;
-  /** Deployed commit SHA. */
-  readonly appVersion?: string;
-}
-
-export function createWorkflowClient(config: WorkflowClientConfig = {}): Inngest {
-  return new Inngest({ id: 'expensewise', ...config });
-}
 
 /** Wires the relay to the outbox (as expensewise_relay) and to Inngest. */
 export function relayPorts(relay: Database, client: Inngest): RelayPorts {

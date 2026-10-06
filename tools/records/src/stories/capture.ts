@@ -264,7 +264,10 @@ export const CAPTURE_STORIES: readonly Story[] = [
         when: 'the email service delivers it',
         then: 'it is told to try again later, so the email is not lost',
         decided: { by: 'claude', source: 'ADR-0026' },
-        checks: ['api/inbound › answers 503 so Bird tries again when the hand-off fails'],
+        checks: [
+          'api/inbound › answers 503 so Bird tries again when the hand-off fails',
+          'api/inbound › acknowledges what it ignores while nothing can take an email on, and asks Bird for the email again',
+        ],
       },
       {
         id: 'AC6',
@@ -377,6 +380,31 @@ export const CAPTURE_STORIES: readonly Story[] = [
         decided: { by: 'blueprint', source: 'arch AP4' },
         checks: [
           'db/inbound.int › files each attachment as a receipt with its expense, and keeps the email, together',
+        ],
+      },
+      {
+        id: 'AC9',
+        given: 'no one has used ExpenseWise for a while, so none of it is running',
+        when: 'an email from me arrives',
+        then: 'the email service is answered by a function of its own that loads only the signature check and the hand-off, never the whole API, so the answer comes well inside the time it waits and the email isn’t sent again',
+        decided: { by: 'owner', source: 'owner 2026-10-06' },
+        checks: [
+          'e2e/bird-webhook › is answered by its own function, not the API’s, which leaves it unconfigured',
+          'api/inbound › loads only the signature check and the problem document, so a cold start loads little',
+          'api/inbound › answers a delivery with nothing of the API, as the API answers it',
+        ],
+      },
+      {
+        id: 'AC10',
+        given:
+          'the email service sends a signed event that isn’t an arriving email, whatever else it carries',
+        when: 'it is delivered',
+        then: 'it is acknowledged and nothing is done with it, so the email service stops sending it',
+        decided: { by: 'claude', source: 'ADR-0026' },
+        checks: [
+          'api/inbound › acknowledges other events and does nothing with them, whatever their data',
+          'api/inbound › acknowledges a signed event whatever else its envelope carries, so Bird stops sending it',
+          'e2e/bird-webhook › acknowledges a signed event it doesn’t read',
         ],
       },
     ],
