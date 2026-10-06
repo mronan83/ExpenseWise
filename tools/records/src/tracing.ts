@@ -177,6 +177,16 @@ export const GAPS: readonly Gap[] = [
     },
   },
   {
+    id: 'GAP-40',
+    title: 'A fare files to its trip by the day it was bought, not the day it flies.',
+    affects: ['FR-EXP-04', 'FR-EXP-19', 'F-54', 'F-12'],
+    severity: 'Medium',
+    evidence:
+      'Found answering your question of Oct 6, how best to get airfare into ExpenseWise. An expense files to the trip whose dates include its date (ADR-0023), and a fare’s date is the day it was charged, usually weeks before it flies, so nearly every fare is on no trip until it is put on one by hand. ADR-0023 foresaw this for flights and hotels and left it to a person’s choice; a hotel folio is dated its check-out, so it files, but a fare doesn’t. The reading finds a ticket’s from and to, not when it departs.',
+    fix: 'Read a ticket’s first departure date and file it to the trip by that day, keeping the day it was charged as its date (#94).',
+    backlog: 94,
+  },
+  {
     id: 'GAP-25',
     title: 'Photos emailed in are stored with their location.',
     affects: ['NFR-PRV-03'],
@@ -1031,10 +1041,52 @@ export const QUESTIONS: readonly Question[] = [
       text: 'A, in the next pull request: let in automatically only the email the person first signed in with; any other waits to be let in from it (#91).',
     },
   },
+  {
+    id: 'Q46',
+    title: 'How an expense the company paid is marked',
+    ask: 'Your requirement of Oct 6: airfare your employer pays directly is tracked on the trip but kept off the claim, and that may change with a new employer or policy. A: a policy by type in Settings › Organization (Airfare today) marks each new expense of that type, and any one expense can be switched either way. B: you mark each expense yourself. C: the policy alone, with no switch on an expense.',
+    why: 'The policy is your employer’s, and it changes as a whole; a single fare can still differ, such as a change fee you paid yourself.',
+    recommendation: 'A.',
+    affects: ['FR-EXP-17', 'FR-EXP-18', 'F-62'],
+    answer: {
+      date: '2026-10-06',
+      text: 'A: a policy by type, and a switch on each expense (#95).',
+    },
+  },
+  {
+    id: 'Q47',
+    title: 'What the report shows of an expense the company paid',
+    ask: 'An expense the company paid directly is never claimed. On the report and its CSV and PDF, A: it is left off entirely, and the trip shows the full cost. B: it is listed apart, below the claim and outside its total, as paid by the company, not claimed.',
+    why: 'A report is a claim; anything on it that isn’t claimed must be impossible to pay by mistake, and anything left off it is unseen by whoever reads it.',
+    recommendation: 'A.',
+    affects: ['FR-EXP-17', 'F-62', 'F-18'],
+    answer: {
+      date: '2026-10-06',
+      text: 'B: listed apart, below the claim and outside its total, so the report shows the trip’s full cost (#95).',
+    },
+  },
+  {
+    id: 'Q48',
+    title: 'What a change of the policy does to expenses already filed',
+    ask: 'When the types the company pays change, A: every expense not yet on a submitted report follows the new policy, except one switched by hand; submitted and approved reports never change. B: only expenses filed after the change follow it.',
+    why: 'A new employer or policy usually applies to trips not yet claimed; a submitted report is locked.',
+    recommendation: 'A.',
+    affects: ['FR-EXP-18', 'F-62'],
+    answer: {
+      date: '2026-10-06',
+      text: 'A: every expense not yet on a submitted report follows it, except one switched by hand (#95).',
+    },
+  },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-06',
+    change:
+      'Your requirement of Oct 6, the full picture of each trip’s expenses: airfare your employer pays directly is tracked on the trip and kept off the claim, by a policy you change when your employer does (FR-EXP-17, FR-EXP-18, #95; your answers to Q46 to Q48). Answering how best to get airfare in, a fare was found to file to its trip by the day it was bought, not the day it flies (GAP-40, FR-EXP-19, #94). Making a trip from a forwarded itinerary stays in Phase 2.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-06',
     change:
