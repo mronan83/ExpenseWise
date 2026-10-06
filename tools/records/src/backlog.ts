@@ -305,6 +305,32 @@ export const BACKLOG: readonly BacklogItem[] = [
     affects: ['NFR-DEL-09', 'F-53'],
   },
 
+  {
+    num: 94,
+    title: 'File a fare to its trip by the day it flies',
+    type: 'Gap',
+    detail:
+      'GAP-40, from your question of Oct 6. A flight, rail or bus ticket reads the date of its first departure, as it already reads where it went from and to, and files to the trip that covers that day; the day it was charged stays its date. A return ticket files by its outbound departure; one whose departure can’t be read files by its date, as now; one you put on a trip by hand stays there.',
+    priority: 'P1',
+    effort: 'S',
+    severity: 'Medium',
+    blocker: { kind: 'none' },
+    source: 'GAP-40',
+    affects: ['GAP-40', 'FR-EXP-19', 'FR-EXP-04', 'F-63', 'F-54'],
+  },
+  {
+    num: 95,
+    title: 'Track what the company pays on the trip, apart from the claim',
+    type: 'Feature',
+    detail:
+      'Your requirement of Oct 6, with your answers to Q46 to Q48. Settings › Organization lists the expense types your employer pays directly, Airfare today; an expense of such a type is marked paid by the company, and any one can be switched either way. The trip shows its full cost, split into claimed and paid by the company. The report and its CSV and PDF list such an expense apart, below the claim and outside its total, and each CSV row says who paid. When the policy changes, every expense not yet on a submitted report follows it, except one switched by hand.',
+    priority: 'P1',
+    effort: 'M',
+    severity: 'Medium',
+    blocker: { kind: 'none' },
+    source: 'Product owner Oct 6',
+    affects: ['FR-EXP-17', 'FR-EXP-18', 'F-62'],
+  },
   // P2: this month
   {
     num: 79,
@@ -1356,6 +1382,7 @@ export const SEQUENCING: readonly string[] = [
   'Your batch of Oct 5 is built in PR #60: approval (#24) with the second factor (#8), a submitted claim keeping its names (#70), emails that filed nothing (#59), journeys and stays in the export (#83), business miles on Home (#73) and proof that no tools reach a model (#38), each behind its switch and off until you switch it on.',
   'With #85, #88 and #90 in PR #60, a session that skipped the code gets nothing for someone with an authenticator, and once a person has one, only an email they let in signs in; their other emails still forward receipts (Q44). #91, letting in first only the email a person first signed in with (your answer to Q45), is next; until then, set up your authenticator soon after release.',
   'Approval in a team needs the second factor switched on too. #87 corrects an approved expense; #89 shows what awaits reimbursement on Home.',
+  'Your requirement of Oct 6 for each trip’s full picture: #94 files a fare to the trip it flies on, and #95 tracks what the company pays on the trip, apart from the claim. #94 is small and comes first.',
   '#48 needs you, not code: it keeps a leaked key from erasing the backups.',
   '#11–#15 are small, independent and each closes a gap; take them between features.',
 ];

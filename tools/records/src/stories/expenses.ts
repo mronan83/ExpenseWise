@@ -699,6 +699,51 @@ export const EXPENSE_STORIES: readonly Story[] = [
       },
     ],
   },
+  {
+    id: 'US-TRIP-06',
+    title: 'Every fare on the trip it flies on',
+    as: 'Alex, who travels for work and books flights weeks ahead',
+    want: 'a fare I bought weeks before a trip to file to that trip, not to the day I paid',
+    soThat: 'each trip shows its full cost without my moving its fares by hand',
+    feature: 'F-63',
+    requirements: ['FR-EXP-19'],
+    status: 'Planned',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'a flight, rail or bus ticket I bought before the trip',
+        when: 'it is read',
+        then: 'it reads the date of its first departure and files to the trip that covers that day; the day it was charged stays its date',
+        decided: { by: 'owner', source: 'owner 2026-10-06' },
+        checks: [],
+      },
+      {
+        id: 'AC2',
+        given: 'a return ticket',
+        when: 'it files',
+        then: 'it files by its outbound departure',
+        decided: { by: 'claude' },
+        checks: [],
+      },
+      {
+        id: 'AC3',
+        given: 'a ticket whose departure can’t be read',
+        when: 'it files',
+        then: 'it files by its date, as any expense does',
+        decided: { by: 'claude' },
+        checks: [],
+      },
+      {
+        id: 'AC4',
+        given: 'a ticket I put on a trip, or on none, by hand',
+        when: 'it is read again or its departure changes',
+        then: 'it stays where I put it',
+        decided: { by: 'claude', source: 'ADR-0023' },
+        checks: [],
+      },
+    ],
+    note: 'Planned (#94, GAP-40). Until it is built, put a fare on its trip from the expense. Making a trip from a forwarded itinerary is Phase 2.',
+  },
 
   // Needs you
   {
