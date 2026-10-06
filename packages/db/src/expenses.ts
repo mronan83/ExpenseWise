@@ -77,6 +77,12 @@ export interface ExpenseRecord extends ExpenseValues, ExpenseDetails, Partial<Ex
    * (FR-EXP-16): its reason for claiming less, line by line. Read from the database.
    */
   readonly excludedLines?: number;
+  /**
+   * The company paid it directly (FR-EXP-17), and whether a person set that by hand (Q46).
+   * Read from the database; a record made elsewhere, such as a test's, may leave them out.
+   */
+  readonly companyPaid?: boolean;
+  readonly companyPaidPinned?: boolean;
   readonly editedAt: Date | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -114,6 +120,8 @@ export const expenseColumns = {
   excludedLines: sql<number>`(select count(*)::int from expense_lines l
     where l.org_id = ${expenses.orgId} and l.expense_id = ${expenses.id}
       and l.excluded_reason is not null)`,
+  companyPaid: expenses.companyPaid,
+  companyPaidPinned: expenses.companyPaidPinned,
   editedAt: expenses.editedAt,
   createdAt: expenses.createdAt,
   updatedAt: expenses.updatedAt,

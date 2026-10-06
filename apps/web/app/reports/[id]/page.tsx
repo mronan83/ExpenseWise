@@ -27,6 +27,7 @@ import { HistoryLink } from '../../history-link';
 import { CATEGORIES_FLAG } from '../../../lib/categories';
 import { SPLIT_FLAG } from '../../../lib/itemized';
 import { APPROVAL_FLAG } from '../../../lib/approval';
+import type { CompanyPaidSection } from '../../../lib/company-paid';
 import { ApprovalPanel } from './approval';
 import { ByCategory } from './by-category';
 
@@ -177,6 +178,8 @@ export default function ReportPage() {
   const report = load.state === 'ready' ? load.report : null;
   const others = load.state === 'ready' ? load.open : [];
   const open = report?.status === 'open';
+  // What the company paid is listed apart from the claim (Q47), local or on a trip.
+  const claimedLocals = report?.localItems.filter((e) => e.paidBy !== 'company') ?? [];
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]">
@@ -262,7 +265,12 @@ export default function ReportPage() {
                 </h2>
                 <ul className="flex flex-col divide-y divide-rule rounded-xl border border-rule bg-sheet">
                   {report.tripItems.map((t) => {
-                    const total = converted(t.reimbursement, totals(t.totals));
+                    // While Paid by the company is on, a trip counts its claim here; what the
+                    // company paid is listed apart below (Q47).
+                    const total = converted(
+                      t.reimbursement,
+                      totals(t.cost ? t.cost.claimed : t.totals),
+                    );
                     return (
                       <li key={t.id} className="flex flex-col gap-1 px-4 py-3">
                         <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3">
@@ -307,7 +315,7 @@ export default function ReportPage() {
               </section>
             ) : null}
 
-            {report.localItems.length > 0 ? (
+            {claimedLocals.length > 0 ? (
               <section aria-labelledby="local-title" className="flex flex-col gap-2">
                 <h2
                   id="local-title"
@@ -316,7 +324,7 @@ export default function ReportPage() {
                   Local expenses
                 </h2>
                 <ul className="flex flex-col divide-y divide-rule rounded-xl border border-rule bg-sheet">
-                  {report.localItems.map((e) => {
+                  {claimedLocals.map((e) => {
                     const name = e.merchant ?? 'An expense';
                     return (
                       <li key={e.id} className="flex flex-col gap-1 px-4 py-3">
@@ -381,6 +389,10 @@ export default function ReportPage() {
                   })}
                 </ul>
               </section>
+            ) : null}
+
+            {report.companyPaid && report.companyPaid.expenses.length > 0 ? (
+              <CompanyPaid section={report.companyPaid} />
             ) : null}
 
             {features(APPROVAL_FLAG) ? (
@@ -471,6 +483,65 @@ export default function ReportPage() {
         ) : null}
       </main>
     </div>
+  );
+}
+
+/**
+ * What the company paid directly, listed apart, below the claim and outside its total, with
+ * its total and the full cost per currency (FR-EXP-17, Q47). Each still has to be ready, like
+ * anything on the report.
+ */
+function CompanyPaid({ section }: { section: CompanyPaidSection }) {
+  return (
+    <section aria-labelledby="company-paid-title" className="flex flex-col gap-2">
+      <h2
+        id="company-paid-title"
+        className="text-xs font-semibold tracking-wider text-ink-2 uppercase"
+      >
+        Paid by the company, not claimed
+      </h2>
+      <ul className="flex flex-col divide-y divide-rule rounded-xl border border-rule bg-sheet">
+        {section.expenses.map((e) => {
+          const name = e.merchant ?? 'An expense';
+          return (
+            <li key={e.id} className="flex flex-col gap-1 px-4 py-3">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3">
+                <Link href={`/expenses/${e.id}`} className="tap truncate text-sm font-semibold">
+                  {name}
+                </Link>
+                <span className="text-right font-mono text-sm whitespace-nowrap">
+                  {e.amount ? formatMoney(e.amount) : '–'}
+                </span>
+                <span className="text-xs break-words text-ink-2">
+                  <span className="whitespace-nowrap">{e.date ? showDate(e.date) : 'No date'}</span>
+                  {e.trip ? ` · ${e.trip.name}` : ' · local'}
+                  {e.held ? ' · possible duplicate' : ''}
+                </span>
+                <span
+                  className={`justify-self-end text-xs font-semibold whitespace-nowrap ${e.ready ? 'text-ok' : 'text-warn'}`}
+                >
+                  {e.ready
+                    ? 'Ready'
+                    : e.status !== 'ready'
+                      ? EXPENSE_STATUS[e.status].label
+                      : 'Needs a reason'}
+                </span>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 rounded-xl border border-rule bg-sheet px-4 py-3 text-sm">
+        <dt className="text-ink-2">Paid by the company</dt>
+        <dd className="text-right font-mono break-words">{totals(section.totals)}</dd>
+        <dt className="text-ink-2">Full cost</dt>
+        <dd className="text-right font-mono break-words">{totals(section.fullCost)}</dd>
+      </dl>
+      <p className="text-xs text-ink-2">
+        Your employer paid these directly. They are on the report so it shows the trip’s full cost,
+        never in what you’re reimbursed.
+      </p>
+    </section>
   );
 }
 

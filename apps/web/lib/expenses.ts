@@ -1,5 +1,6 @@
 import type { ReceiptCheck } from './approval';
 import type { ExpenseCategory } from './categories';
+import type { PaidBy } from './company-paid';
 import type { ExpenseSplit, Itemized } from './itemized';
 import type { ReceiptSummary } from './receipts';
 
@@ -38,6 +39,10 @@ export interface ExpenseSummary {
   reportId: string | null;
   /** Its category and type, while that feature is on (FR-EXP-11). */
   category?: ExpenseCategory;
+  /** Who paid it, while Paid by the company is on (FR-EXP-17). */
+  paidBy?: PaidBy;
+  /** A person set who paid it, so the policy for its type leaves it alone (Q46). */
+  paidByPinned?: boolean;
   createdAt: string;
   updatedAt: string;
 }

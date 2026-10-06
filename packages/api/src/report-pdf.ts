@@ -1,4 +1,4 @@
-import type { ReportExportTable } from '@expensewise/domain';
+import { COMPANY_PAID_HEADING, type ReportExportTable } from '@expensewise/domain';
 import { PDFDocument, rgb, StandardFonts, type PDFFont } from 'pdf-lib';
 
 /** What heads a report’s PDF: whose it is, where, and when (FR-SET-01). */
@@ -154,6 +154,12 @@ async function layOut(heading: ReportPdfHeading, table: ReportExportTable): Prom
    */
   const widest = (texts: readonly string[], font: PDFFont) =>
     Math.max(0, ...texts.map((t) => font.widthOfTextAtSize(printable(t, font), SIZE)));
+  const apart = table.companyPaid;
+  const rowsShown = [...table.rows, ...(apart?.rows ?? [])];
+  const totalsShown = [
+    ...table.totalRows,
+    ...(apart ? [...apart.totalRows, ...apart.fullCostRows] : []),
+  ];
   const needs = table.columns.map(
     (c, i) =>
       2 * PAD +
@@ -163,11 +169,11 @@ async function layOut(heading: ReportPdfHeading, table: ReportExportTable): Prom
           ? []
           : [
               widest(
-                table.rows.map((r) => r[i] ?? ''),
+                rowsShown.map((r) => r[i] ?? ''),
                 regular,
               ),
               widest(
-                table.totalRows.map((r) => r[i] ?? ''),
+                totalsShown.map((r) => r[i] ?? ''),
                 bold,
               ),
             ]),
@@ -256,14 +262,29 @@ async function layOut(heading: ReportPdfHeading, table: ReportExportTable): Prom
     write('Nothing is on this report.', PAGE.margin + PAD, SIZE, regular);
     y -= LEADING;
   }
-  if (table.totalRows.length > 0) {
-    if (y - LEADING * (table.totalRows.length + 1) < PAGE.margin) {
+  /** Total rows under a rule, kept together on one page. */
+  const totalRows = (rows: readonly (readonly string[])[]) => {
+    if (rows.length === 0) return;
+    if (y - LEADING * (rows.length + 1) < PAGE.margin) {
       newPage();
       tableHeader();
     }
     page.rules.push(y + 1.5);
     y -= 3;
-    for (const cells of table.totalRows) row(cells, bold);
+    for (const cells of rows) row(cells, bold);
+  };
+  totalRows(table.totalRows);
+  // What the company paid, apart after the claim and outside its total, then the full cost
+  // (FR-EXP-17, Q47).
+  if (apart) {
+    if (y - LEADING * 4 < PAGE.margin) newPage();
+    y -= 10;
+    write(printable(COMPANY_PAID_HEADING, bold), PAGE.margin, 10, bold);
+    y -= 16;
+    tableHeader();
+    for (const cells of apart.rows) row(cells, regular);
+    totalRows(apart.totalRows);
+    totalRows(apart.fullCostRows);
   }
   // Notes after the totals, such as where a measured route came from (ADR-0039).
   for (const note of table.notes ?? []) {

@@ -756,6 +756,13 @@ export const ReceiptCheckSchema = z
   })
   .openapi('ReceiptCheck');
 
+export const PaidBySchema = z.enum(['claimant', 'company']).openapi('PaidBy', {
+  description:
+    'Who paid it (FR-EXP-17). claimant: the person, who claims it. company: the company paid ' +
+    'it directly, such as airfare an employer books: it stays on its trip and in the trip’s ' +
+    'cost, and is never claimed. Only while `expenses.company-paid` is on.',
+});
+
 export const ExpenseSummarySchema = z
   .object({
     id: z.string().uuid(),
@@ -797,6 +804,16 @@ export const ExpenseSummarySchema = z
     }),
     // Only while categories and types are switched on (FR-EXP-11, FR-INT-10).
     category: ExpenseCategorySchema.optional(),
+    // Only while Paid by the company is switched on (FR-EXP-17, FR-EXP-18).
+    paidBy: PaidBySchema.optional(),
+    paidByPinned: z
+      .boolean()
+      .optional()
+      .openapi({
+        description:
+          'A person set who paid it, so the policy for its type leaves it alone until it is ' +
+          'handed back (Q46). Only while `expenses.company-paid` is on.',
+      }),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
   })
@@ -1006,6 +1023,26 @@ export const ExpenseSearchSchema = z.object({
     .openapi({ description: 'yes: on some trip. no: on none, such as everyday spend.' }),
 });
 
+export const SetPaidBySchema = z
+  .union([
+    z
+      .object({
+        paidBy: z.enum(['claimant', 'company']).openapi({
+          description:
+            'Who paid it, set by hand: the policy for its type leaves it so from then on (Q46).',
+        }),
+      })
+      .strict(),
+    z
+      .object({
+        byPolicy: z.literal(true).openapi({
+          description: 'Hand it back to the policy for its type, which applies at once.',
+        }),
+      })
+      .strict(),
+  ])
+  .openapi('SetPaidBy');
+
 export const SetExpenseTripSchema = z
   .union([
     z
@@ -1125,6 +1162,20 @@ const TripTotalSchema = z.object({
   decimal: z.string().openapi({ example: '1257.60' }),
 });
 
+/** A cost split by who paid it (FR-EXP-17). */
+const CostSplitSchema = z
+  .object({
+    claimed: z.array(TripTotalSchema).openapi({
+      description: 'What the person paid and claims, one total per currency, never converted.',
+    }),
+    companyPaid: z.array(TripTotalSchema).openapi({
+      description:
+        'What the company paid directly and is never claimed, one total per currency, never ' +
+        'converted.',
+    }),
+  })
+  .openapi('CostSplit');
+
 export const TripSummarySchema = z
   .object({
     id: z.string().uuid(),
@@ -1145,6 +1196,11 @@ export const TripSummarySchema = z
       description:
         'What its expenses add up to, one total per currency, never converted. Expenses with ' +
         'no amount yet count in none.',
+    }),
+    cost: CostSplitSchema.optional().openapi({
+      description:
+        'Its cost split into what is claimed and what the company paid; with `totals`, its ' +
+        'full cost. Only while `expenses.company-paid` is on (FR-EXP-17).',
     }),
     reportId: z
       .string()
@@ -1311,12 +1367,14 @@ export const ReportSummarySchema = z
     }),
     totals: z.array(TotalSchema).openapi({
       description:
-        'One total per currency, as spent, never converted; possible duplicates are left out.',
+        'One total per currency, as spent, never converted; possible duplicates are left out, ' +
+        'and, while `expenses.company-paid` is on, what the company paid (FR-EXP-17).',
     }),
     reimbursement: ReimbursementTotalSchema.optional().openapi({
       description:
         'Everything on it in `currency`, the person’s reimbursement currency, at each purchase ' +
-        'date’s reference rate; possible duplicates are left out. Only while the feature ' +
+        'date’s reference rate; possible duplicates are left out, and, while ' +
+        '`expenses.company-paid` is on, what the company paid. Only while the feature ' +
         '`reports.currency-conversion` is on (FR-EXP-13).',
     }),
   })
@@ -1350,6 +1408,7 @@ export const ReportDetailSchema = ReportSummarySchema.extend({
         description:
           'Its amount in the report’s currency, while conversion is on; null with no amount yet.',
       }),
+      paidBy: PaidBySchema.optional(),
     }),
   ),
   rates: z
@@ -1365,6 +1424,41 @@ export const ReportDetailSchema = ReportSummarySchema.extend({
       description:
         'Each rate its amounts were converted at, oldest first, while conversion is on ' +
         '(NFR-DAT-02).',
+    }),
+  companyPaid: z
+    .object({
+      expenses: z.array(
+        z.object({
+          id: z.string().uuid(),
+          status: ExpenseStatusSchema,
+          merchant: z.string().nullable(),
+          date: z.string().nullable(),
+          amount: ExpenseAmountSchema,
+          receiptId: z.string().uuid().nullable(),
+          trip: z.object({ id: z.string().uuid(), name: z.string() }).nullable(),
+          held: z.boolean().openapi({ description: 'Held as a possible duplicate (FR-INT-18).' }),
+          ready: z.boolean().openapi({
+            description:
+              'Read and, for a local expense, justified: the report closes only once it is, like ' +
+              'anything on it.',
+          }),
+        }),
+      ),
+      totals: z.array(TotalSchema).openapi({
+        description: 'What the company paid, one total per currency, never converted.',
+      }),
+      fullCost: z.array(TotalSchema).openapi({
+        description:
+          'The claim and what the company paid together, one total per currency, never ' +
+          'converted: the full cost of what is on the report.',
+      }),
+    })
+    .optional()
+    .openapi({
+      description:
+        'What the company paid directly, listed apart, below the claim and outside its total ' +
+        '(FR-EXP-17, Q47). Its expenses are on the report and need to be ready like any ' +
+        'other, but every other total leaves them out. Only while `expenses.company-paid` is on.',
     }),
 }).openapi('ReportDetail');
 

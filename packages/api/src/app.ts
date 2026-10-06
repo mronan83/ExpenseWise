@@ -17,6 +17,7 @@ import { readyRoute } from './routes/ready.ts';
 import type { Readiness } from './schemas.ts';
 import type { SecretBox } from './secret-box.ts';
 import type { CategoryStore } from './categories.ts';
+import type { CompanyPaidStore } from './company-paid.ts';
 import { registerCategoryRoutes } from './category-routes.ts';
 import { registerExpenseRoutes } from './expense-routes.ts';
 import type { HomeStore } from './home.ts';
@@ -117,6 +118,11 @@ export interface ApiOptions
   readonly emails?: UnfiledEmailStore;
   /** Receipts' itemized lines and expenses' splits. Without it, those routes answer 503. */
   readonly itemized?: ItemizedStore;
+  /**
+   * Who paid each expense, and the policy of the types the company pays (FR-EXP-17,
+   * FR-EXP-18). Without it, those routes answer 503.
+   */
+  readonly companyPaid?: CompanyPaidStore;
   /** Which AI models read receipts (FR-INT-16). Without it, Settings › AI models answers 503. */
   readonly modelSettings?: ModelSettingsStore;
   /** The currency each person is reimbursed in. Without it, those routes answer 503. */

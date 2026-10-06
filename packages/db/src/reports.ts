@@ -24,6 +24,12 @@ import {
 } from 'drizzle-orm';
 import { appendAuditEvent, lockOrgWrites, type AuditEntry } from './audit.ts';
 import { withOrg, type Database, type Transaction } from './client.ts';
+import {
+  listCompanyPaid,
+  tallyPayers,
+  type CompanyPaidRecord,
+  type PayerTally,
+} from './company-paid.ts';
 import { featureOn } from './features.ts';
 import { CONVERSION_FLAG, getReimbursementCurrency, requestConversions } from './conversions.ts';
 import { listReportExpenses, type ReportExpenseRecord } from './expenses.ts';
@@ -97,6 +103,13 @@ export interface ReportContents {
   readonly locals: readonly ReportExpenseRecord[];
   /** Every amount on it with its conversion, where asked for (withReportAmounts()). */
   readonly amounts?: readonly ReportAmount[];
+  /**
+   * What is on it by who paid, and each expense the company paid (FR-EXP-17), read from the
+   * database; shown only while Paid by the company is on. A report made elsewhere, such as a
+   * test's, may leave them out.
+   */
+  readonly payers?: readonly PayerTally[];
+  readonly companyPaid?: readonly CompanyPaidRecord[];
 }
 
 /**
@@ -143,6 +156,8 @@ export async function loadReports(
           .where(inArray(expenses.tripId, tripIds))
           .groupBy(expenses.tripId);
   const locals = await listReportExpenses(tx, ids);
+  const payers = await tallyPayers(tx, { reportIds: ids });
+  const companyPaid = await listCompanyPaid(tx, ids);
   const byId = new Map(found.map((r) => [r.id, r]));
   return ids.flatMap((id) => {
     const report = byId.get(id);
@@ -156,6 +171,8 @@ export async function loadReports(
         tallies: tallies.filter((t) => mineIds.has(t.tripId)),
         counts: counts.filter((c) => mineIds.has(c.tripId)),
         locals: locals.filter((e) => e.reportId === id),
+        payers: payers.filter((p) => p.reportId === id),
+        companyPaid: companyPaid.filter((e) => e.onReportId === id),
       },
     ];
   });

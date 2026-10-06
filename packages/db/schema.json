@@ -1745,6 +1745,12 @@
           "type": "timestamp with time zone",
           "nullable": false,
           "default": "now()"
+        },
+        {
+          "name": "company_pays",
+          "type": "boolean",
+          "nullable": false,
+          "default": "false"
         }
       ],
       "primaryKey": [
@@ -2078,6 +2084,18 @@
           "type": "text",
           "nullable": true,
           "default": null
+        },
+        {
+          "name": "company_paid",
+          "type": "boolean",
+          "nullable": false,
+          "default": "false"
+        },
+        {
+          "name": "company_paid_pinned",
+          "type": "boolean",
+          "nullable": false,
+          "default": "false"
         }
       ],
       "primaryKey": [
@@ -2198,6 +2216,10 @@
         {
           "name": "expenses_currency_iso",
           "definition": "CHECK (((currency IS NULL) OR (currency ~ '^[A-Z]{3}$'::text)))"
+        },
+        {
+          "name": "expenses_drive_not_company_paid",
+          "definition": "CHECK (((source <> 'mileage'::expense_source) OR (NOT company_paid)))"
         },
         {
           "name": "expenses_fx_complete",

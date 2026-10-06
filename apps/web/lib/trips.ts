@@ -1,4 +1,5 @@
 import { showDateRange, showDay } from '@expensewise/domain';
+import type { CostSplit } from './company-paid';
 import type { ExpenseAmount, ExpenseSummary } from './expenses';
 
 export interface TripSummary {
@@ -16,6 +17,8 @@ export interface TripSummary {
   needsReviewCount: number;
   /** One per currency, never converted. */
   totals: ExpenseAmount[];
+  /** Its cost split by who paid it, while Paid by the company is on (FR-EXP-17). */
+  cost?: CostSplit;
   /** The report it is on, once it has joined one. */
   reportId: string | null;
   createdAt: string;

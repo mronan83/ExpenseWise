@@ -13,7 +13,13 @@ interface CatalogNode {
   inUse: boolean;
 }
 
-export type ExpenseType = CatalogNode;
+export interface ExpenseType extends CatalogNode {
+  /**
+   * The policy says the company pays it directly (FR-EXP-18): only while Paid by the company
+   * is on.
+   */
+  companyPays?: boolean;
+}
 
 export interface Category extends CatalogNode {
   glCode: string | null;

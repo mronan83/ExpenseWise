@@ -1,6 +1,11 @@
 import { APPROVAL_NOTE_MAX } from '@expensewise/domain';
 import { z } from '@hono/zod-openapi';
-import { ExpenseAmountSchema, ReceiptCheckSchema, ReportStatusSchema } from './schemas.ts';
+import {
+  ExpenseAmountSchema,
+  PaidBySchema,
+  ReceiptCheckSchema,
+  ReportStatusSchema,
+} from './schemas.ts';
 
 /*
  * Single-step approval (FR-GOV-02, FR-GOV-03, FR-GOV-10 to FR-GOV-13, FR-EXP-10, #24,
@@ -44,6 +49,9 @@ const ReviewedExpenseSchema = z
       })
       .nullable()
       .openapi({ description: 'Why its report’s latest return rejected it, while it is back.' }),
+    // Only while Paid by the company is switched on (FR-EXP-17): one the company paid is never
+    // claimed, and is rejected like any other.
+    paidBy: PaidBySchema.optional(),
   })
   .openapi('ReviewedExpense');
 

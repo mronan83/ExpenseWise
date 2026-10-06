@@ -1,3 +1,4 @@
+import type { PaidBy } from './company-paid';
 import type { ExpenseAmount, ExpenseField } from './expenses';
 import type { ReportStatus } from './reports';
 
@@ -33,6 +34,8 @@ export interface ReviewedExpense {
   claimReason: string | null;
   excludedLines: number;
   rejection: { reason: string; automatic: boolean } | null;
+  /** Who paid it, while Paid by the company is on: the company's is never claimed (FR-EXP-17). */
+  paidBy?: PaidBy;
 }
 
 /** A report's approval as the caller sees it (#24). */

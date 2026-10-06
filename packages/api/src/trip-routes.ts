@@ -1,7 +1,9 @@
 import type { Membership } from '@expensewise/db';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
+import { paidByView, showCompanyPaid } from './company-paid.ts';
 import { expenseSummaries } from './expense-views.ts';
+import { featureGate, type FeatureGate } from './features.ts';
 import { ProblemError } from './problem.ts';
 import {
   createTripRoute,
@@ -18,6 +20,8 @@ export interface TripRouteOptions {
   readonly verifyToken?: TokenVerifier;
   readonly workspace?: WorkspaceStore;
   readonly trips?: TripStore;
+  /** Which features are on. Built from `workspace` when not given. */
+  readonly features?: FeatureGate;
 }
 
 const LIST_LIMIT = 200;
@@ -27,6 +31,7 @@ export function registerTripRoutes(
   options: TripRouteOptions,
 ) {
   const auth = requireIdentity(options.verifyToken);
+  const features = options.features ?? featureGate(options);
   const paths = new Set(
     [listTripsRoute, createTripRoute, getTripRoute, editTripRoute, deleteTripRoute].map((r) =>
       r.getRoutingPath(),
@@ -67,23 +72,37 @@ export function registerTripRoutes(
       detail: problem.message,
       field: problem.field,
     });
+  /**
+   * A trip with its expenses. While Paid by the company is on, its cost is split into what is
+   * claimed and what the company paid, and each expense says who paid it (FR-EXP-17).
+   */
   const shown = async (orgId: string, tripId: string) => {
     const found = await stores().trips.get(orgId, tripId);
     if (!found) throw notFound();
+    const paid = await showCompanyPaid(features, orgId, found.payers !== undefined);
+    const expenses = expenseSummaries(found.expenses);
     return {
-      ...tripSummary(found.trip, found.tallies),
-      expenses: expenseSummaries(found.expenses),
+      ...tripSummary(found.trip, found.tallies, paid ? found.payers : undefined),
+      expenses: paid
+        ? expenses.map((e, i) => {
+            const record = found.expenses.expenses[i];
+            return record ? { ...e, ...paidByView(record) } : e;
+          })
+        : expenses,
     };
   };
 
   app.openapi(listTripsRoute, async (c) => {
     const who = await member(c.var.identity.userId);
     // A person's Trips are their own, whatever else their role lets them open (ADR-0035).
-    const { trips, tallies } = await stores().trips.list(who.orgId, LIST_LIMIT, {
+    const { trips, tallies, payers } = await stores().trips.list(who.orgId, LIST_LIMIT, {
       ...c.req.valid('query'),
       memberId: who.memberId,
     });
-    return c.json({ trips: trips.map((t) => tripSummary(t, tallies)) }, 200);
+    const split = (await showCompanyPaid(features, who.orgId, payers !== undefined))
+      ? payers
+      : undefined;
+    return c.json({ trips: trips.map((t) => tripSummary(t, tallies, split)) }, 200);
   });
 
   app.openapi(createTripRoute, async (c) => {

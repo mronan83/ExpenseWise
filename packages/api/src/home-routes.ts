@@ -1,6 +1,7 @@
 import type { Membership } from '@expensewise/db';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
+import { companyPaidShown, reportsIn } from './company-paid.ts';
 import type { ApprovalStore } from './approval.ts';
 import type { CategoryStore } from './categories.ts';
 import { featureGate, type FeatureGate } from './features.ts';
@@ -83,10 +84,14 @@ export function registerHomeRoutes(
       options.modelSettings !== undefined &&
       (await features.isOn(who.orgId, 'receipts.model-settings'));
     const converting = await showConverted(features, who.orgId, data.reports.reports);
+    const paid = await companyPaidShown(features, who.orgId, reportsIn(data.reports));
     // Asked only when there are drives to show: with none, Home reads as it always has.
     const mileage =
       (data.home.monthDrives?.length ?? 0) > 0 &&
       (await features.isOn(who.orgId, 'expenses.mileage'));
-    return c.json(homeView(data, day, NEEDS_SHOWN, now, settingsOn, converting, mileage), 200);
+    return c.json(
+      homeView(data, day, NEEDS_SHOWN, now, settingsOn, converting, mileage, paid),
+      200,
+    );
   });
 }

@@ -341,6 +341,14 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
     ],
   ],
   ['a past trip', (s) => `/trips/${s.trips.omaha}`, []],
+  [
+    'a trip’s cost, claimed and paid by the company',
+    (s) => `/trips/${s.trips.omaha}`,
+    [
+      (page) => expect(page.getByRole('definition').filter({ hasText: '$389.20' })).toBeVisible(),
+      (page) => expect(page.getByText('Paid by the company', { exact: true })).toBeVisible(),
+    ],
+  ],
   ['a trip with a long name', (s) => `/trips/${s.trips.long}`, []],
   ['a trip with no expenses', (s) => `/trips/${s.trips.empty}`, []],
   ['editing a trip', (s) => `/trips/${s.trips.omaha}`, [press('Edit')]],
@@ -351,6 +359,17 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
     'moving a trip to another report',
     (s) => `/reports/${s.reports.open}`,
     [press('Move to another report')],
+  ],
+  [
+    'what the company paid, apart from a report’s claim',
+    (s) => `/reports/${s.reports.open}`,
+    [
+      (page) =>
+        expect(
+          page.getByRole('heading', { name: 'Paid by the company, not claimed' }),
+        ).toBeVisible(),
+      (page) => expect(page.getByText('Full cost', { exact: true })).toBeVisible(),
+    ],
   ],
   ['a closed report', (s) => `/reports/${s.reports.closed}`, []],
   [
@@ -384,6 +403,24 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
   ['a local expense needing a reason', (s) => `/expenses/${s.expenses.fallback}`, []],
   ['a local expense with its reason', (s) => `/expenses/${s.expenses.lunch}`, []],
   ['organization settings', () => '/settings/organization', []],
+  [
+    'the types the company pays directly, in organization settings',
+    () => '/settings/organization',
+    [
+      (page) =>
+        expect(page.getByRole('heading', { name: 'Paid by the company directly' })).toBeVisible(),
+      (page) => expect(page.getByRole('checkbox', { name: 'Airfare' })).toBeChecked(),
+    ],
+  ],
+  [
+    'an expense the company paid, by its policy',
+    (s) => `/expenses/${s.expenses.flight}`,
+    [
+      (page) =>
+        expect(page.getByText('Paid by the company (your organization’s policy)')).toBeVisible(),
+      (page) => expect(page.getByRole('button', { name: 'I paid it' })).toBeVisible(),
+    ],
+  ],
   ['AI provider settings', () => '/settings/ai', []],
   ['sign-in settings', () => '/settings/sign-ins', []],
   [

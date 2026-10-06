@@ -394,6 +394,12 @@ export const expenseTypes = pgTable(
      * it, so a renamed one keeps its suggestions.
      */
     starterKey: text('starter_key'),
+    /**
+     * The organization's policy that the company pays this type directly, such as Airfare
+     * booked by an employer (FR-EXP-18, Q46): an expense of it is paid by the company unless a
+     * person set it by hand. This type only, not those under it.
+     */
+    companyPays: boolean('company_pays').notNull().default(false),
     /** Who last added or changed it; null while it is as the ready-made set left it. */
     updatedByMemberId: uuid('updated_by_member_id'),
     createdAt: createdAt(),
@@ -563,6 +569,17 @@ export const expenses = pgTable(
      * (ADR-0023).
      */
     tripPinned: boolean('trip_pinned').notNull().default(false),
+    /**
+     * The company paid it directly, such as airfare an employer books (FR-EXP-17): it stays on
+     * its trip and in the trip's cost, and is never claimed. Set by the policy for its type,
+     * or by a person.
+     */
+    companyPaid: boolean('company_paid').notNull().default(false),
+    /**
+     * A person set who paid it. From then on the policy leaves it alone, as `tripPinned` does
+     * filing by date (Q46, ADR-0045), until it is handed back to the policy.
+     */
+    companyPaidPinned: boolean('company_paid_pinned').notNull().default(false),
     /** Corrections to approved expenses are a reversal plus a new version. */
     version: integer('version').notNull().default(1),
     reversalOfId: uuid('reversal_of_id'),
@@ -617,6 +634,8 @@ export const expenses = pgTable(
       foreignColumns: [t.orgId, t.id],
     }),
     check('expenses_currency_iso', sql`${t.currency} IS NULL OR ${isoCurrency(t.currency)}`),
+    // A drive is paid at miles × its rate to the person who drove: never by the company (#95).
+    check('expenses_drive_not_company_paid', sql`${t.source} <> 'mileage' OR NOT ${t.companyPaid}`),
     check(
       'expenses_claim_reason_length',
       sql`${t.claimReason} IS NULL OR char_length(${t.claimReason}) BETWEEN 1 AND ${sql.raw(String(APPROVAL_NOTE_MAX))}`,

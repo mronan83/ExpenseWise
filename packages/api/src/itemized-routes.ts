@@ -10,6 +10,7 @@ import type { OpenAPIHono } from '@hono/zod-openapi';
 import { requireIdentity, type AuthVariables, type TokenVerifier } from './auth.ts';
 import type { CategoryStore } from './categories.ts';
 import { detailWithCategory } from './category-views.ts';
+import { paidByView, readPaidBy, showCompanyPaid } from './company-paid.ts';
 import type { ExpenseStore } from './expenses.ts';
 import { featureGate, type FeatureGate } from './features.ts';
 import type { ItemizedStore } from './itemized.ts';
@@ -214,6 +215,10 @@ export function registerItemizedRoutes(
         return {
           ...(await detailWithCategory(categories, orgId, after)),
           ...(await sections(orgId, after)),
+          // Who paid it, while Paid by the company is on (FR-EXP-17).
+          ...((await showCompanyPaid(features, orgId, readPaidBy([after.expense])))
+            ? paidByView(after.expense)
+            : {}),
         };
       }
     }
@@ -291,6 +296,13 @@ export function registerItemizedRoutes(
     const report = await stores().itemized.byCategory(who.orgId, reportId);
     if (!report) throw notFound('report');
     const converting = await features.isOn(who.orgId, CONVERSION_FLAG);
-    return c.json(categoriesView(reportId, report.currency, report.expenses, converting), 200);
+    // The claim by category: what the company paid is in none, while that is on (FR-EXP-17).
+    const paid = await showCompanyPaid(
+      features,
+      who.orgId,
+      report.expenses.some((e) => e.companyPaid !== undefined),
+    );
+    const claimed = paid ? report.expenses.filter((e) => !e.companyPaid) : report.expenses;
+    return c.json(categoriesView(reportId, report.currency, claimed, converting), 200);
   });
 }

@@ -4,6 +4,7 @@ export * from './ai-models.ts';
 export * from './audit.ts';
 export * from './categories.ts';
 export * from './client.ts';
+export * from './company-paid.ts';
 export * from './connection.ts';
 export * from './conversions.ts';
 export * from './data-api.ts';

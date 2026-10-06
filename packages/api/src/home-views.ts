@@ -67,9 +67,14 @@ export function homeView(
   converting = false,
   /** Whether mileage is on (expenses.mileage), so the month shows the business miles. */
   mileage = false,
+  /**
+   * Whether Paid by the company is on (expenses.company-paid), so reports total their claim
+   * without what the company paid (FR-EXP-17). This month's spending stays everything spent.
+   */
+  companyPaid = false,
 ) {
   const { home } = data;
-  const items = needsYouItems(data, data.reports, now, settingsOn, converting);
+  const items = needsYouItems(data, data.reports, now, settingsOn, converting, companyPaid);
   const month = home.monthExpenses;
   const offTrip = month.filter((r) => !r.onTrip);
   return {
@@ -90,7 +95,7 @@ export function homeView(
     },
     reading: home.reading,
     // Reports to finish: the open and closed ones, newest first (FR-INS-01, Q15).
-    reports: data.reports.reports.map((r) => reportSummary(r, now, converting)),
+    reports: data.reports.reports.map((r) => reportSummary(r, now, converting, companyPaid)),
     recentTrips: home.recentTrips.map((t) => tripSummary(t, home.tallies)),
   };
 }

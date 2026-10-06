@@ -12,12 +12,14 @@ import type { CategoryStore } from './categories.ts';
 import { categorize, detailWithCategory } from './category-views.ts';
 import { receiptCheckOf } from './approval.ts';
 import { checkView } from './approval-views.ts';
+import { paidByView, readPaidBy, showCompanyPaid, type CompanyPaidStore } from './company-paid.ts';
 import { expenseSummaries, proofOf } from './expense-views.ts';
 import type { ExpenseStore } from './expenses.ts';
 import { featureGate, type FeatureGate } from './features.ts';
 import type { ItemizedStore } from './itemized.ts';
 import { itemizedSections } from './itemized-routes.ts';
 import { ProblemError } from './problem.ts';
+import { setPaidByRoute } from './routes/company-paid.ts';
 import { withTravel } from './travel-views.ts';
 import {
   editExpenseRoute,
@@ -35,6 +37,8 @@ export interface ExpenseRouteOptions {
   readonly categories?: CategoryStore;
   /** Lines and splits; while they are switched on, each expense shows its own. */
   readonly itemized?: ItemizedStore;
+  /** Who paid each expense; while Paid by the company is on, each shows it (FR-EXP-17). */
+  readonly companyPaid?: CompanyPaidStore;
   /** Which features are on. Built from `workspace` when not given. */
   readonly features?: FeatureGate;
 }
@@ -53,8 +57,8 @@ export function registerExpenseRoutes(
       : undefined;
   const auth = requireIdentity(options.verifyToken);
   const paths = new Set(
-    [listExpensesRoute, getExpenseRoute, editExpenseRoute, setExpenseTripRoute].map((r) =>
-      r.getRoutingPath(),
+    [listExpensesRoute, getExpenseRoute, editExpenseRoute, setExpenseTripRoute, setPaidByRoute].map(
+      (r) => r.getRoutingPath(),
     ),
   );
   for (const path of paths) app.use(path, auth);
@@ -102,7 +106,11 @@ export function registerExpenseRoutes(
       onTrip: onTrip === undefined ? undefined : onTrip === 'yes',
       memberId: who.memberId,
     });
-    const summaries = expenseSummaries(found);
+    const paid = await showCompanyPaid(features, who.orgId, readPaidBy(found.expenses));
+    // Who paid each, while Paid by the company is on (FR-EXP-17).
+    const summaries = expenseSummaries(found).map((summary, i) =>
+      paid && found.expenses[i] ? { ...summary, ...paidByView(found.expenses[i]) } : summary,
+    );
     const categories = await categoriesOn(who.orgId);
     if (!categories) return c.json({ expenses: summaries }, 200);
     const shown = await categorize(
@@ -119,7 +127,8 @@ export function registerExpenseRoutes(
   const sections = itemizedSections(options.itemized, features);
   /**
    * One expense as its page shows it: its category and type, lines and split included while
-   * each is on, and its journey and stay while Journeys and stays is (FR-INT-20, FR-INT-21).
+   * each is on, its journey and stay while Journeys and stays is (FR-INT-20, FR-INT-21), and
+   * who paid it while Paid by the company is (FR-EXP-17).
    */
   const detail = async (
     orgId: string,
@@ -136,6 +145,10 @@ export function registerExpenseRoutes(
               check: checkView(receiptCheckOf(found.expense, found.proof)),
             },
           }
+        : {}),
+      // Who paid it, while Paid by the company is on (FR-EXP-17).
+      ...((await showCompanyPaid(features, orgId, readPaidBy([found.expense])))
+        ? paidByView(found.expense)
         : {}),
     };
     return (await features.isOn(orgId, 'receipts.journeys')) ? withTravel(shown, found) : shown;
@@ -266,6 +279,46 @@ export function registerExpenseRoutes(
       });
     }
     const found = await expenses.get(who.orgId, expenseId);
+    if (!found) throw notFound();
+    return c.json(await detail(who.orgId, found), 200);
+  });
+
+  /**
+   * A person says who paid one of their expenses, or hands it back to the policy for its type
+   * (FR-EXP-17, Q46). Not a drive, and not once it is submitted.
+   */
+  app.openapi(setPaidByRoute, async (c) => {
+    const caller = c.var.identity;
+    const who = await member(caller.userId);
+    await features.require(who.orgId, 'expenses.company-paid');
+    if (!options.companyPaid) {
+      throw new ProblemError(
+        503,
+        'database-not-configured',
+        'The database is not configured on this server',
+        { code: 'database_not_configured' },
+      );
+    }
+    const { expenseId } = c.req.valid('param');
+    const result = await options.companyPaid.setPaidBy(
+      who.orgId,
+      expenseId,
+      c.req.valid('json'),
+      caller.userId,
+    );
+    if (result.status === 'missing') throw notFound();
+    if (result.status === 'not_changeable') {
+      throw result.problem === 'mileage'
+        ? new ProblemError(409, 'not-editable', 'A drive is never paid by the company', {
+            code: 'mileage',
+            detail: 'It is paid at miles × its rate to whoever drove.',
+          })
+        : new ProblemError(409, 'not-editable', 'Who paid this expense can’t change now', {
+            code: 'locked',
+            detail: 'It is submitted or later, so it stays as it went in.',
+          });
+    }
+    const found = await stores().expenses.get(who.orgId, expenseId);
     if (!found) throw notFound();
     return c.json(await detail(who.orgId, found), 200);
   });

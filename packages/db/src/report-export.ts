@@ -89,6 +89,7 @@ export async function reportForExport(
       journeyTo: expenses.journeyTo,
       checkIn: expenses.checkIn,
       checkOut: expenses.checkOut,
+      companyPaid: expenses.companyPaid,
     })
     .from(expenses)
     .leftJoin(trips, and(eq(trips.orgId, expenses.orgId), eq(trips.id, expenses.tripId)))
@@ -166,6 +167,8 @@ export async function reportForExport(
                 checkOut: r.checkOut,
               },
             }),
+        // Paid by the company directly (FR-EXP-17): listed apart from the claim while it is on.
+        ...(r.companyPaid ? { paidBy: 'company' as const } : {}),
       };
     }),
   };

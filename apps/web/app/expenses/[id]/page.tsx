@@ -28,6 +28,7 @@ import {
   type TravelField,
 } from '../../../lib/expenses';
 import { APPROVAL_FLAG } from '../../../lib/approval';
+import { COMPANY_PAID_FLAG } from '../../../lib/company-paid';
 import { useFeatures } from '../../../lib/features';
 import { describeRate, distanceOf, MILEAGE_FLAG, type MileageEntry } from '../../../lib/mileage';
 import { ROUTE_MILEAGE_FLAG } from '../../../lib/route-mileage';
@@ -38,6 +39,7 @@ import { HistoryLink } from '../../history-link';
 import { MileageForm } from '../../mileage/mileage-form';
 import { RouteDriveDetails } from '../../mileage/route-drive';
 import { ItemizedLines, SplitParts } from './itemized';
+import { WhoPaid } from './who-paid';
 
 type Load =
   | { state: 'loading' }
@@ -148,6 +150,15 @@ export default function ExpensePage() {
               expense={expense}
               onSaved={(next) => setLoad({ state: 'ready', expense: next })}
             />
+            {/* Sent only while Paid by the company is on; a drive is never paid by it. */}
+            {expense.paidBy && expense.source !== 'mileage' && featureOn(COMPANY_PAID_FLAG) ? (
+              <WhoPaid
+                expense={expense}
+                paidBy={expense.paidBy}
+                pinned={expense.paidByPinned ?? false}
+                onSaved={(next) => setLoad({ state: 'ready', expense: next })}
+              />
+            ) : null}
             <TripChoice
               expense={expense}
               onSaved={(next) => setLoad({ state: 'ready', expense: next })}
