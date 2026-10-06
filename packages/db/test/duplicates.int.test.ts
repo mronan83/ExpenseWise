@@ -1,5 +1,5 @@
 import { newId, type ExpenseValues } from '@expensewise/domain';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { withOrg } from '../src/client.ts';
 import {
@@ -114,6 +114,7 @@ const actions = (org: Org, entityId: string) =>
         .select({ action: auditEvents.action, payload: auditEvents.payload })
         .from(auditEvents)
         .where(eq(auditEvents.entityId, entityId))
+        .orderBy(asc(auditEvents.sequence))
     ).map((a) => a.action),
   );
 

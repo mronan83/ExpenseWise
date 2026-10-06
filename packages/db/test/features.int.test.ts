@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { withOrg } from '../src/client.ts';
 import { listOrgFeatures, orgFeatureOn, setOrgFeature } from '../src/features.ts';
@@ -38,7 +38,8 @@ describe('features an owner switches for their organization (Q5, NFR-DEL-05)', (
       tx
         .select({ action: auditEvents.action, payload: auditEvents.payload })
         .from(auditEvents)
-        .where(eq(auditEvents.entityType, 'feature')),
+        .where(eq(auditEvents.entityType, 'feature'))
+        .orderBy(asc(auditEvents.sequence)),
     );
     expect(events.map((e) => e.action)).toEqual(['feature.switched_on', 'feature.switched_off']);
   });
