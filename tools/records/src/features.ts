@@ -983,6 +983,7 @@ export const FEATURES: readonly Feature[] = [
     kind: 'product',
     phase: 'P1',
     status: 'Planned',
+    flags: ['expenses.company-paid'],
     backlog: 95,
   },
   {
