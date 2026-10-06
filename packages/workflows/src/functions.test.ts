@@ -1,11 +1,7 @@
 import { InngestTestEngine } from '@inngest/test';
 import { describe, expect, it } from 'vitest';
-import {
-  createWorkflowClient,
-  OUTBOX_NUDGE,
-  outboxRelayFunction,
-  RELAY_SCHEDULE,
-} from './functions.ts';
+import { createWorkflowClient } from './client.ts';
+import { OUTBOX_NUDGE, outboxRelayFunction, RELAY_SCHEDULE } from './functions.ts';
 import type { RelayPorts } from './relay.ts';
 
 const client = createWorkflowClient({ isDev: true });

@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { InngestTestEngine } from '@inngest/test';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { createWorkflowClient } from './functions.ts';
+import { createWorkflowClient } from './client.ts';
 import {
   openRouteService,
   RouteServiceError,

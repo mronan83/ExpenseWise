@@ -24,15 +24,8 @@ import {
 } from '@expensewise/api';
 import { createReadinessProbe } from '@expensewise/db';
 import { routeKeyVerifier } from '@expensewise/workflows';
-import * as Sentry from '@sentry/nextjs';
 import { handle } from 'hono/vercel';
-import {
-  appDatabase,
-  dispatchEvents,
-  handOffEmail,
-  receiptFiles,
-  secretBox,
-} from '../../../lib/server';
+import { appDatabase, dispatchEvents, receiptFiles, secretBox } from '../../../lib/server';
 
 // The whole versioned API lives in @expensewise/api; Next.js only hands it requests under /api.
 // One source for the project URL: it is public, so a server-only copy (such as a Sensitive
@@ -70,16 +63,18 @@ const handler = handle(
     files: receiptFiles(),
     dispatch: dispatchEvents,
     secrets: secretBox(),
-    // Email-in (ADR-0026): Bird's webhook is checked with this secret, then handed off.
-    birdWebhookSecret: process.env.BIRD_WEBHOOK_SECRET || undefined,
-    receiveEmail: handOffEmail,
+    // Email-in's webhook isn't configured here: app/api/v1/inbound/bird answers it as a function
+    // of its own (#93). A delivery that ever reached this one would get 503, and Bird retries.
     verifyProviderKey: providerKeyVerifier(),
     // An OpenRouteService key is checked with one short route as it is saved (ADR-0039).
     verifyRouteKey: routeKeyVerifier(),
     // Features forced on or off for everyone, beating each owner's switch (the kill switch).
     flagOverrides: process.env.FLAG_OVERRIDES,
-    // Unexpected errors go to error tracking (a no-op until NEXT_PUBLIC_SENTRY_DSN is set).
-    reportError: (error) => Sentry.captureException(error),
+    // Unexpected errors go to error tracking, loaded only once NEXT_PUBLIC_SENTRY_DSN is set, so
+    // a cold start doesn't pay for it while it is off (#93).
+    reportError: process.env.NEXT_PUBLIC_SENTRY_DSN
+      ? (error) => void import('@sentry/nextjs').then((Sentry) => Sentry.captureException(error))
+      : undefined,
   }),
 );
 

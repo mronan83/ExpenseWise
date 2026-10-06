@@ -162,6 +162,21 @@ export const GAPS: readonly Gap[] = [
     },
   },
   {
+    id: 'GAP-39',
+    title:
+      'Bird’s webhook starts as slowly as the whole API, so a delivery can miss the time Bird waits.',
+    affects: ['FR-CAP-02', 'F-16'],
+    severity: 'Medium',
+    evidence:
+      'Bird emailed on Oct 5 that deliveries to the webhook were failing and marked it degraded; a receipt forwarded that evening was filed. The webhook ran in the same function as the whole API, 518 files and 9.9 MB: a cold start, measured in production on Oct 6 after half an hour idle, took 2.4 seconds before any work, half the 5 seconds Bird waits, and grows with every feature. Email arrives rarely, so nearly every delivery starts cold, three at once for each email. Vercel keeps logs for an hour and error tracking has no DSN (GAP-07), so the failed deliveries can no longer be seen here; Bird’s attempts page keeps them.',
+    fix: 'Serve the webhook from a function of its own that loads only the signature check and the hand-off (#93).',
+    backlog: 93,
+    closed: {
+      date: '2026-10-06',
+      note: 'PR #62 (#93), at your word of Oct 6: Bird’s webhook is a function of its own, 154 files and 2.2 MB, that loads only the signature check and the hand-off to the workflow runner, in half the time the API took; the server loads error tracking only once it has a DSN, which takes a quarter of a second off every function’s cold start while it is off. A signed event email-in doesn’t read is acknowledged whatever else it carries. A lint rule and a test keep the function small, and an end-to-end check proves it is the one that answers. Same address, same secret: nothing changes in Bird.',
+    },
+  },
+  {
     id: 'GAP-25',
     title: 'Photos emailed in are stored with their location.',
     affects: ['NFR-PRV-03'],
@@ -1020,6 +1035,12 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-06',
+    change:
+      'PR #62. Bird’s email of Oct 5, that deliveries to the webhook were failing, looked into: the webhook was reachable and its secret right, but it started as slowly as the whole API, 2.4 seconds cold of the 5 Bird waits (GAP-39). At your word, it is now a function of its own that loads only the signature check and the hand-off (#93, GAP-39 closed), the server no longer loads error tracking while it has no DSN, and a signed event email-in doesn’t read is acknowledged whatever else it carries.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-05',
     change:

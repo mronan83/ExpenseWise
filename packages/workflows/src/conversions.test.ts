@@ -15,7 +15,7 @@ import {
   sweepConversions,
   type ConversionPorts,
 } from './conversions.ts';
-import { createWorkflowClient } from './functions.ts';
+import { createWorkflowClient } from './client.ts';
 
 const ORG = '0192f7a0-0000-7000-8000-0000000000a1';
 

@@ -1,7 +1,8 @@
 import { createHmac } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { createApi } from '../src/app.ts';
-import type { ArrivedEmail } from '../src/inbound-routes.ts';
+import { birdWebhook, type ArrivedEmail } from '../src/bird-webhook.ts';
 import { verifyStandardWebhook } from '../src/webhooks.ts';
 
 const NOW = new Date('2026-10-03T18:00:00Z');
@@ -31,30 +32,35 @@ const arrived = (over: Record<string, unknown> = {}) =>
     },
   });
 
-function api(options: { secret?: string; fail?: boolean } = {}) {
+const delivery = (body: string, headers: Record<string, string> = {}): RequestInit => ({
+  method: 'POST',
+  headers: {
+    'content-type': 'application/json',
+    'webhook-id': 'msg_1',
+    'webhook-timestamp': SECONDS,
+    'webhook-signature': sign('msg_1', SECONDS, body),
+    ...headers,
+  },
+  body,
+});
+
+function api(options: { secret?: string; fail?: boolean; handOff?: boolean } = {}) {
   const received: ArrivedEmail[] = [];
   const app = createApi({
     version: 'test',
     now: () => NOW,
     birdWebhookSecret: 'secret' in options ? options.secret : SECRET,
-    receiveEmail: (email) => {
-      if (options.fail) return Promise.reject(new Error('Inngest is down'));
-      received.push(email);
-      return Promise.resolve();
-    },
+    receiveEmail:
+      options.handOff === false
+        ? undefined
+        : (email) => {
+            if (options.fail) return Promise.reject(new Error('Inngest is down'));
+            received.push(email);
+            return Promise.resolve();
+          },
   });
   const post = (body: string, headers: Record<string, string> = {}) =>
-    app.request('/v1/inbound/bird', {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        'webhook-id': 'msg_1',
-        'webhook-timestamp': SECONDS,
-        'webhook-signature': sign('msg_1', SECONDS, body),
-        ...headers,
-      },
-      body,
-    });
+    app.request('/v1/inbound/bird', delivery(body, headers));
   return { post, received };
 }
 
@@ -115,6 +121,29 @@ describe('POST /v1/inbound/bird', () => {
     expect(received).toEqual([]);
   });
 
+  it('acknowledges a signed event whatever else its envelope carries, so Bird stops sending it', async () => {
+    const { post, received } = api();
+    for (const body of [
+      JSON.stringify({ type: 'webhook.test' }),
+      JSON.stringify({ type: 'email.received', timestamp: 1759700000, data: null }),
+      JSON.stringify({ type: 'email_mailbox.thread_created', data: [] }),
+    ]) {
+      const res = await post(body);
+      expect(res.status, body).toBe(200);
+      expect(await res.json()).toEqual({ status: 'ignored' });
+    }
+    expect(received).toEqual([]);
+  });
+
+  it('refuses a signed body that names no event', async () => {
+    const { post } = api();
+    for (const body of ['{"data":{}}', '[]', '"email_mailbox.message_received"', '{"type":7}']) {
+      const res = await post(body);
+      expect(res.status, body).toBe(400);
+      expect(await res.json()).toMatchObject({ detail: 'The body is not a Bird event' });
+    }
+  });
+
   it('reads the signed body whatever content type it is labelled with', async () => {
     const { post, received } = api();
     const res = await post(arrived(), { 'content-type': 'text/plain' });
@@ -154,5 +183,60 @@ describe('POST /v1/inbound/bird', () => {
     const res = await api({ secret: undefined }).post(arrived());
     expect(res.status).toBe(503);
     expect(await res.json()).toMatchObject({ code: 'email_in_not_configured' });
+  });
+
+  it('acknowledges what it ignores while nothing can take an email on, and asks Bird for the email again', async () => {
+    const { post } = api({ handOff: false });
+    const ignored = JSON.stringify({ type: 'email_mailbox.thread_created', data: {} });
+    expect((await post(ignored)).status).toBe(200);
+    const res = await post(arrived());
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({ code: 'email_in_not_configured' });
+    expect((await post(arrived(), { 'webhook-signature': '' })).status).toBe(401);
+  });
+});
+
+/** The modules a source file loads when it runs: its imports that aren't only of types. */
+const loads = (file: string) =>
+  [
+    ...readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8').matchAll(
+      /^import\s+(?!type\s)(?:[^;]*?\s+from\s+)?'([^']+)';/gm,
+    ),
+  ].map((m) => m[1]);
+
+describe('Bird’s webhook as a function of its own (#93)', () => {
+  it('answers a delivery with nothing of the API, as the API answers it', async () => {
+    const received: ArrivedEmail[] = [];
+    const answer = birdWebhook({
+      secret: SECRET,
+      now: () => NOW,
+      receiveEmail: (email) => {
+        received.push(email);
+        return Promise.resolve();
+      },
+    });
+    const res = await answer(
+      new Request('https://example.test/api/v1/inbound/bird', delivery(arrived())),
+    );
+    expect(res.status).toBe(202);
+    expect(await res.json()).toEqual({ status: 'accepted' });
+    expect(received).toEqual([{ provider: 'bird', messageId: 'rem_01abc', threadId: 'thr_01xyz' }]);
+    const unsigned = await answer(
+      new Request('https://example.test/api/v1/inbound/bird', { method: 'POST', body: '{}' }),
+    );
+    expect(unsigned.status).toBe(401);
+    expect(unsigned.headers.get('content-type')).toBe('application/problem+json');
+    expect(await unsigned.json()).toEqual({
+      type: 'https://expensewise.dev/problems/invalid-signature',
+      title: 'The webhook signature is not valid',
+      status: 401,
+      code: 'missing_headers',
+    });
+  });
+
+  it('loads only the signature check and the problem document, so a cold start loads little', () => {
+    expect(loads('bird-webhook.ts')).toEqual(['./problem.ts', './webhooks.ts']);
+    expect(loads('problem.ts')).toEqual([]);
+    expect(loads('webhooks.ts')).toEqual(['node:crypto']);
   });
 });

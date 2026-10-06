@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./bird-webhook": "./src/bird-webhook.ts",
     "./redact": "./src/redact.ts"
   },
   "scripts": {

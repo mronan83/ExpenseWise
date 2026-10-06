@@ -1,5 +1,5 @@
 import { newId } from '@expensewise/domain';
-import { eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { getModelSettings, saveModelSettings } from '../src/ai-models.ts';
 import { withOrg } from '../src/client.ts';
@@ -56,7 +56,8 @@ describe('which AI models read an organization’s receipts (FR-INT-16)', () => 
       tx
         .select({ action: auditEvents.action, payload: auditEvents.payload })
         .from(auditEvents)
-        .where(eq(auditEvents.entityType, 'ai_models')),
+        .where(eq(auditEvents.entityType, 'ai_models'))
+        .orderBy(asc(auditEvents.sequence)),
     );
     expect(events.map((e) => e.action)).toEqual([
       'ai_models.changed',

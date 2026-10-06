@@ -14,12 +14,10 @@ import { NonRetriableError, type Inngest } from 'inngest';
 import type { DNSResolver } from 'mailauth';
 import { dkimVerify } from 'mailauth/lib/dkim/verify';
 import PostalMime, { type Attachment } from 'postal-mime';
+import { EMAIL_RECEIVED } from './client.ts';
 import { emailAsPdf, htmlAsText } from './email-pdf.ts';
 import { sniffMediaType } from './receipts.ts';
 import { committedWorkflowEvent } from './relay.ts';
-
-/** Sent by the inbound webhook for each email that arrives (ADR-0026). */
-export const EMAIL_RECEIVED = 'email/received';
 
 /** An email the provider holds for us, named the way its API finds it again. */
 export interface ReceivedEmail {

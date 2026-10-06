@@ -274,3 +274,21 @@ Read the failed step's log. It shows where the job connected (user, host, port, 
 | `Vercel has no production build of <commit>` | Vercel skipped the build because the commit doesn't change the app (docs only) | Nothing: production keeps the last release, which has the same app |
 
 Brackets or spaces left around a pasted password are removed automatically, and the log says so.
+
+## If Bird says webhook deliveries are failing
+
+Bird emails the owner the first time an endpoint is marked degraded, once a day at most. It keeps retrying each delivery 8 times over about 27.5 hours, a delivery that succeeds sets the endpoint back to active, and after about five days of failures it is paused. A repeated delivery files nothing twice.
+
+1. **Look at Bird first.** Vercel keeps the app's logs for an hour, so by the time the email arrives they are gone. In Bird, open **Webhooks → the endpoint → attempts**: each attempt shows its status code and how long it took.
+2. **Read the attempts:**
+
+| Attempts show | Cause | Fix |
+| --- | --- | --- |
+| A timeout, or 5 seconds or more | A slow cold start. The webhook is a function of its own for this (#93). | Check that `apps/web/app/api/v1/inbound/bird/route.ts` still imports only the handler and the hand-off |
+| 401 `bad_signature` | The signing secret in Bird and `BIRD_WEBHOOK_SECRET` in Vercel differ, for example after a rotation | Copy Bird's secret into `BIRD_WEBHOOK_SECRET` (Production, Sensitive) and redeploy; Bird signs with both for 24 hours after a rotation |
+| 401 `stale` | The clock is more than 5 minutes off | Nothing to fix here; Bird stamps each attempt afresh |
+| 400 | An event the webhook couldn't read | Note the event type and tell Claude |
+| 503 `hand_off_failed` | Inngest didn't take the event | Check Inngest's status; Bird's retries bring the email in once it's back |
+| 503 `email_in_not_configured` | `BIRD_WEBHOOK_SECRET` or `INNGEST_EVENT_KEY` is missing in Production | Set it and redeploy |
+
+3. **Paused?** Re-enable the endpoint in Bird, then use **Replay** for the failed deliveries: up to 20 a day, one attempt each.
