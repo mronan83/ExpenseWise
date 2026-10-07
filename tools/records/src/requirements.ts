@@ -134,6 +134,17 @@ export const FUNCTIONAL: readonly Requirement[] = [
     note: 'Built in PR #68 (#97), behind expenses.card-statements: your requirement of Oct 7, to connect your corporate card and match its transactions, and your answers to Q50 and Q51. The card is on U.S. Bank Access Online, which no aggregator reaches, so its statement is the way in, free and with no third party holding your login.',
   },
   {
+    id: 'FR-CAP-11',
+    text: 'A person deletes a receipt of their own that should not be in the app, such as a forwarded booking confirmation with no amounts, with its readings and its expense, until that expense is submitted. Its file goes too; the audit trail keeps who deleted it, when, and what it was.',
+    sources: ['owner 2026-10-07'],
+    priority: 'Should',
+    phase: 'P1',
+    status: 'Planned',
+    features: ['F-67'],
+    backlog: [100],
+    note: 'Your report of Oct 7: a flight confirmation you forwarded, with no amounts, was filed as a receipt and can’t be removed. Today only a duplicate can be deleted (FR-INT-18), through the same `delete_receipt()` this will use (ADR-0028), so a submitted claim still never changes.',
+  },
+  {
     id: 'FR-CAP-07',
     text: 'The iPhone app captures offline and syncs each receipt exactly once.',
     sources: ['ADR-0004', 'arch §6.10', 'roadmap P3'],

@@ -388,6 +388,19 @@ export const BACKLOG: readonly BacklogItem[] = [
     source: 'GAP-45',
     affects: ['GAP-45', 'FR-INT-25', 'F-66'],
   },
+  {
+    num: 100,
+    title: 'Delete a receipt filed by mistake',
+    type: 'Feature',
+    detail:
+      'Your report of Oct 7 (GAP-46): a forwarded flight confirmation with no amounts was filed as a receipt and can’t be removed. A Delete on the receipt’s page, for its own member, confirmed once, through `delete_receipt()` (ADR-0028): its readings and expense go with it, a closed report it was on reopens, its file is removed once the deletion commits, and the audit trail keeps what it was. Refused once its expense is submitted. A card charge it documented is a missing receipt again.',
+    priority: 'P1',
+    effort: 'S',
+    severity: 'Medium',
+    blocker: { kind: 'none' },
+    source: 'Product owner Oct 7',
+    affects: ['GAP-46', 'FR-CAP-11', 'F-67'],
+  },
   // P2: this month
   {
     num: 79,

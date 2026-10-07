@@ -236,6 +236,16 @@ export const GAPS: readonly Gap[] = [
     },
   },
   {
+    id: 'GAP-46',
+    title: 'A receipt filed by mistake can’t be deleted: only a duplicate can.',
+    affects: ['FR-CAP-11', 'F-67'],
+    severity: 'Medium',
+    evidence:
+      'Your report of Oct 7: a flight confirmation you forwarded, with no amounts, was filed as a receipt, with an expense that needs a look, and nothing removes it. `delete_receipt()` (ADR-0028) is reached only from the choice on a possible duplicate.',
+    fix: 'Delete on a receipt’s page, for its own member, through `delete_receipt()`, until its expense is submitted, its file removed once the deletion commits (#100).',
+    backlog: 100,
+  },
+  {
     id: 'GAP-45',
     title:
       'A card charge matched after its expense’s report was submitted leaves that claim as submitted, so it may already have been claimed.',
@@ -1209,6 +1219,12 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-07',
+    change:
+      'Your report of Oct 7: a flight confirmation you forwarded, with no amounts, was filed as a receipt and can’t be deleted, since only a duplicate can (GAP-46). A person will delete a receipt of their own filed by mistake, with its readings and expense, until its expense is submitted, the audit trail keeping what it was (FR-CAP-11, F-67, US-CAP-09, #100).',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-07',
     change:
