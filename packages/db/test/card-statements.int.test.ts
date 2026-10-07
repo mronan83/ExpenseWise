@@ -18,10 +18,12 @@ import {
   unmatchCardTransaction,
   type StatementReading,
 } from '../src/card-statements.ts';
+import { classifyExpense, listCatalog, seedStarterCatalog } from '../src/categories.ts';
 import { isOwnRecordsRefusal, withMember, withOrg } from '../src/client.ts';
+import { setExpensePaidBy, setTypeCompanyPays } from '../src/company-paid.ts';
 import type { ReceiptOffer } from '../src/expenses.ts';
 import { fileReceipt, settleReceipt } from '../src/receipts.ts';
-import { auditEvents, members, outboxEvents, receipts } from '../src/schema.ts';
+import { auditEvents, expenses, members, outboxEvents, receipts } from '../src/schema.ts';
 import { connectAs, seedOrg } from './helpers.ts';
 
 const app = connectAs('app');
@@ -429,3 +431,154 @@ async function addMember(org: Org, name: string, role: MemberRole): Promise<Who>
   );
   return { orgId: org.orgId, memberId, role, userId: `user_${memberId}` };
 }
+
+describe('a corporate card billed to the company (FR-INT-25, FR-INT-26, US-CAP-08)', () => {
+  /** Who paid each expense, as `company`, `claimant`, with `, pinned` when set by hand. */
+  const payers = (org: Org, ids: readonly string[]) =>
+    withOrg(app.db, org.orgId, async (tx) => {
+      const rows = await tx
+        .select({ id: expenses.id, paid: expenses.companyPaid, pinned: expenses.companyPaidPinned })
+        .from(expenses);
+      return ids.map((id) => {
+        const r = rows.find((e) => e.id === id)!;
+        return `${r.paid ? 'company' : 'claimant'}${r.pinned ? ', pinned' : ''}`;
+      });
+    });
+
+  it('marks the expense a charge paid for as the company’s, keeps a person’s choice, and hands it back when let go', async () => {
+    const org = await seedOrg(app.db, 'card-company-pays');
+    const inOrg = <T>(work: Parameters<typeof withMember<T>>[2]) =>
+      withMember(app.db, self(org), work);
+    const fare = await expenseFrom(org, {
+      merchant: 'Delta',
+      transactionDate: '2026-09-12',
+      currency: 'USD',
+      amountMinor: 40_220,
+    });
+    const { id } = await statementFor(org);
+    await withOrg(app.db, org.orgId, (tx) =>
+      settleCardStatement(tx, org.orgId, id, read(SEPTEMBER)),
+    );
+    // Matched on its own: the company's card paid it, so it is never claimed (AC1).
+    expect(await payers(org, [fare])).toEqual(['company']);
+    const switched = await withOrg(app.db, org.orgId, (tx) =>
+      tx
+        .select({ payload: auditEvents.payload })
+        .from(auditEvents)
+        .where(
+          sql`${auditEvents.action} = 'expense.paid_by_set' AND ${auditEvents.entityId} = ${fare}`,
+        ),
+    );
+    expect(switched.map((e) => e.payload)).toEqual([
+      expect.objectContaining({ byCard: true, after: { paidBy: 'company', pinned: false } }),
+    ]);
+
+    const [delta] = (await inOrg((tx) => listCardStatements(tx, org.memberId))).transactions.filter(
+      (t) => t.expenseId === fare,
+    );
+    // Let go, it goes back to its type's policy, and the charge is a missing receipt (AC4).
+    await inOrg((tx) => unmatchCardTransaction(tx, org.orgId, delta!.id, org.userId));
+    expect(await payers(org, [fare])).toEqual(['claimant']);
+    await inOrg((tx) => matchCardTransactionTo(tx, org.orgId, delta!.id, fare, org.userId));
+    expect(await payers(org, [fare])).toEqual(['company']);
+
+    // A person's choice stands while the charge pays for it, and handing it back follows it (AC3).
+    await inOrg((tx) => setExpensePaidBy(tx, org.orgId, fare, { paidBy: 'claimant' }, org.userId));
+    await inOrg((tx) => unmatchCardTransaction(tx, org.orgId, delta!.id, org.userId));
+    await inOrg((tx) => matchCardTransactionTo(tx, org.orgId, delta!.id, fare, org.userId));
+    expect(await payers(org, [fare])).toEqual(['claimant, pinned']);
+    await inOrg((tx) => setExpensePaidBy(tx, org.orgId, fare, { byPolicy: true }, org.userId));
+    expect(await payers(org, [fare])).toEqual(['company']);
+
+    // Deleting the statement takes its charges, and the expense goes back to its type's policy.
+    await inOrg((tx) => deleteCardStatement(tx, org.orgId, id, org.userId));
+    expect(await payers(org, [fare])).toEqual(['claimant']);
+  });
+
+  it('keeps a card’s expense the company’s whatever its type’s policy, and never changes a submitted claim', async () => {
+    const org = await seedOrg(app.db, 'card-company-policy');
+    await withOrg(app.db, org.orgId, (tx) => seedStarterCatalog(tx, org.orgId));
+    const catalog = await withOrg(app.db, org.orgId, (tx) => listCatalog(tx));
+    const type = catalog.types.find((t) => t.name === 'Airfare')!;
+    const airfare = {
+      typeId: type.id,
+      categoryId: catalog.categories.find((c) => c.typeIds.includes(type.id))!.id,
+    };
+    const inOrg = <T>(work: Parameters<typeof withMember<T>>[2]) =>
+      withMember(app.db, self(org), work);
+    const fare = await expenseFrom(org, {
+      merchant: 'Delta',
+      transactionDate: '2026-09-12',
+      currency: 'USD',
+      amountMinor: 40_220,
+    });
+    const ride = await expenseFrom(org, {
+      merchant: 'Lyft',
+      transactionDate: '2026-09-27',
+      currency: 'USD',
+      amountMinor: 1840,
+    });
+    // The ride's report went in before the statement came: its claim stays as submitted.
+    await withOrg(app.db, org.orgId, (tx) =>
+      tx
+        .update(expenses)
+        .set({ status: 'submitted' })
+        .where(sql`${expenses.id} = ${ride}`),
+    );
+    const { id } = await statementFor(org);
+    await withOrg(app.db, org.orgId, (tx) =>
+      settleCardStatement(tx, org.orgId, id, read(SEPTEMBER)),
+    );
+    expect(await payers(org, [fare, ride])).toEqual(['company', 'claimant']);
+
+    // Typed as airfare, and the company paying no airfare, it is still the card's.
+    await inOrg((tx) => classifyExpense(tx, org.orgId, fare, airfare, org.userId));
+    const by = { memberId: org.memberId, userId: org.userId };
+    await withOrg(app.db, org.orgId, (tx) =>
+      setTypeCompanyPays(tx, org.orgId, airfare.typeId, true, by),
+    );
+    await withOrg(app.db, org.orgId, (tx) =>
+      setTypeCompanyPays(tx, org.orgId, airfare.typeId, false, by),
+    );
+    expect(await payers(org, [fare])).toEqual(['company']);
+  });
+
+  it('matches a charge only to an expense with its receipt, so a matched charge is always documented', async () => {
+    const org = await seedOrg(app.db, 'card-receipt-needed');
+    const inOrg = <T>(work: Parameters<typeof withMember<T>>[2]) =>
+      withMember(app.db, self(org), work);
+    // An expense with no receipt, as a drive or one typed in has none.
+    const typedIn = newId();
+    await withOrg(app.db, org.orgId, (tx) =>
+      tx.insert(expenses).values({
+        id: typedIn,
+        orgId: org.orgId,
+        memberId: org.memberId,
+        status: 'ready',
+        source: 'manual',
+        merchant: 'Lyft',
+        transactionDate: '2026-09-27',
+        amountMinor: 1840,
+        currency: 'USD',
+      }),
+    );
+    const { id } = await statementFor(org);
+    await withOrg(app.db, org.orgId, (tx) =>
+      settleCardStatement(tx, org.orgId, id, read(SEPTEMBER)),
+    );
+    const lyft = (await inOrg((tx) => missingReceipts(tx, org.memberId))).find((t) =>
+      t.merchant.startsWith('LYFT'),
+    )!;
+    // Not matched on its own, not offered, and refused by hand: it stays a missing receipt.
+    expect(lyft).toBeDefined();
+    expect(
+      (await inOrg((tx) => matchableExpenses(tx, org.memberId, '2026-09-27'))).map((e) => e.id),
+    ).not.toContain(typedIn);
+    expect(
+      await inOrg((tx) => matchCardTransactionTo(tx, org.orgId, lyft.id, typedIn, org.userId)),
+    ).toEqual({ status: 'not_matchable' });
+    expect((await inOrg((tx) => missingReceipts(tx, org.memberId))).map((t) => t.id)).toContain(
+      lyft.id,
+    );
+  });
+});

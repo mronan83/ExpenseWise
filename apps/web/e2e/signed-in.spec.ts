@@ -327,7 +327,12 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
   [
     'a fare in euros with the dollars its card was charged',
     (s) => `/expenses/${s.expenses.lufthansa}`,
-    [(page) => expect(page.getByText(/not at your card’s rate/)).toBeVisible()],
+    [
+      (page) => expect(page.getByText(/not at your card’s rate/)).toBeVisible(),
+      // The company's card paid it, so it is never claimed (FR-INT-25).
+      (page) =>
+        expect(page.getByText('Paid by the company (on its card ending 4417)')).toBeVisible(),
+    ],
   ],
   ['changing a drive', (s) => `/expenses/${s.expenses.mileage}`, [press('Change the drive')]],
   [
@@ -381,7 +386,10 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
     'a trip’s cost, claimed and paid by the company',
     (s) => `/trips/${s.trips.omaha}`,
     [
-      (page) => expect(page.getByRole('definition').filter({ hasText: '$389.20' })).toBeVisible(),
+      // The flight by the policy for airfare, and the ride, the stay and the fare in euros because
+      // the company's card paid them (FR-INT-25).
+      (page) =>
+        expect(page.getByRole('definition').filter({ hasText: '€412.80 + $820.20' })).toBeVisible(),
       (page) => expect(page.getByText('Paid by the company', { exact: true })).toBeVisible(),
     ],
   ],

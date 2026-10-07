@@ -14,6 +14,7 @@ import {
 import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { appendAuditEvent, lockOrgWrites } from './audit.ts';
 import type { Transaction } from './client.ts';
+import { paidByCardCharge } from './company-paid.ts';
 import { reopenChangedReports, reportsOfExpenses } from './report-touch.ts';
 import {
   categories,
@@ -497,7 +498,10 @@ export async function classifyExpense(
   const checked = checkChoice(catalog, choice.categoryId, choice.typeId);
   if (!checked.ok) return { status: 'invalid', problem: checked.error };
   // One not set by hand follows the policy for its new type (Q46); a drive never does.
-  const policy = catalog.types.find((t) => t.id === checked.value.typeId)?.companyPays ?? false;
+  // A card charge that paid for it keeps it the company's whatever its type (FR-INT-25).
+  const policy =
+    (catalog.types.find((t) => t.id === checked.value.typeId)?.companyPays ?? false) ||
+    (await paidByCardCharge(tx, expenseId));
   const paid =
     expense.source === 'mileage'
       ? expense

@@ -36,7 +36,12 @@ export interface CompanyPaidSection {
 }
 
 /** Who paid an expense, in a few words, as its page says it. */
-export function paidByText(paidBy: PaidBy, pinned: boolean): string {
+export function paidByText(paidBy: PaidBy, pinned: boolean, cardLastFour?: string | null): string {
   if (paidBy === 'claimant') return 'You';
-  return pinned ? 'Paid by the company' : 'Paid by the company (your organization’s policy)';
+  if (pinned) return 'Paid by the company';
+  // A charge on the company's card paid for it (FR-INT-25): the card says so before the policy.
+  if (cardLastFour !== undefined) {
+    return `Paid by the company (on its card${cardLastFour ? ` ending ${cardLastFour}` : ''})`;
+  }
+  return 'Paid by the company (your organization’s policy)';
 }
