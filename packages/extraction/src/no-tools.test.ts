@@ -19,6 +19,7 @@ import type { ExtractorOptions } from './variant.ts';
 const EVERY_ADDITION = {
   fieldSources: true,
   journeys: true,
+  purchases: true,
 } as const satisfies Required<ExtractorOptions>;
 
 /** Each addition on, off and left out, in every combination. */
@@ -114,8 +115,8 @@ const cases = <M extends ModelId>(models: readonly M[]) =>
 
 describe('a request to read a receipt (NFR-SEC-07)', () => {
   it('is built for every addition, on, off and left out', () => {
-    expect(ALL_OPTIONS).toHaveLength(9);
-    expect(ALL_OPTIONS).toContainEqual({ fieldSources: true, journeys: true });
+    expect(ALL_OPTIONS).toHaveLength(27);
+    expect(ALL_OPTIONS).toContainEqual({ fieldSources: true, journeys: true, purchases: true });
     expect(ALL_OPTIONS).toContainEqual({});
     expect(CLAUDE.length).toBeGreaterThan(0);
     expect(OPENAI.length).toBeGreaterThan(0);

@@ -758,8 +758,52 @@ export const expenseItemizations = pgTable(
 );
 
 /**
+ * One of several separate purchases an expense's receipt holds (FR-INT-23, Q49), numbered from
+ * 1 as printed, such as an airline ticket and a seat upgrade bought later on another card: its
+ * description, the day it was bought, the card and what it charged with its own taxes and fees.
+ * A receipt of one purchase has none. It goes with its itemization.
+ */
+export const expensePurchases = pgTable(
+  'expense_purchases',
+  {
+    id: id(),
+    orgId: orgId(),
+    expenseId: uuid('expense_id').notNull(),
+    position: integer('position').notNull(),
+    /** As printed, such as "Seat upgrade". */
+    description: text('description').notNull(),
+    purchasedOn: date('purchased_on', { mode: 'string' }),
+    cardLastFour: text('card_last_four'),
+    /** What it charged with its own taxes and fees, in `currency`'s minor units; null unread. */
+    totalMinor: bigint('total_minor', { mode: 'number' }),
+    currency: char('currency', { length: 3 }).notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('expense_purchases_org_id_id_key').on(t.orgId, t.id),
+    unique('expense_purchases_position_key').on(t.orgId, t.expenseId, t.position),
+    foreignKey({
+      name: 'expense_purchases_itemization_fk',
+      columns: [t.orgId, t.expenseId, t.currency],
+      foreignColumns: [
+        expenseItemizations.orgId,
+        expenseItemizations.expenseId,
+        expenseItemizations.currency,
+      ],
+    }).onDelete('cascade'),
+    check('expense_purchases_position_positive', sql`${t.position} > 0`),
+    check('expense_purchases_currency_iso', isoCurrency(t.currency)),
+    check(
+      'expense_purchases_card_last_four',
+      sql`${t.cardLastFour} IS NULL OR ${t.cardLastFour} ~ '^[0-9]{4}$'`,
+    ),
+  ],
+);
+
+/**
  * One line of an expense's receipt, numbered from 1 as printed: each item (a discount or a
- * credit is a negative item, #92), then each tax, each fee and the tip. An item line can be excluded from the
+ * credit is a negative item, #92), then each tax, each fee and the tip; on a receipt of several
+ * purchases, purchase by purchase, each line naming its own (FR-INT-23). An item line can be excluded from the
  * claim with a reason, and a note that other needs (FR-EXP-16, Q38), and given a category and
  * type of its own, which makes it a part of the expense (FR-EXP-15, Q36).
  */
@@ -777,6 +821,8 @@ export const expenseLines = pgTable(
     /** As read, in `currency`'s minor units; negative for a discount or a credit. */
     amountMinor: bigint('amount_minor', { mode: 'number' }).notNull(),
     currency: char('currency', { length: 3 }).notNull(),
+    /** The purchase it belongs to, from 1, on a receipt of several; null on one of one. */
+    purchase: integer('purchase'),
     /** Why it is left out of the claim, with a note, and when; null while it is claimed. */
     excludedReason: exclusionReason('excluded_reason'),
     excludedNote: text('excluded_note'),
@@ -800,6 +846,15 @@ export const expenseLines = pgTable(
       ],
     }).onDelete('cascade'),
     foreignKey({
+      name: 'expense_lines_purchase_fk',
+      columns: [t.orgId, t.expenseId, t.purchase],
+      foreignColumns: [
+        expensePurchases.orgId,
+        expensePurchases.expenseId,
+        expensePurchases.position,
+      ],
+    }).onDelete('cascade'),
+    foreignKey({
       name: 'expense_lines_category_fk',
       columns: [t.orgId, t.categoryId],
       foreignColumns: [categories.orgId, categories.id],
@@ -810,6 +865,7 @@ export const expenseLines = pgTable(
       foreignColumns: [expenseTypes.orgId, expenseTypes.id],
     }),
     check('expense_lines_position_positive', sql`${t.position} > 0`),
+    check('expense_lines_purchase_positive', sql`${t.purchase} IS NULL OR ${t.purchase} > 0`),
     check('expense_lines_currency_iso', isoCurrency(t.currency)),
     // Only an item is excluded or split off; tax, tip and fees go with the items.
     check(

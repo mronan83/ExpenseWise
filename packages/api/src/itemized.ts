@@ -1,6 +1,8 @@
 import {
   excludeLine,
+  excludePurchase,
   includeLine,
+  includePurchase,
   itemizationsOf,
   partsOf,
   reportByCategory,
@@ -43,6 +45,22 @@ export interface ItemizedStore {
     actorUserId: string,
     seed: Itemization | null,
   ): Promise<LineChangeResult>;
+  /** Leaves a whole purchase on a receipt of several out, by its number (FR-EXP-20). */
+  excludePurchase(
+    orgId: string,
+    expenseId: string,
+    purchase: number,
+    exclusion: { readonly reason: string; readonly note?: string | null },
+    actorUserId: string,
+    seed: Itemization | null,
+  ): Promise<LineChangeResult>;
+  includePurchase(
+    orgId: string,
+    expenseId: string,
+    purchase: number,
+    actorUserId: string,
+    seed: Itemization | null,
+  ): Promise<LineChangeResult>;
   split(
     orgId: string,
     expenseId: string,
@@ -71,6 +89,10 @@ export function dbItemizedStore(db: Database): ItemizedStore {
       inOrg(orgId, (tx) => excludeLine(tx, orgId, expenseId, position, exclusion, actor, seed)),
     include: (orgId, expenseId, position, actor, seed) =>
       inOrg(orgId, (tx) => includeLine(tx, orgId, expenseId, position, actor, seed)),
+    excludePurchase: (orgId, expenseId, purchase, exclusion, actor, seed) =>
+      inOrg(orgId, (tx) => excludePurchase(tx, orgId, expenseId, purchase, exclusion, actor, seed)),
+    includePurchase: (orgId, expenseId, purchase, actor, seed) =>
+      inOrg(orgId, (tx) => includePurchase(tx, orgId, expenseId, purchase, actor, seed)),
     split: (orgId, expenseId, request, actor, seed) =>
       inOrg(orgId, (tx) => splitExpense(tx, orgId, expenseId, request, actor, seed)),
     unsplit: (orgId, expenseId, actor) =>

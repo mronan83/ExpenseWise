@@ -48,9 +48,9 @@ export function checkedDatabase(db: Database) {
 /**
  * What a reading asks the models for an organization: each addition its own switch decides,
  * so either, both or neither. Where the organization has switched it on, each field comes
- * with the line it was read from (GAP-14), and a transport receipt or folio with its journey
- * or stay (FR-INT-20, FR-INT-21); elsewhere the request is the one every reading has always
- * sent.
+ * with the line it was read from (GAP-14), a transport receipt or folio with its journey
+ * or stay (FR-INT-20, FR-INT-21), and a receipt of several purchases with each one's lines
+ * (FR-INT-23); elsewhere the request is the one every reading has always sent.
  */
 export async function extractorOptions(
   switchOn: (orgId: string, flag: FlagKey) => Promise<boolean>,
@@ -59,6 +59,7 @@ export async function extractorOptions(
   return {
     fieldSources: await switchOn(orgId, 'receipts.field-sources'),
     journeys: await switchOn(orgId, 'receipts.journeys'),
+    purchases: await switchOn(orgId, 'receipts.purchases'),
   };
 }
 

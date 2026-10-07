@@ -17,6 +17,8 @@ import {
   lineToolsText,
   linesProblemText,
   money,
+  purchaseClaims,
+  purchasesOf,
   reimbursed,
   sum,
   toDecimal,
@@ -69,6 +71,9 @@ export function itemizedView(
   const tools = lineTools(lines, excluded, expense);
   const claim = claimWithout(lines, excluded);
   const fromLines = claim.ok ? claim.value.claimed : null;
+  // A purchase left out takes the reason its items were left out with (FR-EXP-20).
+  const reasonOf = (items: readonly number[]) =>
+    stored.find((l) => items.includes(l.position) && l.excluded)?.excluded ?? null;
   return {
     currency: lines.currency,
     total: lines.total ? view(lines.total) : null,
@@ -92,10 +97,24 @@ export function itemizedView(
               at: kept.excluded.at.toISOString(),
             }
           : null,
+        purchase: purchasesOf(lines).length > 0 ? (l.purchase ?? null) : null,
         part:
           kept?.categoryId && kept.typeId
             ? { categoryId: kept.categoryId, typeId: kept.typeId }
             : null,
+      };
+    }),
+    purchases: purchaseClaims(lines, excluded).map((p) => {
+      const left = p.excluded ? reasonOf(p.items) : null;
+      return {
+        number: p.number,
+        description: p.description,
+        date: p.date,
+        cardLastFour: p.cardLastFour,
+        total: p.total ? view(p.total) : null,
+        claimed: p.claimed ? view(p.claimed) : null,
+        lines: [...p.lines],
+        excluded: left ? { reason: left.reason, note: left.note } : null,
       };
     }),
     addsUp: check.addsUp,
@@ -103,7 +122,12 @@ export function itemizedView(
       ? null
       : {
           code: check.problem,
-          message: linesProblemText(check.problem, check.comesTo, check.against),
+          message: linesProblemText(
+            check.problem,
+            check.comesTo,
+            check.against,
+            check.purchase ? purchasesOf(lines)[check.purchase - 1]?.description : undefined,
+          ),
         },
     claim: claim.ok
       ? {

@@ -33,6 +33,26 @@ export interface ReadLine {
   readonly description: string;
   readonly quantity: string | null;
   readonly amount: Money;
+  /**
+   * The purchase it belongs to, from 1, on a receipt that holds several (FR-INT-23); absent or
+   * null on one that holds one.
+   */
+  readonly purchase?: number | null;
+}
+
+/**
+ * One of several separate purchases a receipt holds (FR-INT-23, Q49), such as an airline
+ * ticket and a seat upgrade bought later on another card: its own lines, taxes and fees, date,
+ * card and total. A receipt of one purchase lists none.
+ */
+export interface Purchase {
+  /** As printed, such as "Seat upgrade"; "Purchase 2" when nothing names it. */
+  readonly description: string;
+  /** When it was bought, YYYY-MM-DD; null when not printed. */
+  readonly date: string | null;
+  readonly cardLastFour: string | null;
+  /** What it charged with its own taxes and fees; null when not read. */
+  readonly total: Money | null;
 }
 
 /**
@@ -45,7 +65,16 @@ export interface Itemization {
   readonly total: Money | null;
   readonly subtotal: Money | null;
   readonly lines: readonly ReadLine[];
+  /**
+   * The purchases it holds, numbered from 1 as printed, when it holds two or more (FR-INT-23);
+   * absent or empty for one. Each line names the one it belongs to.
+   */
+  readonly purchases?: readonly Purchase[];
 }
+
+/** The purchases a receipt holds, when it holds two or more; empty for one. */
+export const purchasesOf = (it: Itemization): readonly Purchase[] =>
+  it.purchases && it.purchases.length > 1 ? it.purchases : [];
 
 /**
  * How far lines may miss what they should come to: one minor unit for each line counted, since
@@ -57,8 +86,12 @@ export const LINE_TOLERANCE_MINOR = 1;
  * Why lines don't add up. subtotal: the items miss the printed subtotal. total: with tax, tip
  * and fees they miss the total. no_total: no total was read to check them against.
  * not_positive: the items come to nothing or less, so nothing can be spread across them.
+ * On a receipt of several purchases (FR-INT-23): purchase, one purchase's lines miss its own
+ * total, or its total wasn't read; purchases, the purchases' totals don't come to the
+ * receipt's, or a line names a purchase the receipt doesn't list.
  */
-export type LinesProblem = 'subtotal' | 'total' | 'no_total' | 'not_positive';
+export type LinesProblem =
+  'subtotal' | 'total' | 'no_total' | 'not_positive' | 'purchase' | 'purchases';
 
 export type LinesCheck =
   | {
@@ -69,6 +102,11 @@ export type LinesCheck =
       readonly extras: Money;
       /** The prices include their tax, as VAT receipts print them; the tax is not added again. */
       readonly taxIncluded: boolean;
+      /**
+       * On a receipt of several purchases, what each one's items come to and the taxes, tip and
+       * fees spread across only them (FR-INT-23), in purchase order; absent for one purchase.
+       */
+      readonly purchases?: readonly { readonly items: Money; readonly extras: Money }[];
     }
   | {
       readonly addsUp: false;
@@ -77,9 +115,11 @@ export type LinesCheck =
       readonly comesTo: Money;
       /** What they should come to; null when nothing was read to compare. */
       readonly against: Money | null;
+      /** The purchase, from 1, whose lines don't add up: for the purchase problem only. */
+      readonly purchase?: number;
     };
 
-const ofKind = (it: Itemization, kind: LineKind) =>
+const ofKind = (it: Pick<Itemization, 'lines'>, kind: LineKind) =>
   it.lines.filter((l) => l.kind === kind).map((l) => l.amount);
 
 /** Whether `a` is within a minor unit a line of `b` (R-LINES-TOLERANCE). */
@@ -122,15 +162,8 @@ export function linesMakeTotal(lines: LineSums, total: Money): 'added' | 'includ
  * the subtotal may be printed before or after its tax.
  */
 export function checkLines(it: Itemization): LinesCheck {
-  const count = (kind: LineKind) => it.lines.filter((l) => l.kind === kind).length;
-  const sums: LineSums = {
-    items: sum(it.currency, ofKind(it, 'item')),
-    itemLines: count('item'),
-    taxes: sum(it.currency, ofKind(it, 'tax')),
-    taxLines: count('tax'),
-    others: sum(it.currency, [...ofKind(it, 'fee'), ...ofKind(it, 'tip')]),
-    otherLines: count('fee') + count('tip'),
-  };
+  if (purchasesOf(it).length > 0) return checkPurchases(it);
+  const sums = sumsOf(it.currency, it.lines);
   const { items, taxes, taxLines } = sums;
   const withTax = add(add(items, taxes), sums.others);
 
@@ -153,10 +186,98 @@ export function checkLines(it: Itemization): LinesCheck {
   return { addsUp: true, items, extras: subtract(it.total, items), taxIncluded: included };
 }
 
+/** What these lines come to, by kind, and how many of each were counted. */
+function sumsOf(currency: CurrencyCode, lines: readonly ReadLine[]): LineSums {
+  const count = (kind: LineKind) => lines.filter((l) => l.kind === kind).length;
+  const of = (kind: LineKind) => ofKind({ lines }, kind);
+  return {
+    items: sum(currency, of('item')),
+    itemLines: count('item'),
+    taxes: sum(currency, of('tax')),
+    taxLines: count('tax'),
+    others: sum(currency, [...of('fee'), ...of('tip')]),
+    otherLines: count('fee') + count('tip'),
+  };
+}
+
+/**
+ * Whether a receipt of several purchases adds up (FR-INT-23, Q49): each purchase's lines make
+ * its own total, as one receipt's do (`linesMakeTotal`, R-LINES-TOLERANCE), and the purchases'
+ * totals come to the receipt's exactly, as printed amounts do. Each purchase's taxes, tip and
+ * fees are then spread across only its own items, so no purchase takes a share of another's.
+ * A subtotal printed for the whole receipt isn't checked: each purchase has its own lines.
+ */
+function checkPurchases(it: Itemization): LinesCheck {
+  const purchases = purchasesOf(it);
+  const all = add(
+    add(sum(it.currency, ofKind(it, 'item')), sum(it.currency, ofKind(it, 'tax'))),
+    sum(it.currency, [...ofKind(it, 'fee'), ...ofKind(it, 'tip')]),
+  );
+  if (it.lines.some((l) => !l.purchase || !purchases[l.purchase - 1])) {
+    return { addsUp: false, problem: 'purchases', comesTo: all, against: it.total };
+  }
+  const each: { items: Money; extras: Money }[] = [];
+  let included = false;
+  for (const [i, p] of purchases.entries()) {
+    const purchase = i + 1;
+    const sums = sumsOf(
+      it.currency,
+      it.lines.filter((l) => l.purchase === purchase),
+    );
+    const withTax = add(add(sums.items, sums.taxes), sums.others);
+    if (!p.total) {
+      return { addsUp: false, problem: 'purchase', comesTo: withTax, against: null, purchase };
+    }
+    const made = linesMakeTotal(sums, p.total);
+    if (!made) {
+      return { addsUp: false, problem: 'purchase', comesTo: withTax, against: p.total, purchase };
+    }
+    if (sums.items.amountMinor <= 0) {
+      return { addsUp: false, problem: 'not_positive', comesTo: sums.items, against: null };
+    }
+    included ||= made === 'included';
+    each.push({ items: sums.items, extras: subtract(p.total, sums.items) });
+  }
+  const totals = sum(
+    it.currency,
+    purchases.map((p) => p.total ?? zero(it.currency)),
+  );
+  if (!it.total) return { addsUp: false, problem: 'no_total', comesTo: totals, against: null };
+  if (totals.amountMinor !== it.total.amountMinor) {
+    return { addsUp: false, problem: 'purchases', comesTo: totals, against: it.total };
+  }
+  const items = sum(
+    it.currency,
+    each.map((e) => e.items),
+  );
+  return {
+    addsUp: true,
+    items,
+    extras: subtract(it.total, items),
+    taxIncluded: included,
+    purchases: each,
+  };
+}
+
 /** What a person reads when lines don't add up, said plainly. */
-export function linesProblemText(problem: LinesProblem, comesTo: Money, against: Money | null) {
+export function linesProblemText(
+  problem: LinesProblem,
+  comesTo: Money,
+  against: Money | null,
+  /** The purchase the problem is in, by its description, for the purchase problem. */
+  purchase?: string,
+) {
   const shown = (m: Money | null) => (m ? format(m) : '');
+  const named = purchase ?? 'One purchase';
   switch (problem) {
+    case 'purchase':
+      return against
+        ? `${named}’s lines come to ${shown(comesTo)}, but its total is ${shown(against)}.`
+        : `${named}’s total wasn’t read, so its lines can’t be checked against it.`;
+    case 'purchases':
+      return against
+        ? `The purchases on this receipt come to ${shown(comesTo)}, but its total is ${shown(against)}, or a line names no purchase.`
+        : 'A line names no purchase on this receipt.';
     case 'subtotal':
       return `These lines come to ${shown(comesTo)}, but the receipt’s subtotal is ${shown(against)}.`;
     case 'total':
@@ -194,12 +315,23 @@ export function lineClaims(it: Itemization): LineClaim[] | null {
   const items = it.lines
     .map((line, i) => ({ line, position: i + 1 }))
     .filter((x) => x.line.kind === 'item');
-  const shares = allocateToLargest(
-    check.extras,
-    items.map((x) => x.line.amount.amountMinor),
-  );
-  return items.map((x, i) => {
-    const share = shares[i] ?? zero(it.currency);
+  // On a receipt of several purchases, each one's extras go across only its own items (Q49).
+  const groups = check.purchases
+    ? check.purchases.map((p, i) => ({
+        extras: p.extras,
+        items: items.filter((x) => x.line.purchase === i + 1),
+      }))
+    : [{ extras: check.extras, items }];
+  const shares = new Map<number, Money>();
+  for (const group of groups) {
+    const spread = allocateToLargest(
+      group.extras,
+      group.items.map((x) => x.line.amount.amountMinor),
+    );
+    group.items.forEach((x, i) => shares.set(x.position, spread[i] ?? zero(it.currency)));
+  }
+  return items.map((x) => {
+    const share = shares.get(x.position) ?? zero(it.currency);
     return {
       position: x.position,
       amount: x.line.amount,
@@ -262,10 +394,34 @@ export interface ItemizedClaim {
  * Why lines can't be used as asked. lines_dont_add_up: they don't add up, so nothing is spread.
  * no_such_line, not_an_item: only a receipt's item lines are left out or split; tax, tip and
  * fees go with them. takes_off: a discount or a credit lowers what was paid, so it can't be left
- * out. below_zero: what is left would claim less than nothing.
+ * out, except with the whole purchase it is in. below_zero: what is left would claim less than
+ * nothing. no_such_purchase: the receipt lists no such purchase.
  */
 export type LineProblem =
-  'lines_dont_add_up' | 'no_such_line' | 'not_an_item' | 'takes_off' | 'below_zero';
+  | 'lines_dont_add_up'
+  | 'no_such_line'
+  | 'not_an_item'
+  | 'takes_off'
+  | 'below_zero'
+  | 'no_such_purchase';
+
+/**
+ * The purchases every item of which is left out, by number, on a receipt of several: what is
+ * left out is the whole purchase, its discounts and credits with it.
+ */
+function wholePurchases(it: Itemization, excluded: ReadonlySet<number>): Set<number> {
+  const whole = new Set<number>();
+  purchasesOf(it).forEach((_, i) => {
+    const items = purchaseItems(it, i + 1);
+    if (items.length > 0 && items.every((position) => excluded.has(position))) whole.add(i + 1);
+  });
+  return whole;
+}
+
+/** The item lines of one purchase on a receipt of several, by position. */
+export function purchaseItems(it: Itemization, purchase: number): number[] {
+  return it.lines.flatMap((l, i) => (l.kind === 'item' && l.purchase === purchase ? [i + 1] : []));
+}
 
 /**
  * What the expense claims with these lines left out (FR-EXP-16): the receipt’s total less each
@@ -277,19 +433,66 @@ export function claimWithout(
 ): Result<ItemizedClaim, LineProblem> {
   const claims = lineClaims(it);
   if (!claims || !it.total) return err('lines_dont_add_up');
+  const whole = wholePurchases(it, excluded);
   const left: Money[] = [];
   for (const position of excluded) {
     const line = it.lines[position - 1];
     if (!line) return err('no_such_line');
     const claim = claims.find((c) => c.position === position);
     if (!claim) return err('not_an_item');
-    if (isNegative(claim.claimed)) return err('takes_off');
+    if (isNegative(claim.claimed) && !(line.purchase && whole.has(line.purchase))) {
+      return err('takes_off');
+    }
     left.push(claim.claimed);
   }
   const out = sum(it.currency, left);
   const claimed = subtract(it.total, out);
   if (isNegative(claimed)) return err('below_zero');
   return ok({ receipt: it.total, excluded: out, claimed });
+}
+
+/** One purchase on a receipt of several, with what it claims and what of it is left out. */
+export interface PurchaseClaim extends Purchase {
+  /** Its number on the receipt, from 1. */
+  readonly number: number;
+  /** Its item lines, by position. */
+  readonly items: readonly number[];
+  /** Every line of it, by position: its items, taxes, fees and tip. */
+  readonly lines: readonly number[];
+  /** What it claims: its items with their shares, its total; null while lines don't add up. */
+  readonly claimed: Money | null;
+  /** Every item of it is left out, so the whole purchase is. */
+  readonly excluded: boolean;
+}
+
+/**
+ * The purchases a receipt of several holds (FR-INT-23, FR-EXP-20), each with its lines, what it
+ * claims and whether it is left out. Empty for a receipt of one purchase.
+ */
+export function purchaseClaims(
+  it: Itemization,
+  excluded: ReadonlySet<number> = new Set(),
+): PurchaseClaim[] {
+  const claims = lineClaims(it);
+  const whole = wholePurchases(it, excluded);
+  return purchasesOf(it).map((p, i) => {
+    const number = i + 1;
+    const items = purchaseItems(it, number);
+    const mine = claims?.filter((c) => items.includes(c.position)) ?? null;
+    return {
+      ...p,
+      number,
+      items,
+      lines: it.lines.flatMap((l, at) => (l.purchase === number ? [at + 1] : [])),
+      claimed: mine
+        ? sum(
+            it.currency,
+            mine.map((c) => c.claimed),
+          )
+        : null,
+      excluded: whole.has(number),
+    };
+  });
 }
 
 /**

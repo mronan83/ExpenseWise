@@ -19,7 +19,9 @@ import { ProblemError } from './problem.ts';
 import type { ReceiptWithReadings } from './receipts.ts';
 import {
   excludeLineRoute,
+  excludePurchaseRoute,
   includeLineRoute,
+  includePurchaseRoute,
   reportCategoriesRoute,
   splitExpenseRoute,
   unsplitExpenseRoute,
@@ -31,6 +33,8 @@ import type { ExpenseRecord } from '@expensewise/db';
 export const ITEMIZED_FLAG = 'expenses.itemized' as const;
 /** An expense split into parts by category and type (FR-EXP-15); needs categories on too. */
 export const SPLIT_FLAG = 'expenses.split' as const;
+/** A receipt's several purchases, each left out whole (FR-INT-23, FR-EXP-20). */
+export const PURCHASES_FLAG = 'receipts.purchases' as const;
 const CATEGORIES_FLAG = 'expenses.categories' as const;
 const CONVERSION_FLAG = 'reports.currency-conversion' as const;
 
@@ -79,7 +83,9 @@ const PROBLEM_TEXT: Record<string, string> = {
   note_too_long: `A note is at most ${EXCLUSION_NOTE_MAX} characters.`,
   no_such_line: 'There is no such line on its receipt.',
   not_an_item: 'Only an item is left out or split off; tax, tip and fees go with the items.',
-  takes_off: 'A discount or credit takes money off what was paid, so it can’t be left out.',
+  takes_off:
+    'A discount or credit takes money off what was paid, so it can’t be left out on its own, only with its whole purchase.',
+  no_such_purchase: 'Its receipt lists no such purchase.',
   below_zero: 'That would claim less than nothing.',
   lines_dont_add_up: 'Its lines don’t add up, so nothing can be spread across them.',
   nothing_split: 'Give at least one line a category and type.',
@@ -114,6 +120,8 @@ export function registerItemizedRoutes(
     [
       excludeLineRoute,
       includeLineRoute,
+      excludePurchaseRoute,
+      includePurchaseRoute,
       splitExpenseRoute,
       unsplitExpenseRoute,
       reportCategoriesRoute,
@@ -255,6 +263,43 @@ export function registerItemizedRoutes(
       readLinesOf(before.proof),
     );
     return c.json(await answer(who.orgId, before, result, 'position'), 200);
+  });
+
+  app.openapi(excludePurchaseRoute, async (c) => {
+    const { userId } = c.var.identity;
+    const who = await member(userId, ITEMIZED_FLAG, PURCHASES_FLAG);
+    const { expenseId, purchase } = c.req.valid('param');
+    const before = await found(who.orgId, expenseId);
+    const result = await stores().itemized.excludePurchase(
+      who.orgId,
+      expenseId,
+      purchase,
+      c.req.valid('json'),
+      userId,
+      readLinesOf(before.proof),
+    );
+    const field =
+      result.status === 'invalid' && result.problem.startsWith('note')
+        ? 'note'
+        : result.status === 'invalid' && result.problem === 'no_such_purchase'
+          ? 'purchase'
+          : 'reason';
+    return c.json(await answer(who.orgId, before, result, field), 200);
+  });
+
+  app.openapi(includePurchaseRoute, async (c) => {
+    const { userId } = c.var.identity;
+    const who = await member(userId, ITEMIZED_FLAG, PURCHASES_FLAG);
+    const { expenseId, purchase } = c.req.valid('param');
+    const before = await found(who.orgId, expenseId);
+    const result = await stores().itemized.includePurchase(
+      who.orgId,
+      expenseId,
+      purchase,
+      userId,
+      readLinesOf(before.proof),
+    );
+    return c.json(await answer(who.orgId, before, result, 'purchase'), 200);
   });
 
   app.openapi(splitExpenseRoute, async (c) => {

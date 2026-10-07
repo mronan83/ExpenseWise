@@ -4,6 +4,8 @@ import type { ExpenseAmount } from './expenses';
 export const ITEMIZED_FLAG = 'expenses.itemized';
 /** Splitting an expense into parts by category and type (FR-EXP-15); needs categories on. */
 export const SPLIT_FLAG = 'expenses.split';
+/** A receipt's several purchases, each left out whole (FR-INT-23, FR-EXP-20). */
+export const PURCHASES_FLAG = 'receipts.purchases';
 
 export type ExclusionReason = 'personal' | 'paid_by_someone_else' | 'not_reimbursable' | 'other';
 
@@ -31,7 +33,25 @@ export interface ItemizedLine {
   share: ExpenseAmount | null;
   claimed: ExpenseAmount | null;
   excluded: { reason: ExclusionReason; note: string | null; at: string } | null;
+  /** The purchase it belongs to, from 1, on a receipt of several; null on one of one. */
+  purchase: number | null;
   part: { categoryId: string; typeId: string } | null;
+}
+
+/** One of several purchases a receipt holds, such as a ticket and a seat upgrade (FR-INT-23). */
+export interface ItemizedPurchase {
+  number: number;
+  description: string;
+  /** The day it was bought, YYYY-MM-DD. */
+  date: string | null;
+  cardLastFour: string | null;
+  total: ExpenseAmount | null;
+  /** Its items with their shares of its own taxes and fees; null while lines don't add up. */
+  claimed: ExpenseAmount | null;
+  /** Its lines, by position. */
+  lines: number[];
+  /** Why the whole purchase is left out; null while any of it is claimed. */
+  excluded: { reason: ExclusionReason; note: string | null } | null;
 }
 
 /** An expense's itemized lines, while the feature is on; null for a receipt without lines. */
@@ -40,6 +60,8 @@ export interface Itemized {
   total: ExpenseAmount | null;
   subtotal: ExpenseAmount | null;
   lines: ItemizedLine[];
+  /** The purchases its receipt holds, when two or more; empty for a receipt of one. */
+  purchases: ItemizedPurchase[];
   addsUp: boolean;
   problem: { code: string; message: string } | null;
   claim: { receipt: ExpenseAmount; excluded: ExpenseAmount; claimed: ExpenseAmount } | null;

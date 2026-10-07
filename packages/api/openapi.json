@@ -499,7 +499,8 @@
           "team.invites",
           "expenses.itemized",
           "expenses.split",
-          "expenses.company-paid"
+          "expenses.company-paid",
+          "receipts.purchases"
         ]
       },
       "SwitchFeature": {
@@ -3787,6 +3788,13 @@
               "$ref": "#/components/schemas/ItemizedLine"
             }
           },
+          "purchases": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ItemizedPurchase"
+            },
+            "description": "The separate purchases its receipt holds, when it holds two or more, such as a ticket and a seat upgrade bought later (FR-INT-23, Q49): each one’s taxes and fees are spread over only its own items. Empty for a receipt of one purchase."
+          },
           "addsUp": {
             "type": "boolean",
             "description": "The items come to the subtotal, and with tax, tip and fees to the total, within a cent a line (ADR-0041)."
@@ -3803,7 +3811,9 @@
                   "subtotal",
                   "total",
                   "no_total",
-                  "not_positive"
+                  "not_positive",
+                  "purchase",
+                  "purchases"
                 ]
               },
               "message": {
@@ -3877,6 +3887,7 @@
           "total",
           "subtotal",
           "lines",
+          "purchases",
           "addsUp",
           "problem",
           "claim",
@@ -4000,6 +4011,13 @@
             ],
             "description": "Why it is left out of the claim; null while it is claimed."
           },
+          "purchase": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "The purchase it belongs to, from 1, on a receipt of several (FR-INT-23); null on a receipt of one."
+          },
           "part": {
             "type": [
               "object",
@@ -4031,7 +4049,101 @@
           "share",
           "claimed",
           "excluded",
+          "purchase",
           "part"
+        ]
+      },
+      "ItemizedPurchase": {
+        "type": "object",
+        "properties": {
+          "number": {
+            "type": "integer",
+            "description": "Its number on the receipt, from 1."
+          },
+          "description": {
+            "type": "string",
+            "example": "Seat upgrade",
+            "description": "As printed."
+          },
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The day it was bought, YYYY-MM-DD."
+          },
+          "cardLastFour": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "total": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ItemizedAmount"
+              },
+              {
+                "description": "What it charged with its own taxes and fees, as read."
+              }
+            ]
+          },
+          "claimed": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ItemizedAmount"
+              },
+              {
+                "description": "Its items with their shares of its own taxes and fees: what leaving it out takes off the claim. Null while the lines don’t add up."
+              }
+            ]
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "Its lines, by position."
+          },
+          "excluded": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "reason": {
+                "type": "string",
+                "enum": [
+                  "personal",
+                  "paid_by_someone_else",
+                  "not_reimbursable",
+                  "other"
+                ],
+                "description": "Why a line is left out of the claim (Q38): personal, paid by someone else, not reimbursable, or other, which needs a note."
+              },
+              "note": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "reason",
+              "note"
+            ],
+            "description": "Why the whole purchase is left out of the claim; null while any of it is claimed."
+          }
+        },
+        "required": [
+          "number",
+          "description",
+          "date",
+          "cardLastFour",
+          "total",
+          "claimed",
+          "lines",
+          "excluded"
         ]
       },
       "ExpenseSplit": {
@@ -15471,6 +15583,230 @@
             "required": true,
             "description": "The line’s number, from 1.",
             "name": "position",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The expense, as its page shows it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenseDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or it is another member’s expense, which only its member changes (not_yours).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such expense, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It can’t change now: being_read, locked once submitted, not_itemized, lines_dont_add_up, other_currency or amount_changed when its lines don’t make up its claim, split_by_amount, no_claim for an expense with no amount yet, or mileage for a drive.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not valid: a reason, a note other needs, a line that isn’t an item, parts that don’t add up to the claim, or a category and type that can’t be chosen. field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/expenses/{expenseId}/purchases/{purchase}/exclusion": {
+      "put": {
+        "tags": [
+          "Expenses"
+        ],
+        "summary": "Leave a whole purchase on its receipt out of what the expense claims, with why",
+        "description": "FR-EXP-20, Q49. On a receipt of several purchases, such as a ticket and a seat upgrade bought later on a personal card, every item of one purchase is left out with the reason and note a line takes. The claim drops by the purchase and its own taxes and fees, never a share of another’s. 422 no_such_purchase for a receipt of one purchase. Behind `receipts.purchases` with `expenses.itemized`. One change in the audit trail.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "The purchase’s number on its receipt, from 1."
+            },
+            "required": true,
+            "description": "The purchase’s number on its receipt, from 1.",
+            "name": "purchase",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExcludeLine"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The expense, as its page shows it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenseDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or it is another member’s expense, which only its member changes (not_yours).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such expense, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It can’t change now: being_read, locked once submitted, not_itemized, lines_dont_add_up, other_currency or amount_changed when its lines don’t make up its claim, split_by_amount, no_claim for an expense with no amount yet, or mileage for a drive.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A value is not valid: a reason, a note other needs, a line that isn’t an item, parts that don’t add up to the claim, or a category and type that can’t be chosen. field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Expenses"
+        ],
+        "summary": "Include a purchase left out in the claim again",
+        "description": "FR-EXP-20. Before submission: every item of the purchase is claimed again, and the claim goes back up by it and its own taxes and fees.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "The purchase’s number on its receipt, from 1."
+            },
+            "required": true,
+            "description": "The purchase’s number on its receipt, from 1.",
+            "name": "purchase",
             "in": "path"
           }
         ],

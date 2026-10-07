@@ -8,6 +8,8 @@ import {
   money,
   partsByAmount,
   partsByLine,
+  purchaseItems,
+  purchasesOf,
   type ChoiceProblem,
   type ConversionRecord,
   type ExclusionProblem,
@@ -18,6 +20,7 @@ import {
   type LineAssignment,
   type LineToolsProblem,
   type Part,
+  type Purchase,
   type ReadLine,
   type SplitProblem,
   type TypedPart,
@@ -41,6 +44,7 @@ import {
   expenseItemizations,
   expenseLines,
   expenseParts,
+  expensePurchases,
   expenses,
   expenseTypes,
   reports,
@@ -97,24 +101,34 @@ export async function itemizationsOf(
     .from(expenseItemizations)
     .where(inArray(expenseItemizations.expenseId, [...expenseIds]));
   if (heads.length === 0) return [];
+  const ids = heads.map((h) => h.expenseId);
   const rows = await tx
     .select()
     .from(expenseLines)
-    .where(
-      inArray(
-        expenseLines.expenseId,
-        heads.map((h) => h.expenseId),
-      ),
-    )
+    .where(inArray(expenseLines.expenseId, ids))
     .orderBy(asc(expenseLines.expenseId), asc(expenseLines.position));
+  const bought = await tx
+    .select()
+    .from(expensePurchases)
+    .where(inArray(expensePurchases.expenseId, ids))
+    .orderBy(asc(expensePurchases.expenseId), asc(expensePurchases.position));
   return heads.map((h) => {
     const currency = assertCurrency(h.currency);
     const amount = (minor: number | null) => (minor === null ? null : money(minor, currency));
+    const purchases: Purchase[] = bought
+      .filter((p) => p.expenseId === h.expenseId)
+      .map((p) => ({
+        description: p.description,
+        date: p.purchasedOn,
+        cardLastFour: p.cardLastFour,
+        total: amount(p.totalMinor),
+      }));
     return {
       expenseId: h.expenseId,
       currency,
       total: amount(h.totalMinor),
       subtotal: amount(h.subtotalMinor),
+      ...(purchases.length > 0 ? { purchases } : {}),
       lines: rows
         .filter((r) => r.expenseId === h.expenseId)
         .map((r) => ({
@@ -123,6 +137,7 @@ export async function itemizationsOf(
           description: r.description,
           quantity: r.quantity,
           amount: money(r.amountMinor, currency),
+          purchase: r.purchase,
           excluded:
             r.excludedReason && r.excludedAt
               ? { reason: r.excludedReason, note: r.excludedNote, at: r.excludedAt }
@@ -173,10 +188,22 @@ export async function partsOf(
 const sameLines = (a: StoredItemization | undefined, b: Itemization | null) => {
   if (!a || !b) return !a && !b;
   const minor = (m: { amountMinor: number } | null) => m?.amountMinor ?? null;
+  const [pa, pb] = [purchasesOf(a), purchasesOf(b)];
   return (
     a.currency === b.currency &&
     minor(a.total) === minor(b.total) &&
     minor(a.subtotal) === minor(b.subtotal) &&
+    pa.length === pb.length &&
+    pa.every((p, i) => {
+      const o = pb[i];
+      return (
+        o !== undefined &&
+        p.description === o.description &&
+        p.date === o.date &&
+        p.cardLastFour === o.cardLastFour &&
+        minor(p.total) === minor(o.total)
+      );
+    }) &&
     a.lines.length === b.lines.length &&
     a.lines.every((l, i) => {
       const o = b.lines[i];
@@ -185,7 +212,8 @@ const sameLines = (a: StoredItemization | undefined, b: Itemization | null) => {
         l.kind === o.kind &&
         l.description === o.description &&
         l.quantity === o.quantity &&
-        l.amount.amountMinor === o.amount.amountMinor
+        l.amount.amountMinor === o.amount.amountMinor &&
+        (l.purchase ?? null) === (o.purchase ?? null)
       );
     })
   );
@@ -204,6 +232,22 @@ async function insertLines(
     totalMinor: lines.total?.amountMinor ?? null,
     subtotalMinor: lines.subtotal?.amountMinor ?? null,
   });
+  // The purchases first, so each line can name its own (FR-INT-23).
+  const purchases = purchasesOf(lines);
+  if (purchases.length > 0) {
+    await tx.insert(expensePurchases).values(
+      purchases.map((p, i) => ({
+        orgId,
+        expenseId,
+        position: i + 1,
+        description: p.description,
+        purchasedOn: p.date,
+        cardLastFour: p.cardLastFour,
+        totalMinor: p.total?.amountMinor ?? null,
+        currency: lines.currency,
+      })),
+    );
+  }
   if (lines.lines.length === 0) return;
   await tx.insert(expenseLines).values(
     lines.lines.map((l, i) => ({
@@ -215,6 +259,7 @@ async function insertLines(
       quantity: l.quantity,
       amountMinor: l.amount.amountMinor,
       currency: lines.currency,
+      purchase: purchases.length > 0 ? (l.purchase ?? null) : null,
     })),
   );
 }
@@ -242,7 +287,11 @@ export async function copyReadLines(
     entityType: 'expense',
     entityId: expenseId,
     action: 'expense.lines_read',
-    payload: { lines: lines?.lines.length ?? 0, previous: current?.lines.length ?? 0 },
+    payload: {
+      lines: lines?.lines.length ?? 0,
+      previous: current?.lines.length ?? 0,
+      ...(lines && purchasesOf(lines).length > 0 ? { purchases: purchasesOf(lines).length } : {}),
+    },
   });
   return true;
 }
@@ -429,12 +478,21 @@ async function claim(
   );
 }
 
-/** Excludes a line or includes it again, working out the claim and any split by line again. */
+/** What is left out or included again: one item line, or every item of one purchase. */
+type ExclusionTarget =
+  | { readonly line: number }
+  /** A purchase on a receipt of several, by its number from 1 (FR-EXP-20). */
+  | { readonly purchase: number };
+
+/**
+ * Excludes a line, or a whole purchase, or includes it again, working out the claim and any
+ * split by line again.
+ */
 async function setExcluded(
   tx: Transaction,
   orgId: string,
   expenseId: string,
-  position: number,
+  target: ExclusionTarget,
   exclusion: { readonly reason: ExclusionReason; readonly note: string | null } | null,
   actorUserId: string,
   seed: Itemization | null | undefined,
@@ -446,19 +504,34 @@ async function setExcluded(
   const excluded = excludedOf(lines);
   const usable = lineTools(lines, excluded, expense);
   if (!usable.ok) return { status: 'not_usable', problem: usable.error };
-  const line = lines.lines.find((l) => l.position === position);
-  if (!line) return { status: 'invalid', problem: 'no_such_line' };
-  const was = line.excluded;
-  if (exclusion === null ? !was : was?.reason === exclusion.reason && was.note === exclusion.note) {
-    return { status: 'unchanged' };
+  let positions: number[];
+  let purchase: Purchase | undefined;
+  if ('line' in target) {
+    if (!lines.lines.some((l) => l.position === target.line)) {
+      return { status: 'invalid', problem: 'no_such_line' };
+    }
+    positions = [target.line];
+  } else {
+    purchase = purchasesOf(lines)[target.purchase - 1];
+    if (!purchase) return { status: 'invalid', problem: 'no_such_purchase' };
+    positions = purchaseItems(lines, target.purchase);
   }
+  const touched = lines.lines.filter((l) => positions.includes(l.position));
+  const same = (l: StoredLine) =>
+    exclusion === null
+      ? !l.excluded
+      : l.excluded?.reason === exclusion.reason && l.excluded.note === exclusion.note;
+  if (touched.every(same)) return { status: 'unchanged' };
   const next = new Set(excluded);
-  if (exclusion) next.add(position);
-  else next.delete(position);
+  for (const position of positions) {
+    if (exclusion) next.add(position);
+    else next.delete(position);
+  }
   const after = claimWithout(lines, next);
   if (!after.ok) return { status: 'invalid', problem: after.error };
   const byLine = parts.length > 0 && parts.every((p) => p.basis === 'lines');
-  if (parts.length > 0 && !byLine && Boolean(was) !== Boolean(exclusion)) {
+  const changesClaim = touched.some((l) => Boolean(l.excluded) !== Boolean(exclusion));
+  if (parts.length > 0 && !byLine && changesClaim) {
     return { status: 'split_by_amount' };
   }
   const assigned = assignmentsOf(lines);
@@ -478,35 +551,48 @@ async function setExcluded(
           }
         : { excludedReason: null, excludedNote: null, excludedAt: null, updatedAt: now },
     )
-    .where(and(eq(expenseLines.expenseId, expenseId), eq(expenseLines.position, position)));
+    .where(and(eq(expenseLines.expenseId, expenseId), inArray(expenseLines.position, positions)));
   if (assigned.length > 0 && reparted.ok) {
     await replaceParts(tx, orgId, expenseId, 'lines', reparted.value);
   }
   const claimed = after.value.claimed.amountMinor;
-  const lineClaim = claimWithout(lines, new Set([position]));
+  const takesOff = claimWithout(lines, new Set(positions));
+  const [line] = touched;
+  const was = line?.excluded;
   await appendAuditEvent(tx, orgId, {
     actor: { type: 'user', id: actorUserId },
     entityType: 'expense',
     entityId: expenseId,
-    action: exclusion ? 'expense.line_excluded' : 'expense.line_included',
+    action:
+      'purchase' in target
+        ? exclusion
+          ? 'expense.purchase_excluded'
+          : 'expense.purchase_included'
+        : exclusion
+          ? 'expense.line_excluded'
+          : 'expense.line_included',
     payload: {
-      position,
-      line: line.description,
+      ...('purchase' in target
+        ? { purchase: target.purchase, description: purchase?.description, lines: positions }
+        : { position: target.line, line: line?.description }),
       ...(exclusion ? { reason: exclusion.reason, note: exclusion.note } : {}),
-      ...(was && exclusion ? { previous: { reason: was.reason, note: was.note } } : {}),
-      takesOff: lineClaim.ok ? lineClaim.value.excluded.amountMinor : null,
+      ...('line' in target && was && exclusion
+        ? { previous: { reason: was.reason, note: was.note } }
+        : {}),
+      takesOff: takesOff.ok ? takesOff.value.excluded.amountMinor : null,
       claimed,
       previousClaim: expense.amountMinor,
     },
   });
   if (claimed !== expense.amountMinor) {
+    const what = 'purchase' in target ? 'a purchase' : 'a line';
     await claim(
       tx,
       orgId,
       expenseId,
       claimed,
       actorUserId,
-      exclusion ? 'a line on an expense was excluded' : 'a line on an expense was included again',
+      exclusion ? `${what} on an expense was excluded` : `${what} on an expense was included again`,
     );
   } else {
     await tx
@@ -535,7 +621,7 @@ export async function excludeLine(
 ): Promise<LineChangeResult> {
   const checked = checkExclusion(exclusion.reason, exclusion.note);
   if (!checked.ok) return { status: 'invalid', problem: checked.error };
-  return setExcluded(tx, orgId, expenseId, position, checked.value, actorUserId, seed);
+  return setExcluded(tx, orgId, expenseId, { line: position }, checked.value, actorUserId, seed);
 }
 
 /** Includes an excluded line in the claim again, before submission (FR-EXP-16). */
@@ -547,7 +633,41 @@ export function includeLine(
   actorUserId: string,
   seed?: Itemization | null,
 ): Promise<LineChangeResult> {
-  return setExcluded(tx, orgId, expenseId, position, null, actorUserId, seed);
+  return setExcluded(tx, orgId, expenseId, { line: position }, null, actorUserId, seed);
+}
+
+/**
+ * Leaves a whole purchase on a receipt of several out of the claim (FR-EXP-20, Q49), such as a
+ * seat upgrade paid for personally: every item of it, with the reason and note an excluded line
+ * takes. The claim drops by the purchase and its own taxes and fees, never a share of another
+ * purchase's, and a split by line is worked out again. Audited as one change. Only while the
+ * expense is open to edits, and its lines make up its claim. Call inside withOrg(), as the
+ * caller.
+ */
+export async function excludePurchase(
+  tx: Transaction,
+  orgId: string,
+  expenseId: string,
+  purchase: number,
+  exclusion: { readonly reason: string; readonly note?: string | null },
+  actorUserId: string,
+  seed?: Itemization | null,
+): Promise<LineChangeResult> {
+  const checked = checkExclusion(exclusion.reason, exclusion.note);
+  if (!checked.ok) return { status: 'invalid', problem: checked.error };
+  return setExcluded(tx, orgId, expenseId, { purchase }, checked.value, actorUserId, seed);
+}
+
+/** Includes every item of a purchase in the claim again, before submission (FR-EXP-20). */
+export function includePurchase(
+  tx: Transaction,
+  orgId: string,
+  expenseId: string,
+  purchase: number,
+  actorUserId: string,
+  seed?: Itemization | null,
+): Promise<LineChangeResult> {
+  return setExcluded(tx, orgId, expenseId, { purchase }, null, actorUserId, seed);
 }
 
 /** A split as a person asks for it (Q36): by giving lines categories and types, or by amounts. */

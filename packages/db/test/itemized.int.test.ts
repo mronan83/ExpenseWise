@@ -12,7 +12,9 @@ import { listCatalog, seedStarterCatalog } from '../src/categories.ts';
 import { editExpense, getExpense, type ReceiptOffer } from '../src/expenses.ts';
 import {
   excludeLine,
+  excludePurchase,
   includeLine,
+  includePurchase,
   itemizationsOf,
   partsOf,
   reportCategories,
@@ -640,6 +642,216 @@ describe('whose lines and parts they are, and when they are locked (ADR-0035)', 
       select (select count(*) from expense_lines where expense_id = ${expenseId}::uuid)
            + (select count(*) from expense_parts where expense_id = ${expenseId}::uuid)
            + (select count(*) from expense_itemizations where expense_id = ${expenseId}::uuid) as n`);
+    expect(Number(left.rows[0]?.n)).toBe(0);
+  });
+});
+
+/**
+ * An airline receipt of two purchases (FR-INT-23, Q49): the ticket, bought Sep 12 on one card,
+ * and a seat upgrade bought Sep 30 on a personal card, each with its own taxes and fees.
+ */
+const of = (purchase: number, l: ReturnType<typeof line>) => ({ ...l, purchase });
+const AIRFARE: Itemization = {
+  currency: 'USD',
+  subtotal: null,
+  total: usd(48_713),
+  purchases: [
+    { description: 'Ticket', date: '2026-09-12', cardLastFour: '4417', total: usd(40_220) },
+    { description: 'Seat upgrade', date: '2026-09-30', cardLastFour: '9921', total: usd(8493) },
+  ],
+  lines: [
+    of(1, line('item', 'Airfare', 36_000)),
+    of(1, line('tax', 'US transportation tax', 2700)),
+    of(1, line('fee', 'September 11 security fee', 560)),
+    of(1, line('fee', 'Passenger facility charge', 960)),
+    of(2, line('item', 'Economy Plus', 7900)),
+    of(2, line('tax', 'US transportation tax', 593)),
+  ],
+};
+const FLIGHT: ReceiptOffer = {
+  merchant: 'Example Air',
+  transactionDate: '2026-09-12',
+  currency: 'USD',
+  amountMinor: 48_713,
+};
+
+describe('a receipt of several purchases (FR-INT-23, FR-EXP-20, Q49)', () => {
+  it('copies each purchase with its lines, and a reading of one purchase takes them away', async () => {
+    const org = await seedOrg(app.db, 'purchases-copy');
+    const receipt = await read(org, AIRFARE, FLIGHT);
+    const expenseId = await expenseIdOf(org, receipt);
+    const copied = await linesOf(org, expenseId);
+    expect(copied?.purchases).toEqual(AIRFARE.purchases);
+    expect(copied?.lines.map((l) => [l.position, l.purchase, l.description])).toEqual([
+      [1, 1, 'Airfare'],
+      [2, 1, 'US transportation tax'],
+      [3, 1, 'September 11 security fee'],
+      [4, 1, 'Passenger facility charge'],
+      [5, 2, 'Economy Plus'],
+      [6, 2, 'US transportation tax'],
+    ]);
+    // The same purchases again record nothing; the ticket alone replaces them.
+    await read(org, AIRFARE, FLIGHT, receipt);
+    const ticket: Itemization = {
+      currency: 'USD',
+      subtotal: null,
+      total: usd(40_220),
+      lines: AIRFARE.lines.slice(0, 4).map(({ purchase: _, ...l }) => l),
+    };
+    await read(org, ticket, { ...FLIGHT, amountMinor: 40_220 }, receipt);
+    const after = await linesOf(org, expenseId);
+    expect(after?.purchases).toBeUndefined();
+    expect(after?.lines.every((l) => l.purchase === null)).toBe(true);
+    const left = await owner.db.execute<{ n: number }>(
+      sql`select count(*) as n from expense_purchases where expense_id = ${expenseId}::uuid`,
+    );
+    expect(Number(left.rows[0]?.n)).toBe(0);
+    expect((await actions(org, expenseId)).filter((a) => a === 'expense.lines_read')).toHaveLength(
+      2,
+    );
+  });
+
+  it('leaves out the seat upgrade with its own taxes, as one change, and includes it again', async () => {
+    const org = await seedOrg(app.db, 'purchases-exclude');
+    const expenseId = await expenseIdOf(org, await read(org, AIRFARE, FLIGHT));
+    const inOrg = <T>(work: Parameters<typeof withMember<T>>[2]) =>
+      withMember(app.db, owned(org), work);
+    expect(
+      await inOrg((tx) =>
+        excludePurchase(tx, org.orgId, expenseId, 3, { reason: 'personal' }, org.userId),
+      ),
+    ).toEqual({ status: 'invalid', problem: 'no_such_purchase' });
+    expect(
+      await inOrg((tx) =>
+        excludePurchase(
+          tx,
+          org.orgId,
+          expenseId,
+          2,
+          { reason: 'personal', note: 'Paid on my own card' },
+          org.userId,
+        ),
+      ),
+    ).toEqual({ status: 'changed' });
+    // The ticket and its own taxes and fees stay claimed; none of them went with the upgrade.
+    expect(await amountOf(org, expenseId)).toBe(40_220);
+    const lines = await linesOf(org, expenseId);
+    expect(lines?.lines.filter((l) => l.excluded).map((l) => l.position)).toEqual([5]);
+    expect(
+      await inOrg((tx) =>
+        excludePurchase(
+          tx,
+          org.orgId,
+          expenseId,
+          2,
+          { reason: 'personal', note: 'Paid on my own card' },
+          org.userId,
+        ),
+      ),
+    ).toEqual({ status: 'unchanged' });
+    expect(await inOrg((tx) => includePurchase(tx, org.orgId, expenseId, 2, org.userId))).toEqual({
+      status: 'changed',
+    });
+    expect(await amountOf(org, expenseId)).toBe(48_713);
+    const trail = await withOrg(app.db, org.orgId, (tx) =>
+      tx
+        .select({ action: auditEvents.action, payload: auditEvents.payload })
+        .from(auditEvents)
+        .where(eq(auditEvents.entityId, expenseId))
+        .orderBy(auditEvents.sequence),
+    );
+    expect(trail.map((e) => e.action).slice(-2)).toEqual([
+      'expense.purchase_excluded',
+      'expense.purchase_included',
+    ]);
+    expect(trail.at(-2)?.payload).toMatchObject({
+      purchase: 2,
+      description: 'Seat upgrade',
+      lines: [5],
+      reason: 'personal',
+      note: 'Paid on my own card',
+      takesOff: 8493,
+      claimed: 40_220,
+      previousClaim: 48_713,
+    });
+  });
+
+  it('refuses a purchase on a receipt of one, and keeps a member’s purchases to them', async () => {
+    const org = await seedOrg(app.db, 'purchases-own');
+    const folio = await expenseIdOf(org, await read(org, FOLIO));
+    expect(
+      await withMember(app.db, owned(org), (tx) =>
+        excludePurchase(tx, org.orgId, folio, 1, { reason: 'personal' }, org.userId),
+      ),
+    ).toEqual({ status: 'invalid', problem: 'no_such_purchase' });
+
+    const sam = await addMember(org, 'sam', 'member');
+    const other = await addMember(org, 'alex', 'member');
+    const expenseId = await expenseIdOf(
+      org,
+      await read(org, AIRFARE, FLIGHT, newId(), sam.memberId),
+    );
+    expect(await withMember(app.db, other, (tx) => itemizationsOf(tx, [expenseId]))).toEqual([]);
+    const seen = await withMember(app.db, other, (tx) =>
+      tx.execute(
+        sql`select count(*) as n from expense_purchases where expense_id = ${expenseId}::uuid`,
+      ),
+    );
+    expect(Number((seen.rows[0] as { n: number }).n)).toBe(0);
+    expect(
+      await withMember(app.db, other, (tx) =>
+        excludePurchase(tx, org.orgId, expenseId, 2, { reason: 'personal' }, other.userId),
+      ),
+    ).toEqual({ status: 'missing' });
+    expect(
+      await withMember(app.db, sam, (tx) =>
+        excludePurchase(tx, org.orgId, expenseId, 2, { reason: 'personal' }, sam.userId),
+      ),
+    ).toEqual({ status: 'changed' });
+    await withOrg(app.db, org.orgId, (tx) =>
+      tx.update(expenses).set({ status: 'submitted' }).where(eq(expenses.id, expenseId)),
+    );
+    expect(
+      await withMember(app.db, sam, (tx) =>
+        includePurchase(tx, org.orgId, expenseId, 2, sam.userId),
+      ),
+    ).toEqual({ status: 'not_editable', current: 'submitted' });
+  });
+
+  it('exports the purchase left out, line by line with its own taxes, and deletes it with its receipt', async () => {
+    const org = await seedOrg(app.db, 'purchases-export');
+    const receipt = await read(org, AIRFARE, FLIGHT);
+    const expenseId = await expenseIdOf(org, receipt);
+    await withMember(app.db, owned(org), (tx) =>
+      excludePurchase(tx, org.orgId, expenseId, 2, { reason: 'personal' }, org.userId),
+    );
+    const reportId = await withOrg(app.db, org.orgId, async (tx) => {
+      const [made] = await tx
+        .insert(reports)
+        .values({
+          orgId: org.orgId,
+          memberId: org.memberId,
+          title: 'September',
+          currency: 'USD',
+          status: 'closed',
+          closedAt: new Date(),
+          closesAt: new Date('2026-10-01T00:00:00Z'),
+        })
+        .returning({ id: reports.id });
+      await tx.update(expenses).set({ reportId: made!.id }).where(eq(expenses.id, expenseId));
+      return made!.id;
+    });
+    const exported = await withMember(app.db, owned(org), (tx) => reportForExport(tx, reportId));
+    expect(exported?.expenses[0]).toMatchObject({
+      amountMinor: 40_220,
+      excluded: [{ line: 'Economy Plus', amountMinor: 8493, reason: 'personal', note: null }],
+    });
+    await withMember(app.db, owned(org), (tx) =>
+      tx.execute(sql`select * from delete_receipt(${receipt}::uuid)`),
+    );
+    const left = await owner.db.execute<{ n: number }>(sql`
+      select (select count(*) from expense_lines where expense_id = ${expenseId}::uuid)
+           + (select count(*) from expense_purchases where expense_id = ${expenseId}::uuid) as n`);
     expect(Number(left.rows[0]?.n)).toBe(0);
   });
 });

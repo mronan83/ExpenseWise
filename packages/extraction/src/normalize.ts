@@ -1,5 +1,6 @@
 import {
   assertCurrency,
+  checkLines,
   DomainError,
   fromDecimal,
   isCountryCode,
@@ -13,6 +14,7 @@ import {
   type StayNights,
 } from '@expensewise/domain';
 import { addsUp } from './checks.ts';
+import { itemizationOfReading } from './lines.ts';
 import {
   JOURNEY_DOCUMENTS,
   STAY_DOCUMENTS,
@@ -65,6 +67,12 @@ export interface NormalizedExtraction {
    * whose nights aren't sure fails the stay check, so it needs a look (checks.ts).
    */
   readonly stay?: Stay | null;
+  /**
+   * A document of several purchases (FR-INT-23, `receipts.purchases`): how many, and whether
+   * they add up, each one's lines making its own total and their totals the document's
+   * (`checkLines`). Absent for a document of one, or not asked; the sums check then reads it.
+   */
+  readonly purchases?: { readonly count: number; readonly addUp: boolean };
   /** Fields that could not be read as valid values; each becomes a Needs review reason. */
   readonly problems: readonly string[];
 }
@@ -166,19 +174,25 @@ export function normalizeExtraction(
   const feeTotal = lines('fees', extraction.fees);
   const itemTotal = itemsOf(extraction.lineItems, code);
 
+  // With several purchases, the expense is dated and carded as the first, the purchase the
+  // document is for (US-EXP-10 AC3), whatever the document's own date and card say.
+  const purchases = extraction.purchases ?? [];
+  const first = purchases.length > 1 ? purchases[0] : undefined;
+  const readDate = first?.date ?? extraction.date;
   let date: Field<string> | null = null;
-  if (extraction.date) {
-    if (isIsoDate(extraction.date.value)) {
-      date = { value: extraction.date.value, confidence: extraction.date.confidence };
+  if (readDate) {
+    if (isIsoDate(readDate.value)) {
+      date = { value: readDate.value, confidence: readDate.confidence };
     } else {
       problems.push('date');
     }
   }
 
+  const readCard = first?.cardLastFour ?? extraction.cardLastFour;
   let cardLastFour: Field<string> | null = null;
-  if (extraction.cardLastFour) {
-    if (/^\d{4}$/.test(extraction.cardLastFour.value)) {
-      cardLastFour = extraction.cardLastFour;
+  if (readCard) {
+    if (/^\d{4}$/.test(readCard.value)) {
+      cardLastFour = readCard;
     } else {
       problems.push('cardLastFour');
     }
@@ -235,7 +249,22 @@ export function normalizeExtraction(
           stay: stayOf(extraction.documentType, extraction.stay),
         }
       : {}),
+    ...(first ? { purchases: purchasesOf(extraction) } : {}),
     problems,
+  };
+}
+
+/**
+ * Whether a document's purchases add up: each one's lines make its own total, and their totals
+ * the document's (`checkLines`, R-LINES-TOLERANCE). Lines that can't all be read exactly don't,
+ * so the reading is held for a look rather than filed with taxes in the wrong purchase.
+ */
+function purchasesOf(extraction: ReceiptExtraction) {
+  const lines = itemizationOfReading(extraction);
+  const check = lines ? checkLines(lines) : null;
+  return {
+    count: extraction.purchases?.length ?? 0,
+    addUp: check !== null && (check.addsUp || check.problem === 'not_positive'),
   };
 }
 

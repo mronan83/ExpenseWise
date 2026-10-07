@@ -657,6 +657,25 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
     [press('Show the receipt’s lines')],
   ],
   [
+    'a flight receipt of two purchases, the ticket and a seat upgrade bought later',
+    (s) => `/expenses/${s.expenses.seatUpgrade}`,
+    [
+      press('Show the receipt’s lines'),
+      (page) => expect(page.getByText('Bought Sep 12, 2026, card ending 4417')).toBeVisible(),
+    ],
+  ],
+  [
+    'leaving a seat upgrade out of the claim, with its own taxes',
+    (s) => `/expenses/${s.expenses.seatUpgrade}`,
+    [
+      press('Leave out Seat upgrade'),
+      (page) =>
+        expect(
+          page.getByText('Why leave Seat upgrade out? It takes $84.93 off the claim.'),
+        ).toBeVisible(),
+    ],
+  ],
+  [
     'splitting an expense by amount',
     (s) => `/expenses/${s.expenses.linesShort}`,
     [press('Split by amount')],

@@ -199,6 +199,10 @@ export const GAPS: readonly Gap[] = [
       'Your report of Oct 6: two flight receipts you forwarded each listed the ticket, its fare and taxes bought on one day on one card, and a seat upgrade bought later on your personal card with its own taxes and fees, which isn’t to be expensed. The reading took the upgrade’s taxes and fees with the ticket. Its instructions treat a document as one purchase: they say a payment is never a line, and nothing of a document charged on different days to different cards, so a later purchase’s charges merge into one reading.',
     fix: 'Read each purchase on a receipt as its own group of lines, with its own taxes, fees, date and card, and let a whole purchase be left out of the claim with a reason (#96).',
     backlog: 96,
+    closed: {
+      date: '2026-10-07',
+      note: 'PR #66 (#96), at your word of Oct 7, behind Several purchases on one receipt (`receipts.purchases`): a reading asks for each separate purchase a document holds and the purchase each line, tax and fee belongs to, and the expense takes the first purchase’s date. Each purchase’s taxes and fees are spread over only its own items, and with itemized lines on, a whole purchase can be left out with a reason, taking off it and its own taxes and fees. A reading whose purchases don’t add up is held for a look. Your two fares need Read again with the switch on, or an Edit by hand.',
+    },
   },
   {
     id: 'GAP-25',
@@ -1107,6 +1111,12 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-07',
+    change:
+      'Built #96 in PR #66, at your word of Oct 7, behind Several purchases on one receipt (`receipts.purchases`, off until you switch it on): a receipt holding several purchases, such as a ticket and a seat upgrade bought later on your personal card, reads each as its own group of lines with its own taxes, fees, date and card (FR-INT-23), the expense taking the first purchase’s date; with itemized lines on, a whole purchase can be left out of the claim with a reason, taking off it and its own taxes and fees (FR-EXP-20). F-64 and US-EXP-10 delivered; GAP-41 closed; ADR-0041 amended.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-06',
     change:
