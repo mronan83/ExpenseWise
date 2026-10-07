@@ -1,8 +1,8 @@
 # ADR-0007: Bank and card feeds
 
-Connect read-only Plaid transactions in Phase 2; no card issuing is planned.
+Connect read-only Plaid transactions in Phase 2; no card issuing is planned. *Amended Oct 7:* a card's statement comes in first, and a live feed is a later source of the same transactions.
 
-- **Status:** Accepted (decided by product owner)
+- **Status:** Accepted (decided by product owner); amended Oct 7, 2026, by the product owner's answers to Q50 and Q51 (GAP-42, #97)
 - **Date:** 2026-09-30
 - **Deciders:** Product owner; Claude (principal architect)
 - **Decision register:** D-07
@@ -20,6 +20,7 @@ Without a transaction feed we can't auto-create expenses from card swipes, spot 
   - A card transaction with no receipt after 24 h triggers a nudge, at most one a day, with quiet hours respected.
   - A hotel charge with no folio after 24 h becomes an inbox item.
 - **Plan and keys.** The Plaid Trial plan allows 10 bank connections. Preview environments use Plaid sandbox keys.
+- *Amended Oct 7 (Q50, Q51, GAP-42):* **a card's statement comes first.** The product owner's corporate card is a U.S. Bank commercial card, seen in Access Online, which Plaid, SimpleFIN and Teller don't reach: aggregators reach consumer and small-business sites such as usbank.com, not commercial-card portals such as Access Online, CitiManager or PaymentNet. Its issuer's daily commercial-card file (Visa VCF) goes only where the employer's card program administrator enrolls it. So a person brings in their card's monthly statement, or a transaction list downloaded from the card's site, by upload or by forwarding it to their receipts address (FR-CAP-10), and each transaction is matched to an expense (FR-INT-24), in Phase 1 (#97). The Transaction entity and its matching are the same whichever source brings a transaction in; Plaid, or SimpleFIN, becomes a later adapter for cards whose site an aggregator reaches. No card login reaches ExpenseWise or a third party.
 
 ## Alternatives considered
 
@@ -27,6 +28,9 @@ Without a transaction feed we can't auto-create expenses from card swipes, spot 
 | --- | --- |
 | No feeds: receipts and email only | Leaves out card-swipe expenses, missing-receipt detection and reliable duplicate checks, which C4 identifies as the main automation gains. |
 | Card issuing via a partner | A regulated business, and no card issuing is planned. Corporate cards appear in Phase 4 only as a candidate that needs its own business case. |
+| Plaid first for a corporate card (Oct 7) | Plaid doesn't reach a commercial-card portal such as U.S. Bank Access Online, so it can't bring this card's charges in at any price. |
+| The employer's commercial-card file (Oct 7) | Daily and complete, but enrolled by the employer's card program administrator, with a file-transfer setup: the product owner chose the statement (Q51). |
+| Free open-source connection (Oct 7) | None exists in the US: open-source finance apps rent an aggregator (SimpleFIN about $15 a year), and the free European one, GoCardless Bank Account Data, stopped taking sign-ups in July 2025. OFX Direct Connect is gone at American Express, and the CFPB's open-banking rule is enjoined and being rewritten. |
 
 ## Consequences
 
@@ -51,3 +55,4 @@ Plaid sits behind an adapter (AP7), and the Transaction shape and its adapter ar
 - [System context](../05-architecture.md#62-system-context), [domain model](../05-architecture.md#66-domain-model), [travel data](../05-architecture.md#611-travel-data)
 - [Risk register](../08-risk-register.md): R6, R8
 - [ADR-0011](0011-travel-data-sources.md)
+- FR-CAP-06, FR-CAP-10, FR-INT-12, FR-INT-24, F-65, US-CAP-07, GAP-42, Q50, Q51, backlog #97

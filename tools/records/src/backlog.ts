@@ -347,6 +347,19 @@ export const BACKLOG: readonly BacklogItem[] = [
     affects: ['GAP-41', 'FR-INT-23', 'FR-EXP-20', 'F-64', 'F-55'],
     done: { date: '2026-10-07', in: 'PR #66' },
   },
+  {
+    num: 97,
+    title: 'Bring in a card statement and match its transactions',
+    type: 'Feature',
+    detail:
+      'Your requirement of Oct 7, with your answers to Q50 and Q51 (GAP-42). Upload your U.S. Bank Access Online statement, or forward it to your receipts address, or a transaction list downloaded from Access Online: each transaction is kept once, with its date, merchant, amount and card. Each is matched to an expense by amount, date and merchant; one with no receipt shows in Needs you, where you attach the receipt or say why there is none, such as a personal charge. Behind a switch, off until you turn it on.',
+    priority: 'P1',
+    effort: 'L',
+    severity: 'Medium',
+    blocker: { kind: 'none' },
+    source: 'Product owner Oct 7',
+    affects: ['GAP-42', 'FR-CAP-10', 'FR-INT-24', 'F-65', 'FR-CAP-06'],
+  },
   // P2: this month
   {
     num: 79,
@@ -1395,6 +1408,7 @@ export const BACKLOG: readonly BacklogItem[] = [
 
 /** How to order the open work, beyond priority. */
 export const SEQUENCING: readonly string[] = [
+  '#97 brings in your corporate card’s statement from U.S. Bank Access Online and matches its transactions to your expenses (your answers to Q50 and Q51); no live connection reaches that portal, so the statement is the way in.',
   '#96, in PR #66, reads each purchase on a receipt as its own group of lines (your answer to Q49), so a seat upgrade bought later on your own card can be left out with its own taxes and fees. Switch on Several purchases on one receipt, with itemized lines, then Read again each fare that holds one.',
   'Your batch of Oct 5 is built in PR #60: approval (#24) with the second factor (#8), a submitted claim keeping its names (#70), emails that filed nothing (#59), journeys and stays in the export (#83), business miles on Home (#73) and proof that no tools reach a model (#38), each behind its switch and off until you switch it on.',
   'With #85, #88 and #90 in PR #60, a session that skipped the code gets nothing for someone with an authenticator, and once a person has one, only an email they let in signs in; their other emails still forward receipts (Q44). #91, letting in first only the email a person first signed in with (your answer to Q45), is next; until then, set up your authenticator soon after release.',

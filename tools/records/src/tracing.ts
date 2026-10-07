@@ -191,6 +191,17 @@ export const GAPS: readonly Gap[] = [
     },
   },
   {
+    id: 'GAP-42',
+    title:
+      'The card feed planned in ADR-0007 can’t reach a commercial-card portal, so a corporate card’s transactions never arrive.',
+    affects: ['FR-CAP-06', 'FR-INT-12', 'FR-CAP-10', 'FR-INT-24'],
+    severity: 'Medium',
+    evidence:
+      'Your request of Oct 7 to connect your corporate card and match its transactions: it is a U.S. Bank commercial card, seen in Access Online (Q50). Plaid, SimpleFIN and Teller reach U.S. Bank’s own site, usbank.com, not Access Online; U.S. Bank’s daily commercial-card file goes to an expense system only when the employer’s card program administrator enrolls it. ADR-0007 planned Plaid alone, so nothing would bring this card’s charges in.',
+    fix: 'Bring in the card’s monthly statement, or a downloaded transaction list, and match each transaction to an expense (#97); a live feed becomes a second source where a card’s site allows one.',
+    backlog: 97,
+  },
+  {
     id: 'GAP-41',
     title: 'A receipt that holds several purchases is read as one, mixing their taxes and fees.',
     affects: ['FR-INT-22', 'FR-INT-23', 'FR-INT-04', 'F-55'],
@@ -1107,10 +1118,36 @@ export const QUESTIONS: readonly Question[] = [
       text: 'C: one expense, each purchase its own group of lines that can be left out (#96).',
     },
   },
+  {
+    id: 'Q50',
+    title: 'Who issues your corporate card',
+    ask: 'Who issues your corporate card, and where do you sign in to see its transactions? A corporate card is reached either through your own sign-in, where an aggregator such as Plaid supports the issuer’s site, or through your employer’s card program.',
+    why: 'Aggregators reach consumer and small-business sites, such as americanexpress.com or usbank.com, but generally not commercial-card portals such as CitiManager, PaymentNet or Access Online. The answer decides whether any live connection is possible.',
+    affects: ['FR-CAP-06', 'FR-CAP-10', 'GAP-42'],
+    answer: { date: '2026-10-07', text: 'U.S. Bank, in Access Online.' },
+  },
+  {
+    id: 'Q51',
+    title: 'How a corporate card’s transactions come in',
+    ask: 'Your card is on U.S. Bank Access Online, which no live connection reaches. A: import its monthly statement, or a transaction list downloaded from Access Online, uploaded or forwarded, and match each transaction to an expense. B: ask your employer’s card administrator to send U.S. Bank’s daily commercial-card file to ExpenseWise. C: keep the Plaid plan of ADR-0007 and revisit later.',
+    why: 'A is free, needs nobody else, works for any issuer, and keeps your card login with you; it is monthly unless you import sooner. B is fresher but needs your employer’s approval and a file-transfer setup. C leaves this card out of reach until the issuer or the rules change; the CFPB’s open-banking rule is on hold.',
+    recommendation: 'A.',
+    affects: ['FR-CAP-06', 'FR-CAP-10', 'FR-INT-24', 'FR-INT-12', 'GAP-42', 'F-65'],
+    answer: {
+      date: '2026-10-07',
+      text: 'A: statement import and matching (#97); Plaid becomes a later, optional source.',
+    },
+  },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-07',
+    change:
+      'Your requirement of Oct 7, to connect your corporate card and match its transactions, and your answers to Q50 and Q51: the card is a U.S. Bank commercial card on Access Online, which Plaid and the other aggregators don’t reach (GAP-42). Its monthly statement, or a downloaded transaction list, will come in by upload or forwarding and each transaction be matched to an expense, a transaction with no receipt showing in Needs you (FR-CAP-10, FR-INT-24, F-65, #97). ADR-0007 is amended: statement import first, a live feed a later source.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-07',
     change:
