@@ -1479,7 +1479,7 @@ export const CAPTURE_STORIES: readonly Story[] = [
     soThat: 'nothing on the card goes undocumented, and nothing is paid twice',
     feature: 'F-66',
     requirements: ['FR-INT-25', 'FR-INT-26'],
-    status: 'Planned',
+    status: 'Delivered',
     criteria: [
       {
         id: 'AC1',
@@ -1488,15 +1488,24 @@ export const CAPTURE_STORIES: readonly Story[] = [
         when: 'I open the expense or its report',
         then: 'the expense is paid by the company: it stays on its report and trip, and is never claimed',
         decided: { by: 'owner', source: 'Q52' },
-        checks: [],
+        checks: [
+          'db/card-statements.int › marks the expense a charge paid for as the company’s, keeps a person’s choice, and hands it back when let go',
+          'db/card-statements.int › keeps a card’s expense the company’s whatever its type’s policy, and never changes a submitted claim',
+          'api/card-statements.int › keeps each charge and credit, leaves the payment out, and matches the charge it can',
+          'e2e/signed-in › a fare in euros with the dollars its card was charged',
+        ],
       },
       {
         id: 'AC2',
-        given: 'a charge matched to an expense I typed in, with no receipt',
+        given:
+          'a charge whose only expense has no receipt, such as a drive, or whose expense’s receipt I delete',
         when: 'I open Needs you',
-        then: 'the charge is flagged as missing its receipt, until I attach the receipt or set the charge aside with a reason',
+        then: 'it stays flagged as missing its receipt, since a charge is matched only to an expense with its receipt, until it has one or I set it aside with a reason',
         decided: { by: 'owner', source: 'Q52' },
-        checks: [],
+        checks: [
+          'db/card-statements.int › matches a charge only to an expense with its receipt, so a matched charge is always documented',
+          'db/card-statements.int › sets one aside with a reason, brings it back, and matches one by hand to a nearby expense',
+        ],
       },
       {
         id: 'AC3',
@@ -1504,7 +1513,9 @@ export const CAPTURE_STORIES: readonly Story[] = [
         when: 'a charge is matched to it',
         then: 'my choice stands, as it does against the policy for its type',
         decided: { by: 'claude', source: 'ADR-0045' },
-        checks: [],
+        checks: [
+          'db/card-statements.int › marks the expense a charge paid for as the company’s, keeps a person’s choice, and hands it back when let go',
+        ],
       },
       {
         id: 'AC4',
@@ -1512,9 +1523,11 @@ export const CAPTURE_STORIES: readonly Story[] = [
         when: 'nothing else pays for that expense',
         then: 'the expense goes back to the policy for its type, and the charge is flagged again',
         decided: { by: 'claude' },
-        checks: [],
+        checks: [
+          'db/card-statements.int › marks the expense a charge paid for as the company’s, keeps a person’s choice, and hands it back when let go',
+        ],
       },
     ],
-    note: 'Your answer to Q52 of Oct 7 (GAP-43, GAP-44, #98): your card is in your name and billed to your employer, and you use it so every charge has its receipt and expense, with any that hasn’t flagged. A charge with no expense is flagged already (US-CAP-07 AC3). Whether the card is billed to the company will be an organization setting, for a team whose cards differ: Claude’s, yours to confirm.',
+    note: 'Your answer to Q52 of Oct 7 (GAP-43, GAP-44), built in PR #70 (#98). Your card is in your name and billed to your employer, and you use it so every charge has its receipt and expense, with any that hasn’t flagged. A charge with no expense is flagged already (US-CAP-07 AC3). Every card brought in is taken as billed to the company, with no setting, as yours is: Claude’s, yours to confirm.',
   },
 ];

@@ -70,6 +70,7 @@ const apiWith = (flagOverrides: string) =>
     flagOverrides,
   });
 const on = apiWith('team.invites=on,expenses.card-statements=on');
+const paidOn = apiWith('team.invites=on,expenses.card-statements=on,expenses.company-paid=on');
 const off = apiWith('team.invites=on');
 
 const run = randomBytes(3).toString('hex');
@@ -113,6 +114,8 @@ interface Body {
   readonly missing: number;
   readonly expenses: { readonly id: string; readonly merchant: string | null }[];
   readonly items: { readonly kind: string; readonly transaction?: { readonly id: string } }[];
+  readonly paidBy?: string;
+  readonly paidByPinned?: boolean;
   readonly cardCharge?: {
     readonly id: string;
     readonly amount: Amount;
@@ -250,6 +253,11 @@ describe('a downloaded list (US-CAP-07 AC6, AC2, AC3)', () => {
     });
     expect(charge(shown, 'DELTA AIR 006')).toMatchObject({ state: 'missing', expense: null });
     expect(charge(shown, 'DELTA AIR CREDIT')).toMatchObject({ state: 'credit' });
+
+    // The company's card paid it, so it is the company's and never claimed (FR-INT-25).
+    expect(
+      (await call(owner, 'GET', `/v1/expenses/${lyft}`, undefined, paidOn)).body,
+    ).toMatchObject({ paidBy: 'company', paidByPinned: false });
 
     // The expense shows the charge that paid for it; with the feature off, it doesn't.
     expect((await call(owner, 'GET', `/v1/expenses/${lyft}`)).body.cardCharge).toMatchObject({

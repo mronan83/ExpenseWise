@@ -56,7 +56,7 @@ export function WhoPaid({
       <h2 id="who-paid-title" className="text-base font-semibold">
         Who paid
       </h2>
-      <p role="status">{paidByText(paidBy, pinned)}</p>
+      <p role="status">{paidByText(paidBy, pinned, expense.cardCharge?.cardLastFour)}</p>
       <p className="text-xs text-ink-2">
         {paidBy === 'company'
           ? 'It stays on its trip and in the trip’s cost, and is never claimed.'
