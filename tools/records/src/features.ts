@@ -1012,6 +1012,15 @@ export const FEATURES: readonly Feature[] = [
     note: 'Built in PR #64 (#95, ADR-0045), by your requirement of Oct 6 and your answers to Q46 to Q48. Behind `expenses.company-paid`. Settings › Organization lists the active types with a box each, which owners and finance admins tick, as an admin action under the second factor, for each type the company pays directly, Airfare today; it shows with categories on, and says so when they are off. An expense of a ticked type is paid by the company once a person gives it that type, and a change of the policy reaches every expense of it not yet on a submitted report, except one switched by hand, with one audit event naming each. On the expense, Who paid says Paid by the company (your organization’s policy), Paid by the company or You, switches it, and Follow the policy hands it back; never for a drive, and read-only once submitted. The trip page splits its cost into Claimed and Paid by the company; the report lists what the company paid apart, below the claim and outside its total, with the full cost; every claim total, by category too, Home’s and Needs you’s reports, approval lists and the reimbursement-currency totals leave it out, and the CSV and PDF list it after the claim, the CSV saying on each row who paid. It still has to be Ready before its report closes. Home’s month is what was spent, so it keeps everything. Off, nothing reads it. It adds to pages other features own: Settings › Organization (F-51), the expense, trip and report pages. Four screens in the signed-in checks.',
   },
   {
+    id: 'F-64',
+    title: 'Several purchases on one receipt, each its own group of lines',
+    group: 'Expenses, trips and reports',
+    kind: 'product',
+    phase: 'P1',
+    status: 'Planned',
+    backlog: 96,
+  },
+  {
     id: 'F-63',
     title: 'A ticket files to its trip by the day it departs',
     group: 'Expenses, trips and reports',

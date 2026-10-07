@@ -333,6 +333,19 @@ export const BACKLOG: readonly BacklogItem[] = [
     affects: ['FR-EXP-17', 'FR-EXP-18', 'F-62'],
     done: { date: '2026-10-06', in: 'PR #64' },
   },
+  {
+    num: 96,
+    title: 'Read each purchase on a receipt as its own group of lines',
+    type: 'Gap',
+    detail:
+      'Your report of Oct 6 (GAP-41) and your answer to Q49. A receipt that holds several purchases, such as a ticket and a seat upgrade bought later on your personal card, reads as one expense with each purchase its own group: its items, its own taxes and fees, its date and card. Leave a whole purchase out with a reason, such as Personal, and the claim drops by it and its own taxes and fees, never a share of another’s. The expense takes the first purchase’s date and card. A receipt read before needs Read again.',
+    priority: 'P1',
+    effort: 'M',
+    severity: 'Medium',
+    blocker: { kind: 'none' },
+    source: 'GAP-41',
+    affects: ['GAP-41', 'FR-INT-23', 'FR-EXP-20', 'F-64', 'F-55'],
+  },
   // P2: this month
   {
     num: 79,
@@ -1381,6 +1394,7 @@ export const BACKLOG: readonly BacklogItem[] = [
 
 /** How to order the open work, beyond priority. */
 export const SEQUENCING: readonly string[] = [
+  '#96 reads each purchase on a receipt as its own group of lines (your answer to Q49), so a seat upgrade bought later on your own card can be left out with its own taxes and fees. Until it ships, edit such a fare by hand to the base fare and its taxes.',
   'Your batch of Oct 5 is built in PR #60: approval (#24) with the second factor (#8), a submitted claim keeping its names (#70), emails that filed nothing (#59), journeys and stays in the export (#83), business miles on Home (#73) and proof that no tools reach a model (#38), each behind its switch and off until you switch it on.',
   'With #85, #88 and #90 in PR #60, a session that skipped the code gets nothing for someone with an authenticator, and once a person has one, only an email they let in signs in; their other emails still forward receipts (Q44). #91, letting in first only the email a person first signed in with (your answer to Q45), is next; until then, set up your authenticator soon after release.',
   'Approval in a team needs the second factor switched on too. #87 corrects an approved expense; #89 shows what awaits reimbursement on Home.',
