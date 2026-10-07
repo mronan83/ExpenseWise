@@ -139,10 +139,14 @@ export const FUNCTIONAL: readonly Requirement[] = [
     sources: ['owner 2026-10-07'],
     priority: 'Should',
     phase: 'P1',
-    status: 'Planned',
+    status: 'Verified',
     features: ['F-67'],
-    backlog: [100],
-    note: 'Your report of Oct 7: a flight confirmation you forwarded, with no amounts, was filed as a receipt and can’t be removed. Today only a duplicate can be deleted (FR-INT-18), through the same `delete_receipt()` this will use (ADR-0028), so a submitted claim still never changes.',
+    checks: [
+      'db/receipt-delete.int › deletes the member’s own receipt with its expense, and the audit trail keeps what it was',
+      'db/receipt-delete.int › refuses a submitted claim, and a receipt still being read',
+      'api/delete-receipt.int › deletes the person’s own receipt, its expense and its file, and Needs you lets it go (AC1)',
+    ],
+    note: 'Built in PR #77 (#100), by your report of Oct 7: a flight confirmation you forwarded, with no amounts, was filed as a receipt and couldn’t be removed. A receipt’s page has Delete this receipt, behind `receipts.delete`, through the same `delete_receipt()` a duplicate’s deletion uses (ADR-0028), so a submitted claim still never changes.',
   },
   {
     id: 'FR-CAP-07',

@@ -248,6 +248,14 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
   ['a receipt the primary model read', (s) => `/receipts/${s.receipts.primaryRead}`, []],
   ['a receipt a back-up model read', (s) => `/receipts/${s.receipts.backupRead}`, []],
   ['a receipt filed with every AI model off', (s) => `/receipts/${s.receipts.notRead}`, []],
+  [
+    'deleting a receipt filed by mistake',
+    (s) => `/receipts/${s.receipts.notRead}`,
+    [
+      press('Delete this receipt'),
+      (page) => expect(page.getByRole('button', { name: 'Delete it' })).toBeVisible(),
+    ],
+  ],
   ['Expenses', () => '/expenses', []],
   [
     'expenses on no trip, opened from Home',

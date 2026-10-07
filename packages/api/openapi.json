@@ -501,6 +501,7 @@
           "expenses.split",
           "expenses.company-paid",
           "expenses.card-statements",
+          "receipts.delete",
           "receipts.purchases"
         ]
       },
@@ -3111,6 +3112,19 @@
         },
         "required": [
           "corrections"
+        ]
+      },
+      "DeletedReceipt": {
+        "type": "object",
+        "properties": {
+          "deleted": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The receipt deleted, with its expense."
+          }
+        },
+        "required": [
+          "deleted"
         ]
       },
       "DuplicateResolution": {
@@ -10422,6 +10436,91 @@
           },
           "404": {
             "description": "No such receipt in this organization.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in, the database or file storage is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Receipts"
+        ],
+        "summary": "Delete a receipt filed by mistake",
+        "description": "FR-CAP-11, behind `receipts.delete`. Deletes a receipt of the caller’s own, such as a forwarded booking confirmation with no amounts, with its file, readings, confirmations and expense, through the same deletion a duplicate’s uses (ADR-0028). The audit trail records what it was. A card charge its expense documented is a missing receipt again.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "receiptId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletedReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or it is someone else’s receipt, or the caller is an auditor (not_yours).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such receipt, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "being_read: it is still being read; try again in a few seconds. locked: its expense is submitted or further along, so its claim stays as it went in.",
             "content": {
               "application/problem+json": {
                 "schema": {

@@ -2,6 +2,7 @@ import {
   confirmReceipt,
   correctReceipt,
   deleteDuplicateReceipt,
+  deleteReceipt,
   fileReceipt,
   findReceiptBySha256,
   getReceipt,
@@ -16,6 +17,7 @@ import {
   type ConfirmReceiptResult,
   type CorrectReceiptResult,
   type Database,
+  type DeleteReceiptResult,
   type DuplicatePairRecord,
   type ExtractionRunRecord,
   type FileReceiptResult,
@@ -111,6 +113,11 @@ export interface ReceiptStore {
     decision: DuplicateDecision,
     actorUserId: string,
   ): Promise<ResolveDuplicateResult>;
+  /**
+   * Deletes a receipt of the caller's own filed by mistake, with its expense (FR-CAP-11); the
+   * caller removes its file once this returns.
+   */
+  delete(orgId: string, receiptId: string, actorUserId: string): Promise<DeleteReceiptResult>;
 }
 
 /**
@@ -161,5 +168,7 @@ export function dbReceiptStore(db: Database): ReceiptStore {
           ? deleteDuplicateReceipt(tx, orgId, other, kept, actor)
           : mergeDuplicateReceipt(tx, orgId, kept, other, decision.fields, actor);
       }),
+    delete: (orgId, receiptId, actor) =>
+      inOrg(orgId, (tx) => deleteReceipt(tx, orgId, receiptId, actor)),
   };
 }

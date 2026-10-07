@@ -150,6 +150,13 @@ export const FLAGS = {
       'you until you attach it or set it aside, such as a personal charge. A PDF is read with ' +
       'your Anthropic key (FR-CAP-10, FR-INT-24, #97).',
   },
+  'receipts.delete': {
+    name: 'Delete a receipt',
+    description:
+      'Delete a receipt of your own filed by mistake, such as a forwarded booking confirmation ' +
+      'with no amounts, with its readings and expense, until its expense is submitted. Its file ' +
+      'goes too; the audit trail keeps who deleted it and what it was (FR-CAP-11, #100).',
+  },
   'receipts.purchases': {
     name: 'Several purchases on one receipt',
     description:
