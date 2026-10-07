@@ -213,7 +213,18 @@ export const GAPS: readonly Gap[] = [
     severity: 'Medium',
     evidence:
       'Building #97: matching a charge links it to its expense and changes nothing else. Where the employer pays U.S. Bank directly (corporate billing), that expense is already paid, and claiming it on a report would pay it twice; where you pay the bill yourself (individual billing), it must stay claimed. Which applies to your card isn’t known (Q52). Until then, Paid by the company (FR-EXP-17) marks such an expense by hand, or by its type’s policy.',
-    fix: 'With your answer to Q52, a matched charge on a company-billed card marks its expense paid by the company, unless a person set who paid by hand (#98).',
+    fix: 'By your answer to Q52, a charge matched to an expense marks it paid by the company, unless a person set who paid by hand, so it stays on its report, documented, and is never claimed (FR-INT-25, #98).',
+    backlog: 98,
+  },
+  {
+    id: 'GAP-44',
+    title:
+      'A card charge matched to an expense with no receipt is no longer flagged, so a charge can pass as documented without its receipt.',
+    affects: ['FR-INT-26', 'FR-INT-24', 'F-65'],
+    severity: 'Medium',
+    evidence:
+      'Your answer to Q52: every charge must have its receipt and expense. Since #97, a charge is a missing receipt only while it has no expense; matched to an expense typed in by hand, which has no receipt, it leaves Needs you.',
+    fix: 'Flag a charge whose expense has no receipt as missing its receipt, until one is attached or the charge is set aside with a reason (FR-INT-26, #98).',
     backlog: 98,
   },
   {
@@ -1160,12 +1171,31 @@ export const QUESTIONS: readonly Question[] = [
     why: 'With corporate billing, an expense matched to the card and still claimed would be paid twice, once to U.S. Bank and once to you; with individual billing, marking it paid by the company would leave you out of pocket. Your card agreement, or your card program administrator, says which.',
     recommendation:
       'A if your employer pays U.S. Bank, as most corporate programs on Access Online do; B otherwise.',
-    affects: ['FR-INT-24', 'FR-EXP-17', 'F-65', 'GAP-43'],
+    affects: [
+      'FR-INT-24',
+      'FR-EXP-17',
+      'F-65',
+      'GAP-43',
+      'FR-INT-25',
+      'FR-INT-26',
+      'F-66',
+      'GAP-44',
+    ],
+    answer: {
+      date: '2026-10-07',
+      text: 'A: the card is in your name and billed to your employer. You use it so every charge has its receipt and expense documented, and a charge without one must be flagged (FR-INT-25, FR-INT-26, #98).',
+    },
   },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-07',
+    change:
+      'Your answer to Q52: your corporate card is in your name and billed to your employer, and you use it so every charge has its receipt and expense, with any charge without one flagged. A charge matched to an expense will mark it paid by the company, so it stays on its report and is never claimed (FR-INT-25), and a charge whose expense has no receipt will be flagged like one with no expense (FR-INT-26, GAP-44). F-66 and US-CAP-08 planned; #98 is unblocked.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-07',
     change:

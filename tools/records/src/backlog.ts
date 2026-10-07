@@ -363,16 +363,16 @@ export const BACKLOG: readonly BacklogItem[] = [
   },
   {
     num: 98,
-    title: 'A charge on a company-billed card marks its expense paid by the company',
+    title: 'Every corporate card charge documented: paid by the company, with its receipt',
     type: 'Feature',
     detail:
-      'GAP-43, found building #97. Your answer to Q52 decides it: where your employer pays U.S. Bank, a charge matched to an expense marks it Paid by the company, unless you set who paid by hand, so it is never claimed as well; where you pay the bill, nothing changes. Needs Paid by the company switched on too.',
+      'Your answer to Q52 (GAP-43, GAP-44): your card is billed to your employer, and every charge must have its receipt and expense. A charge matched to an expense marks it Paid by the company, unless you set who paid by hand, so it stays on its report and is never claimed; letting the charge go hands the expense back to its type’s policy. A charge whose expense has no receipt is flagged in Needs you like one with no expense, until its receipt is attached or it is set aside with a reason. Whether cards are billed to the company is an organization setting, on for yours. Needs Paid by the company switched on too.',
     priority: 'P1',
-    effort: 'S',
+    effort: 'M',
     severity: 'Medium',
-    blocker: { kind: 'owner', ask: 'Your decision: Q52' },
-    source: 'GAP-43',
-    affects: ['GAP-43', 'FR-INT-24', 'FR-EXP-17', 'F-65'],
+    blocker: { kind: 'none' },
+    source: 'Product owner Oct 7',
+    affects: ['GAP-43', 'GAP-44', 'FR-INT-25', 'FR-INT-26', 'F-66', 'FR-EXP-17'],
   },
   // P2: this month
   {
@@ -1422,7 +1422,7 @@ export const BACKLOG: readonly BacklogItem[] = [
 
 /** How to order the open work, beyond priority. */
 export const SEQUENCING: readonly string[] = [
-  '#97, in PR #68, brings in your corporate card’s statement from U.S. Bank Access Online and matches its transactions to your expenses (your answers to Q50 and Q51). Switch on Card statements, then bring in September’s statement or its downloaded list on the Card page. #98 waits on your answer to Q52: if your employer pays the card’s bill, mark matched expenses Paid by the company by hand until it is built.',
+  '#97, in PR #68, brings in your corporate card’s statement from U.S. Bank Access Online and matches its transactions to your expenses (your answers to Q50 and Q51). Switch on Card statements, then bring in September’s statement or its downloaded list on the Card page. #98 is next, by your answer to Q52: matched charges become Paid by the company, and a charge whose expense has no receipt is flagged too; until it is built, mark matched expenses Paid by the company by hand.',
   '#96, in PR #66, reads each purchase on a receipt as its own group of lines (your answer to Q49), so a seat upgrade bought later on your own card can be left out with its own taxes and fees. Switch on Several purchases on one receipt, with itemized lines, then Read again each fare that holds one.',
   'Your batch of Oct 5 is built in PR #60: approval (#24) with the second factor (#8), a submitted claim keeping its names (#70), emails that filed nothing (#59), journeys and stays in the export (#83), business miles on Home (#73) and proof that no tools reach a model (#38), each behind its switch and off until you switch it on.',
   'With #85, #88 and #90 in PR #60, a session that skipped the code gets nothing for someone with an authenticator, and once a person has one, only an email they let in signs in; their other emails still forward receipts (Q44). #91, letting in first only the email a person first signed in with (your answer to Q45), is next; until then, set up your authenticator soon after release.',
