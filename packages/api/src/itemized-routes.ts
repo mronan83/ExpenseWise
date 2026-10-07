@@ -14,6 +14,8 @@ import { paidByView, readPaidBy, showCompanyPaid } from './company-paid.ts';
 import type { ExpenseStore } from './expenses.ts';
 import { featureGate, type FeatureGate } from './features.ts';
 import type { ItemizedStore } from './itemized.ts';
+import { cardChargeSection } from './card-statement-views.ts';
+import type { CardStore } from './card-statements.ts';
 import { categoriesView, itemizedView, readLinesOf, splitWithLines } from './itemized-views.ts';
 import { ProblemError } from './problem.ts';
 import type { ReceiptWithReadings } from './receipts.ts';
@@ -45,6 +47,8 @@ export interface ItemizedRouteOptions {
   readonly categories?: CategoryStore;
   /** Lines and splits. Without it, these routes answer 503 and expenses show neither. */
   readonly itemized?: ItemizedStore;
+  /** Card transactions, so an expense changed here still shows the charge that paid it. */
+  readonly cards?: CardStore;
   /** Which features are on. Built from `workspace` when not given. */
   readonly features?: FeatureGate;
 }
@@ -129,6 +133,7 @@ export function registerItemizedRoutes(
   );
   for (const path of paths) app.use(path, auth);
   const sections = itemizedSections(options.itemized, features);
+  const cardCharge = cardChargeSection(options.cards, features);
 
   const stores = () => {
     if (!options.workspace || !options.expenses || !options.itemized) {
@@ -227,6 +232,7 @@ export function registerItemizedRoutes(
           ...((await showCompanyPaid(features, orgId, readPaidBy([after.expense])))
             ? paidByView(after.expense)
             : {}),
+          ...(await cardCharge(orgId, after.expense.id)),
         };
       }
     }

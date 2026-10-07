@@ -17,6 +17,8 @@ import { readyRoute } from './routes/ready.ts';
 import type { Readiness } from './schemas.ts';
 import type { SecretBox } from './secret-box.ts';
 import type { CategoryStore } from './categories.ts';
+import type { CardStore } from './card-statements.ts';
+import { registerCardStatementRoutes } from './card-statement-routes.ts';
 import type { CompanyPaidStore } from './company-paid.ts';
 import { registerCategoryRoutes } from './category-routes.ts';
 import { registerExpenseRoutes } from './expense-routes.ts';
@@ -118,6 +120,11 @@ export interface ApiOptions
   readonly emails?: UnfiledEmailStore;
   /** Receipts' itemized lines and expenses' splits. Without it, those routes answer 503. */
   readonly itemized?: ItemizedStore;
+  /**
+   * Card statements and their transactions (FR-CAP-10, FR-INT-24). Without it, those routes
+   * answer 503, and Needs you and expenses show no card charges.
+   */
+  readonly cards?: CardStore;
   /**
    * Who paid each expense, and the policy of the types the company pays (FR-EXP-17,
    * FR-EXP-18). Without it, those routes answer 503.
@@ -293,6 +300,7 @@ export function createApi(options: ApiOptions) {
   registerModelSettingsRoutes(app, routes);
   registerPeopleRoutes(app, routes);
   registerUnfiledEmailRoutes(app, routes);
+  registerCardStatementRoutes(app, routes);
 
   app.doc31('/v1/openapi.json', OPENAPI_INFO);
 

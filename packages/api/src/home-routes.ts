@@ -13,6 +13,7 @@ import { ProblemError } from './problem.ts';
 import { showConverted } from './reimbursement.ts';
 import { homeRoute } from './routes/home.ts';
 import { unfiledEmailsAsked, type UnfiledEmailStore } from './unfiled-emails.ts';
+import { cardChargesAsked, type CardStore } from './card-statements.ts';
 import type { WorkspaceStore } from './workspace.ts';
 
 export interface HomeRouteOptions {
@@ -29,6 +30,8 @@ export interface HomeRouteOptions {
   readonly emails?: UnfiledEmailStore;
   /** Present where approval can be on, so Needs you lists what to approve and what came back. */
   readonly approvals?: ApprovalStore;
+  /** Present where card statements can be on, so Needs you lists missing receipts (#97). */
+  readonly cards?: CardStore;
   readonly now?: () => Date;
 }
 
@@ -79,6 +82,7 @@ export function registerHomeRoutes(
       unfiledSince: await unfiledEmailsAsked(options, features, who.orgId, now),
       // Asked for only where approval is on, so Needs you is otherwise asked as before.
       ...((await askForApproval(options, features, who.orgId)) ? { approval: true } : {}),
+      ...((await cardChargesAsked(options, features, who.orgId)) ? { cardCharges: true } : {}),
     });
     const settingsOn =
       options.modelSettings !== undefined &&

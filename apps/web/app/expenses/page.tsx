@@ -7,6 +7,7 @@ import { api, ApiProblem } from '../../lib/api';
 import { statusOf, type ExpenseSummary } from '../../lib/expenses';
 import { useFeatures } from '../../lib/features';
 import { formText } from '../../lib/form';
+import { CARD_STATEMENTS_FLAG } from '../../lib/card-statements';
 import { MILEAGE_FLAG } from '../../lib/mileage';
 import { formatMoney } from '../../lib/receipts';
 import { supabase } from '../../lib/supabase';
@@ -89,6 +90,11 @@ export default function ExpensesPage() {
           ExpenseWise
         </Link>
         <span className="flex items-baseline gap-4">
+          {featureOn(CARD_STATEMENTS_FLAG) ? (
+            <Link href="/card" className="tap text-xs font-semibold text-carbon">
+              Card
+            </Link>
+          ) : null}
           {featureOn(MILEAGE_FLAG) ? (
             <Link href="/mileage/new" className="tap text-xs font-semibold text-carbon">
               Add mileage

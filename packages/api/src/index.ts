@@ -15,6 +15,7 @@ export * from './organization.ts';
 export * from './bird-webhook.ts';
 export * from './inbound-routes.ts';
 export * from './itemized.ts';
+export * from './card-statements.ts';
 export * from './mileage.ts';
 export * from './mileage-rates.ts';
 export * from './model-settings.ts';

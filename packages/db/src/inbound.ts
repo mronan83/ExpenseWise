@@ -1,8 +1,10 @@
 import { and, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import { appendAuditEvent } from './audit.ts';
+import { CARD_STATEMENT_FILED, fileCardStatement } from './card-statements.ts';
 import type { Database, Transaction } from './client.ts';
 import { fileReceipt, RECEIPT_UPLOADED, type CommittedEvent } from './receipts.ts';
 import {
+  cardStatements,
   inboundEmails,
   outboxEvents,
   receipts,
@@ -51,7 +53,13 @@ export interface NewInboundEmail {
 
 /** An attachment already stored where its receipt will point. */
 export interface InboundAttachment {
+  /**
+   * A receipt's id, or a card statement's for one emailed with "statement" in its subject
+   * (FR-CAP-10, #97).
+   */
   readonly receiptId: string;
+  /** What it is filed as: a receipt unless said. */
+  readonly kind?: 'statement';
   readonly storageKey: string;
   readonly contentType: string;
   readonly byteSize: number;
@@ -102,6 +110,36 @@ async function waitingUploadEvents(
   }));
 }
 
+/** The read events of statements an email filed that are still being read, as for receipts. */
+async function waitingStatementEvents(
+  tx: Transaction,
+  orgId: string,
+  statementIds: readonly string[],
+): Promise<CommittedEvent[]> {
+  if (statementIds.length === 0) return [];
+  const rows = await tx
+    .select({ id: outboxEvents.id, payload: outboxEvents.payload })
+    .from(outboxEvents)
+    .innerJoin(
+      cardStatements,
+      eq(cardStatements.id, sql`(${outboxEvents.payload}->>'statementId')::uuid`),
+    )
+    .where(
+      and(
+        eq(outboxEvents.topic, CARD_STATEMENT_FILED),
+        inArray(cardStatements.id, [...statementIds]),
+        eq(cardStatements.status, 'reading'),
+      ),
+    )
+    .orderBy(outboxEvents.createdAt, outboxEvents.id);
+  return rows.map((r) => ({
+    outboxId: r.id,
+    topic: CARD_STATEMENT_FILED,
+    orgId,
+    payload: r.payload as Record<string, unknown>,
+  }));
+}
+
 /**
  * Keeps an email and files each of its attachments as a receipt, with the receipt's expense,
  * outbox event and audit events, in one transaction. Call inside withOrg(). A message already
@@ -128,13 +166,42 @@ export async function recordInboundEmail(
       ),
     );
   if (kept) {
-    const ids = attachments.map((a) => a.receiptId);
-    return { status: 'exists', events: await waitingUploadEvents(tx, orgId, ids) };
+    const ids = (kind?: 'statement') =>
+      attachments.filter((a) => a.kind === kind).map((a) => a.receiptId);
+    return {
+      status: 'exists',
+      events: [
+        ...(await waitingUploadEvents(tx, orgId, ids())),
+        ...(await waitingStatementEvents(tx, orgId, ids('statement'))),
+      ],
+    };
   }
 
   const receiptIds: string[] = [];
+  const statementIds: string[] = [];
   const events: CommittedEvent[] = [];
   for (const file of attachments) {
+    if (file.kind === 'statement') {
+      const filed = await fileCardStatement(
+        tx,
+        orgId,
+        {
+          id: file.receiptId,
+          memberId: email.memberId,
+          source: 'email',
+          storageKey: file.storageKey,
+          contentType: file.contentType,
+          byteSize: file.byteSize,
+          sha256: file.sha256,
+        },
+        { type: 'user', id: actorUserId },
+      );
+      if (filed.status === 'filed') {
+        statementIds.push(filed.statementId);
+        events.push(filed.event);
+      }
+      continue;
+    }
     const filed = await fileReceipt(
       tx,
       orgId,
@@ -165,6 +232,7 @@ export async function recordInboundEmail(
       status: email.status,
       attachments: attachments.length,
       receiptIds,
+      ...(statementIds.length > 0 ? { statementIds } : {}),
     },
   });
   return { status: 'recorded', receiptIds, events };

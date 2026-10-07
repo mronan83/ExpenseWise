@@ -407,6 +407,20 @@
       "when": 1791332377531,
       "tag": "0057_several_purchases_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1791375126475,
+      "tag": "0058_card_statements",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1791375134579,
+      "tag": "0059_card_statements_rls",
+      "breakpoints": true
     }
   ]
 }

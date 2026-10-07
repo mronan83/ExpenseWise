@@ -200,6 +200,21 @@ export const GAPS: readonly Gap[] = [
       'Your request of Oct 7 to connect your corporate card and match its transactions: it is a U.S. Bank commercial card, seen in Access Online (Q50). Plaid, SimpleFIN and Teller reach U.S. Bank’s own site, usbank.com, not Access Online; U.S. Bank’s daily commercial-card file goes to an expense system only when the employer’s card program administrator enrolls it. ADR-0007 planned Plaid alone, so nothing would bring this card’s charges in.',
     fix: 'Bring in the card’s monthly statement, or a downloaded transaction list, and match each transaction to an expense (#97); a live feed becomes a second source where a card’s site allows one.',
     backlog: 97,
+    closed: {
+      date: '2026-10-07',
+      note: 'PR #68 (#97), behind Card statements (`expenses.card-statements`): your statement comes in as a PDF, uploaded on the Card page or forwarded with “statement” in the subject, read once by Claude Sonnet on your Anthropic key, or as a transaction list downloaded as CSV with no model. Each transaction is kept once and matched to an expense by amount, currency, day and merchant, a tie left for you; one with no expense is a missing receipt in Needs you, until you add its receipt, match it by hand or set it aside with a reason. A statement whose lines miss its printed totals waits for your look.',
+    },
+  },
+  {
+    id: 'GAP-43',
+    title:
+      'A card charge matched to an expense doesn’t mark it paid by the company, so on a company-billed card it would be claimed as well.',
+    affects: ['FR-INT-24', 'FR-EXP-17', 'F-65'],
+    severity: 'Medium',
+    evidence:
+      'Building #97: matching a charge links it to its expense and changes nothing else. Where the employer pays U.S. Bank directly (corporate billing), that expense is already paid, and claiming it on a report would pay it twice; where you pay the bill yourself (individual billing), it must stay claimed. Which applies to your card isn’t known (Q52). Until then, Paid by the company (FR-EXP-17) marks such an expense by hand, or by its type’s policy.',
+    fix: 'With your answer to Q52, a matched charge on a company-billed card marks its expense paid by the company, unless a person set who paid by hand (#98).',
+    backlog: 98,
   },
   {
     id: 'GAP-41',
@@ -1138,10 +1153,25 @@ export const QUESTIONS: readonly Question[] = [
       text: 'A: statement import and matching (#97); Plaid becomes a later, optional source.',
     },
   },
+  {
+    id: 'Q52',
+    title: 'Who pays your card’s bill',
+    ask: 'Is your U.S. Bank card billed to your employer, who pays U.S. Bank (corporate billing), or to you, who pay the bill and claim the expenses back (individual billing)? A: corporate billing: a charge matched to an expense marks it Paid by the company, so it is never claimed, unless you set who paid by hand. B: individual billing: matching changes nothing of who paid, and you claim as today. C: it differs by card: say so for each.',
+    why: 'With corporate billing, an expense matched to the card and still claimed would be paid twice, once to U.S. Bank and once to you; with individual billing, marking it paid by the company would leave you out of pocket. Your card agreement, or your card program administrator, says which.',
+    recommendation:
+      'A if your employer pays U.S. Bank, as most corporate programs on Access Online do; B otherwise.',
+    affects: ['FR-INT-24', 'FR-EXP-17', 'F-65', 'GAP-43'],
+  },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-07',
+    change:
+      'Built #97 in PR #68, at your word of Oct 7, behind Card statements (`expenses.card-statements`, off until you switch it on): your U.S. Bank statement comes in as a PDF, uploaded on the new Card page or forwarded with “statement” in the subject, or as a transaction list downloaded as CSV, and each transaction is kept once and matched to your expenses; a charge with no expense is a missing receipt in Needs you (FR-CAP-10, FR-INT-24). F-65 and US-CAP-07 delivered; GAP-42 closed; ADR-0046 accepted. AC7 now shows the card’s dollars on the expense rather than beside each conversion: Claude’s, yours to confirm. Opened GAP-43 and Q52: who pays your card’s bill decides whether a matched charge is still claimed (#98).',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-07',
     change:

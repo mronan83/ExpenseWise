@@ -449,6 +449,517 @@
       }
     },
     {
+      "name": "card_statements",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "member_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "source",
+          "type": "statement_source",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "storage_key",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "content_type",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "byte_size",
+          "type": "integer",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "sha256",
+          "type": "character(64)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "status",
+          "type": "statement_status",
+          "nullable": false,
+          "default": "'reading'::statement_status"
+        },
+        {
+          "name": "problem",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "card_last_four",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "period_start",
+          "type": "date",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "period_end",
+          "type": "date",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "currency",
+          "type": "character(3)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "charges_minor",
+          "type": "bigint",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "credits_minor",
+          "type": "bigint",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "model",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "version",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "cost_nano_usd",
+          "type": "bigint",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "added",
+          "type": "integer",
+          "nullable": false,
+          "default": "0"
+        },
+        {
+          "name": "read_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "card_statements_member_fk",
+          "columns": [
+            "org_id",
+            "member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "card_statements_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "card_statements_member_sha256_key",
+          "columns": [
+            "org_id",
+            "member_id",
+            "sha256"
+          ]
+        },
+        {
+          "name": "card_statements_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "card_statements_byte_size_positive",
+          "definition": "CHECK ((byte_size > 0))"
+        },
+        {
+          "name": "card_statements_card_last_four",
+          "definition": "CHECK (((card_last_four IS NULL) OR (card_last_four ~ '^[0-9]{4}$'::text)))"
+        },
+        {
+          "name": "card_statements_currency_iso",
+          "definition": "CHECK (((currency IS NULL) OR (currency ~ '^[A-Z]{3}$'::text)))"
+        },
+        {
+          "name": "card_statements_file_kept",
+          "definition": "CHECK (((storage_key IS NULL) = (source = 'list'::statement_source)))"
+        },
+        {
+          "name": "card_statements_sha256_hex",
+          "definition": "CHECK ((sha256 ~ '^[0-9a-f]{64}$'::text))"
+        }
+      ],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (member_id = app_current_member()))",
+          "check": null
+        },
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.card_statements FOR EACH ROW EXECUTE FUNCTION enforce_own_records('member')"
+        }
+      ],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "card_transactions",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "member_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "statement_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "key",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "transaction_date",
+          "type": "date",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "posted_on",
+          "type": "date",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "merchant",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "amount_minor",
+          "type": "bigint",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "currency",
+          "type": "character(3)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "card_last_four",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "reference",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "expense_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "matched_by",
+          "type": "matched_by",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "matched_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "set_aside_reason",
+          "type": "set_aside_reason",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "set_aside_note",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "set_aside_at",
+          "type": "timestamp with time zone",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "card_transactions_expense_fk",
+          "columns": [
+            "org_id",
+            "expense_id"
+          ],
+          "table": "expenses",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "card_transactions_member_fk",
+          "columns": [
+            "org_id",
+            "member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "card_transactions_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "card_transactions_statement_fk",
+          "columns": [
+            "org_id",
+            "statement_id"
+          ],
+          "table": "card_statements",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "card_transactions_member_key",
+          "columns": [
+            "org_id",
+            "member_id",
+            "key"
+          ]
+        },
+        {
+          "name": "card_transactions_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "card_transactions_card_last_four",
+          "definition": "CHECK (((card_last_four IS NULL) OR (card_last_four ~ '^[0-9]{4}$'::text)))"
+        },
+        {
+          "name": "card_transactions_currency_iso",
+          "definition": "CHECK ((currency ~ '^[A-Z]{3}$'::text))"
+        },
+        {
+          "name": "card_transactions_matched_or_set_aside",
+          "definition": "CHECK (((expense_id IS NULL) OR (set_aside_reason IS NULL)))"
+        },
+        {
+          "name": "card_transactions_matched_whole",
+          "definition": "CHECK ((((expense_id IS NULL) AND (matched_by IS NULL) AND (matched_at IS NULL)) OR ((expense_id IS NOT NULL) AND (matched_by IS NOT NULL) AND (matched_at IS NOT NULL))))"
+        },
+        {
+          "name": "card_transactions_note_length",
+          "definition": "CHECK (((set_aside_note IS NULL) OR (char_length(set_aside_note) <= 200)))"
+        },
+        {
+          "name": "card_transactions_other_needs_note",
+          "definition": "CHECK (((set_aside_reason IS DISTINCT FROM 'other'::set_aside_reason) OR (COALESCE(length(TRIM(BOTH FROM set_aside_note)), 0) > 0)))"
+        },
+        {
+          "name": "card_transactions_set_aside_whole",
+          "definition": "CHECK ((((set_aside_reason IS NULL) AND (set_aside_note IS NULL) AND (set_aside_at IS NULL)) OR ((set_aside_reason IS NOT NULL) AND (set_aside_at IS NOT NULL))))"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "card_transactions_expense_key",
+          "definition": "CREATE UNIQUE INDEX card_transactions_expense_key ON public.card_transactions USING btree (org_id, expense_id) WHERE (expense_id IS NOT NULL)"
+        },
+        {
+          "name": "card_transactions_member_open_idx",
+          "definition": "CREATE INDEX card_transactions_member_open_idx ON public.card_transactions USING btree (org_id, member_id, transaction_date)"
+        }
+      ],
+      "policies": [
+        {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (member_id = app_current_member()))",
+          "check": null
+        },
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.card_transactions FOR EACH ROW EXECUTE FUNCTION enforce_own_records('member')"
+        }
+      ],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
       "name": "categories",
       "rls": {
         "enabled": true,
@@ -2478,6 +2989,10 @@
         {
           "name": "approved_locked",
           "definition": "CREATE TRIGGER approved_locked BEFORE UPDATE ON public.expenses FOR EACH ROW EXECUTE FUNCTION lock_approved_expenses()"
+        },
+        {
+          "name": "card_transactions_released",
+          "definition": "CREATE TRIGGER card_transactions_released BEFORE DELETE ON public.expenses FOR EACH ROW EXECUTE FUNCTION release_card_transactions()"
         },
         {
           "name": "expense_conversion_first",
@@ -6013,6 +6528,13 @@
       ]
     },
     {
+      "name": "matched_by",
+      "values": [
+        "auto",
+        "person"
+      ]
+    },
+    {
       "name": "member_role",
       "values": [
         "member",
@@ -6076,10 +6598,36 @@
       ]
     },
     {
+      "name": "set_aside_reason",
+      "values": [
+        "personal",
+        "no_receipt",
+        "not_an_expense",
+        "other"
+      ]
+    },
+    {
       "name": "split_basis",
       "values": [
         "lines",
         "amounts"
+      ]
+    },
+    {
+      "name": "statement_source",
+      "values": [
+        "upload",
+        "email",
+        "list"
+      ]
+    },
+    {
+      "name": "statement_status",
+      "values": [
+        "reading",
+        "read",
+        "needs_look",
+        "failed"
       ]
     },
     {
@@ -6396,6 +6944,14 @@
     },
     {
       "name": "reject_audit_mutation",
+      "arguments": "",
+      "returns": "trigger",
+      "security": "invoker",
+      "volatility": "volatile",
+      "executableBy": []
+    },
+    {
+      "name": "release_card_transactions",
       "arguments": "",
       "returns": "trigger",
       "security": "invoker",

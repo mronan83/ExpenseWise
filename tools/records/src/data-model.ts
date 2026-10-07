@@ -66,6 +66,12 @@ export const DOMAINS: readonly Domain[] = [
     ],
   },
   {
+    name: 'Card statements',
+    about:
+      'A member’s corporate card: each statement or downloaded list they brought in, and every transaction on it, kept once, matched to the expense it paid for or set aside with why (FR-CAP-10, FR-INT-24, ADR-0046).',
+    tables: ['card_statements', 'card_transactions'],
+  },
+  {
     name: 'Reports and approval',
     about:
       'Expenses gathered for submission, each approver’s decision, and the expenses a returned report rejected, with why.',
@@ -137,6 +143,14 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   receipt_duplicates: {
     about:
       'Two of a member’s receipts that read as the same purchase (FR-INT-18): with a time and a place on both, a similar merchant at the same place on the same day, at most 30 minutes apart, whatever the total; otherwise the same currency and total, dated a day apart at most (ADR-0031). Whether a pair is exact or possible is judged from both expenses when shown, and the audit event records it as flagged. The later one is held: it needs a look, whatever its reading settled to, which is kept here to restore, and its expense counts in no total. Open until the person decides. Keep both dismisses the pair, which is never flagged again; delete and merge remove the row with the receipt (ADR-0028).',
+  },
+  card_statements: {
+    about:
+      'A card statement a member brought in, kept once per member by its SHA-256 (FR-CAP-10, #97): a PDF uploaded or forwarded with “statement” in the subject, kept beside receipts at `orgs/{org}/statements/{id}` and read once by the statement workflow, or a downloaded list, read in the request with no model and no file kept. It holds what the reading found: the card’s last four digits, the period, its currency and the totals of charges and credits the statement prints, how many transactions it added that no earlier statement had, and the model, instructions and cost of the reading. `reading` until then; `needs_look`, with the problem in plain words, when its lines miss its printed totals or one couldn’t be read, so nothing is matched until the member confirms it (US-CAP-07 AC5); `failed` when nothing could be read, saying why. A member may delete one brought in by mistake, with its transactions; each change is audited. Its member’s own (ADR-0035).',
+  },
+  card_transactions: {
+    about:
+      'One transaction on a member’s card, kept once per member by a key of its card, day, currency, amount, merchant words and reference, numbered when a statement prints two alike (US-CAP-07 AC4): its day and posting day, the merchant as printed, the amount in the card’s currency (a credit negative), the card and the reference. It pays for at most one expense, matched on its own by the domain’s rule (same amount and currency within three days, the closer merchant first, a tie left for the person) or by the person whatever its amount, or it is set aside with a reason, such as personal, and a note that other needs; never both (FR-INT-24). A charge of a statement read in full that is neither is a missing receipt in Needs you. Deleting its expense lets it go (`release_card_transactions`); deleting its statement deletes it. Its member’s own (ADR-0035).',
   },
   inbound_emails: {
     about:
@@ -298,6 +312,8 @@ export const FUNCTIONS: Readonly<Record<string, string>> = {
     'Gives an organization the ready-made categories and types, and which types each allows, unless it has a category or type already, so running it again adds nothing. Runs as its caller: the release ran it for every organization as the owner, and the app runs it inside `withOrg()` as an organization is created, where row-level security keeps it to that one (ADR-0036).',
   delete_expense_conversion:
     'Fires before an expense is deleted and deletes its conversion first, while the expense is still there to say whose it is, so the `own_records` trigger on `expense_conversions` lets the member who deleted the receipt delete it too (ADR-0034, ADR-0035). Reached through the cascade instead, the expense was already gone and the member’s deletion was refused; added in PR #59. The foreign key’s cascade stays as a backstop.',
+  release_card_transactions:
+    'Fires before an expense is deleted and lets go of the card transaction that paid for it, which is a missing receipt again (US-CAP-07 AC3), rather than blocking the deletion.',
   delete_expense_lines:
     'Fires before an expense is deleted and deletes its lines and parts first, while the expense is still there to say whose they are, so the `own_records` trigger on each lets the member who deleted the receipt delete them too (ADR-0041). The foreign keys’ cascade stays as a backstop.',
   reject_audit_mutation:
@@ -338,7 +354,7 @@ export const RULES: readonly Rule[] = [
   {
     rule: 'Inside an organization, each member sees and changes only their own records.',
     mechanism:
-      'With a member named for the transaction, a restrictive `own_records` policy shows a member or approver only their own receipts, expenses, trips, reports, emails and saved places, and the readings, confirmations, duplicate pairs, conversions, mileage, routes, receipt lines and split parts that hang off them; owners, finance admins and auditors see everyone’s. An `own_records` trigger refuses any change to another member’s rows, and every change by an auditor, with an error rather than a silent skip. What hangs off an expense is deleted just before it, while it still says whose it is, so a member can delete their own receipt (`delete_expense_conversion`, `delete_expense_lines`, `delete_expense_rejections`). An approver also sees each report routed to them and what is on it (ADR-0043). With no member named, the system’s own work sees and changes everything, as before (ADR-0035).',
+      'With a member named for the transaction, a restrictive `own_records` policy shows a member or approver only their own receipts, expenses, trips, reports, emails, saved places and card statements and transactions, and the readings, confirmations, duplicate pairs, conversions, mileage, routes, receipt lines and split parts that hang off them; owners, finance admins and auditors see everyone’s. An `own_records` trigger refuses any change to another member’s rows, and every change by an auditor, with an error rather than a silent skip. What hangs off an expense is deleted just before it, while it still says whose it is, so a member can delete their own receipt (`delete_expense_conversion`, `delete_expense_lines`, `delete_expense_rejections`). An approver also sees each report routed to them and what is on it (ADR-0043). With no member named, the system’s own work sees and changes everything, as before (ADR-0035).',
     objects: [
       'own_records',
       'app_current_member',
@@ -385,6 +401,8 @@ export const RULES: readonly Rule[] = [
       'expense_purchases_currency_iso',
       'expense_lines_currency_iso',
       'expense_parts_currency_iso',
+      'card_statements_currency_iso',
+      'card_transactions_currency_iso',
     ],
     refs: ['NFR-DAT-01', 'ADR-0008'],
   },
@@ -455,6 +473,41 @@ export const RULES: readonly Rule[] = [
       'expense_lines_purchase_positive',
     ],
     refs: ['FR-INT-23', 'FR-EXP-20', 'ADR-0041'],
+  },
+  {
+    rule: 'A member brings each statement in once, and keeps each card transaction once.',
+    mechanism:
+      'A statement is unique by its member and SHA-256, and keeps a file exactly when it isn’t a downloaded list; a card is four digits or none. A transaction is unique by its member and its key, which the domain makes the same each time a statement prints it (`transactionKeys`), so a later statement adds only what is new. Both point at their member, and a transaction at its statement, by composite keys; a statement deleted takes its transactions.',
+    objects: [
+      'card_statements_member_sha256_key',
+      'card_statements_file_kept',
+      'card_statements_sha256_hex',
+      'card_statements_byte_size_positive',
+      'card_statements_card_last_four',
+      'card_statements_member_fk',
+      'card_transactions_member_key',
+      'card_transactions_statement_fk',
+      'card_transactions_member_fk',
+      'card_transactions_card_last_four',
+    ],
+    refs: ['FR-CAP-10', 'ADR-0046'],
+  },
+  {
+    rule: 'A card transaction pays for at most one expense of its member, or is set aside with a reason, never both.',
+    mechanism:
+      'An expense is matched by at most one transaction (a unique index on the expense), through a composite key in the same organization; a match records who made it and when, and a set-aside its reason and when, each whole, and other needs a short note. Deleting the expense lets its transaction go first (`release_card_transactions`). That the expense is the same member’s, and the matching rule itself, are the domain’s and the API’s (`matchTransactions`).',
+    objects: [
+      'card_transactions_expense_key',
+      'card_transactions_expense_fk',
+      'card_transactions_matched_or_set_aside',
+      'card_transactions_matched_whole',
+      'card_transactions_set_aside_whole',
+      'card_transactions_other_needs_note',
+      'card_transactions_note_length',
+      'card_transactions_released',
+      'release_card_transactions',
+    ],
+    refs: ['FR-INT-24', 'ADR-0046'],
   },
   {
     rule: 'A split expense’s parts are each more than zero, in its own organization’s categories and types.',

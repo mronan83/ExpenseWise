@@ -13,3 +13,5 @@ export * from './proof.ts';
 export * from './review.ts';
 export * from './schema.ts';
 export * from './variant.ts';
+export * from './statement.ts';
+export * from './statement-list.ts';

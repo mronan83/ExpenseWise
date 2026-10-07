@@ -230,6 +230,7 @@ function setup(switchedOn: readonly string[], flagOverrides = '', passed: Passed
     categories: store,
     emails: store,
     itemized: store,
+    cards: store,
     modelSettings: store,
     reimbursement: store,
     people: store,

@@ -1,7 +1,7 @@
 import { generateKeyPairSync } from 'node:crypto';
 import type { InboundAttachment, NewInboundEmail, RecordInboundEmailResult } from '@expensewise/db';
 import { derivedId } from '@expensewise/domain';
-import { receiptPath, RECEIPT_MAX_BYTES } from '@expensewise/storage';
+import { receiptPath, RECEIPT_MAX_BYTES, statementPath } from '@expensewise/storage';
 import { InngestTestEngine, mockCtx } from '@inngest/test';
 import type { DNSResolver } from 'mailauth';
 import { dkimSign } from 'mailauth/lib/dkim/sign';
@@ -288,7 +288,10 @@ const BIRD: ReceivedEmail = { provider: 'bird', messageId: 'rem_01abc', threadId
  * Fake provider, database and storage, recording what keeping an email did. `raw` is null once
  * the provider no longer has the message.
  */
-function world(raw: string | null, options: { filed?: Record<string, string> } = {}) {
+function world(
+  raw: string | null,
+  options: { filed?: Record<string, string>; statements?: boolean } = {},
+) {
   const saved: string[] = [];
   const files = new Map<string, Uint8Array>();
   const recorded: { email: NewInboundEmail; attachments: readonly InboundAttachment[] }[] = [];
@@ -304,6 +307,7 @@ function world(raw: string | null, options: { filed?: Record<string, string> } =
           : undefined,
       ),
     filedAs: (_org, sha256) => Promise.resolve(options.filed?.[sha256]),
+    statementsOn: () => Promise.resolve(options.statements ?? false),
     saveFile: (key, data) => {
       saved.push(key);
       files.set(key, data);
@@ -465,6 +469,51 @@ describe('keeping an email', () => {
 
   it('keeps nothing once the provider no longer has the message', async () => {
     expect(await keepEmail(world(null).ports, BIRD)).toEqual({ outcome: 'gone' });
+  });
+});
+
+describe('a card statement forwarded by email (FR-CAP-10, US-CAP-07 AC1)', () => {
+  const statementEmail = (subject: string) =>
+    signed(
+      message({
+        subject,
+        text: 'See attached',
+        parts: [
+          { type: 'application/pdf', name: 'statement.pdf', bytes: pdf(40_000, 7) },
+          { type: 'image/jpeg', name: 'logo.jpg', bytes: jpeg(20_000) },
+        ],
+      }),
+    );
+
+  it('files its PDF as a statement, not a receipt, where card statements are on', async () => {
+    const w = world(await statementEmail('Fwd: Your September statement'), { statements: true });
+    expect(await keepEmail(w.ports, BIRD)).toMatchObject({ outcome: 'kept', status: 'filed' });
+    const [kept] = w.recorded[0]?.attachments ?? [];
+    expect(w.recorded[0]?.attachments).toHaveLength(1);
+    expect(kept).toMatchObject({ kind: 'statement', contentType: 'application/pdf' });
+    expect(kept?.receiptId).toBe(derivedId(`email:bird:rem_01abc:statement:${kept?.sha256}`));
+    expect(w.saved).toEqual([statementPath(ORG, kept!.receiptId)]);
+  });
+
+  it('reads it as receipts, as always, where card statements are off (AC9)', async () => {
+    const w = world(await statementEmail('Fwd: Your September statement'));
+    await keepEmail(w.ports, BIRD);
+    expect(w.recorded[0]?.attachments.map((a) => a.kind)).toEqual([undefined, undefined]);
+    expect(w.saved.every((key) => key.includes('/receipts/'))).toBe(true);
+  });
+
+  // A hotel folio called a statement is filed as one here; the reader then says it isn't one,
+  // and how to forward it as a receipt (card-statements.test.ts).
+  it('goes by the subject alone: “statement” files statements, anything else receipts', async () => {
+    const w = world(await statementEmail('Fwd: Hotel stay, statements of account'), {
+      statements: true,
+    });
+    await keepEmail(w.ports, BIRD);
+    expect(w.recorded[0]?.attachments.every((a) => a.kind === 'statement')).toBe(true);
+
+    const receipts = world(await statementEmail('Fwd: Your receipt'), { statements: true });
+    await keepEmail(receipts.ports, BIRD);
+    expect(receipts.recorded[0]?.attachments.map((a) => a.kind)).toEqual([undefined, undefined]);
   });
 });
 

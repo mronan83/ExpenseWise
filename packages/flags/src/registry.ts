@@ -141,6 +141,15 @@ export const FLAGS = {
       'the claim. Settings › Organization lists the types the company pays, which needs ' +
       'categories and types on (FR-EXP-17, FR-EXP-18, #95).',
   },
+  'expenses.card-statements': {
+    name: 'Card statements',
+    description:
+      'Bring in your corporate card’s monthly statement, as a PDF uploaded or emailed with ' +
+      '“statement” in the subject, or a transaction list downloaded from the card’s site: each ' +
+      'transaction is matched to the expense it paid for, and one with no receipt shows in Needs ' +
+      'you until you attach it or set it aside, such as a personal charge. A PDF is read with ' +
+      'your Anthropic key (FR-CAP-10, FR-INT-24, #97).',
+  },
   'receipts.purchases': {
     name: 'Several purchases on one receipt',
     description:

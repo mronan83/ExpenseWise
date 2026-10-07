@@ -298,6 +298,37 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
     ],
   ],
   ['a drive logged as mileage', (s) => `/expenses/${s.expenses.mileage}`, []],
+  [
+    'the card: charges with no receipt, statements and matches',
+    () => '/card',
+    [
+      (page) =>
+        expect(page.getByRole('heading', { name: '1 charge has no receipt' })).toBeVisible(),
+      (page) =>
+        expect(page.getByText('Its charges come to $801.30, but it prints $901.30.')).toBeVisible(),
+      (page) => expect(page.getByText('Personal.')).toBeVisible(),
+    ],
+  ],
+  ['setting a card charge aside', () => '/card', [press('Set it aside')]],
+  [
+    'matching a card charge to an expense by hand',
+    () => '/card',
+    [press('Match to an expense'), (page) => expect(page.getByRole('radio').first()).toBeVisible()],
+  ],
+  [
+    'a card charge with no receipt, in Needs you',
+    () => '/',
+    [
+      press('Show all'),
+      (page) =>
+        expect(page.getByText(/^Charged to your card ending 4417, with no expense/)).toBeVisible(),
+    ],
+  ],
+  [
+    'a fare in euros with the dollars its card was charged',
+    (s) => `/expenses/${s.expenses.lufthansa}`,
+    [(page) => expect(page.getByText(/not at your card’s rate/)).toBeVisible()],
+  ],
   ['changing a drive', (s) => `/expenses/${s.expenses.mileage}`, [press('Change the drive')]],
   [
     'adding a drive by its route',

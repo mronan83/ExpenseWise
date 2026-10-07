@@ -8,6 +8,7 @@ import {
 } from '@expensewise/domain';
 import { CORRECTABLE_FIELDS, READING_CHECKS } from '@expensewise/extraction';
 import { z } from '@hono/zod-openapi';
+import { CardInboxItemSchema, ExpenseCardChargeSchema } from './card-statement-schemas.ts';
 import { ExpenseCategorySchema } from './category-schemas.ts';
 import { ExpenseSplitSchema, ItemizedSchema } from './itemized-schemas.ts';
 import { ORG_FEATURE_KEYS, type OrgFeatureKey } from './features.ts';
@@ -948,6 +949,8 @@ export const ExpenseDetailSchema = ExpenseSummarySchema.extend({
   itemized: ItemizedSchema.optional(),
   // Only while splits and categories are switched on (FR-EXP-15).
   split: ExpenseSplitSchema.optional(),
+  // Only while card statements are switched on, and a charge pays for it (FR-INT-24).
+  cardCharge: ExpenseCardChargeSchema.optional(),
   // Only while approval is switched on (FR-EXP-10, FR-GOV-13).
   claim: z
     .object({
@@ -1662,6 +1665,7 @@ export const InboxItemSchema = z
     ReportInboxItemSchema,
     ExpenseInboxItemSchema,
     EmailInboxItemSchema,
+    CardInboxItemSchema,
   ])
   .openapi('InboxItem');
 

@@ -427,4 +427,28 @@ export const RULES: readonly Rule[] = [
     },
     note: 'The same as a local expense’s justification (R-JUSTIFICATION-MAX): long enough to explain, short enough to read on a phone.',
   },
+  {
+    id: 'R-MATCH-DAYS',
+    name: 'How far apart a card charge and its expense may be dated',
+    value: '3 days either way',
+    decided: { by: 'claude', source: 'ADR-0046' },
+    code: {
+      file: 'packages/domain/src/card-transactions.ts',
+      constant: 'MATCH_DAYS',
+      literal: '3',
+    },
+    note: 'A card prints the day a charge was authorized or posted, a hotel the day you checked out: three days covers both without reaching the next trip. The same amount and currency are needed too, and a tie is left for you. Claude’s, yours to confirm.',
+  },
+  {
+    id: 'R-STATEMENT-ROWS-MAX',
+    name: 'Most rows one downloaded card list may hold',
+    value: '2,000 rows; a longer list is refused whole',
+    decided: { by: 'claude', source: 'ADR-0046' },
+    code: {
+      file: 'packages/extraction/src/statement-list.ts',
+      constant: 'STATEMENT_ROWS_MAX',
+      literal: '2000',
+    },
+    note: 'About a year of a busy card. Refused whole rather than cut short, so no charge is quietly left out.',
+  },
 ];

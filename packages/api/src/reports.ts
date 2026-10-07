@@ -22,6 +22,8 @@ import {
   type ReportForExport,
   type Transaction,
   type UnfiledEmailRecord,
+  type CardTransactionRecord,
+  missingReceipts,
   withReportAmounts,
 } from '@expensewise/db';
 import { reportsWaitingFor } from './approval.ts';
@@ -57,6 +59,8 @@ export interface ReportsNeedingYou {
   readonly uncoded?: UncodedNeedingYou;
   /** Asked for: the member's emails that filed nothing, newest first (#59). */
   readonly emails?: UnfiledEmailRecord[];
+  /** Asked for: the member's card charges with no expense, oldest first (US-CAP-07 AC3). */
+  readonly cardCharges?: CardTransactionRecord[];
 }
 
 /** What else Needs you is asked to read. */
@@ -70,6 +74,8 @@ export interface NeedsYouOptions {
   readonly unfiledSince?: Date;
   /** Reports to approve, and returned reports with their rejections, while approval is on. */
   readonly approval?: boolean;
+  /** The member's missing receipts, while card statements are on (US-CAP-07 AC3). */
+  readonly cardCharges?: boolean;
 }
 
 /**
@@ -165,6 +171,9 @@ export async function reportsNeedingYou(
           toApprove: await reportsWaitingFor(tx, memberId),
           returned: await returnedNeedingYou(tx, memberId),
         }
+      : {}),
+    ...(options.cardCharges
+      ? { cardCharges: (await missingReceipts(tx, memberId)).slice(0, limit) }
       : {}),
   };
 }
