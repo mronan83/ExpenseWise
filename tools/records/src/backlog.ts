@@ -345,6 +345,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none' },
     source: 'GAP-41',
     affects: ['GAP-41', 'FR-INT-23', 'FR-EXP-20', 'F-64', 'F-55'],
+    done: { date: '2026-10-07', in: 'PR #66' },
   },
   // P2: this month
   {
@@ -1394,7 +1395,7 @@ export const BACKLOG: readonly BacklogItem[] = [
 
 /** How to order the open work, beyond priority. */
 export const SEQUENCING: readonly string[] = [
-  '#96 reads each purchase on a receipt as its own group of lines (your answer to Q49), so a seat upgrade bought later on your own card can be left out with its own taxes and fees. Until it ships, edit such a fare by hand to the base fare and its taxes.',
+  '#96, in PR #66, reads each purchase on a receipt as its own group of lines (your answer to Q49), so a seat upgrade bought later on your own card can be left out with its own taxes and fees. Switch on Several purchases on one receipt, with itemized lines, then Read again each fare that holds one.',
   'Your batch of Oct 5 is built in PR #60: approval (#24) with the second factor (#8), a submitted claim keeping its names (#70), emails that filed nothing (#59), journeys and stays in the export (#83), business miles on Home (#73) and proof that no tools reach a model (#38), each behind its switch and off until you switch it on.',
   'With #85, #88 and #90 in PR #60, a session that skipped the code gets nothing for someone with an authenticator, and once a person has one, only an email they let in signs in; their other emails still forward receipts (Q44). #91, letting in first only the email a person first signed in with (your answer to Q45), is next; until then, set up your authenticator soon after release.',
   'Approval in a team needs the second factor switched on too. #87 corrects an approved expense; #89 shows what awaits reimbursement on Home.',

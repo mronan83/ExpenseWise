@@ -92,6 +92,7 @@ export class OpenAIExtractor implements Extractor {
     this.asked = {
       fieldSources: options.fieldSources ?? false,
       journeys: options.journeys ?? false,
+      purchases: options.purchases ?? false,
     };
   }
 

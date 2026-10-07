@@ -81,7 +81,18 @@ interface Line {
   readonly share: Amount | null;
   readonly claimed: Amount | null;
   readonly excluded: { readonly reason: string; readonly note: string | null } | null;
+  readonly purchase?: number | null;
   readonly part: { readonly categoryId: string } | null;
+}
+interface Bought {
+  readonly number: number;
+  readonly description: string;
+  readonly date: string | null;
+  readonly cardLastFour: string | null;
+  readonly total: Amount | null;
+  readonly claimed: Amount | null;
+  readonly lines: number[];
+  readonly excluded: { readonly reason: string; readonly note: string | null } | null;
 }
 /** The parts of the answers these checks read. */
 interface Body {
@@ -96,6 +107,7 @@ interface Body {
   readonly amount: Amount | null;
   readonly itemized?: {
     readonly lines: Line[];
+    readonly purchases?: Bought[];
     readonly addsUp: boolean;
     readonly problem: { readonly code: string; readonly message: string } | null;
     readonly claim: {
@@ -601,5 +613,125 @@ describe('splitting an expense into parts (FR-EXP-15)', () => {
     expect(plain.text.split('\r\n')[1]).toBe(
       '2026-10-01,Hotel Lindley,Travel,Lodging,,Partner summit,,1082.76,EUR',
     );
+  });
+});
+
+/**
+ * An airline receipt of two purchases (FR-INT-23, Q49): the ticket, bought Sep 12 on one card,
+ * and a seat upgrade bought Sep 30 on a personal card, each with its own taxes and fees.
+ */
+const of = (purchase: number, l: ReturnType<typeof line>) => ({ ...l, purchase });
+const AIRFARE: Itemization = {
+  currency: 'USD',
+  subtotal: null,
+  total: usd(48_713),
+  purchases: [
+    { description: 'Ticket', date: '2026-09-12', cardLastFour: '4417', total: usd(40_220) },
+    { description: 'Seat upgrade', date: '2026-09-30', cardLastFour: '9921', total: usd(8493) },
+  ],
+  lines: [
+    of(1, line('item', 'Airfare', 36_000)),
+    of(1, line('tax', 'US transportation tax', 2700)),
+    of(1, line('fee', 'September 11 security fee', 560)),
+    of(1, line('fee', 'Passenger facility charge', 960)),
+    of(2, line('item', 'Economy Plus', 7900)),
+    of(2, line('tax', 'US transportation tax', 593)),
+  ],
+};
+const FLIGHT = {
+  merchant: 'Example Air',
+  transactionDate: '2026-09-12',
+  currency: 'USD',
+  amountMinor: 48_713,
+};
+const PURCHASES_ON = apiWith(`${ON},receipts.purchases=on`);
+
+describe('a receipt of several purchases (FR-INT-23, FR-EXP-20)', () => {
+  it('shows each purchase with its lines, and leaves out the seat upgrade with its own taxes', async () => {
+    const expenseId = await readReceipt(owner, 'airfare', AIRFARE, undefined, FLIGHT);
+    const shown = await call(owner, 'GET', `/v1/expenses/${expenseId}`, undefined, PURCHASES_ON);
+    expect(shown.body.itemized?.purchases).toEqual([
+      {
+        number: 1,
+        description: 'Ticket',
+        date: '2026-09-12',
+        cardLastFour: '4417',
+        total: { amountMinor: 40_220, currency: 'USD', decimal: '402.20' },
+        claimed: { amountMinor: 40_220, currency: 'USD', decimal: '402.20' },
+        lines: [1, 2, 3, 4],
+        excluded: null,
+      },
+      {
+        number: 2,
+        description: 'Seat upgrade',
+        date: '2026-09-30',
+        cardLastFour: '9921',
+        total: { amountMinor: 8493, currency: 'USD', decimal: '84.93' },
+        claimed: { amountMinor: 8493, currency: 'USD', decimal: '84.93' },
+        lines: [5, 6],
+        excluded: null,
+      },
+    ]);
+    expect(shown.body.itemized?.lines.map((l) => [l.purchase, l.share?.decimal ?? null])).toEqual([
+      [1, '42.20'],
+      [1, null],
+      [1, null],
+      [1, null],
+      [2, '5.93'],
+      [2, null],
+    ]);
+
+    const path = `/v1/expenses/${expenseId}/purchases/2/exclusion`;
+    expect(
+      await call(
+        owner,
+        'PUT',
+        `/v1/expenses/${expenseId}/purchases/3/exclusion`,
+        {
+          reason: 'personal',
+        },
+        PURCHASES_ON,
+      ),
+    ).toMatchObject({ status: 422, body: { code: 'no_such_purchase', field: 'purchase' } });
+    const left = await call(owner, 'PUT', path, { reason: 'personal' }, PURCHASES_ON);
+    expect(left.status).toBe(200);
+    expect(left.body.amount?.decimal).toBe('402.20');
+    expect(left.body.itemized?.claim).toMatchObject({
+      receipt: { decimal: '487.13' },
+      excluded: { decimal: '84.93' },
+      claimed: { decimal: '402.20' },
+    });
+    expect(left.body.itemized?.purchases?.[1]?.excluded).toEqual({
+      reason: 'personal',
+      note: null,
+    });
+    // Finance sees it left out and why, and can't include it again.
+    const seen = await call(finn, 'GET', `/v1/expenses/${expenseId}`, undefined, PURCHASES_ON);
+    expect(seen.body.itemized?.purchases?.[1]?.excluded).toMatchObject({ reason: 'personal' });
+    expect(await call(finn, 'DELETE', path, undefined, PURCHASES_ON)).toMatchObject({
+      status: 403,
+      body: { code: 'not_yours' },
+    });
+    const back = await call(owner, 'DELETE', path, undefined, PURCHASES_ON);
+    expect(back.status).toBe(200);
+    expect(back.body.amount?.decimal).toBe('487.13');
+    expect(back.body.itemized?.purchases?.[1]?.excluded).toBeNull();
+  });
+
+  it('answers that the feature is off while several purchases are, and shows a receipt of one none', async () => {
+    const expenseId = await readReceipt(owner, 'airfare-off', AIRFARE, undefined, FLIGHT);
+    const path = `/v1/expenses/${expenseId}/purchases/2/exclusion`;
+    expect(await call(owner, 'PUT', path, { reason: 'personal' })).toMatchObject({
+      status: 404,
+      body: { code: 'feature_off' },
+    });
+    expect(await call(owner, 'DELETE', path)).toMatchObject({
+      status: 404,
+      body: { code: 'feature_off' },
+    });
+    const folio = await readReceipt(owner, 'folio-one', FOLIO);
+    const shown = await call(owner, 'GET', `/v1/expenses/${folio}`, undefined, PURCHASES_ON);
+    expect(shown.body.itemized?.purchases).toEqual([]);
+    expect(shown.body.itemized?.lines.every((l) => l.purchase === null)).toBe(true);
   });
 });

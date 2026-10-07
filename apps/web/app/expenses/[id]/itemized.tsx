@@ -1,18 +1,21 @@
 'use client';
 
-import { fromDecimal, sum, toDecimal } from '@expensewise/domain';
+import { fromDecimal, showDate, sum, toDecimal } from '@expensewise/domain';
 import { useState, type FormEvent } from 'react';
 import { api, ApiProblem } from '../../../lib/api';
 import type { Catalog } from '../../../lib/categories';
-import type { ExpenseDetail } from '../../../lib/expenses';
+import type { ExpenseAmount, ExpenseDetail } from '../../../lib/expenses';
+import { useFeatures } from '../../../lib/features';
 import {
   EXCLUSION_NOTE_MAX,
   EXCLUSION_REASONS,
+  PURCHASES_FLAG,
   reasonLabel,
   type ExclusionReason,
   type ExpenseSplit,
   type Itemized,
   type ItemizedLine,
+  type ItemizedPurchase,
 } from '../../../lib/itemized';
 import { formatMoney } from '../../../lib/receipts';
 
@@ -50,16 +53,20 @@ const pairOf = (value: string) => {
 /**
  * A receipt's itemized lines in a section under the expense's total (FR-INT-22): each as read,
  * with its share of the tax, tip and fees; whether they add up, said plainly when they don't;
- * and each item line excluded from the claim with a reason, or included again (FR-EXP-16).
+ * and each item line excluded from the claim with a reason, or included again (FR-EXP-16). A
+ * receipt of several purchases lists them first, each left out whole with its own taxes and
+ * fees, and groups its lines under them (FR-INT-23, FR-EXP-20).
  */
 export function ItemizedLines({ expense, onSaved }: { expense: ExpenseDetail; onSaved: Saved }) {
   const lines = expense.itemized;
+  const featureOn = useFeatures();
   const [open, setOpen] = useState(false);
   const [excluding, setExcluding] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   if (!lines) return null;
   const canChange = expense.editable && lines.byLine.usable;
+  const purchases = lines.purchases ?? [];
 
   async function include(line: ItemizedLine) {
     setBusy(true);
@@ -77,12 +84,86 @@ export function ItemizedLines({ expense, onSaved }: { expense: ExpenseDetail; on
     }
   }
 
+  const row = (line: ItemizedLine) => (
+    <li key={line.position} className="flex flex-col gap-1 py-2">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3">
+        <span className={`break-words ${line.excluded ? 'text-ink-2 line-through' : ''}`}>
+          {line.description}
+          {line.quantity ? <span className="text-ink-2"> (qty {line.quantity})</span> : null}
+          {line.kind === 'tax' || line.kind === 'fee' ? (
+            <span className="text-ink-2"> ({line.kind})</span>
+          ) : null}
+        </span>
+        <span className="text-right tabular-nums">{formatMoney(line.amount)}</span>
+      </div>
+      {line.share && line.claimed ? (
+        <p className="text-xs text-ink-2">
+          With {formatMoney(line.share)} of {purchases.length > 0 ? 'its purchase’s' : 'the'} tax,
+          tip and fees: {formatMoney(line.claimed)}
+        </p>
+      ) : null}
+      {line.excluded ? (
+        <p className="text-xs text-warn">
+          Left out: {reasonLabel(line.excluded.reason)}
+          {line.excluded.note ? ` (${line.excluded.note})` : ''}
+        </p>
+      ) : null}
+      <PartOf line={line} split={expense.split} />
+      {canChange &&
+      line.kind === 'item' &&
+      (line.excluded || line.amount.amountMinor >= 0) &&
+      excluding !== line.position ? (
+        <div>
+          {line.excluded ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void include(line)}
+              className={secondary}
+            >
+              Include {line.description} again
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => setExcluding(line.position)}
+              className={secondary}
+            >
+              Exclude {line.description}
+            </button>
+          )}
+        </div>
+      ) : null}
+      {excluding === line.position ? (
+        <ExcludeForm
+          what={line.description}
+          takesOff={line.claimed}
+          path={`/v1/expenses/${expense.id}/lines/${line.position}/exclusion`}
+          onCancel={() => setExcluding(null)}
+          onSaved={(next) => {
+            setExcluding(null);
+            onSaved(next);
+          }}
+        />
+      ) : null}
+    </li>
+  );
+
   return (
     <section aria-labelledby="lines-title" className={card}>
       <h2 id="lines-title" className="text-base font-semibold">
         What its total is made of
       </h2>
       <ClaimSummary lines={lines} />
+      {purchases.length > 0 ? (
+        <Purchases
+          expense={expense}
+          lines={lines}
+          canChange={canChange && featureOn(PURCHASES_FLAG)}
+          onSaved={onSaved}
+        />
+      ) : null}
       <div>
         <button
           type="button"
@@ -108,74 +189,18 @@ export function ItemizedLines({ expense, onSaved }: { expense: ExpenseDetail; on
               {lines.byLine.message}
             </p>
           ) : null}
-          <ul className="flex flex-col divide-y divide-rule">
-            {lines.lines.map((line) => (
-              <li key={line.position} className="flex flex-col gap-1 py-2">
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3">
-                  <span className={`break-words ${line.excluded ? 'text-ink-2 line-through' : ''}`}>
-                    {line.description}
-                    {line.quantity ? (
-                      <span className="text-ink-2"> (qty {line.quantity})</span>
-                    ) : null}
-                    {line.kind === 'tax' || line.kind === 'fee' ? (
-                      <span className="text-ink-2"> ({line.kind})</span>
-                    ) : null}
-                  </span>
-                  <span className="text-right tabular-nums">{formatMoney(line.amount)}</span>
-                </div>
-                {line.share && line.claimed ? (
-                  <p className="text-xs text-ink-2">
-                    With {formatMoney(line.share)} of the tax, tip and fees:{' '}
-                    {formatMoney(line.claimed)}
-                  </p>
-                ) : null}
-                {line.excluded ? (
-                  <p className="text-xs text-warn">
-                    Left out: {reasonLabel(line.excluded.reason)}
-                    {line.excluded.note ? ` (${line.excluded.note})` : ''}
-                  </p>
-                ) : null}
-                <PartOf line={line} split={expense.split} />
-                {canChange &&
-                line.kind === 'item' &&
-                (line.excluded || line.amount.amountMinor >= 0) &&
-                excluding !== line.position ? (
-                  <div>
-                    {line.excluded ? (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void include(line)}
-                        className={secondary}
-                      >
-                        Include {line.description} again
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => setExcluding(line.position)}
-                        className={secondary}
-                      >
-                        Exclude {line.description}
-                      </button>
-                    )}
-                  </div>
-                ) : null}
-                {excluding === line.position ? (
-                  <ExcludeForm
-                    expense={expense}
-                    line={line}
-                    onCancel={() => setExcluding(null)}
-                    onSaved={(next) => {
-                      setExcluding(null);
-                      onSaved(next);
-                    }}
-                  />
-                ) : null}
-              </li>
-            ))}
-          </ul>
+          {purchases.length > 0 ? (
+            purchases.map((p) => (
+              <div key={p.number} className="flex flex-col">
+                <h3 className="text-xs font-semibold text-ink-2">{p.description}</h3>
+                <ul className="flex flex-col divide-y divide-rule">
+                  {lines.lines.filter((l) => l.purchase === p.number).map(row)}
+                </ul>
+              </div>
+            ))
+          ) : (
+            <ul className="flex flex-col divide-y divide-rule">{lines.lines.map(row)}</ul>
+          )}
         </div>
       ) : null}
       {error ? (
@@ -187,7 +212,121 @@ export function ItemizedLines({ expense, onSaved }: { expense: ExpenseDetail; on
   );
 }
 
-/** The receipt's total, what is left out of it, and what is claimed (FR-EXP-16). */
+/**
+ * The purchases a receipt of several holds (FR-INT-23), each with when it was bought, the card
+ * and what it claims with its own taxes and fees, left out of the claim whole with a reason, or
+ * included again (FR-EXP-20, Q49).
+ */
+function Purchases({
+  expense,
+  lines,
+  canChange,
+  onSaved,
+}: {
+  expense: ExpenseDetail;
+  lines: Itemized;
+  canChange: boolean;
+  onSaved: Saved;
+}) {
+  const [excluding, setExcluding] = useState<number | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const path = (p: ItemizedPurchase) =>
+    `/v1/expenses/${expense.id}/purchases/${p.number}/exclusion`;
+
+  async function include(p: ItemizedPurchase) {
+    setBusy(true);
+    setError(null);
+    try {
+      onSaved(await api<ExpenseDetail>(path(p), { method: 'DELETE' }));
+    } catch (e) {
+      setError(describeError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <h3 className="text-sm font-semibold">{lines.purchases.length} purchases on this receipt</h3>
+      <p className="text-xs text-ink-2">
+        Each has its own taxes and fees. Leave one out, such as a seat you paid for yourself, and
+        they go with it.
+      </p>
+      <ul className="flex flex-col divide-y divide-rule">
+        {lines.purchases.map((p) => {
+          const when = [
+            p.date ? `Bought ${showDate(p.date)}` : null,
+            p.cardLastFour ? `card ending ${p.cardLastFour}` : null,
+          ].filter(Boolean);
+          const amount = p.claimed ?? p.total;
+          return (
+            <li key={p.number} className="flex flex-col gap-1 py-2">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3">
+                <span className={`break-words ${p.excluded ? 'text-ink-2 line-through' : ''}`}>
+                  {p.description}
+                </span>
+                <span className="text-right tabular-nums">{amount ? formatMoney(amount) : ''}</span>
+              </div>
+              {when.length > 0 ? <p className="text-xs text-ink-2">{when.join(', ')}</p> : null}
+              {p.excluded ? (
+                <p className="text-xs text-warn">
+                  Left out: {reasonLabel(p.excluded.reason)}
+                  {p.excluded.note ? ` (${p.excluded.note})` : ''}
+                </p>
+              ) : null}
+              {canChange && excluding !== p.number ? (
+                <div>
+                  {p.excluded ? (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void include(p)}
+                      className={secondary}
+                    >
+                      Include {p.description} again
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setExcluding(p.number)}
+                      className={secondary}
+                    >
+                      Leave out {p.description}
+                    </button>
+                  )}
+                </div>
+              ) : null}
+              {excluding === p.number ? (
+                <ExcludeForm
+                  what={p.description}
+                  takesOff={p.claimed}
+                  path={path(p)}
+                  onCancel={() => setExcluding(null)}
+                  onSaved={(next) => {
+                    setExcluding(null);
+                    onSaved(next);
+                  }}
+                />
+              ) : null}
+            </li>
+          );
+        })}
+      </ul>
+      {error ? (
+        <p role="alert" className="text-sm text-warn">
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * The receipt's total, what is left out of it, and what is claimed (FR-EXP-16): a purchase left
+ * out whole shows once, with what it and its own taxes and fees take off (FR-EXP-20).
+ */
 function ClaimSummary({ lines }: { lines: Itemized }) {
   if (!lines.claim) {
     return (
@@ -198,7 +337,24 @@ function ClaimSummary({ lines }: { lines: Itemized }) {
     );
   }
   const { receipt, excluded, claimed } = lines.claim;
-  const left = lines.lines.filter((l) => l.excluded);
+  const whole = (lines.purchases ?? []).filter((p) => p.excluded);
+  const inWhole = new Set(whole.flatMap((p) => p.lines));
+  const left = [
+    ...whole.map((p) => ({
+      key: `p${p.number}`,
+      what: p.description,
+      amount: p.claimed,
+      why: p.excluded!,
+    })),
+    ...lines.lines
+      .filter((l) => l.excluded && !inWhole.has(l.position))
+      .map((l) => ({
+        key: `l${l.position}`,
+        what: l.description,
+        amount: l.claimed,
+        why: l.excluded!,
+      })),
+  ];
   return (
     <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1">
       <dt className="text-xs font-medium text-ink-2">Receipt</dt>
@@ -209,10 +365,10 @@ function ClaimSummary({ lines }: { lines: Itemized }) {
           <dd className="flex flex-col">
             <span className="tabular-nums">{formatMoney(excluded)}</span>
             {left.map((l) => (
-              <span key={l.position} className="text-xs text-ink-2">
-                {l.description}: {l.claimed ? formatMoney(l.claimed) : ''},{' '}
-                {reasonLabel(l.excluded!.reason).toLowerCase()}
-                {l.excluded!.note ? ` (${l.excluded!.note})` : ''}
+              <span key={l.key} className="text-xs text-ink-2">
+                {l.what}: {l.amount ? formatMoney(l.amount) : ''},{' '}
+                {reasonLabel(l.why.reason).toLowerCase()}
+                {l.why.note ? ` (${l.why.note})` : ''}
               </span>
             ))}
           </dd>
@@ -235,15 +391,22 @@ function PartOf({ line, split }: { line: ItemizedLine; split: ExpenseSplit | nul
   );
 }
 
-/** Why a line is left out: a reason from the list, and a note that only other needs (Q38). */
+/**
+ * Why a line, or a whole purchase, is left out: a reason from the list, and a note that only
+ * other needs (Q38).
+ */
 function ExcludeForm({
-  expense,
-  line,
+  what,
+  takesOff,
+  path,
   onCancel,
   onSaved,
 }: {
-  expense: ExpenseDetail;
-  line: ItemizedLine;
+  /** The line's or the purchase's description. */
+  what: string;
+  /** What leaving it out takes off the claim. */
+  takesOff: ExpenseAmount | null;
+  path: string;
   onCancel: () => void;
   onSaved: Saved;
 }) {
@@ -259,7 +422,7 @@ function ExcludeForm({
     setError(null);
     try {
       onSaved(
-        await api<ExpenseDetail>(`/v1/expenses/${expense.id}/lines/${line.position}/exclusion`, {
+        await api<ExpenseDetail>(path, {
           method: 'PUT',
           body: JSON.stringify({ reason, note: note.trim() || null }),
         }),
@@ -274,8 +437,8 @@ function ExcludeForm({
     <form onSubmit={(e) => void save(e)} className="flex flex-col gap-3 pt-1">
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-1 text-xs font-semibold text-ink">
-          Why leave {line.description} out?
-          {line.claimed ? ` It takes ${formatMoney(line.claimed)} off the claim.` : ''}
+          Why leave {what} out?
+          {takesOff ? ` It takes ${formatMoney(takesOff)} off the claim.` : ''}
         </legend>
         {EXCLUSION_REASONS.map((r) => (
           <label key={r.value} className="flex min-h-11 items-center gap-2">

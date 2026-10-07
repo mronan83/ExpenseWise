@@ -1605,7 +1605,7 @@ export const EXPENSE_STORIES: readonly Story[] = [
       'I can leave out an upgrade I bought later on my own card, and claim the fare with only its own taxes',
     feature: 'F-64',
     requirements: ['FR-INT-23', 'FR-EXP-20'],
-    status: 'Planned',
+    status: 'Delivered',
     criteria: [
       {
         id: 'AC1',
@@ -1614,7 +1614,12 @@ export const EXPENSE_STORIES: readonly Story[] = [
         when: 'it is read',
         then: 'each purchase is its own group, with its own lines, taxes, fees, date and card, and the groups add up to the receipt’s total',
         decided: { by: 'owner', source: 'Q49' },
-        checks: [],
+        checks: [
+          'extraction/purchases › keeps each purchase’s lines together, each naming it, with its date, card and total',
+          'db/itemized.int › copies each purchase with its lines, and a reading of one purchase takes them away',
+          'api/itemized.int › shows each purchase with its lines, and leaves out the seat upgrade with its own taxes',
+          'e2e/signed-in › a flight receipt of two purchases, the ticket and a seat upgrade bought later',
+        ],
       },
       {
         id: 'AC2',
@@ -1622,34 +1627,113 @@ export const EXPENSE_STORIES: readonly Story[] = [
         when: 'I leave the seat upgrade’s purchase out as personal',
         then: 'the claim drops by that purchase and its own taxes and fees, never by a share of the ticket’s',
         decided: { by: 'owner', source: 'Q49' },
-        checks: [],
+        checks: [
+          'domain/itemized › leaves out the upgrade with its own taxes, never a share of the ticket’s',
+          'db/itemized.int › leaves out the seat upgrade with its own taxes, as one change, and includes it again',
+          'api/itemized.int › shows each purchase with its lines, and leaves out the seat upgrade with its own taxes',
+          'e2e/signed-in › leaving a seat upgrade out of the claim, with its own taxes',
+        ],
       },
       {
         id: 'AC3',
         given: 'a receipt read as several purchases',
         when: 'it becomes an expense',
-        then: 'the expense takes the date and card of the first purchase, the one the receipt is for',
+        then: 'the expense takes the date of the first purchase, the one the receipt is for, and the reading shows that purchase’s card',
         decided: { by: 'claude' },
-        checks: [],
+        checks: [
+          'extraction/purchases › dates and cards the expense as the first purchase, the one the receipt is for',
+        ],
       },
       {
         id: 'AC4',
         given: 'a purchase with its own tax and fee lines',
         when: 'the claim is worked out',
-        then: 'its taxes and fees spread only over its own items',
+        then: 'its taxes and fees spread only over its own items, and every purchase claims exactly its own total',
         decided: { by: 'claude', source: 'ADR-0041' },
-        checks: [],
+        checks: [
+          'domain/itemized › spreads each purchase’s taxes and fees over only its own items',
+          'domain/itemized › always adds up to the receipt exactly, each purchase claiming its own total',
+        ],
       },
       {
         id: 'AC5',
+        given:
+          'a reading whose purchase’s lines miss its own total, or whose purchases don’t come to the receipt’s total exactly',
+        when: 'it is read',
+        then: 'it is held for a look, however confident, and its lines say which purchase doesn’t add up and can’t be left out',
+        decided: { by: 'claude', source: 'ADR-0041' },
+        checks: [
+          'extraction/purchases › holds a reading for a look when a purchase’s taxes are read into another',
+          'extraction/purchases › holds it too when the purchases don’t come to the receipt’s total',
+          'domain/itemized › says which purchase’s lines miss its total, or that its total wasn’t read',
+          'domain/itemized › needs the purchases to come to the receipt’s total exactly, and every line to name one',
+        ],
+      },
+      {
+        id: 'AC6',
         given: 'a receipt with a single purchase',
         when: 'it is read',
         then: 'it reads and claims exactly as before',
         decided: { by: 'claude' },
-        checks: [],
+        checks: [
+          'domain/itemized › reads a receipt that lists one purchase as one, exactly as before',
+          'extraction/purchases › reads a receipt that lists one purchase, or none, exactly as before',
+          'api/itemized.int › answers that the feature is off while several purchases are, and shows a receipt of one none',
+        ],
+      },
+      {
+        id: 'AC7',
+        given: 'a purchase with a discount or credit among its items',
+        when: 'I leave the credit out on its own, or the whole purchase',
+        then: 'the credit alone is refused, and the whole purchase is left out with it',
+        decided: { by: 'claude', source: 'ADR-0041' },
+        checks: ['domain/itemized › leaves a purchase’s credit out only with the whole purchase'],
+      },
+      {
+        id: 'AC8',
+        given: 'a purchase left out or included again',
+        when: 'it is saved',
+        then: 'the audit trail records one change: who, the purchase, its lines, the reason, what it took off and the claim before and after',
+        decided: AUDIT,
+        checks: [
+          'db/itemized.int › leaves out the seat upgrade with its own taxes, as one change, and includes it again',
+        ],
+      },
+      {
+        id: 'AC9',
+        given: 'a purchase left out',
+        when: 'a reviewer opens the expense or its report’s export',
+        then: 'it shows under Left out with what it took off and why, and the export lists its lines with theirs',
+        decided: { by: 'owner', source: 'owner 2026-10-04' },
+        checks: [
+          'api/itemized.int › shows each purchase with its lines, and leaves out the seat upgrade with its own taxes',
+          'db/itemized.int › exports the purchase left out, line by line with its own taxes, and deletes it with its receipt',
+        ],
+      },
+      {
+        id: 'AC10',
+        given: 'another member’s expense, or a submitted claim',
+        when: 'someone tries to leave out or include one of its purchases',
+        then: 'it is refused: only the expense’s member changes it, and only before it is submitted',
+        decided: OCT3,
+        checks: [
+          'db/itemized.int › refuses a purchase on a receipt of one, and keeps a member’s purchases to them',
+          'api/itemized.int › shows each purchase with its lines, and leaves out the seat upgrade with its own taxes',
+        ],
+      },
+      {
+        id: 'AC11',
+        given: 'Several purchases on one receipt switched off for my organization',
+        when: 'a receipt is read, or I try to leave out a purchase',
+        then: 'nothing more is asked of the models, and leaving out a purchase answers that the feature is off',
+        decided: { by: 'owner', source: 'Q5' },
+        checks: [
+          'workflows/receipt-ports › asks for several purchases only where receipts.purchases is on (FR-INT-23)',
+          'api/itemized.int › answers that the feature is off while several purchases are, and shows a receipt of one none',
+        ],
       },
     ],
-    note: 'Reported on Oct 6: two forwarded flight receipts listed a seat upgrade paid later on a personal card, and the reading mixed its taxes and fees into the fare (GAP-41, #96). Until #96 ships, Edit the expense to the base fare and its taxes, dated the day the fare was bought.',
+    note: 'Reported on Oct 6: two forwarded flight receipts listed a seat upgrade paid later on a personal card, and the reading mixed its taxes and fees into the fare (GAP-41). Built in PR #66 behind `receipts.purchases` (#96); leaving a purchase out needs itemized lines on too. A receipt read before needs Read again.',
   },
 
   // Needs you: emails that filed nothing

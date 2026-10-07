@@ -1183,6 +1183,12 @@
           "type": "timestamp with time zone",
           "nullable": false,
           "default": "now()"
+        },
+        {
+          "name": "purchase",
+          "type": "integer",
+          "nullable": true,
+          "default": null
         }
       ],
       "primaryKey": [
@@ -1223,6 +1229,20 @@
           "table": "organizations",
           "references": [
             "id"
+          ]
+        },
+        {
+          "name": "expense_lines_purchase_fk",
+          "columns": [
+            "org_id",
+            "expense_id",
+            "purchase"
+          ],
+          "table": "expense_purchases",
+          "references": [
+            "org_id",
+            "expense_id",
+            "position"
           ]
         },
         {
@@ -1279,6 +1299,10 @@
         {
           "name": "expense_lines_position_positive",
           "definition": "CHECK ((\"position\" > 0))"
+        },
+        {
+          "name": "expense_lines_purchase_positive",
+          "definition": "CHECK (((purchase IS NULL) OR (purchase > 0)))"
         },
         {
           "name": "expense_lines_split_whole",
@@ -1520,6 +1544,172 @@
         {
           "name": "own_records",
           "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.expense_parts FOR EACH ROW EXECUTE FUNCTION enforce_own_records('expense')"
+        }
+      ],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "expense_purchases",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "expense_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "position",
+          "type": "integer",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "description",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "purchased_on",
+          "type": "date",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "card_last_four",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "total_minor",
+          "type": "bigint",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "currency",
+          "type": "character(3)",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "expense_purchases_itemization_fk",
+          "columns": [
+            "org_id",
+            "expense_id",
+            "currency"
+          ],
+          "table": "expense_itemizations",
+          "references": [
+            "org_id",
+            "expense_id",
+            "currency"
+          ]
+        },
+        {
+          "name": "expense_purchases_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "expense_purchases_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "expense_purchases_position_key",
+          "columns": [
+            "org_id",
+            "expense_id",
+            "position"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "expense_purchases_card_last_four",
+          "definition": "CHECK (((card_last_four IS NULL) OR (card_last_four ~ '^[0-9]{4}$'::text)))"
+        },
+        {
+          "name": "expense_purchases_currency_iso",
+          "definition": "CHECK ((currency ~ '^[A-Z]{3}$'::text))"
+        },
+        {
+          "name": "expense_purchases_position_positive",
+          "definition": "CHECK ((\"position\" > 0))"
+        }
+      ],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (EXISTS ( SELECT 1\n   FROM expenses e\n  WHERE ((e.org_id = expense_purchases.org_id) AND (e.id = expense_purchases.expense_id)))))",
+          "check": null
+        },
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.expense_purchases FOR EACH ROW EXECUTE FUNCTION enforce_own_records('expense')"
         }
       ],
       "grants": {

@@ -760,6 +760,53 @@ await capture(
   ),
 );
 
+// An airline receipt of two purchases (FR-INT-23, #96): the ticket, and a seat upgrade bought
+// later on a personal card, each with its own taxes and fees; the expense takes the ticket's
+// date, and the upgrade can be left out whole.
+const purchase = (n: number, label: string, value: string) => ({
+  label,
+  value,
+  confidence: 'high',
+  purchase: n,
+});
+await capture(
+  'seatUpgrade',
+  'upload',
+  both(
+    reading('Delta Air Lines', '2026-09-27', 'USD', '487.13', {
+      documentType: 'airline_ticket',
+      journey: { from: end('OMA'), to: end('SFO'), departs: end('2026-10-01') },
+      stay: null,
+      taxes: [
+        purchase(1, 'US transportation tax', '27.00'),
+        purchase(2, 'US transportation tax', '5.93'),
+      ],
+      fees: [
+        purchase(1, 'September 11 security fee', '5.60'),
+        purchase(1, 'Passenger facility charge', '9.60'),
+      ],
+      lineItems: [
+        { description: 'Airfare', quantity: null, amount: '360.00', purchase: 1 },
+        { description: 'Comfort+, seat 14C', quantity: null, amount: '79.00', purchase: 2 },
+      ],
+      purchases: [
+        {
+          description: 'Ticket',
+          date: end('2026-09-12'),
+          cardLastFour: end('4417'),
+          total: end('402.20'),
+        },
+        {
+          description: 'Seat upgrade',
+          date: end('2026-09-27'),
+          cardLastFour: end('9921'),
+          total: end('84.93'),
+        },
+      ],
+    }),
+  ),
+);
+
 // A confirmed correction, an expense edited away from its receipt, one put on a trip by hand.
 await call('POST', `/v1/receipts/${receipts.steak}/confirm`, {
   model: sonnet,

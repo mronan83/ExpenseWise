@@ -55,6 +55,15 @@ export const ItemizedLineSchema = z
       })
       .nullable()
       .openapi({ description: 'Why it is left out of the claim; null while it is claimed.' }),
+    purchase: z
+      .number()
+      .int()
+      .nullable()
+      .openapi({
+        description:
+          'The purchase it belongs to, from 1, on a receipt of several (FR-INT-23); null on a ' +
+          'receipt of one.',
+      }),
     part: z
       .object({ categoryId: z.string().uuid(), typeId: z.string().uuid() })
       .nullable()
@@ -65,6 +74,31 @@ export const ItemizedLineSchema = z
   })
   .openapi('ItemizedLine');
 
+export const ItemizedPurchaseSchema = z
+  .object({
+    number: z.number().int().openapi({ description: 'Its number on the receipt, from 1.' }),
+    description: z.string().openapi({ example: 'Seat upgrade', description: 'As printed.' }),
+    date: z.string().nullable().openapi({ description: 'The day it was bought, YYYY-MM-DD.' }),
+    cardLastFour: z.string().nullable(),
+    total: AmountSchema.nullable().openapi({
+      description: 'What it charged with its own taxes and fees, as read.',
+    }),
+    claimed: AmountSchema.nullable().openapi({
+      description:
+        'Its items with their shares of its own taxes and fees: what leaving it out takes off ' +
+        'the claim. Null while the lines don’t add up.',
+    }),
+    lines: z.array(z.number().int()).openapi({ description: 'Its lines, by position.' }),
+    excluded: z
+      .object({ reason: ExclusionReasonSchema, note: z.string().nullable() })
+      .nullable()
+      .openapi({
+        description:
+          'Why the whole purchase is left out of the claim; null while any of it is claimed.',
+      }),
+  })
+  .openapi('ItemizedPurchase');
+
 /** Present while `expenses.itemized` is on; null for a receipt that prints no lines. */
 export const ItemizedSchema = z
   .object({
@@ -72,6 +106,12 @@ export const ItemizedSchema = z
     total: AmountSchema.nullable().openapi({ description: 'The receipt’s total, as read.' }),
     subtotal: AmountSchema.nullable(),
     lines: z.array(ItemizedLineSchema),
+    purchases: z.array(ItemizedPurchaseSchema).openapi({
+      description:
+        'The separate purchases its receipt holds, when it holds two or more, such as a ticket ' +
+        'and a seat upgrade bought later (FR-INT-23, Q49): each one’s taxes and fees are spread ' +
+        'over only its own items. Empty for a receipt of one purchase.',
+    }),
     addsUp: z.boolean().openapi({
       description:
         'The items come to the subtotal, and with tax, tip and fees to the total, within a cent ' +
@@ -79,7 +119,7 @@ export const ItemizedSchema = z
     }),
     problem: z
       .object({
-        code: z.enum(['subtotal', 'total', 'no_total', 'not_positive']),
+        code: z.enum(['subtotal', 'total', 'no_total', 'not_positive', 'purchase', 'purchases']),
         message: z.string(),
       })
       .nullable()

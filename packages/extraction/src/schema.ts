@@ -28,7 +28,29 @@ const lineAmount = z
 
 const Amount = z.object({ value: amount, confidence: Confidence });
 
-const Fees = z.array(z.object({ label: z.string(), value: amount, confidence: Confidence }));
+const FeeLine = z.object({ label: z.string(), value: amount, confidence: Confidence });
+const Fees = z.array(FeeLine);
+const TaxLine = z.object({ label: z.string(), value: amount, confidence: Confidence });
+const LineItem = z.object({
+  description: z.string().describe('As printed.'),
+  quantity: z.string().nullable(),
+  amount: lineAmount,
+});
+
+const TAXES =
+  'Each tax line, such as sales tax, VAT or a city tax, each time it is printed: a tax ' +
+  'charged for each night is a line for each night. Never merge them, and never add a ' +
+  'total the document prints of them, such as "Total taxes", as another line. A credit of ' +
+  'a tax is negative. Exclude tips and fees.';
+const FEES =
+  'Each fee or surcharge the total includes that is neither a tax nor a tip, such as a ' +
+  'booking, service, delivery or airport fee, each time it is printed.';
+const LINE_ITEMS =
+  'Every item line the document charges or credits, in the order printed, each time it is ' +
+  "printed: a hotel folio's room charge for each night is a line of its own. A credit, " +
+  'refund, reversal, adjustment or discount is a line of its own with a negative amount, ' +
+  'never netted into the charge it reverses. Not taxes, fees, the tip, a total of other ' +
+  'lines, or a payment.';
 
 export const DOCUMENT_TYPES = [
   'receipt',
@@ -142,18 +164,8 @@ export const ReceiptExtractionSchema = z.object({
       'which is often 0.00.',
   ),
   subtotal: Amount.nullable().describe('The amount before taxes, fees and tip, when printed.'),
-  taxes: z
-    .array(z.object({ label: z.string(), value: amount, confidence: Confidence }))
-    .describe(
-      'Each tax line, such as sales tax, VAT or a city tax, each time it is printed: a tax ' +
-        'charged for each night is a line for each night. Never merge them, and never add a ' +
-        'total the document prints of them, such as "Total taxes", as another line. A credit of ' +
-        'a tax is negative. Exclude tips and fees.',
-    ),
-  fees: Fees.describe(
-    'Each fee or surcharge the total includes that is neither a tax nor a tip, such as a ' +
-      'booking, service, delivery or airport fee, each time it is printed.',
-  ),
+  taxes: z.array(TaxLine).describe(TAXES),
+  fees: Fees.describe(FEES),
   tip: Amount.nullable(),
   cardLastFour: z
     .object({
@@ -163,21 +175,7 @@ export const ReceiptExtractionSchema = z.object({
     .nullable(),
   time: Time,
   address: Address,
-  lineItems: z
-    .array(
-      z.object({
-        description: z.string().describe('As printed.'),
-        quantity: z.string().nullable(),
-        amount: lineAmount,
-      }),
-    )
-    .describe(
-      'Every item line the document charges or credits, in the order printed, each time it is ' +
-        "printed: a hotel folio's room charge for each night is a line of its own. A credit, " +
-        'refund, reversal, adjustment or discount is a line of its own with a negative amount, ' +
-        'never netted into the charge it reverses. Not taxes, fees, the tip, a total of other ' +
-        'lines, or a payment.',
-    ),
+  lineItems: z.array(LineItem).describe(LINE_ITEMS),
 });
 
 const JourneyEnd = (where: string) =>
@@ -254,14 +252,75 @@ export const JOURNEYS_SHAPE = {
 };
 export const JOURNEYS_VERSION = 'journeys-v2';
 
+const PurchaseNumber = z
+  .number()
+  .int()
+  .nullable()
+  .describe(
+    'The purchase it belongs to, numbered from 1 in the order of purchases. Null when the ' +
+      'document holds one purchase.',
+  );
+
+const Purchase = z.object({
+  description: z
+    .string()
+    .describe('What was bought, as printed, such as "Ticket", "Seat upgrade" or "Checked bag".'),
+  date: z
+    .object({
+      value: z.string().describe('The day it was bought as YYYY-MM-DD.'),
+      confidence: Confidence,
+    })
+    .nullable()
+    .describe('Null if the document does not print when it was bought.'),
+  cardLastFour: z
+    .object({
+      value: z.string().describe('Exactly four digits.'),
+      confidence: Confidence,
+    })
+    .nullable()
+    .describe('The card it was charged to. Null if not printed.'),
+  total: Amount.nullable().describe(
+    'What it charged, with its own taxes and fees, as printed. Null if not printed.',
+  ),
+});
+
 /**
- * Any reading, as asked with any of the additions: a rail ticket among the documents, and a
- * journey and a stay present only where they were asked for.
+ * What an organization that has switched on several purchases on one receipt is also asked
+ * (FR-INT-23, Q49): each separate purchase a document holds, such as an airline ticket and a
+ * seat upgrade bought later on another card, and the purchase each line, tax and fee belongs
+ * to. Added to whichever schema it is asked with; every other organization's is unchanged.
+ */
+export const PURCHASES_SHAPE = {
+  lineItems: z.array(LineItem.extend({ purchase: PurchaseNumber })).describe(LINE_ITEMS),
+  taxes: z.array(TaxLine.extend({ purchase: PurchaseNumber })).describe(TAXES),
+  fees: z.array(FeeLine.extend({ purchase: PurchaseNumber })).describe(FEES),
+  purchases: z
+    .array(Purchase)
+    .describe(
+      'Each separate purchase the document holds, in the order printed, when it holds two or ' +
+        'more, each paid on its own: the first is the purchase the document is for. Empty for ' +
+        'a document of one purchase, which is nearly every one.',
+    ),
+};
+export const PURCHASES_VERSION = 'purchases-v1';
+
+/** A line's purchase as any reading has it: one not asked for purchases has none. */
+const Grouped = { purchase: PurchaseNumber.optional() };
+const FeesRead = z.array(FeeLine.extend(Grouped));
+
+/**
+ * Any reading, as asked with any of the additions: a rail ticket among the documents, a
+ * journey and a stay present only where they were asked for, and purchases, with the one each
+ * line belongs to, only where they were.
  */
 const ReadingSchema = ReceiptExtractionSchema.extend({
   documentType: z.enum(JOURNEY_DOCUMENT_TYPES),
   journey: JourneyRead.optional(),
   stay: Stay.optional(),
+  lineItems: z.array(LineItem.extend(Grouped)),
+  taxes: z.array(TaxLine.extend(Grouped)),
+  fees: FeesRead,
+  purchases: z.array(Purchase).optional(),
 });
 
 export type ReceiptExtraction = z.infer<typeof ReadingSchema>;
@@ -317,7 +376,7 @@ export function sourcesOf(output: unknown): FieldSources | null {
  * and keeps none: absent is not asked, null is asked and not read.
  */
 export const StoredReadingSchema = ReadingSchema.extend({
-  fees: Fees.default([]),
+  fees: FeesRead.default([]),
   time: Time.default(null),
   address: Address.default(null),
 });

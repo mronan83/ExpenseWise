@@ -33,11 +33,14 @@ const DAYS_AHEAD = 1;
  * item lines stand in for it, credits taking off, each a minor unit out too: the rule the lines
  * an expense keeps are held to (`linesMakeTotal`, R-LINES-TOLERANCE, #92). Null when there is
  * nothing to add up: no total was read, or the receipt prints neither a subtotal nor an item
- * line that can be read exactly.
+ * line that can be read exactly. A document of several purchases adds up when each one's lines
+ * make its own total and their totals the document's (`purchases-v1`, FR-INT-23).
  */
 export function addsUp(n: NormalizedExtraction): boolean | null {
   const total = n.total?.value;
   if (!total) return null;
+  // Several purchases add up purchase by purchase, as their lines are kept (FR-INT-23).
+  if (n.purchases) return n.purchases.addUp;
   const subtotal = n.subtotal?.value;
   if (!subtotal) return n.itemTotal ? itemsAddUp(n, n.itemTotal, total) : null;
   const tax = n.taxTotal?.value;

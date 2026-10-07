@@ -47,3 +47,12 @@ export const JOURNEYS_INSTRUCTIONS = `- A train or rail ticket, or its receipt, 
 - For a ride receipt, an airline ticket or a rail ticket, read in journey where it went from and to, exactly as printed: a ride's pickup and drop-off, a flight's origin and destination as airport codes or cities, a train's departure and arrival stations. A ticket of several legs goes from where the first leg starts to where the outbound journey ends, so a return ticket SFO to ORD and back reads SFO to ORD. Read in departs the date the first leg departs, as YYYY-MM-DD: a ticket is often bought weeks before it flies, so this is the day of travel, never the day it was bought or the receipt was issued.
 - For a hotel folio, read in stay its check-in and check-out dates as YYYY-MM-DD. Never work a date out from the number of nights.
 - Leave journey and stay null for any other document, and leave out an end or a date the document doesn't print.`;
+
+/**
+ * What asking for several purchases on one receipt adds to the instructions, for an
+ * organization that has switched on `receipts.purchases` (FR-INT-23, Q49). Its version is added
+ * to the prompt's, as journeys' is; with the switch off nothing is added.
+ */
+export const PURCHASES_INSTRUCTIONS = `- A document can hold several separate purchases, each paid on its own: an airline ticket and a seat, upgrade or bag bought later, often on another day and another card, or a booking and a change fee charged later. List each in purchases, in the order printed, the first being the purchase the document is for: what was bought, the day it was bought, the card it was charged to and what it charged with its own taxes and fees. Give every line item, tax and fee the number of the purchase it belongs to, from 1, so that no purchase's taxes or fees are read into another's. Each purchase has at least one line item, such as the fare or the seat.
+- With several purchases, the total is what the document charged for all of them, as printed, or, where it prints no such total, the purchases' totals added up; the date and card are the first purchase's, and the subtotal is null.
+- Charges on different days to one bill that is paid once, such as a hotel folio's nights, are one purchase. For a document of one purchase, which is nearly every one, leave purchases empty and every line's purchase null.`;

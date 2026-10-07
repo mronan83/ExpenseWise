@@ -90,6 +90,47 @@ export const includeLineRoute = createRoute({
   responses: changed,
 });
 
+const purchaseParams = z.object({
+  expenseId: pathId('expenseId'),
+  purchase: z.coerce
+    .number()
+    .int()
+    .min(1)
+    .openapi({
+      param: { name: 'purchase', in: 'path' },
+      description: 'The purchase’s number on its receipt, from 1.',
+    }),
+});
+
+export const excludePurchaseRoute = createRoute({
+  method: 'put',
+  path: '/v1/expenses/{expenseId}/purchases/{purchase}/exclusion',
+  tags: ['Expenses'],
+  summary: 'Leave a whole purchase on its receipt out of what the expense claims, with why',
+  description:
+    'FR-EXP-20, Q49. On a receipt of several purchases, such as a ticket and a seat upgrade ' +
+    'bought later on a personal card, every item of one purchase is left out with the reason ' +
+    'and note a line takes. The claim drops by the purchase and its own taxes and fees, never a ' +
+    'share of another’s. 422 no_such_purchase for a receipt of one purchase. Behind ' +
+    '`receipts.purchases` with `expenses.itemized`. One change in the audit trail.',
+  ...secured,
+  request: { params: purchaseParams, body: json(ExcludeLineSchema) },
+  responses: changed,
+});
+
+export const includePurchaseRoute = createRoute({
+  method: 'delete',
+  path: '/v1/expenses/{expenseId}/purchases/{purchase}/exclusion',
+  tags: ['Expenses'],
+  summary: 'Include a purchase left out in the claim again',
+  description:
+    'FR-EXP-20. Before submission: every item of the purchase is claimed again, and the claim ' +
+    'goes back up by it and its own taxes and fees.',
+  ...secured,
+  request: { params: purchaseParams },
+  responses: changed,
+});
+
 const expenseParams = z.object({ expenseId: pathId('expenseId') });
 
 export const splitExpenseRoute = createRoute({

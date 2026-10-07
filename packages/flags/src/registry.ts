@@ -141,6 +141,15 @@ export const FLAGS = {
       'the claim. Settings › Organization lists the types the company pays, which needs ' +
       'categories and types on (FR-EXP-17, FR-EXP-18, #95).',
   },
+  'receipts.purchases': {
+    name: 'Several purchases on one receipt',
+    description:
+      'A receipt that holds several purchases, such as an airline ticket and a seat upgrade ' +
+      'bought later on another card, reads each as its own group of lines, with its own taxes, ' +
+      'fees, date and card, and the expense takes the first one’s date and card. With itemized ' +
+      'lines on, a whole purchase can be left out of the claim with a reason (FR-INT-23, ' +
+      'FR-EXP-20, #96). A receipt read before is grouped when read again.',
+  },
   // The operator's switch per AI model (FR-INT-16, US-READ-18). Unlike a feature, it acts
   // only when FLAG_OVERRIDES turns it off: then that model reads no organization's receipts,
   // whatever each has chosen. Unset or on, each organization decides. See modelStopped().

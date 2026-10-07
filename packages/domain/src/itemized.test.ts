@@ -12,6 +12,8 @@ import {
   linesProblemText,
   partsByAmount,
   partsByLine,
+  purchaseClaims,
+  purchaseItems,
   SPLIT_PARTS_MAX,
   type Itemization,
   type LineKind,
@@ -494,5 +496,207 @@ describe('a folio’s credit, read as a line of its own (#92)', () => {
         { ...MEALS, amount: usd(13_612), positions: [3, 5] },
       ],
     });
+  });
+});
+
+/**
+ * An airline receipt of two purchases (FR-INT-23, Q49): the ticket, bought Sep 12 on one card,
+ * and a seat upgrade bought Sep 30 on another, each with its own taxes and fees.
+ */
+const of = (purchase: number, l: ReadLine): ReadLine => ({ ...l, purchase });
+const TWO_PURCHASES: Itemization = {
+  currency: 'USD',
+  subtotal: null,
+  total: usd(48_713),
+  purchases: [
+    { description: 'Ticket', date: '2026-09-12', cardLastFour: '4417', total: usd(40_220) },
+    { description: 'Seat upgrade', date: '2026-09-30', cardLastFour: '9921', total: usd(8493) },
+  ],
+  lines: [
+    of(1, line('item', 'Airfare', 36_000)),
+    of(1, line('tax', 'US transportation tax', 2700)),
+    of(1, line('fee', 'September 11 security fee', 560)),
+    of(1, line('fee', 'Passenger facility charge', 960)),
+    of(2, line('item', 'Economy Plus', 7900)),
+    of(2, line('tax', 'US transportation tax', 593)),
+  ],
+};
+
+describe('a receipt of several purchases, each its own group of lines (FR-INT-23, Q49)', () => {
+  it('adds up when each purchase’s lines make its total, and the purchases the receipt’s', () => {
+    expect(checkLines(TWO_PURCHASES)).toEqual({
+      addsUp: true,
+      items: usd(43_900),
+      extras: usd(4813),
+      taxIncluded: false,
+      purchases: [
+        { items: usd(36_000), extras: usd(4220) },
+        { items: usd(7900), extras: usd(593) },
+      ],
+    });
+  });
+
+  it('spreads each purchase’s taxes and fees over only its own items', () => {
+    expect(
+      lineClaims(TWO_PURCHASES)!.map((c) => [
+        c.position,
+        c.share.amountMinor,
+        c.claimed.amountMinor,
+      ]),
+    ).toEqual([
+      [1, 4220, 40_220],
+      [5, 593, 8493],
+    ]);
+  });
+
+  it('leaves out the upgrade with its own taxes, never a share of the ticket’s', () => {
+    expect(purchaseItems(TWO_PURCHASES, 2)).toEqual([5]);
+    expect(claimWithout(TWO_PURCHASES, new Set([5]))).toEqual({
+      ok: true,
+      value: { receipt: usd(48_713), excluded: usd(8493), claimed: usd(40_220) },
+    });
+    expect(purchaseClaims(TWO_PURCHASES, new Set([5]))).toEqual([
+      {
+        description: 'Ticket',
+        date: '2026-09-12',
+        cardLastFour: '4417',
+        total: usd(40_220),
+        number: 1,
+        items: [1],
+        lines: [1, 2, 3, 4],
+        claimed: usd(40_220),
+        excluded: false,
+      },
+      {
+        description: 'Seat upgrade',
+        date: '2026-09-30',
+        cardLastFour: '9921',
+        total: usd(8493),
+        number: 2,
+        items: [5],
+        lines: [5, 6],
+        claimed: usd(8493),
+        excluded: true,
+      },
+    ]);
+  });
+
+  it('says which purchase’s lines miss its total, or that its total wasn’t read', () => {
+    const [ticket, upgrade] = TWO_PURCHASES.purchases!;
+    const short = {
+      ...TWO_PURCHASES,
+      purchases: [ticket!, { ...upgrade!, total: usd(9000) }],
+      total: usd(49_220),
+    };
+    const check = checkLines(short);
+    expect(check).toMatchObject({ addsUp: false, problem: 'purchase', purchase: 2 });
+    if (check.addsUp) throw new Error('it should not add up');
+    expect(linesProblemText(check.problem, check.comesTo, check.against, 'Seat upgrade')).toBe(
+      'Seat upgrade’s lines come to $84.93, but its total is $90.00.',
+    );
+    const unread = checkLines({
+      ...TWO_PURCHASES,
+      purchases: [ticket!, { ...upgrade!, total: null }],
+    });
+    expect(unread).toMatchObject({ addsUp: false, problem: 'purchase', against: null });
+    if (unread.addsUp) throw new Error('it should not add up');
+    expect(linesProblemText(unread.problem, unread.comesTo, unread.against, 'Seat upgrade')).toBe(
+      'Seat upgrade’s total wasn’t read, so its lines can’t be checked against it.',
+    );
+  });
+
+  it('needs the purchases to come to the receipt’s total exactly, and every line to name one', () => {
+    const off = checkLines({ ...TWO_PURCHASES, total: usd(48_714) });
+    expect(off).toMatchObject({
+      addsUp: false,
+      problem: 'purchases',
+      comesTo: usd(48_713),
+      against: usd(48_714),
+    });
+    const stray = checkLines({
+      ...TWO_PURCHASES,
+      lines: [...TWO_PURCHASES.lines, of(3, line('fee', 'Bag', 3500))],
+    });
+    expect(stray).toMatchObject({ addsUp: false, problem: 'purchases' });
+    expect(checkLines({ ...TWO_PURCHASES, total: null })).toMatchObject({
+      addsUp: false,
+      problem: 'no_total',
+    });
+  });
+
+  it('leaves a purchase’s credit out only with the whole purchase', () => {
+    const credited: Itemization = {
+      ...TWO_PURCHASES,
+      total: usd(46_713),
+      purchases: [
+        TWO_PURCHASES.purchases![0]!,
+        { ...TWO_PURCHASES.purchases![1]!, total: usd(6493) },
+      ],
+      lines: [
+        ...TWO_PURCHASES.lines.slice(0, 5),
+        of(2, line('item', 'Upgrade credit', -2000)),
+        TWO_PURCHASES.lines[5]!,
+      ],
+    };
+    expect(checkLines(credited).addsUp).toBe(true);
+    expect(claimWithout(credited, new Set([6]))).toEqual({ ok: false, error: 'takes_off' });
+    expect(claimWithout(credited, new Set([5, 6]))).toEqual({
+      ok: true,
+      value: { receipt: usd(46_713), excluded: usd(6493), claimed: usd(40_220) },
+    });
+  });
+
+  it('reads a receipt that lists one purchase as one, exactly as before', () => {
+    const one: Itemization = {
+      ...FOLIO,
+      purchases: [{ description: 'Stay', date: null, cardLastFour: null, total: FOLIO.total }],
+      lines: FOLIO.lines.map((l) => of(1, l)),
+    };
+    expect(checkLines(one)).toEqual(checkLines(FOLIO));
+    expect(lineClaims(one)).toEqual(lineClaims(FOLIO));
+    expect(claimWithout(one, new Set([2]))).toEqual(claimWithout(FOLIO, new Set([2])));
+    expect(purchaseClaims(one)).toEqual([]);
+  });
+
+  it('always adds up to the receipt exactly, each purchase claiming its own total', () => {
+    const purchase = fc.record({
+      items: fc.array(fc.integer({ min: 1, max: 200_000 }), { minLength: 1, maxLength: 8 }),
+      extras: fc.array(fc.integer({ min: 0, max: 20_000 }), { maxLength: 4 }),
+    });
+    fc.assert(
+      fc.property(fc.array(purchase, { minLength: 2, maxLength: 5 }), (bought) => {
+        const totals = bought.map(
+          (b) => b.items.reduce((a, c) => a + c, 0) + b.extras.reduce((a, c) => a + c, 0),
+        );
+        const it: Itemization = {
+          currency: 'USD',
+          subtotal: null,
+          total: usd(totals.reduce((a, c) => a + c, 0)),
+          purchases: totals.map((t, i) => ({
+            description: `Purchase ${i + 1}`,
+            date: null,
+            cardLastFour: null,
+            total: usd(t),
+          })),
+          lines: bought.flatMap((b, i) => [
+            ...b.items.map((c, j) => of(i + 1, line('item', `Item ${j + 1}`, c))),
+            ...b.extras.map((c, j) => of(i + 1, line(j % 2 ? 'fee' : 'tax', `Extra ${j + 1}`, c))),
+          ]),
+        };
+        const claims = purchaseClaims(it);
+        expect(claims.map((c) => c.claimed)).toEqual(totals.map(usd));
+        expect(
+          sum(
+            'USD',
+            lineClaims(it)!.map((c) => c.claimed),
+          ),
+        ).toEqual(it.total);
+        const last = claims.at(-1)!;
+        expect(claimWithout(it, new Set(last.items))).toMatchObject({
+          ok: true,
+          value: { excluded: usd(totals.at(-1)!) },
+        });
+      }),
+    );
   });
 });

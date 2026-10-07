@@ -2,6 +2,7 @@ import type { z } from 'zod';
 import {
   JOURNEYS_INSTRUCTIONS,
   PROMPT_VERSION,
+  PURCHASES_INSTRUCTIONS,
   SOURCES_PROMPT_VERSION,
   SOURCES_SYSTEM_PROMPT,
   SYSTEM_PROMPT,
@@ -9,6 +10,8 @@ import {
 import {
   JOURNEYS_SHAPE,
   JOURNEYS_VERSION,
+  PURCHASES_SHAPE,
+  PURCHASES_VERSION,
   ReceiptExtractionSchema,
   ReceiptExtractionWithSourcesSchema,
   SCHEMA_VERSION,
@@ -28,6 +31,12 @@ export interface ExtractorOptions {
    * `receipts.journeys` (FR-INT-20, FR-INT-21). Off, nothing of it is asked.
    */
   readonly journeys?: boolean;
+  /**
+   * Ask for each separate purchase a document holds, and the one each line belongs to: for an
+   * organization that has switched on `receipts.purchases` (FR-INT-23). Off, nothing of it is
+   * asked.
+   */
+  readonly purchases?: boolean;
 }
 
 /** One request a reader can send: the instructions, the structure, and their versions. */
@@ -73,6 +82,12 @@ const JOURNEYS: Addition = {
   version: JOURNEYS_VERSION,
 };
 
+const PURCHASES: Addition = {
+  instructions: PURCHASES_INSTRUCTIONS,
+  shape: PURCHASES_SHAPE,
+  version: PURCHASES_VERSION,
+};
+
 /**
  * A request with an addition: its instructions after the others, its structure after the
  * others' (a field it redefines keeps its place), and its version joined on with "+", as in
@@ -88,17 +103,21 @@ const withAddition = (variant: ExtractionVariant, addition: Addition): Extractio
 const composed = new Map<string, ExtractionVariant>();
 
 /**
- * The request for these options, made once each: source lines and journeys are independent,
- * so each organization is asked for exactly what it has switched on. With both off it is the
- * request every reading has always sent.
+ * The request for these options, made once each: source lines, journeys and purchases are
+ * independent, so each organization is asked for exactly what it has switched on, journeys
+ * before purchases. With all off it is the request every reading has always sent.
  */
 export function variantOf(options: ExtractorOptions = {}): ExtractionVariant {
   const base = options.fieldSources ? EXTRACTION_VARIANTS.sources : EXTRACTION_VARIANTS.plain;
-  if (!options.journeys) return base;
-  const key = `${base.schemaVersion}+journeys`;
+  const additions = [
+    ...(options.journeys ? [JOURNEYS] : []),
+    ...(options.purchases ? [PURCHASES] : []),
+  ];
+  if (additions.length === 0) return base;
+  const key = [base.schemaVersion, ...additions.map((a) => a.version)].join('+');
   let variant = composed.get(key);
   if (!variant) {
-    variant = withAddition(base, JOURNEYS);
+    variant = additions.reduce(withAddition, base);
     composed.set(key, variant);
   }
   return variant;

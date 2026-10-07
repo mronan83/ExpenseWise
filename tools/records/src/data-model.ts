@@ -51,6 +51,7 @@ export const DOMAINS: readonly Domain[] = [
       'expenses',
       'expense_conversions',
       'expense_itemizations',
+      'expense_purchases',
       'expense_lines',
       'expense_parts',
       'trips',
@@ -153,9 +154,13 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
     about:
       'An expense’s copy of its receipt’s itemized lines: the currency, total and subtotal of the reading they were copied from, one per expense (FR-INT-22, ADR-0041). Copied when the expense is filed and again with each new reading, while the expense follows its receipt: until a person edits it, leaves a line out or splits it, and never once it is submitted, so a submitted claim never changes under a re-read. A reading with no lines takes it away. Each copy is audited. Written whether or not `expenses.itemized` is on, so switching it on shows the lines at once.',
   },
+  expense_purchases: {
+    about:
+      'The separate purchases a receipt of several holds, on its expense’s copy of the lines, numbered from 1 as printed (FR-INT-23, Q49, #96), such as an airline ticket and a seat upgrade bought later on another card: what was bought, the day, the card’s last four digits and what it charged with its own taxes and fees, in the itemization’s currency. A receipt of one purchase has none. Each line names its purchase, whose taxes and fees are spread over only its own items, and leaving a purchase out excludes each of its items. Replaced with the lines, and gone with its itemization. Read only through its expense, with the expense’s member named.',
+  },
   expense_lines: {
     about:
-      'One line of that copy, numbered from 1 as printed: each item, each time it is printed (a discount or a credit, refund or reversal a negative one of its own, #92), then each tax, each fee and the tip, in the itemization’s currency. An item can be left out of the claim with a reason picked from four and a note, which other needs (FR-EXP-16, Q38), and given a category and type of its own in a split by line (FR-EXP-15, Q36). What a line and its share of the tax, tip and fees take off is the domain’s arithmetic, never stored: the claim is written to the expense’s amount. Read only through its expense, with the expense’s member named.',
+      'One line of that copy, numbered from 1 as printed: each item, each time it is printed (a discount or a credit, refund or reversal a negative one of its own, #92), then each tax, each fee and the tip, in the itemization’s currency; on a receipt of several purchases, purchase by purchase, each naming its own (#96). An item can be left out of the claim with a reason picked from four and a note, which other needs (FR-EXP-16, Q38), and given a category and type of its own in a split by line (FR-EXP-15, Q36). What a line and its share of the tax, tip and fees take off is the domain’s arithmetic, never stored: the claim is written to the expense’s amount. Read only through its expense, with the expense’s member named.',
   },
   expense_parts: {
     about:
@@ -377,6 +382,7 @@ export const RULES: readonly Rule[] = [
       'expense_conversions_into_iso',
       'members_reimbursement_currency_iso',
       'expense_itemizations_currency_iso',
+      'expense_purchases_currency_iso',
       'expense_lines_currency_iso',
       'expense_parts_currency_iso',
     ],
@@ -435,6 +441,20 @@ export const RULES: readonly Rule[] = [
       'delete_expense_lines',
     ],
     refs: ['FR-INT-22', 'FR-EXP-16', 'ADR-0041'],
+  },
+  {
+    rule: 'On a receipt of several purchases, each purchase is numbered once, in the receipt’s currency, and each line belongs to one of them.',
+    mechanism:
+      'Each purchase points at its itemization by its organization, expense and currency, and has its own number; a line’s purchase, where it names one, points at a purchase of the same expense by number, and goes with it. A card is four digits or none. That each purchase’s lines make its own total, and the purchases the receipt’s exactly, is the domain’s (`checkLines`), as is leaving a whole purchase out (`claimWithout`, `purchaseItems`).',
+    objects: [
+      'expense_purchases_itemization_fk',
+      'expense_purchases_position_key',
+      'expense_purchases_position_positive',
+      'expense_purchases_card_last_four',
+      'expense_lines_purchase_fk',
+      'expense_lines_purchase_positive',
+    ],
+    refs: ['FR-INT-23', 'FR-EXP-20', 'ADR-0041'],
   },
   {
     rule: 'A split expense’s parts are each more than zero, in its own organization’s categories and types.',
