@@ -14,7 +14,7 @@ Each ADR records one decision with its context, the alternatives considered and 
 | [0004](0004-iphone-technology.md) | iPhone technology | D-04 | Accepted (decided by product owner) | 2026-09-30 |
 | [0005](0005-identity.md) | Identity | D-05 | Superseded by [ADR-0013](0013-supabase-platform.md) | 2026-09-30 |
 | [0006](0006-receipt-extraction.md) | Receipt extraction | D-06 | Accepted (decided by product owner) | 2026-09-30 |
-| [0007](0007-bank-and-card-feeds.md) | Bank and card feeds | D-07 | Accepted (decided by product owner) | 2026-09-30 |
+| [0007](0007-bank-and-card-feeds.md) | Bank and card feeds | D-07 | Accepted (decided by product owner); amended Oct 7: statement first | 2026-09-30 |
 | [0008](0008-money-and-data-conventions.md) | Money and data conventions | D-08 | Accepted (recommended; no objection) | 2026-09-30 |
 | [0009](0009-delivery-model.md) | Delivery model | D-09 | Accepted (recommended; no objection) | 2026-09-30 |
 | [0010](0010-residency-and-compliance.md) | Residency and compliance | D-10 | Accepted (decided by product owner) | 2026-09-30 |

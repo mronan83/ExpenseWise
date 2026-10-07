@@ -2,7 +2,7 @@ import type { Story } from '../model.ts';
 
 const OCT3 = { by: 'owner', source: 'owner 2026-10-03' } as const;
 
-/** Capture: camera, upload and PDF (F-05), and email-in (F-16). */
+/** Capture: camera, upload and PDF (F-05), email-in (F-16), and card statements (F-65). */
 export const CAPTURE_STORIES: readonly Story[] = [
   {
     id: 'US-CAP-01',
@@ -1342,5 +1342,91 @@ export const CAPTURE_STORIES: readonly Story[] = [
       },
     ],
     note: 'Your answers to Q31 and Q5. The end-to-end bench switches every feature on, so no test yet opens these screens with route mileage off (#66).',
+  },
+  {
+    id: 'US-CAP-07',
+    title: 'Bring in my corporate card’s statement and see what has no receipt',
+    as: 'Alex, who travels for work on a corporate card',
+    want: 'my card’s transactions brought in from its statement and matched to my expenses',
+    soThat: 'I see at once which charges still need a receipt, without giving anyone my card login',
+    feature: 'F-65',
+    requirements: ['FR-CAP-10', 'FR-INT-24'],
+    status: 'Planned',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'my card’s monthly statement from U.S. Bank Access Online, as a PDF',
+        when: 'I upload it, or forward it to my receipts address',
+        then: 'each transaction on it is kept with its date, merchant, amount and the card’s last four digits',
+        decided: { by: 'owner', source: 'Q51' },
+        checks: [],
+      },
+      {
+        id: 'AC2',
+        given:
+          'a card transaction and one of my expenses of the same amount, a few days apart at the same merchant',
+        when: 'the statement is brought in',
+        then: 'they are matched, and the expense shows its card transaction',
+        decided: { by: 'owner', source: 'Q51' },
+        checks: [],
+      },
+      {
+        id: 'AC3',
+        given: 'a card transaction that matches no expense',
+        when: 'I open Needs you',
+        then: 'it is listed as a missing receipt, and I attach the receipt or say why there is none, such as a personal charge',
+        decided: { by: 'claude' },
+        checks: [],
+      },
+      {
+        id: 'AC4',
+        given: 'a transaction already brought in',
+        when: 'a later statement, or the same one again, lists it',
+        then: 'it is kept once',
+        decided: { by: 'claude' },
+        checks: [],
+      },
+      {
+        id: 'AC5',
+        given: 'a statement whose transactions don’t add up to the new charges it prints',
+        when: 'it is read',
+        then: 'it is held for a look before any transaction is matched, as a receipt whose sums miss is',
+        decided: { by: 'claude', source: 'ADR-0041' },
+        checks: [],
+      },
+      {
+        id: 'AC6',
+        given: 'a transaction list downloaded from Access Online, where my card program allows one',
+        when: 'I upload it',
+        then: 'its transactions come in the same way, without a model reading it',
+        decided: { by: 'claude' },
+        checks: [],
+      },
+      {
+        id: 'AC7',
+        given: 'a foreign charge whose statement shows the dollars it cost',
+        when: 'it is matched to an expense in another currency',
+        then: 'the dollars show beside the expense’s conversion, which stays at the purchase date’s reference rate',
+        decided: { by: 'claude', source: 'ADR-0034' },
+        checks: [],
+      },
+      {
+        id: 'AC8',
+        given: 'another member of my organization',
+        when: 'they open their transactions or Needs you',
+        then: 'they never see mine: each person’s card transactions are their own',
+        decided: { by: 'claude', source: 'ADR-0035' },
+        checks: [],
+      },
+      {
+        id: 'AC9',
+        given: 'card statements switched off for my organization',
+        when: 'a statement is uploaded or forwarded',
+        then: 'it is read as a receipt is, as before, and nothing is matched',
+        decided: { by: 'owner', source: 'Q5' },
+        checks: [],
+      },
+    ],
+    note: 'Your requirement of Oct 7 and your answers to Q50 and Q51 (GAP-42, #97). No live connection reaches U.S. Bank Access Online, so the statement is the way in; a live feed, where a card’s site allows one, would bring the same transactions later.',
   },
 ];
