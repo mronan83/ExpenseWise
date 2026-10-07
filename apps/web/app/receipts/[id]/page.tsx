@@ -82,6 +82,8 @@ export default function ReceiptPage() {
   // Where each field was read, and one tap to correct a Ready receipt (GAP-14).
   const sources = isOn('receipts.field-sources');
   const journeys = isOn('receipts.journeys');
+  // Deleting a receipt filed by mistake, such as a flight confirmation (FR-CAP-11).
+  const deletable = isOn('receipts.delete');
   const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -231,6 +233,9 @@ export default function ReceiptPage() {
                 {message}
               </p>
             ) : null}
+            {deletable && !reading ? (
+              <DeleteReceipt receiptId={id} onDeleted={() => router.replace('/receipts')} />
+            ) : null}
             <Original receipt={receipt} />
           </>
         ) : null}
@@ -303,6 +308,83 @@ function Verdict({ receipt, stale }: { receipt: ReceiptDetail; stale: boolean })
       </span>{' '}
       {text}
     </p>
+  );
+}
+
+/**
+ * Deletes something filed that isn't a receipt, such as a flight confirmation with no
+ * amounts, once the person confirms (FR-CAP-11, US-CAP-09). The server refuses one whose
+ * expense is submitted, or another member's, and says why.
+ */
+function DeleteReceipt({ receiptId, onDeleted }: { receiptId: string; onDeleted: () => void }) {
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function remove() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api(`/v1/receipts/${receiptId}`, { method: 'DELETE' });
+      onDeleted();
+    } catch (failure) {
+      setError(describeError(failure));
+      setBusy(false);
+    }
+  }
+
+  if (!asking) {
+    return (
+      <div>
+        <button
+          type="button"
+          onClick={() => setAsking(true)}
+          className="rounded-lg border border-rule px-4 py-2 text-sm font-semibold text-bad"
+        >
+          Delete this receipt
+        </button>
+      </div>
+    );
+  }
+  return (
+    <section
+      aria-labelledby="delete-receipt"
+      className="flex flex-col gap-3 rounded-xl border border-bad bg-sheet p-4 text-sm"
+    >
+      <h2 id="delete-receipt" className="font-semibold">
+        Delete this receipt?
+      </h2>
+      <p>
+        For something that isn’t a receipt, such as a flight confirmation. Its file, readings and
+        expense go too, and this can’t be undone.
+      </p>
+      <div className="flex flex-wrap gap-3">
+        <button
+          type="button"
+          onClick={() => void remove()}
+          disabled={busy}
+          className="rounded-lg bg-bad px-4 py-2 text-sm font-semibold text-paper disabled:opacity-60"
+        >
+          {busy ? 'Deleting…' : 'Delete it'}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setAsking(false);
+            setError(null);
+          }}
+          disabled={busy}
+          className="rounded-lg border border-rule px-4 py-2 text-sm font-semibold disabled:opacity-60"
+        >
+          Keep it
+        </button>
+      </div>
+      {error ? (
+        <p role="alert" className="text-warn">
+          {error}
+        </p>
+      ) : null}
+    </section>
   );
 }
 

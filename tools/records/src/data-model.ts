@@ -286,7 +286,7 @@ export const FUNCTIONS: Readonly<Record<string, string>> = {
   app_invite_hash:
     'The SHA-256 of the invite token the API was given, from `app.invite_hash`. Lets the person holding a link see that one invite before they belong to its organization; the API clears it once read.',
   delete_receipt:
-    'Deletes one receipt of the current organization with its readings, confirmations, duplicate pairs and, unless another receipt proves it, its expense; returns the file to remove. Refuses a receipt whose expense is submitted or further along. Runs as its owner, because the app holds no DELETE right on receipts, readings, confirmations or expenses (ADR-0028).',
+    'Deletes one receipt of the current organization with its readings, confirmations, duplicate pairs and, unless another receipt proves it, its expense; returns the file to remove. Refuses a receipt whose expense is submitted or further along. Reached from a duplicate the person chose to delete, and from a receipt of their own filed by mistake (FR-CAP-11, #100); the own-records triggers refuse anyone else’s. Runs as its owner, because the app holds no DELETE right on receipts, readings, confirmations or expenses (ADR-0028).',
   claim_outbox_batch:
     'Hands the relay a batch of unpublished outbox events, locking them so two sweeps never take the same one. Runs as its owner, so the relay role needs no table rights.',
   mark_outbox_published: 'Marks events the relay has sent, so they are not sent again.',

@@ -244,6 +244,10 @@ export const GAPS: readonly Gap[] = [
       'Your report of Oct 7: a flight confirmation you forwarded, with no amounts, was filed as a receipt, with an expense that needs a look, and nothing removes it. `delete_receipt()` (ADR-0028) is reached only from the choice on a possible duplicate.',
     fix: 'Delete on a receipt’s page, for its own member, through `delete_receipt()`, until its expense is submitted, its file removed once the deletion commits (#100).',
     backlog: 100,
+    closed: {
+      date: '2026-10-07',
+      note: 'PR #77 (#100): Delete this receipt on a receipt’s page, behind `receipts.delete`, for its own member until its expense is submitted; its readings, expense and file go, and the audit trail keeps what it was.',
+    },
   },
   {
     id: 'GAP-45',
@@ -1219,6 +1223,12 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-07',
+    change:
+      'Built #100 in PR #77, at your word of Oct 7, behind Delete a receipt (`receipts.delete`, off until you switch it on): a receipt’s page has Delete this receipt, which asks once, then deletes it with its readings, its expense and its file, for something filed that isn’t a receipt, such as your flight confirmation (FR-CAP-11). Only its own member deletes it, never once its expense is submitted; the audit trail keeps what it was, and a card charge it documented is a missing receipt again. F-67 and US-CAP-09 delivered; GAP-46 closed.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-07',
     change:

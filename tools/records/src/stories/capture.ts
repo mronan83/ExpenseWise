@@ -1538,7 +1538,7 @@ export const CAPTURE_STORIES: readonly Story[] = [
     soThat: 'it doesn’t sit in Needs you or my expenses, and my records hold only what I spent',
     feature: 'F-67',
     requirements: ['FR-CAP-11'],
-    status: 'Planned',
+    status: 'Delivered',
     criteria: [
       {
         id: 'AC1',
@@ -1547,7 +1547,12 @@ export const CAPTURE_STORIES: readonly Story[] = [
         when: 'I delete it from its page, and confirm',
         then: 'it, its readings and its expense are gone, from Needs you too, and its file is removed',
         decided: { by: 'owner', source: 'owner 2026-10-07' },
-        checks: [],
+        checks: [
+          'api/delete-receipt.int › deletes the person’s own receipt, its expense and its file, and Needs you lets it go (AC1)',
+          'db/receipt-delete.int › deletes the member’s own receipt with its expense, and the audit trail keeps what it was',
+          'api/receipts › deletes it, then its file',
+          'e2e/signed-in › deleting a receipt filed by mistake',
+        ],
       },
       {
         id: 'AC2',
@@ -1555,7 +1560,10 @@ export const CAPTURE_STORIES: readonly Story[] = [
         when: 'I try to delete it',
         then: 'it is refused, and the claim stays as it went in',
         decided: { by: 'claude', source: 'ADR-0028' },
-        checks: [],
+        checks: [
+          'db/receipt-delete.int › refuses a submitted claim, and a receipt still being read',
+          'api/receipts › refuses one still being read, and one whose expense is submitted',
+        ],
       },
       {
         id: 'AC3',
@@ -1563,7 +1571,10 @@ export const CAPTURE_STORIES: readonly Story[] = [
         when: 'I try to delete it',
         then: 'it is refused: only its own member deletes a receipt, and an auditor deletes nothing',
         decided: { by: 'claude', source: 'ADR-0035' },
-        checks: [],
+        checks: [
+          'api/delete-receipt.int › lets only its own member delete it, never an auditor (AC3)',
+          'db/receipt-delete.int › lets only the receipt’s own member delete it, never an auditor',
+        ],
       },
       {
         id: 'AC4',
@@ -1571,7 +1582,10 @@ export const CAPTURE_STORIES: readonly Story[] = [
         when: 'an owner opens the audit trail',
         then: 'the deletion is there, with who, when and what the receipt was',
         decided: { by: 'claude', source: 'ADR-0028' },
-        checks: [],
+        checks: [
+          'api/delete-receipt.int › keeps the deletion in the audit trail, with what it was (AC4)',
+          'db/receipt-delete.int › deletes the member’s own receipt with its expense, and the audit trail keeps what it was',
+        ],
       },
       {
         id: 'AC5',
@@ -1579,9 +1593,11 @@ export const CAPTURE_STORIES: readonly Story[] = [
         when: 'I delete it',
         then: 'the charge is a missing receipt again in Needs you',
         decided: { by: 'claude', source: 'ADR-0047' },
-        checks: [],
+        checks: [
+          'db/receipt-delete.int › makes a card charge its expense documented a missing receipt again (AC5)',
+        ],
       },
     ],
-    note: 'Your report of Oct 7 (GAP-46, #100). Deleting reuses what a duplicate’s deletion does today (ADR-0028); only the button and its route are new.',
+    note: 'Your report of Oct 7 (GAP-46), built in PR #77 (#100) behind `receipts.delete`. Deleting reuses what a duplicate’s deletion does (ADR-0028); only the button and its route are new.',
   },
 ];

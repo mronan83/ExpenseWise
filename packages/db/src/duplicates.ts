@@ -352,6 +352,86 @@ export async function deleteDuplicateReceipt(
     : { status: 'deleted', kept: keepId, storageKey };
 }
 
+export type DeleteReceiptResult =
+  | { readonly status: 'deleted'; readonly storageKey: string }
+  | { readonly status: 'missing' }
+  /** Still being read: try again once its reading settles. */
+  | { readonly status: 'being_read' }
+  /** Its expense is submitted, approved or settled, so its claim stays as it went in. */
+  | { readonly status: 'locked' };
+
+/**
+ * Deletes a receipt filed by mistake, such as a forwarded booking confirmation with no amounts
+ * (FR-CAP-11, US-CAP-09), with its readings, confirmations and expense, through
+ * delete_receipt(), which refuses a submitted claim (ADR-0028). Only its own member deletes it:
+ * the own-records trigger refuses anyone else, and an auditor (ADR-0035). The audit trail
+ * records what it was first. Receipts held as copies of it are checked again, a closed report
+ * its expense was on reopens, and a card charge its expense documented is a missing receipt
+ * again (`release_card_transactions`). The caller removes the file once this commits. Call
+ * inside withOrg(), as the caller.
+ */
+export async function deleteReceipt(
+  tx: Transaction,
+  orgId: string,
+  receiptId: string,
+  actorUserId: string,
+): Promise<DeleteReceiptResult> {
+  await lockOrgWrites(tx, orgId);
+  const doomed = await expenseOfReceipt(tx, orgId, receiptId);
+  if (!doomed) return { status: 'missing' };
+  if (doomed.receiptStatus === 'processing') return { status: 'being_read' };
+  if (
+    doomed.expenseStatus &&
+    !['processing', 'needs_review', 'ready'].includes(doomed.expenseStatus)
+  ) {
+    return { status: 'locked' };
+  }
+  const actor = { type: 'user' as const, id: actorUserId };
+  await appendAuditEvent(tx, orgId, {
+    actor,
+    entityType: 'receipt',
+    entityId: receiptId,
+    action: 'receipt.deleted',
+    payload: {
+      filedByMistake: true,
+      sha256: doomed.sha256,
+      merchant: doomed.merchant,
+      date: doomed.transactionDate,
+      currency: doomed.currency,
+      amountMinor: doomed.amountMinor,
+      expenseId: doomed.expenseId,
+    },
+  });
+  const heldByDoomed = await tx
+    .select({
+      receiptId: receiptDuplicates.receiptId,
+      settledStatus: receiptDuplicates.settledStatus,
+    })
+    .from(receiptDuplicates)
+    .where(
+      and(
+        eq(receiptDuplicates.orgId, orgId),
+        eq(receiptDuplicates.otherReceiptId, receiptId),
+        eq(receiptDuplicates.state, 'open'),
+      ),
+    );
+  await reopenChangedReports(
+    tx,
+    orgId,
+    await reportsOfExpenses(tx, doomed.expenseId ? [doomed.expenseId] : []),
+    actor,
+    'a receipt on it was deleted',
+  );
+  const { rows } = await tx.execute<{ storage_key: string }>(
+    sql`select storage_key from delete_receipt(${receiptId})`,
+  );
+  for (const held of heldByDoomed) {
+    await release(tx, orgId, held.receiptId, held.settledStatus, actor);
+    await checkForDuplicate(tx, orgId, held.receiptId, held.settledStatus, actor);
+  }
+  return { status: 'deleted', storageKey: rows[0]?.storage_key ?? doomed.storageKey };
+}
+
 /**
  * Merges a duplicate into the primary the person chose (FR-INT-18): the primary's expense
  * takes every field it lacks from the duplicate's, and each field the person picked; then the

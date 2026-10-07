@@ -51,6 +51,7 @@ import {
   readReceiptAgainRoute,
   receiptUploadRoute,
   resolveDuplicateRoute,
+  deleteReceiptRoute,
 } from './routes/receipts.ts';
 import type { WorkspaceStore } from './workspace.ts';
 
@@ -101,6 +102,7 @@ export function registerReceiptRoutes(
       confirmReceiptRoute,
       correctReceiptRoute,
       resolveDuplicateRoute,
+      deleteReceiptRoute,
       inboxRoute,
     ].map((r) => r.getRoutingPath()),
   );
@@ -504,6 +506,32 @@ export function registerReceiptRoutes(
     if (!after) throw notFound();
     const imageUrl = await imageOf(after.receipt.storageKey);
     return c.json(await detailOf(who.orgId, after, imageUrl), 200);
+  });
+
+  app.openapi(deleteReceiptRoute, async (c) => {
+    const caller = c.var.identity;
+    const who = await member(caller.userId);
+    await features.require(who.orgId, 'receipts.delete');
+    const { receiptId } = c.req.valid('param');
+    const result = await stores().receipts.delete(who.orgId, receiptId, caller.userId);
+    if (result.status === 'missing') throw notFound();
+    if (result.status === 'being_read') {
+      throw new ProblemError(409, 'being-read', 'This receipt is still being read', {
+        code: 'being_read',
+        detail: 'Try again in a few seconds, once its reading settles.',
+      });
+    }
+    if (result.status === 'locked') {
+      throw new ProblemError(409, 'locked', 'Its expense is submitted or further along', {
+        code: 'locked',
+        detail:
+          'A submitted or approved expense is never deleted, so its claim stays as it went in.',
+      });
+    }
+    // After the commit: a failure here leaves a file nothing points to, never a receipt
+    // without its file.
+    await removeFile(result.storageKey);
+    return c.json({ deleted: receiptId }, 200);
   });
 
   app.openapi(resolveDuplicateRoute, async (c) => {
