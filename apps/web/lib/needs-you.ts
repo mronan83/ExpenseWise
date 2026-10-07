@@ -1,4 +1,5 @@
 import { showDate, showDateTime } from '@expensewise/domain';
+import type { CardInboxItem } from './card-statements';
 import { categoryText, type ExpenseCategory } from './categories';
 import {
   formatMoney,
@@ -91,6 +92,25 @@ function emailCard({ email, reason }: EmailInboxItem): InboxCard {
   };
 }
 
+/**
+ * A charge on the person's card with no expense (US-CAP-07 AC3): add its receipt, match it to
+ * an expense, or say why there is none, on the Card page.
+ */
+function cardCard({ transaction }: CardInboxItem): InboxCard {
+  const card = transaction.cardLastFour ? ` ending ${transaction.cardLastFour}` : '';
+  return {
+    key: `card-${transaction.id}`,
+    title: transaction.merchant,
+    amount: formatMoney(transaction.amount),
+    when: showDate(transaction.date),
+    status: { label: 'No receipt', tone: 'text-warn' },
+    text: `Charged to your card${card}, with no expense. Add its receipt, match it to an expense, or say why there isn’t one.`,
+    action: 'Sort it out',
+    href: `/card#charge-${transaction.id}`,
+    edge: 'warn',
+  };
+}
+
 /** What an inbox item says, and the one thing to do about it (FR-EXP-02). */
 export function inboxCard(item: InboxItem): InboxCard {
   switch (item.kind) {
@@ -136,6 +156,8 @@ export function inboxCard(item: InboxItem): InboxCard {
     }
     case 'email':
       return emailCard(item);
+    case 'card':
+      return cardCard(item);
     case 'report': {
       const { report, reason } = item;
       if (reason.code === 'returned') {

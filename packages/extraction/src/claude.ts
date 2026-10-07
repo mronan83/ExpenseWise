@@ -75,7 +75,8 @@ export class ClaudeExtractor implements Extractor {
   }
 }
 
-function documentBlock(input: ExtractionInput): Anthropic.ContentBlockParam {
+/** A document or image as a content block for Claude. */
+export function documentBlock(input: ExtractionInput): Anthropic.ContentBlockParam {
   const data = Buffer.from(input.bytes).toString('base64');
   if (input.mediaType === 'application/pdf') {
     return { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data } };

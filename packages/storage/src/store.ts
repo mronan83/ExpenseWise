@@ -41,6 +41,10 @@ export class StorageError extends Error {
 export const receiptPath = (orgId: string, receiptId: string) =>
   `orgs/${orgId}/receipts/${receiptId}`;
 
+/** Where a card statement's file lives (FR-CAP-10), in the same private bucket. */
+export const statementPath = (orgId: string, statementId: string) =>
+  `orgs/${orgId}/statements/${statementId}`;
+
 /** The private bucket receipt files live in. */
 export const RECEIPT_BUCKET = 'receipts';
 

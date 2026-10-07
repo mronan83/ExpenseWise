@@ -500,6 +500,7 @@
           "expenses.itemized",
           "expenses.split",
           "expenses.company-paid",
+          "expenses.card-statements",
           "receipts.purchases"
         ]
       },
@@ -1141,6 +1142,9 @@
           },
           {
             "$ref": "#/components/schemas/EmailInboxItem"
+          },
+          {
+            "$ref": "#/components/schemas/CardInboxItem"
           }
         ],
         "discriminator": {
@@ -1149,7 +1153,8 @@
             "receipt": "#/components/schemas/ReceiptInboxItem",
             "report": "#/components/schemas/ReportInboxItem",
             "expense": "#/components/schemas/ExpenseInboxItem",
-            "email": "#/components/schemas/EmailInboxItem"
+            "email": "#/components/schemas/EmailInboxItem",
+            "card": "#/components/schemas/CardInboxItem"
           }
         }
       },
@@ -1798,6 +1803,93 @@
           "reason"
         ],
         "description": "An email from the person’s own address that filed nothing, while emails that filed nothing are on (#59). Never its text. It shows for 30 days after it arrived, unless dismissed first."
+      },
+      "CardInboxItem": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "card"
+            ]
+          },
+          "transaction": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "date": {
+                "type": "string",
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              "merchant": {
+                "type": "string"
+              },
+              "amount": {
+                "$ref": "#/components/schemas/CardAmount"
+              },
+              "cardLastFour": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "id",
+              "date",
+              "merchant",
+              "amount",
+              "cardLastFour"
+            ]
+          },
+          "reason": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "missing_receipt"
+                ],
+                "description": "A card charge with no expense: add its receipt, match it, or say why not."
+              }
+            },
+            "required": [
+              "code"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "transaction",
+          "reason"
+        ],
+        "description": "A charge on the person’s card with no expense, while card statements are on."
+      },
+      "CardAmount": {
+        "type": "object",
+        "properties": {
+          "amountMinor": {
+            "type": "integer",
+            "description": "Integer minor units, e.g. cents."
+          },
+          "currency": {
+            "type": "string",
+            "example": "USD"
+          },
+          "decimal": {
+            "type": "string",
+            "example": "402.20",
+            "description": "The same amount, for display."
+          }
+        },
+        "required": [
+          "amountMinor",
+          "currency",
+          "decimal"
+        ]
       },
       "ReceiptDetail": {
         "allOf": [
@@ -3648,6 +3740,9 @@
               "split": {
                 "$ref": "#/components/schemas/ExpenseSplit"
               },
+              "cardCharge": {
+                "$ref": "#/components/schemas/ExpenseCardCharge"
+              },
               "claim": {
                 "type": "object",
                 "properties": {
@@ -4237,6 +4332,53 @@
           "type",
           "amount",
           "lines"
+        ]
+      },
+      "ExpenseCardCharge": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "date": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "merchant": {
+            "type": "string"
+          },
+          "amount": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CardAmount"
+              },
+              {
+                "description": "What the card was charged, in its currency, beside any conversion (AC7)."
+              }
+            ]
+          },
+          "cardLastFour": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "matchedBy": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "person"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "date",
+          "merchant",
+          "amount",
+          "cardLastFour",
+          "matchedBy"
         ]
       },
       "ReceiptCheck": {
@@ -8150,6 +8292,481 @@
         "required": [
           "organization",
           "member"
+        ]
+      },
+      "StatementUploadTicket": {
+        "type": "object",
+        "properties": {
+          "statementId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "bucket": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "Uploads one file to this path, once."
+          }
+        },
+        "required": [
+          "statementId",
+          "bucket",
+          "path",
+          "token"
+        ]
+      },
+      "StatementUploadRequest": {
+        "type": "object",
+        "properties": {
+          "byteSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10485760,
+            "description": "At most 10 MB."
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "SHA-256 of the PDF, lowercase hex."
+          }
+        },
+        "required": [
+          "byteSize",
+          "sha256"
+        ],
+        "description": "A statement’s PDF, before it is uploaded."
+      },
+      "CardStatements": {
+        "type": "object",
+        "properties": {
+          "statements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CardStatement"
+            },
+            "description": "Newest first."
+          },
+          "transactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CardTransaction"
+            },
+            "description": "Every transaction they brought in, latest first."
+          },
+          "missing": {
+            "type": "integer",
+            "description": "How many are missing receipts."
+          }
+        },
+        "required": [
+          "statements",
+          "transactions",
+          "missing"
+        ]
+      },
+      "CardStatement": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "upload",
+              "email",
+              "list"
+            ],
+            "description": "upload: a PDF brought in here. email: a PDF forwarded. list: a downloaded list."
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "reading",
+              "read",
+              "needs_look",
+              "failed"
+            ],
+            "description": "reading: its PDF is being read. read: its transactions are kept and matched. needs_look: its lines don’t make its printed totals, or a line couldn’t be read, so nothing is matched until the person confirms it (US-CAP-07 AC5). failed: nothing could be read; problem says why."
+          },
+          "problem": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "needs_look and failed: why, in plain words."
+          },
+          "cardLastFour": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "periodStart": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "periodEnd": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "charges": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CardAmount"
+              },
+              {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "Its own printed total of charges."
+              }
+            ]
+          },
+          "credits": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CardAmount"
+              },
+              {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "Its own printed total of credits."
+              }
+            ]
+          },
+          "added": {
+            "type": "integer",
+            "description": "Transactions it brought in that no earlier statement had."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "source",
+          "status",
+          "problem",
+          "cardLastFour",
+          "periodStart",
+          "periodEnd",
+          "charges",
+          "credits",
+          "added",
+          "createdAt"
+        ]
+      },
+      "CardTransaction": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "statementId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "transactionDate": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "postedOn": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "merchant": {
+            "type": "string",
+            "description": "As the statement prints it."
+          },
+          "amount": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CardAmount"
+              },
+              {
+                "description": "In the card’s currency, as charged. A credit or refund is negative."
+              }
+            ]
+          },
+          "cardLastFour": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "missing",
+              "matched",
+              "set_aside",
+              "credit",
+              "waiting"
+            ],
+            "description": "missing: a charge with no expense yet, a missing receipt. matched: it pays for an expense. set_aside: the person said why it has none. credit: a credit or refund, never a missing receipt. waiting: its statement needs a look first."
+          },
+          "expense": {
+            "$ref": "#/components/schemas/MatchedExpense"
+          },
+          "matchedBy": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "auto",
+              "person",
+              null
+            ],
+            "description": "auto: by its amount, day and merchant. person: chosen by the person."
+          },
+          "setAside": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "reason": {
+                "type": "string",
+                "enum": [
+                  "personal",
+                  "no_receipt",
+                  "not_an_expense",
+                  "other"
+                ],
+                "description": "Why a charge has no expense: personal, no receipt was given, not an expense (such as a fee the company pays), or other, which needs a note."
+              },
+              "note": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "reason",
+              "note",
+              "at"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "statementId",
+          "transactionDate",
+          "postedOn",
+          "merchant",
+          "amount",
+          "cardLastFour",
+          "state",
+          "expense",
+          "matchedBy",
+          "setAside"
+        ]
+      },
+      "MatchedExpense": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "merchant": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+          },
+          "amount": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CardAmount"
+              },
+              {
+                "type": [
+                  "object",
+                  "null"
+                ]
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "merchant",
+          "date",
+          "amount"
+        ]
+      },
+      "FileStatement": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The statementId from the upload ticket."
+          },
+          "byteSize": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10485760,
+            "description": "At most 10 MB."
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "description": "SHA-256 of the PDF, lowercase hex."
+          }
+        },
+        "required": [
+          "id",
+          "byteSize",
+          "sha256"
+        ]
+      },
+      "StatementListResult": {
+        "type": "object",
+        "properties": {
+          "statementId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "added": {
+            "type": "integer",
+            "description": "Transactions no earlier statement had."
+          },
+          "matched": {
+            "type": "integer",
+            "description": "Of all open ones, how many were matched."
+          },
+          "skipped": {
+            "type": "integer",
+            "description": "Rows that weren’t transactions, such as a payment, or didn’t read."
+          }
+        },
+        "required": [
+          "statementId",
+          "added",
+          "matched",
+          "skipped"
+        ]
+      },
+      "StatementListRequest": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1048576,
+            "description": "The downloaded list as text: CSV or tab-separated, with a header row naming its columns. At most 2000 rows."
+          },
+          "currency": {
+            "type": "string",
+            "pattern": "^[A-Z]{3}$",
+            "description": "The card’s currency; the organization’s home currency if not given."
+          }
+        },
+        "required": [
+          "text"
+        ]
+      },
+      "MatchAgainResult": {
+        "type": "object",
+        "properties": {
+          "matched": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "matched"
+        ]
+      },
+      "SetAside": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "enum": [
+              "personal",
+              "no_receipt",
+              "not_an_expense",
+              "other"
+            ],
+            "description": "Why a charge has no expense: personal, no receipt was given, not an expense (such as a fee the company pays), or other, which needs a note."
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 200,
+            "description": "Needed for other; at most 200 characters."
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "MatchToExpense": {
+        "type": "object",
+        "properties": {
+          "expenseId": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "expenseId"
+        ],
+        "description": "Any of the person’s expenses not paid by another charge, whatever its amount."
+      },
+      "MatchableExpenses": {
+        "type": "object",
+        "properties": {
+          "expenses": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MatchedExpense"
+            },
+            "description": "The person’s expenses within a week of the charge, not yet matched, nearest first."
+          }
+        },
+        "required": [
+          "expenses"
         ]
       }
     },
@@ -17036,6 +17653,984 @@
           },
           "503": {
             "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/card-statements/uploads": {
+      "post": {
+        "tags": [
+          "Card statements"
+        ],
+        "summary": "Get a one-time upload for a statement PDF",
+        "description": "Returns a path and token the client uploads the PDF to directly, as for a receipt.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatementUploadRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Upload the PDF here, then file it.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementUploadTicket"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or it is another member’s, which only its member changes (not_yours).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such statement or transaction, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in, the database or file storage is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/card-statements": {
+      "post": {
+        "tags": [
+          "Card statements"
+        ],
+        "summary": "Bring in an uploaded statement PDF",
+        "description": "US-CAP-07 AC1. Records the statement and the event that has it read, in one transaction. It is read by Claude with the organization’s Anthropic key, its transactions kept and matched. Safe to retry with the same id.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FileStatement"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Already brought in: a retried request, or the same PDF brought in before.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardStatements"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Brought in; it is being read.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardStatements"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or it is another member’s, which only its member changes (not_yours).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such statement or transaction, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in, the database or file storage is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Card statements"
+        ],
+        "summary": "The person’s card statements and their transactions",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The person’s statements and transactions, after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardStatements"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or it is another member’s, which only its member changes (not_yours).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such statement or transaction, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in, the database or file storage is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/card-statements/lists": {
+      "post": {
+        "tags": [
+          "Card statements"
+        ],
+        "summary": "Bring in a downloaded transaction list",
+        "description": "US-CAP-07 AC6. Reads a CSV or tab-separated list in the request, with no model: its columns found by their names, payments to the card left out. Its transactions are kept and matched at once. The same list again changes nothing.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StatementListRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The same list was brought in before; nothing changed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementListResult"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Brought in and matched.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementListResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or it is another member’s, which only its member changes (not_yours).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such statement or transaction, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "It isn’t a transaction list: empty, no_columns (no date, merchant and amount columns), no_rows (no row read as a transaction) or too_many_rows; or unknown_currency.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in, the database or file storage is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/card-statements/{statementId}/confirm": {
+      "post": {
+        "tags": [
+          "Card statements"
+        ],
+        "summary": "Take a statement that needed a look as read, and match it",
+        "description": "US-CAP-07 AC5: once the person has looked at what it says doesn’t add up.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "statementId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The person’s statements and transactions, after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardStatements"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or it is another member’s, which only its member changes (not_yours).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such statement or transaction, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It isn’t waiting for a look (not_waiting).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in, the database or file storage is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/card-statements/{statementId}": {
+      "delete": {
+        "tags": [
+          "Card statements"
+        ],
+        "summary": "Delete a statement brought in by mistake, with its transactions",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "statementId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The person’s statements and transactions, after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardStatements"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or it is another member’s, which only its member changes (not_yours).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such statement or transaction, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in, the database or file storage is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/card-statements/match": {
+      "post": {
+        "tags": [
+          "Card statements"
+        ],
+        "summary": "Match the person’s open transactions again",
+        "description": "FR-INT-24. Matching runs when a statement is read and when a receipt is read; this runs it after expenses typed in by hand.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "How many were matched.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchAgainResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or it is another member’s, which only its member changes (not_yours).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such statement or transaction, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in, the database or file storage is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/card-transactions/{transactionId}/set-aside": {
+      "put": {
+        "tags": [
+          "Card statements"
+        ],
+        "summary": "Say why a charge has no expense",
+        "description": "US-CAP-07 AC3. It is no longer a missing receipt. One set aside already takes the new reason. Each change is in the audit trail.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "transactionId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAside"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The person’s statements and transactions, after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardStatements"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or it is another member’s, which only its member changes (not_yours).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such statement or transaction, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It pays for an expense: let it go first (matched).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "A reason, or the note other needs, is not valid; field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in, the database or file storage is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Card statements"
+        ],
+        "summary": "Bring a charge set aside back as a missing receipt",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "transactionId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The person’s statements and transactions, after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardStatements"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or it is another member’s, which only its member changes (not_yours).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such statement or transaction, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in, the database or file storage is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/card-transactions/{transactionId}/expense": {
+      "put": {
+        "tags": [
+          "Card statements"
+        ],
+        "summary": "Match a charge to an expense the person chose",
+        "description": "FR-INT-24. Any of the person’s expenses not paid by another charge, whatever its amount or currency: a tip added later, or a charge abroad.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "transactionId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MatchToExpense"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The person’s statements and transactions, after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardStatements"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or it is another member’s, which only its member changes (not_yours).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such statement or transaction, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "set_aside: bring it back first. not_matchable: the expense isn’t the person’s, or is paid by another charge.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in, the database or file storage is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Card statements"
+        ],
+        "summary": "Let a charge go of its expense",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "transactionId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The person’s statements and transactions, after the change.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CardStatements"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or it is another member’s, which only its member changes (not_yours).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such statement or transaction, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in, the database or file storage is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/card-transactions/{transactionId}/expenses": {
+      "get": {
+        "tags": [
+          "Card statements"
+        ],
+        "summary": "Expenses a charge might be matched to",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "transactionId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Nearest first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MatchableExpenses"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or it is another member’s, which only its member changes (not_yours).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such statement or transaction, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in, the database or file storage is not configured on this server.",
             "content": {
               "application/problem+json": {
                 "schema": {

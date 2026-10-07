@@ -1351,7 +1351,7 @@ export const CAPTURE_STORIES: readonly Story[] = [
     soThat: 'I see at once which charges still need a receipt, without giving anyone my card login',
     feature: 'F-65',
     requirements: ['FR-CAP-10', 'FR-INT-24'],
-    status: 'Planned',
+    status: 'Delivered',
     criteria: [
       {
         id: 'AC1',
@@ -1359,7 +1359,12 @@ export const CAPTURE_STORIES: readonly Story[] = [
         when: 'I upload it, or forward it to my receipts address',
         then: 'each transaction on it is kept with its date, merchant, amount and the card’s last four digits',
         decided: { by: 'owner', source: 'Q51' },
-        checks: [],
+        checks: [
+          'workflows/card-statements › keeps each transaction with its date, merchant, amount and card, when its totals add up',
+          'workflows/email › files its PDF as a statement, not a receipt, where card statements are on',
+          'api/card-statements.int › is uploaded beside receipts, filed, and handed on to be read',
+          'e2e/signed-in › the card: charges with no receipt, statements and matches',
+        ],
       },
       {
         id: 'AC2',
@@ -1368,7 +1373,13 @@ export const CAPTURE_STORIES: readonly Story[] = [
         when: 'the statement is brought in',
         then: 'they are matched, and the expense shows its card transaction',
         decided: { by: 'owner', source: 'Q51' },
-        checks: [],
+        rules: ['R-MATCH-DAYS'],
+        checks: [
+          'domain/card-transactions › matches the same amount and currency within three days, one to one',
+          'domain/card-transactions › prefers the closer merchant name, then the nearer date',
+          'db/card-statements.int › files a statement once, keeps each transaction once, and matches what it can',
+          'api/card-statements.int › keeps each charge and credit, leaves the payment out, and matches the charge it can',
+        ],
       },
       {
         id: 'AC3',
@@ -1376,7 +1387,14 @@ export const CAPTURE_STORIES: readonly Story[] = [
         when: 'I open Needs you',
         then: 'it is listed as a missing receipt, and I attach the receipt or say why there is none, such as a personal charge',
         decided: { by: 'claude' },
-        checks: [],
+        rules: ['R-EXCLUSION-NOTE-MAX'],
+        checks: [
+          'domain/card-transactions › takes a reason from the list, with a note that only other needs',
+          'db/card-statements.int › sets one aside with a reason, brings it back, and matches one by hand to a nearby expense',
+          'api/card-statements.int › is set aside with a reason, which other needs a note for, and brought back',
+          'e2e/signed-in › a card charge with no receipt, in Needs you',
+          'e2e/signed-in › setting a card charge aside',
+        ],
       },
       {
         id: 'AC4',
@@ -1384,7 +1402,11 @@ export const CAPTURE_STORIES: readonly Story[] = [
         when: 'a later statement, or the same one again, lists it',
         then: 'it is kept once',
         decided: { by: 'claude' },
-        checks: [],
+        checks: [
+          'domain/card-transactions › keys a transaction the same each time it is printed, and two identical charges apart',
+          'db/card-statements.int › files a statement once, keeps each transaction once, and matches what it can',
+          'api/card-statements.int › keeps each charge and credit, leaves the payment out, and matches the charge it can',
+        ],
       },
       {
         id: 'AC5',
@@ -1392,7 +1414,12 @@ export const CAPTURE_STORIES: readonly Story[] = [
         when: 'it is read',
         then: 'it is held for a look before any transaction is matched, as a receipt whose sums miss is',
         decided: { by: 'claude', source: 'ADR-0041' },
-        checks: [],
+        checks: [
+          'domain/card-transactions › says which total a missed line leaves short',
+          'workflows/card-statements › holds a statement whose lines miss its printed totals for a look (AC5)',
+          'db/card-statements.int › holds a statement that needs a look, matching nothing until the person confirms it',
+          'api/card-statements.int › holds a statement whose lines miss its totals until it is confirmed, then matches it',
+        ],
       },
       {
         id: 'AC6',
@@ -1400,15 +1427,24 @@ export const CAPTURE_STORIES: readonly Story[] = [
         when: 'I upload it',
         then: 'its transactions come in the same way, without a model reading it',
         decided: { by: 'claude' },
-        checks: [],
+        rules: ['R-STATEMENT-ROWS-MAX'],
+        checks: [
+          'extraction/statement › finds the columns by their names, after any lines above the header',
+          'extraction/statement › reads charges printed as negative, and debit and credit columns, the same way',
+          'db/card-statements.int › brings in a downloaded list with no model, once',
+          'api/card-statements.int › keeps each charge and credit, leaves the payment out, and matches the charge it can',
+        ],
       },
       {
         id: 'AC7',
         given: 'a foreign charge whose statement shows the dollars it cost',
         when: 'it is matched to an expense in another currency',
-        then: 'the dollars show beside the expense’s conversion, which stays at the purchase date’s reference rate',
+        then: 'the expense shows the dollars the card was charged, and keeps its own amount, which its report converts at the purchase date’s reference rate',
         decided: { by: 'claude', source: 'ADR-0034' },
-        checks: [],
+        checks: [
+          'api/card-statements.int › shows the dollars the card was charged on an expense in euros, whose own amount stays',
+          'e2e/signed-in › a fare in euros with the dollars its card was charged',
+        ],
       },
       {
         id: 'AC8',
@@ -1416,7 +1452,10 @@ export const CAPTURE_STORIES: readonly Story[] = [
         when: 'they open their transactions or Needs you',
         then: 'they never see mine: each person’s card transactions are their own',
         decided: { by: 'claude', source: 'ADR-0035' },
-        checks: [],
+        checks: [
+          'db/card-statements.int › keeps each member’s statements to them, and deletes one with its transactions',
+          'api/card-statements.int › shows each member only their own, and an auditor brings none in',
+        ],
       },
       {
         id: 'AC9',
@@ -1424,9 +1463,12 @@ export const CAPTURE_STORIES: readonly Story[] = [
         when: 'a statement is uploaded or forwarded',
         then: 'it is read as a receipt is, as before, and nothing is matched',
         decided: { by: 'owner', source: 'Q5' },
-        checks: [],
+        checks: [
+          'workflows/email › reads it as receipts, as always, where card statements are off (AC9)',
+          'api/card-statements.int › answers feature_off on every route, and Needs you and expenses read as before',
+        ],
       },
     ],
-    note: 'Your requirement of Oct 7 and your answers to Q50 and Q51 (GAP-42, #97). No live connection reaches U.S. Bank Access Online, so the statement is the way in; a live feed, where a card’s site allows one, would bring the same transactions later.',
+    note: 'Your requirement of Oct 7 and your answers to Q50 and Q51 (GAP-42, #97), built in PR #68 behind expenses.card-statements. No live connection reaches U.S. Bank Access Online, so the statement is the way in; a live feed, where a card’s site allows one, would bring the same transactions later. AC7 shows the card’s dollars on the expense rather than beside each conversion on its report and trip, which is where conversions show: Claude’s, yours to confirm.',
   },
 ];

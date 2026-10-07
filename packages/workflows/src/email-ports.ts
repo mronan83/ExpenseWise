@@ -7,6 +7,7 @@ import {
 import type { ObjectStore } from '@expensewise/storage';
 import { NonRetriableError } from 'inngest';
 import type { EmailReadingPorts, ReceivedEmail } from './email.ts';
+import { featureSwitch } from './features.ts';
 import { checkedDatabase } from './receipt-ports.ts';
 
 /** Bird's API host for a key: `bk_us1_…` keys go to us1, `bk_eu1_…` keys to eu1. */
@@ -51,12 +52,16 @@ export interface EmailReadingDeps {
   /** A Bird API key with the mailbox:read scope. */
   readonly birdApiKey: string;
   readonly fetch?: typeof fetch;
+  /** FLAG_OVERRIDES, read from the environment when not given. */
+  readonly flagOverrides?: string;
 }
 
 /** The email workflow on Bird, Postgres and Supabase Storage (ADR-0026). */
 export function emailReadingPorts(deps: EmailReadingDeps): EmailReadingPorts {
   const { safe, inOrg } = checkedDatabase(deps.db);
+  const switchOn = featureSwitch(inOrg, deps.flagOverrides ?? process.env.FLAG_OVERRIDES);
   return {
+    statementsOn: (orgId) => switchOn(orgId, 'expenses.card-statements'),
     fetchRaw: birdRawMessage(deps.birdApiKey, deps.fetch),
     async memberForSender(address) {
       await safe();

@@ -359,6 +359,20 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none' },
     source: 'Product owner Oct 7',
     affects: ['GAP-42', 'FR-CAP-10', 'FR-INT-24', 'F-65', 'FR-CAP-06'],
+    done: { date: '2026-10-07', in: 'PR #68' },
+  },
+  {
+    num: 98,
+    title: 'A charge on a company-billed card marks its expense paid by the company',
+    type: 'Feature',
+    detail:
+      'GAP-43, found building #97. Your answer to Q52 decides it: where your employer pays U.S. Bank, a charge matched to an expense marks it Paid by the company, unless you set who paid by hand, so it is never claimed as well; where you pay the bill, nothing changes. Needs Paid by the company switched on too.',
+    priority: 'P1',
+    effort: 'S',
+    severity: 'Medium',
+    blocker: { kind: 'owner', ask: 'Your decision: Q52' },
+    source: 'GAP-43',
+    affects: ['GAP-43', 'FR-INT-24', 'FR-EXP-17', 'F-65'],
   },
   // P2: this month
   {
@@ -1408,7 +1422,7 @@ export const BACKLOG: readonly BacklogItem[] = [
 
 /** How to order the open work, beyond priority. */
 export const SEQUENCING: readonly string[] = [
-  '#97 brings in your corporate card’s statement from U.S. Bank Access Online and matches its transactions to your expenses (your answers to Q50 and Q51); no live connection reaches that portal, so the statement is the way in.',
+  '#97, in PR #68, brings in your corporate card’s statement from U.S. Bank Access Online and matches its transactions to your expenses (your answers to Q50 and Q51). Switch on Card statements, then bring in September’s statement or its downloaded list on the Card page. #98 waits on your answer to Q52: if your employer pays the card’s bill, mark matched expenses Paid by the company by hand until it is built.',
   '#96, in PR #66, reads each purchase on a receipt as its own group of lines (your answer to Q49), so a seat upgrade bought later on your own card can be left out with its own taxes and fees. Switch on Several purchases on one receipt, with itemized lines, then Read again each fare that holds one.',
   'Your batch of Oct 5 is built in PR #60: approval (#24) with the second factor (#8), a submitted claim keeping its names (#70), emails that filed nothing (#59), journeys and stays in the export (#83), business miles on Home (#73) and proof that no tools reach a model (#38), each behind its switch and off until you switch it on.',
   'With #85, #88 and #90 in PR #60, a session that skipped the code gets nothing for someone with an authenticator, and once a person has one, only an email they let in signs in; their other emails still forward receipts (Q44). #91, letting in first only the email a person first signed in with (your answer to Q45), is next; until then, set up your authenticator soon after release.',

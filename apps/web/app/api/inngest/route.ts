@@ -1,6 +1,8 @@
 import { createDatabase } from '@expensewise/db';
 import {
   amountConversionFunction,
+  cardStatementReadingFunction,
+  cardStatementReadingPorts,
   conversionPorts,
   conversionSweepFunction,
   emailReadingFunction,
@@ -15,6 +17,7 @@ import {
   routeMeasuringPorts,
   type ConversionPorts,
   type EmailReadingPorts,
+  type StatementReadingPorts,
   type ReceiptReadingPorts,
   type RelayPorts,
   type ReportSchedulePorts,
@@ -61,6 +64,21 @@ function readingPorts(): ReceiptReadingPorts {
   }
   reading = receiptReadingPorts({ db, files, providerKey });
   return reading;
+}
+
+let statements: StatementReadingPorts | undefined;
+function statementPorts(): StatementReadingPorts {
+  if (statements) return statements;
+  const db = appDatabase();
+  const files = receiptFiles();
+  const providerKey = providerKeyReader();
+  if (!db || !files || !providerKey) {
+    throw new Error(
+      'Reading card statements needs DATABASE_URL, NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY',
+    );
+  }
+  statements = cardStatementReadingPorts({ db, files, providerKey });
+  return statements;
 }
 
 let emails: EmailReadingPorts | undefined;
@@ -116,6 +134,7 @@ const handler = workflowsServed
       functions: [
         ...relayFunctions,
         receiptReadingFunction(workflowClient, readingPorts),
+        cardStatementReadingFunction(workflowClient, statementPorts),
         emailReadingFunction(workflowClient, emailPorts),
         reportScheduleFunction(workflowClient, schedulePorts),
         amountConversionFunction(workflowClient, convertingPorts),
@@ -141,6 +160,7 @@ export const GET = handler?.GET ?? notConfigured;
 export const POST = handler?.POST ?? notConfigured;
 export const PUT = handler?.PUT ?? notConfigured;
 
-// A reading step calls the model with a 50-second limit; keeping an email fetches it (30
-// seconds at most), stores up to ten files and writes them in one transaction.
+// A reading step, a receipt's or a card statement's, calls the model with a 50-second limit;
+// keeping an email fetches it (30 seconds at most), stores up to ten files and writes them in
+// one transaction.
 export const maxDuration = 60;

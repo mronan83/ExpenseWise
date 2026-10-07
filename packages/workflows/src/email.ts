@@ -9,7 +9,7 @@ import type {
 } from '@expensewise/db';
 import { derivedId } from '@expensewise/domain';
 import type { DocumentMediaType } from '@expensewise/extraction';
-import { receiptPath, RECEIPT_MAX_BYTES } from '@expensewise/storage';
+import { receiptPath, RECEIPT_MAX_BYTES, statementPath } from '@expensewise/storage';
 import { NonRetriableError, type Inngest } from 'inngest';
 import type { DNSResolver } from 'mailauth';
 import { dkimVerify } from 'mailauth/lib/dkim/verify';
@@ -182,6 +182,11 @@ export interface EmailReadingPorts {
   /** The receipt that already holds this file in the organization, if any. */
   filedAs(orgId: string, sha256: string): Promise<string | undefined>;
   saveFile(storageKey: string, bytes: Uint8Array, contentType: string): Promise<void>;
+  /**
+   * Whether the organization brings in card statements (`expenses.card-statements`): then an
+   * email with "statement" in its subject files its PDFs as statements (FR-CAP-10, #97).
+   */
+  statementsOn?(orgId: string): Promise<boolean>;
   record(
     orgId: string,
     email: NewInboundEmail,
@@ -208,6 +213,9 @@ export type KeepEmailResult =
     }
   /** Kept on an earlier try; its receipts still waiting are handed on again. */
   | { readonly outcome: 'exists'; readonly events: CommittedEvent[] };
+
+/** A subject that names a card statement, as a person forwarding one writes it. */
+export const STATEMENT_SUBJECT = /\bstatements?\b/i;
 
 /**
  * Keeps an arriving email for the member who sent it (ADR-0026). The From address must be a
@@ -241,7 +249,29 @@ export async function keepEmail(
       : null;
   const files = !sender.verified ? [] : body ? [body] : parsed.files;
   const attachments: InboundAttachment[] = [];
-  for (const file of files) {
+  // A card statement forwarded with "statement" in its subject is brought in as one, never
+  // read as a receipt (US-CAP-07 AC1); a statement is a PDF.
+  const statements =
+    !body &&
+    files.some((f) => f.contentType === 'application/pdf') &&
+    STATEMENT_SUBJECT.test(parsed.subject ?? '') &&
+    (await ports.statementsOn?.(member.orgId)) === true;
+  if (statements) {
+    for (const file of files.filter((f) => f.contentType === 'application/pdf')) {
+      const statementId = derivedId(`${key}:statement:${file.sha256}`);
+      const storageKey = statementPath(member.orgId, statementId);
+      await ports.saveFile(storageKey, file.bytes, file.contentType);
+      attachments.push({
+        receiptId: statementId,
+        kind: 'statement',
+        storageKey,
+        contentType: file.contentType,
+        byteSize: file.bytes.byteLength,
+        sha256: file.sha256,
+      });
+    }
+  }
+  for (const file of statements ? [] : files) {
     const receiptId = derivedId(`${key}:${file.sha256}`);
     const holder = await ports.filedAs(member.orgId, file.sha256);
     // Already a receipt from another upload or email: not filed twice.

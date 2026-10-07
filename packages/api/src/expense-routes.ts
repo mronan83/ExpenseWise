@@ -18,6 +18,8 @@ import type { ExpenseStore } from './expenses.ts';
 import { featureGate, type FeatureGate } from './features.ts';
 import type { ItemizedStore } from './itemized.ts';
 import { itemizedSections } from './itemized-routes.ts';
+import { cardChargeSection } from './card-statement-views.ts';
+import type { CardStore } from './card-statements.ts';
 import { ProblemError } from './problem.ts';
 import { setPaidByRoute } from './routes/company-paid.ts';
 import { withTravel } from './travel-views.ts';
@@ -39,6 +41,8 @@ export interface ExpenseRouteOptions {
   readonly itemized?: ItemizedStore;
   /** Who paid each expense; while Paid by the company is on, each shows it (FR-EXP-17). */
   readonly companyPaid?: CompanyPaidStore;
+  /** Card transactions; while card statements are on, an expense shows the charge that paid it. */
+  readonly cards?: CardStore;
   /** Which features are on. Built from `workspace` when not given. */
   readonly features?: FeatureGate;
 }
@@ -125,10 +129,12 @@ export function registerExpenseRoutes(
   });
 
   const sections = itemizedSections(options.itemized, features);
+  const cardCharge = cardChargeSection(options.cards, features);
   /**
    * One expense as its page shows it: its category and type, lines and split included while
-   * each is on, its journey and stay while Journeys and stays is (FR-INT-20, FR-INT-21), and
-   * who paid it while Paid by the company is (FR-EXP-17).
+   * each is on, its journey and stay while Journeys and stays is (FR-INT-20, FR-INT-21), who
+   * paid it while Paid by the company is (FR-EXP-17), and the card charge that paid it while
+   * card statements are (FR-INT-24).
    */
   const detail = async (
     orgId: string,
@@ -150,6 +156,7 @@ export function registerExpenseRoutes(
       ...((await showCompanyPaid(features, orgId, readPaidBy([found.expense])))
         ? paidByView(found.expense)
         : {}),
+      ...(await cardCharge(orgId, found.expense.id)),
     };
     return (await features.isOn(orgId, 'receipts.journeys')) ? withTravel(shown, found) : shown;
   };

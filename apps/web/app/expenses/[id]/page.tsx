@@ -28,6 +28,7 @@ import {
   type TravelField,
 } from '../../../lib/expenses';
 import { APPROVAL_FLAG } from '../../../lib/approval';
+import type { ExpenseCardCharge } from '../../../lib/card-statements';
 import { COMPANY_PAID_FLAG } from '../../../lib/company-paid';
 import { useFeatures } from '../../../lib/features';
 import { describeRate, distanceOf, MILEAGE_FLAG, type MileageEntry } from '../../../lib/mileage';
@@ -169,6 +170,10 @@ export default function ExpensePage() {
                 expense={expense}
                 onSaved={(next) => setLoad({ state: 'ready', expense: next })}
               />
+            ) : null}
+            {/* Sent only while card statements are on, and a charge pays for it (FR-INT-24). */}
+            {expense.cardCharge ? (
+              <CardCharge charge={expense.cardCharge} expense={expense} />
             ) : null}
             <Proof expense={expense} />
           </>
@@ -549,6 +554,40 @@ function Drive({
           {error}
         </p>
       ) : null}
+    </section>
+  );
+}
+
+/**
+ * The charge on the person's card that paid for this expense (US-CAP-07 AC2). In another
+ * currency, the dollars the card was charged show here, and the claim keeps its own amount,
+ * converted on its report at its purchase date's reference rate (AC7, ADR-0034).
+ */
+function CardCharge({ charge, expense }: { charge: ExpenseCardCharge; expense: ExpenseDetail }) {
+  const abroad = expense.amount !== null && expense.amount.currency !== charge.amount.currency;
+  const onCard = charge.cardLastFour ? ` ending ${charge.cardLastFour}` : '';
+  return (
+    <section
+      aria-labelledby="card-charge-title"
+      className="flex flex-col gap-2 rounded-xl border border-rule bg-sheet p-4 text-sm"
+    >
+      <h2 id="card-charge-title" className="text-base font-semibold">
+        Its card charge
+      </h2>
+      <p>
+        <span className="font-semibold tabular-nums">{formatMoney(charge.amount)}</span> charged to
+        your card{onCard} on {showDate(charge.date)}, as {charge.merchant}.{' '}
+        {charge.matchedBy === 'auto' ? 'Matched on its own.' : 'Matched by you.'}
+      </p>
+      {abroad && expense.amount ? (
+        <p className="text-ink-2">
+          It claims {formatMoney(expense.amount)}, which its report converts at its purchase date’s
+          reference rate, not at your card’s rate.
+        </p>
+      ) : null}
+      <Link href={`/card#charge-${charge.id}`} className="tap text-sm font-semibold text-carbon">
+        See it on your card
+      </Link>
     </section>
   );
 }

@@ -1,4 +1,5 @@
 import type { ReceiptCheck } from './approval';
+import type { ExpenseCardCharge } from './card-statements';
 import type { ExpenseCategory } from './categories';
 import type { PaidBy } from './company-paid';
 import type { ExpenseSplit, Itemized } from './itemized';
@@ -88,6 +89,8 @@ export interface ExpenseDetail extends ExpenseSummary {
   split?: ExpenseSplit | null;
   /** How it holds up against its receipt, and why it claims less; while approval is on. */
   claim?: { reason: string | null; check: ReceiptCheck };
+  /** The card charge that paid for it, while card statements are on (FR-INT-24). */
+  cardCharge?: ExpenseCardCharge;
 }
 
 export interface Journey {

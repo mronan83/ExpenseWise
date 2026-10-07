@@ -17,6 +17,7 @@ import {
   dbApprovalStore,
   createSecretBox,
   dbAuditStore,
+  dbCardStore,
   dbCategoryStore,
   dbCompanyPaidStore,
   dbExpenseStore,
@@ -48,10 +49,19 @@ import {
 } from '@expensewise/db';
 import { derivedId } from '@expensewise/domain';
 import { runMigrations } from '@expensewise/db/migrate';
-import { COMPARISON_MODELS, FALLBACK_MODEL, type ModelId } from '@expensewise/extraction';
 import {
+  COMPARISON_MODELS,
+  FALLBACK_MODEL,
+  type ModelId,
+  type StatementReader,
+} from '@expensewise/extraction';
+import {
+  asReading,
+  cardStatementReadingPorts,
   conversionPorts,
   convertOrganization,
+  readStatement,
+  STATEMENT_MODEL,
   measureRoute,
   readWith,
   receiptReadingPorts,
@@ -335,6 +345,7 @@ const app = createHttpApp({
   audit: dbAuditStore(db),
   categories: dbCategoryStore(db),
   itemized: dbItemizedStore(db),
+  cards: dbCardStore(db),
   companyPaid: dbCompanyPaidStore(db),
   modelSettings: dbModelSettingsStore(db),
   reimbursement: dbReimbursementStore(db),
@@ -1037,6 +1048,87 @@ for (const [n, subject, status, senderProblem] of [
     ),
   );
 }
+
+// Riley's corporate card (FR-CAP-10, FR-INT-24, #97). September's transaction list, as Access
+// Online downloads it: the ride and the stay match their expenses on their own, the flight has
+// no expense, a coffee is set aside as personal, a credit needs no receipt and the payment to
+// the card is left out. The Lufthansa fare, in euros, is matched by hand to its dollar charge.
+await call('POST', '/v1/card-statements/lists', {
+  text: [
+    'Transaction Date,Posting Date,Merchant Name,Amount,Card Number',
+    '09/28/2026,09/29/2026,DELTA AIR 0062345678901 ATLANTA GA,402.20,XXXXXXXXXXXX4417',
+    '09/28/2026,09/30/2026,LUFTHANSA 2201234567890 FRANKFURT,483.94,XXXXXXXXXXXX4417',
+    '09/29/2026,09/30/2026,STARBUCKS STORE 2291 OMAHA NE,6.45,XXXXXXXXXXXX4417',
+    '09/30/2026,10/01/2026,LYFT *RIDE WED 6PM,18.40,XXXXXXXXXXXX4417',
+    '09/30/2026,10/01/2026,HILTON OMAHA CREDIT,-20.00,XXXXXXXXXXXX4417',
+    '10/01/2026,10/02/2026,HILTON OMAHA,412.60,XXXXXXXXXXXX4417',
+    '09/25/2026,09/25/2026,PAYMENT - THANK YOU,-1000.00,XXXXXXXXXXXX4417',
+  ].join('\n'),
+});
+type CardView = { transactions: { id: string; merchant: string }[] };
+const charges = (await call<CardView>('GET', '/v1/card-statements')).transactions;
+const chargeOf = (merchant: string) => charges.find((t) => t.merchant.startsWith(merchant))!.id;
+await call('PUT', `/v1/card-transactions/${chargeOf('STARBUCKS')}/set-aside`, {
+  reason: 'personal',
+});
+await call('PUT', `/v1/card-transactions/${chargeOf('LUFTHANSA')}/expense`, {
+  expenseId: expenses.lufthansa,
+});
+// October's statement as a PDF, read by the real statement workflow with a scripted answer
+// whose lines miss the total it prints, so it waits for a look (US-CAP-07 AC5).
+const statementPdf = new TextEncoder().encode('%PDF-1.7\nbench card statement, October\n');
+const pdfDescribed = {
+  byteSize: statementPdf.byteLength,
+  sha256: createHash('sha256').update(statementPdf).digest('hex'),
+};
+const pdfTicket = await call<{ statementId: string; path: string }>(
+  'POST',
+  '/v1/card-statements/uploads',
+  pdfDescribed,
+);
+files.set(pdfTicket.path, statementPdf);
+await call('POST', '/v1/card-statements', { id: pdfTicket.statementId, ...pdfDescribed });
+const statementPorts = {
+  ...cardStatementReadingPorts({ db, files: store, providerKey: () => Promise.resolve('no_key') }),
+  reader: () =>
+    Promise.resolve({
+      model: STATEMENT_MODEL,
+      read: () =>
+        Promise.resolve({
+          outcome: 'extracted' as const,
+          statement: {
+            cardStatement: true,
+            issuer: 'U.S. Bank',
+            cardLastFour: '4417',
+            periodStart: '2026-09-29',
+            periodEnd: '2026-10-28',
+            currency: 'USD',
+            charges: '901.30',
+            credits: null,
+            transactions: [
+              ['2026-10-05', 'MARRIOTT HOUSTON MEDICAL CTR', '289.00'],
+              ['2026-10-06', 'UNITED 0162345678901 HOUSTON TX', '512.30'],
+            ].map(([transactionDate, description, amount]) => ({
+              transactionDate: transactionDate!,
+              postedDate: null,
+              description: description!,
+              amount: amount!,
+              reference: null,
+              cardLastFour: null,
+            })),
+          },
+          model: STATEMENT_MODEL,
+          version: 'statement-v1',
+          latencyMs: 9000,
+          usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+          costNanoUsd: 0n,
+        }),
+    } as unknown as StatementReader),
+};
+const statementRead = await readStatement(statementPorts, organization.id, pdfTicket.statementId);
+if (statementRead?.status !== 'needs_look')
+  throw new Error('The bench statement should need a look');
+await statementPorts.settle(organization.id, pdfTicket.statementId, asReading(statementRead));
 
 const seeded: Seeded = {
   trips: {

@@ -3,6 +3,8 @@ import {
   DISTANCE_UNITS,
   EXCLUSION_NOTE_MAX,
   EXCLUSION_REASONS,
+  SET_ASIDE_NOTE_MAX,
+  SET_ASIDE_REASONS,
   EXPENSE_SOURCES,
   EXPENSE_STATUSES,
   LINE_KINDS,
@@ -1678,5 +1680,155 @@ export const orgMileageRates = pgTable(
       sql`(${t.perMile} IS NULL) = (${t.currency} IS NULL)`,
     ),
     check('org_mileage_rates_rate_positive', sql`${t.perMile} IS NULL OR ${t.perMile} > 0`),
+  ],
+);
+
+export const statementSource = pgEnum('statement_source', ['upload', 'email', 'list']);
+export const statementStatus = pgEnum('statement_status', [
+  'reading',
+  'read',
+  'needs_look',
+  'failed',
+]);
+export const setAsideReason = pgEnum('set_aside_reason', SET_ASIDE_REASONS);
+export const matchedBy = pgEnum('matched_by', ['auto', 'person']);
+
+/**
+ * A card statement a member brought in (FR-CAP-10, #97): a PDF uploaded or emailed, read by a
+ * model, or a transaction list downloaded from the card's site, read with none. It keeps what
+ * the statement says of itself, whether it is read, needs a look or couldn't be read and why,
+ * and which model read it at what cost. The same file is brought in once per member.
+ */
+export const cardStatements = pgTable(
+  'card_statements',
+  {
+    id: id(),
+    orgId: orgId(),
+    memberId: uuid('member_id').notNull(),
+    source: statementSource('source').notNull(),
+    /** Where its file is kept; null for a list, which is read in the request and not kept. */
+    storageKey: text('storage_key'),
+    contentType: text('content_type').notNull(),
+    byteSize: integer('byte_size').notNull(),
+    sha256: char('sha256', { length: 64 }).notNull(),
+    status: statementStatus('status').notNull().default('reading'),
+    /** Why it needs a look or couldn't be read, said plainly; null otherwise. */
+    problem: text('problem'),
+    cardLastFour: text('card_last_four'),
+    periodStart: date('period_start', { mode: 'string' }),
+    periodEnd: date('period_end', { mode: 'string' }),
+    currency: char('currency', { length: 3 }),
+    /** Its own totals of charges and of credits, as printed, in minor units; null unprinted. */
+    chargesMinor: bigint('charges_minor', { mode: 'number' }),
+    creditsMinor: bigint('credits_minor', { mode: 'number' }),
+    /** The model and instructions that read it, and what that cost; null for a list. */
+    model: text('model'),
+    version: text('version'),
+    costNanoUsd: bigint('cost_nano_usd', { mode: 'number' }),
+    /** How many transactions it brought in that weren't in already. */
+    added: integer('added').notNull().default(0),
+    readAt: timestamp('read_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('card_statements_org_id_id_key').on(t.orgId, t.id),
+    unique('card_statements_member_sha256_key').on(t.orgId, t.memberId, t.sha256),
+    foreignKey({
+      name: 'card_statements_member_fk',
+      columns: [t.orgId, t.memberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    check('card_statements_sha256_hex', sql`${t.sha256} ~ '^[0-9a-f]{64}$'`),
+    check('card_statements_byte_size_positive', sql`${t.byteSize} > 0`),
+    check('card_statements_file_kept', sql`(${t.storageKey} IS NULL) = (${t.source} = 'list')`),
+    check('card_statements_currency_iso', sql`${t.currency} IS NULL OR ${isoCurrency(t.currency)}`),
+    check(
+      'card_statements_card_last_four',
+      sql`${t.cardLastFour} IS NULL OR ${t.cardLastFour} ~ '^[0-9]{4}$'`,
+    ),
+  ],
+);
+
+/**
+ * One transaction on a member's card, brought in by the first statement that listed it and
+ * kept once by its key, however often another lists it (US-CAP-07 AC4). It is matched to at most
+ * one expense, by the matching or by the person, or set aside with a reason, such as a personal
+ * charge; while neither, it is a missing receipt in Needs you (FR-INT-24).
+ */
+export const cardTransactions = pgTable(
+  'card_transactions',
+  {
+    id: id(),
+    orgId: orgId(),
+    memberId: uuid('member_id').notNull(),
+    statementId: uuid('statement_id').notNull(),
+    /** The same each time it is printed (`transactionKeys`). */
+    key: text('key').notNull(),
+    transactionDate: date('transaction_date', { mode: 'string' }).notNull(),
+    postedOn: date('posted_on', { mode: 'string' }),
+    /** As the card prints it. */
+    merchant: text('merchant').notNull(),
+    /** In `currency`'s minor units; negative for a credit. */
+    amountMinor: bigint('amount_minor', { mode: 'number' }).notNull(),
+    currency: char('currency', { length: 3 }).notNull(),
+    cardLastFour: text('card_last_four'),
+    reference: text('reference'),
+    expenseId: uuid('expense_id'),
+    matchedBy: matchedBy('matched_by'),
+    matchedAt: timestamp('matched_at', { withTimezone: true }),
+    setAsideReason: setAsideReason('set_aside_reason'),
+    setAsideNote: text('set_aside_note'),
+    setAsideAt: timestamp('set_aside_at', { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('card_transactions_org_id_id_key').on(t.orgId, t.id),
+    unique('card_transactions_member_key').on(t.orgId, t.memberId, t.key),
+    // An expense is paid by one card transaction at most.
+    uniqueIndex('card_transactions_expense_key')
+      .on(t.orgId, t.expenseId)
+      .where(sql`${t.expenseId} IS NOT NULL`),
+    index('card_transactions_member_open_idx').on(t.orgId, t.memberId, t.transactionDate),
+    foreignKey({
+      name: 'card_transactions_statement_fk',
+      columns: [t.orgId, t.statementId],
+      foreignColumns: [cardStatements.orgId, cardStatements.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'card_transactions_member_fk',
+      columns: [t.orgId, t.memberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    foreignKey({
+      name: 'card_transactions_expense_fk',
+      columns: [t.orgId, t.expenseId],
+      foreignColumns: [expenses.orgId, expenses.id],
+    }),
+    check('card_transactions_currency_iso', isoCurrency(t.currency)),
+    check(
+      'card_transactions_card_last_four',
+      sql`${t.cardLastFour} IS NULL OR ${t.cardLastFour} ~ '^[0-9]{4}$'`,
+    ),
+    check(
+      'card_transactions_matched_whole',
+      sql`(${t.expenseId} IS NULL AND ${t.matchedBy} IS NULL AND ${t.matchedAt} IS NULL) OR (${t.expenseId} IS NOT NULL AND ${t.matchedBy} IS NOT NULL AND ${t.matchedAt} IS NOT NULL)`,
+    ),
+    check(
+      'card_transactions_set_aside_whole',
+      sql`(${t.setAsideReason} IS NULL AND ${t.setAsideNote} IS NULL AND ${t.setAsideAt} IS NULL) OR (${t.setAsideReason} IS NOT NULL AND ${t.setAsideAt} IS NOT NULL)`,
+    ),
+    // Matched or set aside, never both.
+    check(
+      'card_transactions_matched_or_set_aside',
+      sql`${t.expenseId} IS NULL OR ${t.setAsideReason} IS NULL`,
+    ),
+    check(
+      'card_transactions_other_needs_note',
+      sql`${t.setAsideReason} IS DISTINCT FROM 'other' OR coalesce(length(trim(${t.setAsideNote})), 0) > 0`,
+    ),
+    check(
+      'card_transactions_note_length',
+      sql`${t.setAsideNote} IS NULL OR char_length(${t.setAsideNote}) <= ${sql.raw(String(SET_ASIDE_NOTE_MAX))}`,
+    ),
   ],
 );

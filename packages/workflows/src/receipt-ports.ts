@@ -2,6 +2,7 @@ import {
   assertRowSecurityApplies,
   getModelSettings,
   getReceipt,
+  matchCardTransactions,
   listProviderKeys,
   recordExtractionRun,
   runsForRequest,
@@ -119,6 +120,19 @@ export function receiptReadingPorts(deps: ReceiptReadingDeps): ReceiptReadingPor
     runs: (orgId, receiptId, requestId) =>
       inOrg(orgId, (tx) => runsForRequest(tx, receiptId, requestId)),
     settle: (orgId, receiptId, outcome) =>
-      inOrg(orgId, (tx) => settleReceipt(tx, orgId, receiptId, outcome)),
+      inOrg(orgId, async (tx) => {
+        await settleReceipt(tx, orgId, receiptId, outcome);
+        // A receipt read after the statement that listed its charge pays for that charge, which
+        // is no longer a missing receipt (FR-INT-24, #97).
+        if (await featureOn(tx, orgId, 'expenses.card-statements', overrides())) {
+          const receipt = await getReceipt(tx, receiptId);
+          if (receipt) {
+            await matchCardTransactions(tx, orgId, receipt.memberId, {
+              type: 'system',
+              id: 'receipt-workflow',
+            });
+          }
+        }
+      }),
   };
 }
