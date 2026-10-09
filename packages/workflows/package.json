@@ -20,9 +20,9 @@
     "@expensewise/storage": "workspace:*",
     "html-to-text": "^9.0.5",
     "inngest": "^4.21.1",
-    "mailauth": "^7.1.0",
+    "mailauth": "^7.1.1",
     "pdf-lib": "^1.17.1",
-    "postal-mime": "^4.0.2"
+    "postal-mime": "^4.0.4"
   },
   "devDependencies": {
     "@inngest/test": "^1.0.0",
