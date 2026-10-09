@@ -2,15 +2,19 @@
 # runtime roles' passwords, then make this commit's Vercel build live. Vercel builds every
 # push but doesn't assign the production domain itself, so nothing reaches production until
 # this run has made the database ready for the new code. The product owner's request to
-# merge is the release approval (ADR-0019), so the run starts as soon as a merge lands.
+# merge is the release approval (ADR-0019), and the run starts once CI has passed on the merged
+# commit (ADR-0048): a commit whose gates fail on main is never released.
 name: Release
 
 on:
+  # By hand, for a recovery that needs migrations and role passwords applied again (runbook).
   workflow_dispatch:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
 
-# One release at a time. A run queued behind another is replaced by a newer push, and a run
+# One release at a time. A run queued behind another is replaced by a newer one, and a run
 # whose commit is no longer the head of main migrates but doesn't promote.
 concurrency:
   group: release-production
@@ -22,11 +26,21 @@ permissions:
 jobs:
   release:
     name: Migrate, then promote
+    # Only CI's own push to main that passed, in this repository: never a pull request's run,
+    # even one from a branch named main.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     environment: production
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
+        with:
+          # The commit CI passed on, not whatever main is by the time this starts.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
@@ -50,7 +64,7 @@ jobs:
           VERCEL_PROJECT_ID: prj_GTcrU44bpSXbZA1IS6f2tfNTZQQg
           VERCEL_TEAM_ID: team_A8TfHlLyTc2toipq0WsMVKvK
           PRODUCTION_URL: https://expensewise-theta.vercel.app
-          RELEASE_SHA: ${{ github.sha }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
           REPOSITORY: ${{ github.repository }}
           GITHUB_TOKEN: ${{ github.token }}
         run: node .github/scripts/promote-production.mjs

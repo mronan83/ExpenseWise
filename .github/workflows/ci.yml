@@ -11,6 +11,9 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Each job stops at about five times its longest run so far, G5 at 45 minutes (its runs take 17
+# or so), rather than GitHub's default of six hours.
+
 permissions:
   contents: read
 
@@ -22,6 +25,7 @@ jobs:
   static:
     name: G1 · Static checks
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -37,6 +41,7 @@ jobs:
   unit:
     name: G2 · Unit & property tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
@@ -57,6 +62,7 @@ jobs:
   integration:
     name: G3 · Integration & contract
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     services:
       postgres:
         image: postgres:16
@@ -83,6 +89,7 @@ jobs:
   security:
     name: G4 · Security
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
         with:
@@ -107,6 +114,7 @@ jobs:
   e2e:
     name: G5 · Build & end-to-end
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     needs: static
     # The signed-in checks run the real API on its own database (apps/web/e2e/bench).
     services:

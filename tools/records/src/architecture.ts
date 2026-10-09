@@ -797,10 +797,11 @@ export const SETTINGS: readonly Setting[] = [
 /** What each GitHub workflow is for, by file. */
 export const WORKFLOWS: Readonly<Record<string, string>> = {
   'ci.yml':
-    'The quality gates on every pull request and push to main: static checks, unit and property tests with coverage, integration and contract against a real Postgres, security, then build and end-to-end, signed out and, against the real API on its own database, signed in, with layout and accessibility checks.',
-  'codeql.yml': 'Static analysis for security on every pull request, push and week.',
+    'The quality gates on every pull request and push to main: static checks, unit and property tests with coverage, integration and contract against a real Postgres, security, then build and end-to-end, signed out and, against the real API on its own database, signed in, with layout and accessibility checks. Each job stops at a time limit of about five times its longest run, G5 at 45 minutes; a newer push replaces a run still going. Its run on main decides the release (ADR-0048).',
+  'codeql.yml':
+    'Static analysis for security on every pull request, push and week, each scan stopping at 15 minutes; a newer push to a pull request replaces its scan still running.',
   'release.yml':
-    'Runs when main changes: migrate, set role passwords where needed, then promote the commit’s build. One at a time, never cancelled.',
+    'Runs once CI has passed on a commit pushed to main, never on a pull request’s run (ADR-0048): migrate, set role passwords where needed, then promote that commit’s build. One at a time, never cancelled. Also run by hand for a recovery, ungated.',
   'backup.yml':
     'The nightly encrypted backup to Backblaze B2, with the heartbeat and quota alerts.',
   'restore-drill.yml':
