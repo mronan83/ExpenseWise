@@ -688,7 +688,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Add the 2027 IRS mileage rate before January',
     type: 'Ops',
     detail:
-      'Mileage is paid at the IRS business rate on the drive’s date (R-MILEAGE-RATE, ADR-0038), known through Dec 31, 2026. A drive dated in 2027 is refused, not paid at the old rate, until the IRS announces the 2027 rate, usually in mid-December, and it is added. Each year the same: a one-line change and its test.',
+      'Mileage is paid at the IRS business rate on the drive’s date (R-MILEAGE-RATE, ADR-0038), known through Dec 31, 2026. A drive dated in 2027 is refused, not paid at the old rate, until the IRS announces the 2027 rate, usually in mid-December, and it is added. Each year the same: a one-line change and its test. From Jan 9 the signed-in checks’ bench stops too, naming this, since its drives are dated from the day it runs (PR #78).',
     priority: 'P2',
     effort: 'S',
     severity: 'Medium',
