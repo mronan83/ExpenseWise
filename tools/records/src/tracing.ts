@@ -1226,6 +1226,12 @@ export const CHANGE_LOG: readonly ChangeLogEntry[] = [
   {
     date: '2026-10-09',
     change:
+      'Your decision of Oct 9 (ADR-0048, D-50): the release now waits for CI to pass on the merged commit, so a commit whose gates fail on main is never released, rather than going live while CI was still checking it. A release lands 15 to 20 minutes after a merge, not 2. CI and CodeQL jobs now stop at a time limit rather than GitHub’s six hours, and a newer push to a pull request replaces its CodeQL scan still running (US-REL-02 AC2, AC9).',
+    by: 'Claude, at your direction',
+  },
+  {
+    date: '2026-10-09',
+    change:
       'PR #78: the signed-in screen checks’ bench counts every date from the day it runs, rather than from fixed days in Sep to Nov 2026. From Sep 3, 2027 those days would have made its receipts more than a year older than their upload, so Ready receipts would have needed a look: rehearsed on a moved clock, the bench on main then stops at closing a report, an error that says nothing of dates, and every pull request’s checks with it. The bench now also stops, naming what drifted, if a receipt or trip isn’t where its script put it (US-UX-02 AC8, F-47).',
     by: 'Claude, at your direction',
   },

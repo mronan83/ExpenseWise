@@ -2,7 +2,7 @@
 
 The product owner's request to merge is the production approval. The **Release** workflow runs straight after each merge, with no second approval click.
 
-- **Status:** Accepted (decided by product owner)
+- **Status:** Accepted (decided by product owner). Amended by [ADR-0048](0048-the-release-waits-for-ci-on-main.md): the run starts once CI has passed on the merged commit, not at once.
 - **Date:** 2026-10-02
 - **Deciders:** Product owner; Claude (principal architect)
 - **Decision register:** D-21

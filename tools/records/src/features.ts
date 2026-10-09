@@ -1620,7 +1620,7 @@ export const FEATURES: readonly Feature[] = [
     phase: 'P0',
     status: 'Partial',
     delivered: 'PR #17, PR #19',
-    decisions: ['ADR-0018', 'ADR-0019'],
+    decisions: ['ADR-0018', 'ADR-0019', 'ADR-0048'],
     code: [
       '.github/workflows/release.yml',
       '.github/scripts/promote-production.mjs',
