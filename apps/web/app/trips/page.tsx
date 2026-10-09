@@ -10,6 +10,7 @@ import { formatMoney } from '../../lib/receipts';
 import { supabase } from '../../lib/supabase';
 import { localToday, tripDates, type TripDetail, type TripSummary } from '../../lib/trips';
 import { TripFields } from './trip-fields';
+import { Wordmark } from '../brand';
 
 type Load =
   | { state: 'loading' }
@@ -62,8 +63,8 @@ export default function TripsPage() {
   return (
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]">
       <header className="flex items-baseline justify-between py-3">
-        <Link href="/" className="tap font-mono text-xs tracking-widest text-ink-2 uppercase">
-          ExpenseWise
+        <Link href="/" className="tap">
+          <Wordmark />
         </Link>
         <Link href="/expenses" className="tap text-xs font-semibold text-carbon">
           Expenses

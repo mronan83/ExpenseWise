@@ -8,6 +8,7 @@ import { useFeatures } from '../../../lib/features';
 import { formText } from '../../../lib/form';
 import { supabase } from '../../../lib/supabase';
 import { SettingsNav } from '../nav';
+import { Wordmark } from '../../brand';
 
 type Provider = 'anthropic' | 'openai';
 
@@ -92,8 +93,8 @@ export default function AiSettingsPage() {
   return (
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]">
       <header className="flex items-baseline justify-between py-3">
-        <Link href="/" className="tap font-mono text-xs tracking-widest text-ink-2 uppercase">
-          ExpenseWise
+        <Link href="/" className="tap">
+          <Wordmark />
         </Link>
         {load.state === 'ready' || load.state === 'error' ? (
           <button type="button" onClick={() => void signOut()} className="tap text-sm text-carbon">

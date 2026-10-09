@@ -402,7 +402,34 @@ export const BACKLOG: readonly BacklogItem[] = [
     affects: ['GAP-46', 'FR-CAP-11', 'F-67'],
     done: { date: '2026-10-07', in: 'PR #77' },
   },
+  {
+    num: 101,
+    title: 'The Carbon identity: logo, icons, colors and type',
+    type: 'Feature',
+    detail:
+      'Your request of Oct 9 for a full brand, direction A by your choice, keeping the name: the mark, a receipt whose torn edge is a W, on every screen, the home screen and a shared link; IBM Plex served with the app; the tokens tuned and checked at AA in both themes; icons in the tab bar; a brand guide (docs/brand.md, ADR-0049).',
+    priority: 'P1',
+    effort: 'M',
+    severity: 'Low',
+    blocker: { kind: 'none' },
+    source: 'Product owner Oct 9',
+    affects: ['GAP-47', 'NFR-UX-07', 'F-68'],
+    done: { date: '2026-10-09', in: 'PR #81' },
+  },
   // P2: this month
+  {
+    num: 102,
+    title: 'Form fields with a border you can see',
+    type: 'Gap',
+    detail:
+      'GAP-48, found checking the Carbon colors: fields are outlined in the divider color, about 1.3:1, where WCAG 2.2 AA asks 3:1 for a control’s edge. A `field` token for field borders, at 3:1 or more on paper and sheet in light and dark, used by every input, select and text area; `rule` stays for dividers. `e2e/shell` checks the new pairings beside the text colors.',
+    priority: 'P2',
+    effort: 'S',
+    severity: 'Low',
+    blocker: { kind: 'none' },
+    source: 'GAP-48',
+    affects: ['GAP-48', 'NFR-UX-01'],
+  },
   {
     num: 79,
     title: 'Read where a journey went, and a hotel stay’s nights',

@@ -14,6 +14,7 @@ import {
 } from '../lib/second-factor';
 import { onAuthenticatorRequired, onNotLetIn, onStepUp } from '../lib/step-up';
 import { supabase } from '../lib/supabase';
+import { Wordmark } from './brand';
 
 const explain = (error: unknown) =>
   error instanceof SecondFactorError ? error.message : 'Something went wrong. Try again.';
@@ -176,7 +177,7 @@ export function StepUpPrompt() {
       className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]"
     >
       <header className="py-3">
-        <span className="font-mono text-xs tracking-widest text-ink-2 uppercase">ExpenseWise</span>
+        <Wordmark />
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <h1 className="text-2xl font-bold">Enter your code to continue</h1>
@@ -268,7 +269,7 @@ export function AuthenticatorRequiredScreen() {
       className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]"
     >
       <header className="flex items-baseline justify-between py-3">
-        <span className="font-mono text-xs tracking-widest text-ink-2 uppercase">ExpenseWise</span>
+        <Wordmark />
         <button type="button" onClick={() => void signOut()} className="tap text-sm text-carbon">
           Sign out
         </button>
@@ -357,7 +358,7 @@ export function NotLetInScreen() {
       className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]"
     >
       <header className="py-3">
-        <span className="font-mono text-xs tracking-widest text-ink-2 uppercase">ExpenseWise</span>
+        <Wordmark />
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <h1 className="text-2xl font-bold">This email isn’t let in to sign in</h1>

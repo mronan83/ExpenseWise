@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "brand:assets": "node scripts/brand-assets.mjs"
   },
   "dependencies": {
     "@expensewise/api": "workspace:*",
@@ -19,6 +20,8 @@
     "@expensewise/flags": "workspace:*",
     "@expensewise/storage": "workspace:*",
     "@expensewise/workflows": "workspace:*",
+    "@fontsource/ibm-plex-mono": "5.3.0",
+    "@fontsource/ibm-plex-sans": "5.3.0",
     "@sentry/nextjs": "^11.2.0",
     "@supabase/supabase-js": "^2.117.2",
     "hono": "^4.13.12",
@@ -34,6 +37,7 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "eslint-config-next": "^16.3.8",
+    "opentype.js": "1.3.4",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.15"
   }

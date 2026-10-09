@@ -6,6 +6,7 @@ import { useState, type FormEvent } from 'react';
 import { formText } from '../../lib/form';
 import { codeNeeded } from '../../lib/second-factor';
 import { supabase } from '../../lib/supabase';
+import { Wordmark } from '../brand';
 
 /**
  * Where to go after signing in: an invite link that sent the person here (#29). Only a path
@@ -51,8 +52,8 @@ export default function SignInPage() {
   return (
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]">
       <header className="flex items-baseline justify-between py-3">
-        <Link href="/" className="tap font-mono text-xs tracking-widest text-ink-2 uppercase">
-          ExpenseWise
+        <Link href="/" className="tap">
+          <Wordmark />
         </Link>
       </header>
       <main className="flex flex-1 flex-col gap-4">

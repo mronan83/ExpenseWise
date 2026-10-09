@@ -1,33 +1,36 @@
 @import 'tailwindcss';
 
-/* Design tokens (docs/04-app-design.md). One set for web; exported to Swift for iOS later. */
+/*
+ * Design tokens: the Carbon identity (docs/brand.md, ADR-0049). Paper, ink and carbon-copy blue;
+ * one set for web, exported to Swift for iOS later. Every text color is at least 4.5:1 on paper,
+ * sheet and carbon-wash, in both themes; e2e/shell checks it.
+ */
 :root {
-  --paper: #f4f6f3;
+  --paper: #f4f5f8;
   --sheet: #ffffff;
-  --ink: #131b19;
-  --ink-2: #4a5653;
-  --ink-3: #5f6a66;
-  --rule: #dce1dc;
+  --ink: #141729;
+  --ink-2: #4a4f66;
+  --ink-3: #5d6279;
+  --rule: #dcdee7;
   --carbon: #2d43c2;
   --carbon-ink: #ffffff;
   --carbon-wash: #e8ebfb;
   --ok: #1d7849;
-  /* At least 4.5:1 on sheet, paper and carbon-wash, where a "differs" note sits on a highlighted row. */
   --warn: #965700;
   --bad: #b42318;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #0d1211;
-    --sheet: #151c1a;
-    --ink: #e4eae7;
-    --ink-2: #a7b2ae;
-    --ink-3: #8b9793;
-    --rule: #253029;
+    --paper: #0e1018;
+    --sheet: #161927;
+    --ink: #e6e8f0;
+    --ink-2: #a9aec2;
+    --ink-3: #8e93a9;
+    --rule: #272b3c;
     --carbon: #9aa7ff;
-    --carbon-ink: #0d1211;
-    --carbon-wash: #1c2242;
+    --carbon-ink: #0e1018;
+    --carbon-wash: #1d2245;
     --ok: #4fc48c;
     --warn: #e6a640;
     --bad: #f2786d;

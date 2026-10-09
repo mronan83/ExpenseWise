@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { assuranceLevels, authenticators, type Authenticator } from '../../../lib/second-factor';
 import { supabase } from '../../../lib/supabase';
 import { CodeForm } from '../../second-factor';
+import { Wordmark } from '../../brand';
 
 type Load =
   | { state: 'loading' }
@@ -65,7 +66,7 @@ export default function CodePage() {
   return (
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]">
       <header className="flex items-baseline justify-between py-3">
-        <span className="font-mono text-xs tracking-widest text-ink-2 uppercase">ExpenseWise</span>
+        <Wordmark />
         {load.state === 'ready' || load.state === 'error' ? (
           <button type="button" onClick={() => void signOut()} className="tap text-sm text-carbon">
             Sign out
