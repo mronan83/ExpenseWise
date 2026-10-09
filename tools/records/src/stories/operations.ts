@@ -1269,8 +1269,16 @@ export const OPERATIONS_STORIES: readonly Story[] = [
         checks: [],
         untested: 66,
       },
+      {
+        id: 'AC8',
+        given: 'whatever day gate G5 runs on',
+        when: 'the bench seeds its receipts, trips, drives and reports',
+        then: 'each is in the state its screen is checked in, its dates counted from that day, or the bench stops and the gate fails, naming what drifted',
+        decided: CLAUDE,
+        checks: ['e2e/signed-in'],
+      },
     ],
-    note: 'The bench seeds its data through the real API and reading workflow, with drawn receipt images, never real ones. CI’s iPhone engine is WebKit on Linux, not iOS Safari (GAP-22); paying for a device cloud is #57. Put back on Oct 3, the overlapping date fields you found on your iPhone and the contrast failure on differing readings both fail these checks.',
+    note: 'The bench seeds its data through the real API and reading workflow, with drawn receipt images, never real ones. Its dates count from the day it runs (AC8), so a receipt never turns a year older than its upload and a trip to come never becomes a past one. CI’s iPhone engine is WebKit on Linux, not iOS Safari (GAP-22); paying for a device cloud is #57. Put back on Oct 3, the overlapping date fields you found on your iPhone and the contrast failure on differing readings both fail these checks.',
   },
   {
     id: 'US-UX-03',

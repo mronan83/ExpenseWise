@@ -47,7 +47,7 @@ import {
   setRolePasswords,
   withOrg,
 } from '@expensewise/db';
-import { derivedId } from '@expensewise/domain';
+import { derivedId, IRS_BUSINESS_RATES_THROUGH } from '@expensewise/domain';
 import { runMigrations } from '@expensewise/db/migrate';
 import {
   COMPARISON_MODELS,
@@ -68,7 +68,7 @@ import {
   routeMeasuringPorts,
   settleReading,
 } from '@expensewise/workflows';
-import { BENCH_PORT, E2E_USER, type Seeded } from './config';
+import { BENCH_PORT, benchDay, E2E_USER, type Seeded } from './config';
 
 const baseUrl = process.env.DATABASE_URL;
 if (!baseUrl) {
@@ -374,6 +374,16 @@ async function callAs<T>(user: string, method: string, path: string, body?: unkn
 const call = <T>(method: string, path: string, body?: unknown) =>
   callAs<T>(E2E_USER, method, path, body);
 
+// Every date counts from today, the bench's day 0 (benchDay). As the dates were first written,
+// on Oct 9, 2026, the Omaha trip ran from 10 to 8 days before it and Frankfurt was a month off.
+const today = new Date().toISOString().slice(0, 10);
+const day = (offset: number) => benchDay(today, offset);
+/** The day as a receipt or a card's transaction list prints it: MM/DD/YYYY, or MM/DD/YY. */
+const printed = (offset: number, year: 'full' | 'short' = 'full') => {
+  const [y, m, d] = day(offset).split('-') as [string, string, string];
+  return `${m}/${d}/${year === 'full' ? y : y.slice(2)}`;
+};
+
 // The organization, a key, trips, receipts in every state, and expenses changed by hand.
 const { organization } = await call<{ organization: { id: string } }>(
   'POST',
@@ -412,31 +422,31 @@ const trips = {
     name: 'Q4 Architect Meeting',
     purpose: 'Quarterly architecture review',
     primaryCity: 'Omaha, NE',
-    startDate: '2026-09-29',
-    endDate: '2026-10-01',
+    startDate: day(-10),
+    endDate: day(-8),
   }),
   houston: await trip({
     name: 'Houston · Acme onsite',
     purpose: 'Client onsite',
     primaryCity: 'Houston',
-    startDate: '2026-09-22',
-    endDate: '2026-09-25',
+    startDate: day(-17),
+    endDate: day(-14),
   }),
   long: await trip({
     name: 'Northern California customer advisory board and partner summit week',
     purpose:
       'Customer advisory board, partner summit and two days of executive briefings with the regional leadership team',
     primaryCity: 'Half Moon Bay, California',
-    startDate: '2026-10-20',
-    endDate: '2026-10-23',
+    startDate: day(11),
+    endDate: day(14),
   }),
-  empty: await trip({ name: 'Frankfurt', startDate: '2026-11-09', endDate: '2026-11-12' }),
+  empty: await trip({ name: 'Frankfurt', startDate: day(31), endDate: day(34) }),
   // Everything on it Ready: it is moved to a report of its own, and closed.
   chicago: await trip({
     name: 'Chicago · partner review',
     primaryCity: 'Chicago',
-    startDate: '2026-09-01',
-    endDate: '2026-09-03',
+    startDate: day(-38),
+    endDate: day(-36),
   }),
 };
 
@@ -485,12 +495,12 @@ await capture(
   both(
     reading(
       'Blue Bottle Coffee',
-      '2026-09-30',
+      day(-9),
       'USD',
       '6.50',
       linesOf({
         merchant: 'BLUE BOTTLE COFFEE',
-        date: '09/30/2026 08:12 AM',
+        date: `${printed(-9)} 08:12 AM`,
         currency: 'USD $',
         total: 'TOTAL .................. $6.50',
       }),
@@ -498,19 +508,13 @@ await capture(
   ),
 );
 await capture('folio', 'upload', {
-  [haiku]: reading('The Ritz-Carlton, Half Moon Bay', '2026-10-01', 'USD', '1284.37', {
+  [haiku]: reading('The Ritz-Carlton, Half Moon Bay', day(-8), 'USD', '1284.37', {
     documentType: 'hotel_folio',
   }),
-  [sonnet]: reading(
-    'The Ritz-Carlton Half Moon Bay — Folio 88213-A',
-    '2026-10-01',
-    'USD',
-    '1248.37',
-    {
-      documentType: 'hotel_folio',
-      taxes: [{ label: 'Occupancy tax', value: '147.00', confidence: 'high' }],
-    },
-  ),
+  [sonnet]: reading('The Ritz-Carlton Half Moon Bay — Folio 88213-A', day(-8), 'USD', '1248.37', {
+    documentType: 'hotel_folio',
+    taxes: [{ label: 'Occupancy tax', value: '147.00', confidence: 'high' }],
+  }),
 });
 // When and where a ride was bought, as its receipt prints them (FR-INT-17).
 const eppley = {
@@ -528,7 +532,7 @@ await capture(
   'uber',
   'camera',
   both(
-    reading('Uber', '2026-09-30', 'USD', '31.45', {
+    reading('Uber', day(-9), 'USD', '31.45', {
       ...eppley,
       documentType: 'ride_receipt',
       subtotal: { value: '25.20', confidence: 'high' },
@@ -546,7 +550,7 @@ await capture(
   'uberAgain',
   'upload',
   both(
-    reading('Uber Technologies Inc.', '2026-09-30', 'USD', '31.45', {
+    reading('Uber Technologies Inc.', day(-9), 'USD', '31.45', {
       ...eppley,
       documentType: 'ride_receipt',
       subtotal: { value: '25.20', confidence: 'high' },
@@ -573,33 +577,33 @@ const juniper = (time: string) => ({
 await capture(
   'dinner',
   'camera',
-  both(reading('Juniper & Rye', '2026-09-29', 'USD', '84.50', juniper('19:58'))),
+  both(reading('Juniper & Rye', day(-10), 'USD', '84.50', juniper('19:58'))),
 );
 await capture(
   'dinnerSlip',
   'camera',
   both(
-    reading('Juniper & Rye', '2026-09-29', 'USD', '101.40', {
+    reading('Juniper & Rye', day(-10), 'USD', '101.40', {
       ...juniper('20:03'),
       tip: { value: '16.90', confidence: 'high' },
     }),
   ),
 );
 await capture('steak', 'camera', {
-  [haiku]: reading('Pappas Bros. Steakhouse', '2026-09-23', 'USD', '93.10', {
+  [haiku]: reading('Pappas Bros. Steakhouse', day(-16), 'USD', '93.10', {
     tip: { value: '0', confidence: 'low' },
   }),
-  [sonnet]: reading('Pappas Bros. Steakhouse', '2026-09-23', 'USD', '98.10'),
+  [sonnet]: reading('Pappas Bros. Steakhouse', day(-16), 'USD', '98.10'),
 });
 await capture(
   'lufthansa',
   'upload',
-  both(reading('Lufthansa', '2026-09-28', 'EUR', '412.80', { documentType: 'airline_ticket' })),
+  both(reading('Lufthansa', day(-11), 'EUR', '412.80', { documentType: 'airline_ticket' })),
 );
 await capture('fallback', 'upload', {
   [haiku]: 'refuse',
   [sonnet]: 'refuse',
-  [FALLBACK_MODEL]: reading('Verve Coffee Roasters', '2026-10-02', 'USD', '12.25'),
+  [FALLBACK_MODEL]: reading('Verve Coffee Roasters', day(-7), 'USD', '12.25'),
 });
 await capture('failed', 'camera', { [haiku]: 'refuse', [sonnet]: 'refuse' });
 // Read alike and with confidence, but the parts miss the tip, and a date a week from now.
@@ -607,19 +611,18 @@ await capture(
   'sums',
   'camera',
   both(
-    reading('Bayside Grill', '2026-09-24', 'USD', '58.43', {
+    reading('Bayside Grill', day(-15), 'USD', '58.43', {
       subtotal: { value: '45.50', confidence: 'high' },
       taxes: [{ label: 'Sales tax', value: '4.43', confidence: 'high' }],
     }),
   ),
 );
-const nextWeek = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
-await capture('future', 'upload', both(reading('Hyatt Regency Omaha', nextWeek, 'USD', '212.40')));
+await capture('future', 'upload', both(reading('Hyatt Regency Omaha', day(7), 'USD', '212.40')));
 // An order confirmation: read with confidence, and still a summary, so it waits (Q10).
 await capture(
   'summary',
   'upload',
-  both(reading('Amazon.com', '2026-09-29', 'USD', '86.97', { documentType: 'purchase_summary' })),
+  both(reading('Amazon.com', day(-10), 'USD', '86.97', { documentType: 'purchase_summary' })),
 );
 await capture('processing', 'upload');
 // Read under the AI model settings (FR-INT-16): Ready on one confident reading by the primary;
@@ -627,7 +630,7 @@ await capture('processing', 'upload');
 await capture(
   'primaryRead',
   'camera',
-  { [sonnet]: reading('Verve Coffee Roasters', '2026-09-30', 'USD', '9.75') },
+  { [sonnet]: reading('Verve Coffee Roasters', day(-9), 'USD', '9.75') },
   [sonnet, haiku],
 );
 await capture(
@@ -635,7 +638,7 @@ await capture(
   'camera',
   {
     [sonnet]: 'refuse',
-    [haiku]: reading('Upstream Brewing Company', '2026-09-30', 'USD', '41.20', {
+    [haiku]: reading('Upstream Brewing Company', day(-9), 'USD', '41.20', {
       total: { value: '41.20', confidence: 'low' },
     }),
   },
@@ -643,7 +646,7 @@ await capture(
 );
 await capture('notRead', 'upload', {}, []);
 // A ride in Chicago, and a lunch on no trip: a local expense, Ready, given a reason below.
-await capture('chicago', 'camera', both(reading('Lyft', '2026-09-02', 'USD', '24.60')));
+await capture('chicago', 'camera', both(reading('Lyft', day(-37), 'USD', '24.60')));
 // A garage ticket read alike and Ready, its merchant then corrected with a tap (GAP-14).
 await capture(
   'parking',
@@ -651,18 +654,18 @@ await capture(
   both(
     reading(
       'SP+ Parking',
-      '2026-09-29',
+      day(-10),
       'USD',
       '18.00',
       linesOf({
         merchant: 'SP+ PARKING / GARAGE 114',
-        date: 'ENTRY 09/29/26 07:58 / EXIT 09/29/26 17:41',
+        date: `ENTRY ${printed(-10, 'short')} 07:58 / EXIT ${printed(-10, 'short')} 17:41`,
         total: 'AMOUNT PAID $18.00',
       }),
     ),
   ),
 );
-await capture('lunch', 'camera', both(reading('Zuni Café', '2026-09-27', 'USD', '48.20')));
+await capture('lunch', 'camera', both(reading('Zuni Café', day(-12), 'USD', '48.20')));
 // Journeys and stays (FR-INT-20, FR-INT-21), read as a model asked for them answers: a ride
 // with its pickup and drop-off, a flight with its airports, a folio with its stay, and a
 // folio whose dates can't be right, which needs a look rather than a wrong count of nights.
@@ -671,7 +674,7 @@ await capture(
   'ride',
   'camera',
   both(
-    reading('Lyft', '2026-09-30', 'USD', '18.40', {
+    reading('Lyft', day(-9), 'USD', '18.40', {
       documentType: 'ride_receipt',
       journey: { from: end('Hilton Omaha, 1001 Cass St'), to: end('1520 Harney St') },
       stay: null,
@@ -682,10 +685,10 @@ await capture(
   'flight',
   'upload',
   both(
-    reading('United Airlines', '2026-09-29', 'USD', '389.20', {
+    reading('United Airlines', day(-10), 'USD', '389.20', {
       documentType: 'airline_ticket',
       // The day it departs (FR-EXP-19, #94): the expense files to its trip by it.
-      journey: { from: end('SFO'), to: end('OMA'), departs: end('2026-09-29') },
+      journey: { from: end('SFO'), to: end('OMA'), departs: end(day(-10)) },
       stay: null,
     }),
   ),
@@ -694,10 +697,10 @@ await capture(
   'stay',
   'upload',
   both(
-    reading('Hilton Omaha', '2026-10-01', 'USD', '412.60', {
+    reading('Hilton Omaha', day(-8), 'USD', '412.60', {
       documentType: 'hotel_folio',
       journey: null,
-      stay: { checkIn: end('2026-09-29'), checkOut: end('2026-10-01') },
+      stay: { checkIn: end(day(-10)), checkOut: end(day(-8)) },
     }),
   ),
 );
@@ -705,10 +708,10 @@ await capture(
   'stayUnsure',
   'upload',
   both(
-    reading('Embassy Suites Omaha Downtown', '2026-09-30', 'USD', '236.80', {
+    reading('Embassy Suites Omaha Downtown', day(-9), 'USD', '236.80', {
       documentType: 'hotel_folio',
       journey: null,
-      stay: { checkIn: end('2026-10-01'), checkOut: end('2026-09-30') },
+      stay: { checkIn: end(day(-8)), checkOut: end(day(-9)) },
     }),
   ),
 );
@@ -718,7 +721,7 @@ await capture(
   'folioLines',
   'upload',
   both(
-    reading('Hotel Indigo Omaha', '2026-10-01', 'USD', '1129.10', {
+    reading('Hotel Indigo Omaha', day(-8), 'USD', '1129.10', {
       documentType: 'hotel_folio',
       subtotal: { value: '985.50', confidence: 'high' },
       taxes: [{ label: 'Occupancy tax', value: '128.12', confidence: 'high' }],
@@ -736,7 +739,7 @@ await capture(
   'linesShort',
   'camera',
   both(
-    reading('Harney Street Bistro', '2026-09-30', 'USD', '58.43', {
+    reading('Harney Street Bistro', day(-9), 'USD', '58.43', {
       subtotal: { value: '45.50', confidence: 'high' },
       taxes: [{ label: 'Sales tax', value: '4.43', confidence: 'high' }],
       tip: { value: '8.50', confidence: 'high' },
@@ -757,7 +760,7 @@ await capture(
   'folioCredit',
   'upload',
   both(
-    reading('Hilton Garden Inn Omaha Downtown', '2026-10-01', 'USD', '425.26', {
+    reading('Hilton Garden Inn Omaha Downtown', day(-8), 'USD', '425.26', {
       documentType: 'hotel_folio',
       taxes: [...nightsTaxes, ...nightsTaxes],
       lineItems: [
@@ -784,9 +787,9 @@ await capture(
   'seatUpgrade',
   'upload',
   both(
-    reading('Delta Air Lines', '2026-09-27', 'USD', '487.13', {
+    reading('Delta Air Lines', day(-12), 'USD', '487.13', {
       documentType: 'airline_ticket',
-      journey: { from: end('OMA'), to: end('SFO'), departs: end('2026-10-01') },
+      journey: { from: end('OMA'), to: end('SFO'), departs: end(day(-8)) },
       stay: null,
       taxes: [
         purchase(1, 'US transportation tax', '27.00'),
@@ -803,13 +806,13 @@ await capture(
       purchases: [
         {
           description: 'Ticket',
-          date: end('2026-09-12'),
+          date: end(day(-27)),
           cardLastFour: end('4417'),
           total: end('402.20'),
         },
         {
           description: 'Seat upgrade',
-          date: end('2026-09-27'),
+          date: end(day(-12)),
           cardLastFour: end('9921'),
           total: end('84.93'),
         },
@@ -876,26 +879,34 @@ await call('PUT', `/v1/settings/expense-types/${airfare}/company-pays`, { compan
 
 const expenses: Record<string, string> = {};
 for (const name of Object.keys(receipts)) expenses[name] = await expenseOf(name);
+// The drives are paid at the IRS rate, which the API refuses past the last day it is known for,
+// as it does in production: the bench stops here until the next year's rate is added (#76).
+if (day(-8) > IRS_BUSINESS_RATES_THROUGH) {
+  throw new Error(
+    `The bench's drives run to ${day(-8)}, past ${IRS_BUSINESS_RATES_THROUGH}, the last day the ` +
+      'IRS business rate is known for. Add the next year’s rate in packages/domain/src/mileage.ts.',
+  );
+}
 // A drive to the airport on the Omaha trip's first day (FR-CAP-03): it files to the trip.
 expenses.mileage = (
   await call<{ id: string }>('POST', '/v1/mileage', {
-    date: '2026-09-29',
+    date: day(-10),
     destination: 'Eppley Airfield, Omaha',
     purpose: 'Drive to the airport for the Q4 architect meeting',
     miles: '38.4',
   })
 ).id;
-// And the drive home on its last day, Oct 1, so Home shows October's business miles (#73).
+// And the drive home on its last day, so Home shows that month's business miles (#73).
 await call('POST', '/v1/mileage', {
-  date: '2026-10-01',
+  date: day(-8),
   destination: '12 Elm St, Omaha',
   purpose: 'Drive home from the airport after the Q4 architect meeting',
   miles: '36.15',
 });
-// The organization's own rate a mile from Nov 1, and the IRS rate again from Mar 1 (Q28, #77),
-// set after the drive, which keeps the IRS rate it was logged at.
-await call('PUT', '/v1/settings/mileage-rates/2026-11-01', { perMile: '0.65' });
-await call('PUT', '/v1/settings/mileage-rates/2027-03-01', { perMile: null });
+// The organization's own rate a mile from 23 days on, and the IRS rate again from 143 days on
+// (Q28, #77), set after the drive, which keeps the IRS rate it was logged at.
+await call('PUT', `/v1/settings/mileage-rates/${day(23)}`, { perMile: '0.65' });
+await call('PUT', `/v1/settings/mileage-rates/${day(143)}`, { perMile: null });
 // Route mileage (FR-CAP-04): the organization's OpenRouteService key, Riley's saved places,
 // a round trip measured and claimed at more miles with a reason (Q33), and a drive with a stop
 // that can't be found, which needs a look.
@@ -907,7 +918,7 @@ await call('POST', '/v1/me/places', {
 });
 expenses.routeMeasured = (
   await call<{ id: string }>('POST', '/v1/mileage/routes', {
-    date: '2026-09-30',
+    date: day(-9),
     purpose: 'Client visit at Acme, then the airport',
     stops: [
       '1520 Harney St, Omaha, NE',
@@ -923,7 +934,7 @@ await call('PUT', `/v1/mileage/${expenses.routeMeasured}/route/miles`, {
 });
 expenses.routeNotFound = (
   await call<{ id: string }>('POST', '/v1/mileage/routes', {
-    date: '2026-09-30',
+    date: day(-9),
     purpose: 'Site visit for the Q4 architect meeting',
     stops: ['1520 Harney St, Omaha, NE', '9 Nowhere Lane, Omaha, NE'],
   })
@@ -961,14 +972,14 @@ const submitted = async (who: string, expenseId: string) => {
   await callAs(who, 'POST', `/v1/reports/${reportId}/submit`);
   return reportId;
 };
-const samDrive = await drive('sam', '2026-09-15', 'Acme HQ', 'Client visit at Acme');
+const samDrive = await drive('sam', day(-24), 'Acme HQ', 'Client visit at Acme');
 const toApprove = await submitted('sam', samDrive.id);
 const casey = await call<Made>('POST', '/v1/settings/people/invites', {
   role: 'approver',
   label: 'Casey',
 });
 await callAs('casey', 'POST', '/v1/invites/accept', { token: casey.token });
-const officeDrive = await drive('riley', '2026-09-16', 'The office', 'Drive to the office');
+const officeDrive = await drive('riley', day(-23), 'The office', 'Drive to the office');
 const returned = await submitted(E2E_USER, officeDrive.id);
 await callAs('casey', 'POST', `/v1/reports/${returned}/return`, {
   comment: 'Claim client visits only: the office isn’t one',
@@ -1049,20 +1060,20 @@ for (const [n, subject, status, senderProblem] of [
   );
 }
 
-// Riley's corporate card (FR-CAP-10, FR-INT-24, #97). September's transaction list, as Access
+// Riley's corporate card (FR-CAP-10, FR-INT-24, #97). The Omaha trip's transaction list, as Access
 // Online downloads it: the ride and the stay match their expenses on their own, the flight has
 // no expense, a coffee is set aside as personal, a credit needs no receipt and the payment to
 // the card is left out. The Lufthansa fare, in euros, is matched by hand to its dollar charge.
 await call('POST', '/v1/card-statements/lists', {
   text: [
     'Transaction Date,Posting Date,Merchant Name,Amount,Card Number',
-    '09/28/2026,09/29/2026,DELTA AIR 0062345678901 ATLANTA GA,402.20,XXXXXXXXXXXX4417',
-    '09/28/2026,09/30/2026,LUFTHANSA 2201234567890 FRANKFURT,483.94,XXXXXXXXXXXX4417',
-    '09/29/2026,09/30/2026,STARBUCKS STORE 2291 OMAHA NE,6.45,XXXXXXXXXXXX4417',
-    '09/30/2026,10/01/2026,LYFT *RIDE WED 6PM,18.40,XXXXXXXXXXXX4417',
-    '09/30/2026,10/01/2026,HILTON OMAHA CREDIT,-20.00,XXXXXXXXXXXX4417',
-    '10/01/2026,10/02/2026,HILTON OMAHA,412.60,XXXXXXXXXXXX4417',
-    '09/25/2026,09/25/2026,PAYMENT - THANK YOU,-1000.00,XXXXXXXXXXXX4417',
+    `${printed(-11)},${printed(-10)},DELTA AIR 0062345678901 ATLANTA GA,402.20,XXXXXXXXXXXX4417`,
+    `${printed(-11)},${printed(-9)},LUFTHANSA 2201234567890 FRANKFURT,483.94,XXXXXXXXXXXX4417`,
+    `${printed(-10)},${printed(-9)},STARBUCKS STORE 2291 OMAHA NE,6.45,XXXXXXXXXXXX4417`,
+    `${printed(-9)},${printed(-8)},LYFT *RIDE WED 6PM,18.40,XXXXXXXXXXXX4417`,
+    `${printed(-9)},${printed(-8)},HILTON OMAHA CREDIT,-20.00,XXXXXXXXXXXX4417`,
+    `${printed(-8)},${printed(-7)},HILTON OMAHA,412.60,XXXXXXXXXXXX4417`,
+    `${printed(-14)},${printed(-14)},PAYMENT - THANK YOU,-1000.00,XXXXXXXXXXXX4417`,
   ].join('\n'),
 });
 type CardView = { transactions: { id: string; merchant: string }[] };
@@ -1074,9 +1085,9 @@ await call('PUT', `/v1/card-transactions/${chargeOf('STARBUCKS')}/set-aside`, {
 await call('PUT', `/v1/card-transactions/${chargeOf('LUFTHANSA')}/expense`, {
   expenseId: expenses.lufthansa,
 });
-// October's statement as a PDF, read by the real statement workflow with a scripted answer
+// The next month's statement as a PDF, read by the real statement workflow with a scripted answer
 // whose lines miss the total it prints, so it waits for a look (US-CAP-07 AC5).
-const statementPdf = new TextEncoder().encode('%PDF-1.7\nbench card statement, October\n');
+const statementPdf = new TextEncoder().encode('%PDF-1.7\nbench card statement\n');
 const pdfDescribed = {
   byteSize: statementPdf.byteLength,
   sha256: createHash('sha256').update(statementPdf).digest('hex'),
@@ -1100,14 +1111,14 @@ const statementPorts = {
             cardStatement: true,
             issuer: 'U.S. Bank',
             cardLastFour: '4417',
-            periodStart: '2026-09-29',
-            periodEnd: '2026-10-28',
+            periodStart: day(-10),
+            periodEnd: day(19),
             currency: 'USD',
             charges: '901.30',
             credits: null,
             transactions: [
-              ['2026-10-05', 'MARRIOTT HOUSTON MEDICAL CTR', '289.00'],
-              ['2026-10-06', 'UNITED 0162345678901 HOUSTON TX', '512.30'],
+              [day(-4), 'MARRIOTT HOUSTON MEDICAL CTR', '289.00'],
+              [day(-3), 'UNITED 0162345678901 HOUSTON TX', '512.30'],
             ].map(([transactionDate, description, amount]) => ({
               transactionDate: transactionDate!,
               postedDate: null,
@@ -1130,7 +1141,67 @@ if (statementRead?.status !== 'needs_look')
   throw new Error('The bench statement should need a look');
 await statementPorts.settle(organization.id, pdfTicket.statementId, asReading(statementRead));
 
+// Each receipt reached the state it was scripted for, and each trip stands where it should
+// against today: one that has ended on a report, one to come on none. Any drift, such as a
+// reading too old for its upload, stops the bench here rather than leaving a screen checked in
+// a state nobody meant.
+const SCRIPTED: Record<string, string> = {
+  coffee: 'extracted',
+  folio: 'needs_review',
+  uber: 'extracted',
+  uberAgain: 'needs_review',
+  dinner: 'extracted',
+  dinnerSlip: 'needs_review',
+  steak: 'extracted',
+  lufthansa: 'extracted',
+  fallback: 'needs_review',
+  failed: 'failed',
+  sums: 'needs_review',
+  future: 'needs_review',
+  summary: 'needs_review',
+  processing: 'processing',
+  primaryRead: 'extracted',
+  backupRead: 'needs_review',
+  notRead: 'needs_review',
+  chicago: 'extracted',
+  parking: 'extracted',
+  lunch: 'extracted',
+  ride: 'extracted',
+  flight: 'extracted',
+  stay: 'extracted',
+  stayUnsure: 'needs_review',
+  folioLines: 'extracted',
+  linesShort: 'extracted',
+  folioCredit: 'extracted',
+  seatUpgrade: 'extracted',
+};
+const drift: string[] = [];
+for (const [name, id] of Object.entries(receipts)) {
+  const { status } = await call<{ status: string }>('GET', `/v1/receipts/${id}`);
+  if (status !== SCRIPTED[name]) {
+    drift.push(`receipt ${name} is ${status}, scripted as ${SCRIPTED[name] ?? 'nothing'}`);
+  }
+}
+const onReports = new Map(
+  (await call<{ trips: { id: string; reportId: string | null }[] }>('GET', '/v1/trips')).trips.map(
+    (t) => [t.id, t.reportId !== null],
+  ),
+);
+for (const [name, ended] of [
+  ['omaha', true],
+  ['houston', true],
+  ['chicago', true],
+  ['long', false],
+  ['empty', false],
+] as const) {
+  if (onReports.get(trips[name].id) !== ended) {
+    drift.push(`trip ${name} is ${ended ? 'on no report' : 'on a report'} on ${today}`);
+  }
+}
+if (drift.length > 0) throw new Error(`The bench drifted from its script: ${drift.join('; ')}.`);
+
 const seeded: Seeded = {
+  today,
   trips: {
     omaha: trips.omaha.id,
     houston: trips.houston.id,
