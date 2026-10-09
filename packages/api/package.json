@@ -23,7 +23,7 @@
     "@expensewise/flags": "workspace:*",
     "@expensewise/storage": "workspace:*",
     "@hono/zod-openapi": "^1.6.3",
-    "hono": "^4.13.12",
+    "hono": "^4.13.13",
     "jose": "^6.2.12",
     "pdf-lib": "^1.17.1",
     "zod": "^4.6.5"
