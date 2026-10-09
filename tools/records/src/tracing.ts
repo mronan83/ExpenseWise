@@ -215,6 +215,10 @@ export const GAPS: readonly Gap[] = [
       'Building #97: matching a charge links it to its expense and changes nothing else. Where the employer pays U.S. Bank directly (corporate billing), that expense is already paid, and claiming it on a report would pay it twice; where you pay the bill yourself (individual billing), it must stay claimed. Which applies to your card isn’t known (Q52). Until then, Paid by the company (FR-EXP-17) marks such an expense by hand, or by its type’s policy.',
     fix: 'By your answer to Q52, a charge matched to an expense marks it paid by the company, unless a person set who paid by hand, so it stays on its report, documented, and is never claimed (FR-INT-25, #98).',
     backlog: 98,
+    closed: {
+      date: '2026-10-07',
+      note: 'PR #70 (#98): a charge matched to an expense makes it Paid by the company whatever its type, unless you set who paid by hand, and letting the charge go, or deleting its statement, hands it back to its type’s policy. A claim already submitted keeps what it claimed (GAP-45).',
+    },
   },
   {
     id: 'GAP-44',
@@ -226,6 +230,35 @@ export const GAPS: readonly Gap[] = [
       'Your answer to Q52: every charge must have its receipt and expense. Since #97, a charge is a missing receipt only while it has no expense; matched to an expense typed in by hand, which has no receipt, it leaves Needs you.',
     fix: 'Flag a charge whose expense has no receipt as missing its receipt, until one is attached or the charge is set aside with a reason (FR-INT-26, #98).',
     backlog: 98,
+    closed: {
+      date: '2026-10-07',
+      note: 'PR #70 (#98): a charge is matched, on its own or by hand, only to an expense with its receipt, so one whose only expense has none, such as a drive, stays a missing receipt; deleting a matched expense’s receipt deletes the expense and flags the charge again.',
+    },
+  },
+  {
+    id: 'GAP-46',
+    title: 'A receipt filed by mistake can’t be deleted: only a duplicate can.',
+    affects: ['FR-CAP-11', 'F-67'],
+    severity: 'Medium',
+    evidence:
+      'Your report of Oct 7: a flight confirmation you forwarded, with no amounts, was filed as a receipt, with an expense that needs a look, and nothing removes it. `delete_receipt()` (ADR-0028) is reached only from the choice on a possible duplicate.',
+    fix: 'Delete on a receipt’s page, for its own member, through `delete_receipt()`, until its expense is submitted, its file removed once the deletion commits (#100).',
+    backlog: 100,
+    closed: {
+      date: '2026-10-07',
+      note: 'PR #77 (#100): Delete this receipt on a receipt’s page, behind `receipts.delete`, for its own member until its expense is submitted; its readings, expense and file go, and the audit trail keeps what it was.',
+    },
+  },
+  {
+    id: 'GAP-45',
+    title:
+      'A card charge matched after its expense’s report was submitted leaves that claim as submitted, so it may already have been claimed.',
+    affects: ['FR-INT-25', 'F-66'],
+    severity: 'Medium',
+    evidence:
+      'Building #98: who paid an expense never changes once it is submitted (Q48, ADR-0045), and a statement arrives monthly, often after the trip’s report went in. The charge still matches and documents the expense, but its claim stays as submitted.',
+    fix: 'Know the card at the receipt: a receipt the reading shows paid with a card already brought in, by its last four digits, is Paid by the company as soon as it is read, before its report is submitted (#99).',
+    backlog: 99,
   },
   {
     id: 'GAP-41',
@@ -1190,6 +1223,30 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-09',
+    change:
+      'PR #78: the signed-in screen checks’ bench counts every date from the day it runs, rather than from fixed days in Sep to Nov 2026. From Sep 3, 2027 those days would have made its receipts more than a year older than their upload, so Ready receipts would have needed a look: rehearsed on a moved clock, the bench on main then stops at closing a report, an error that says nothing of dates, and every pull request’s checks with it. The bench now also stops, naming what drifted, if a receipt or trip isn’t where its script put it (US-UX-02 AC8, F-47).',
+    by: 'Claude, at your direction',
+  },
+  {
+    date: '2026-10-07',
+    change:
+      'Built #100 in PR #77, at your word of Oct 7, behind Delete a receipt (`receipts.delete`, off until you switch it on): a receipt’s page has Delete this receipt, which asks once, then deletes it with its readings, its expense and its file, for something filed that isn’t a receipt, such as your flight confirmation (FR-CAP-11). Only its own member deletes it, never once its expense is submitted; the audit trail keeps what it was, and a card charge it documented is a missing receipt again. F-67 and US-CAP-09 delivered; GAP-46 closed.',
+    by: 'Claude, at your direction',
+  },
+  {
+    date: '2026-10-07',
+    change:
+      'Your report of Oct 7: a flight confirmation you forwarded, with no amounts, was filed as a receipt and can’t be deleted, since only a duplicate can (GAP-46). A person will delete a receipt of their own filed by mistake, with its readings and expense, until its expense is submitted, the audit trail keeping what it was (FR-CAP-11, F-67, US-CAP-09, #100).',
+    by: 'Claude, at your direction',
+  },
+  {
+    date: '2026-10-07',
+    change:
+      'Built #98 in PR #70, at your word of Oct 7, by your answer to Q52: a charge on your corporate card matched to an expense makes it Paid by the company, whatever its type, so it stays on its report and is never claimed, unless you set who paid by hand (FR-INT-25); a charge is matched only to an expense with its receipt, so a charge without one stays flagged (FR-INT-26). F-66 and US-CAP-08 delivered; GAP-43 and GAP-44 closed; ADR-0047 accepted. Opened GAP-45 and #99: a claim submitted before its statement came keeps what it claimed, which knowing the card at the receipt would close.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-07',
     change:

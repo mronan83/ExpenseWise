@@ -18,6 +18,7 @@ import {
   type CardTransaction,
   type MatchedExpense,
 } from '../../lib/card-statements';
+import { COMPANY_PAID_FLAG } from '../../lib/company-paid';
 import { loadFeatures } from '../../lib/features';
 import { formatMoney } from '../../lib/receipts';
 import { supabase } from '../../lib/supabase';
@@ -54,6 +55,8 @@ export default function CardPage() {
   const [load, setLoad] = useState<Load>({ state: 'loading' });
   const [progress, setProgress] = useState<string | null>(null);
   const [said, setSaid] = useState<{ text: string; problem: boolean } | null>(null);
+  // Whether Paid by the company is on, which keeps what the card paid for out of every claim.
+  const [paidOn, setPaidOn] = useState(true);
 
   const refresh = useCallback(async () => {
     const session = (await supabase()?.auth.getSession())?.data.session;
@@ -63,10 +66,12 @@ export default function CardPage() {
     }
     try {
       const { features } = await loadFeatures();
-      if (!features.some((f) => f.key === CARD_STATEMENTS_FLAG && f.enabled)) {
+      const on = (key: string) => features.some((f) => f.key === key && f.enabled);
+      if (!on(CARD_STATEMENTS_FLAG)) {
         setLoad({ state: 'off' });
         return;
       }
+      setPaidOn(on(COMPANY_PAID_FLAG));
       setLoad({ state: 'ready', data: await api<CardStatements>('/v1/card-statements') });
     } catch (error) {
       setLoad({ state: 'error', message: describeError(error) });
@@ -204,6 +209,16 @@ export default function CardPage() {
               ) : null}
             </section>
 
+            {!paidOn ? (
+              <p role="note" className="rounded-xl border border-warn p-4 text-sm">
+                Your card is billed to your employer, so what it paid for is never claimed. Switch
+                on Paid by the company in{' '}
+                <Link href="/settings/features" className="font-semibold text-carbon underline">
+                  Settings › Features
+                </Link>{' '}
+                so your reports leave those expenses out of what you claim.
+              </p>
+            ) : null}
             <Missing missing={missing} statements={data.statements} onSaved={saved} />
 
             {data.statements.length > 0 ? (

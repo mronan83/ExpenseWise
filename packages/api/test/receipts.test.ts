@@ -239,6 +239,17 @@ function fakeReceipts() {
           : { status: 'merged' as const, kept, storageKey, taken: [...decision.fields] },
       );
     },
+    delete: (_org, receiptId) => {
+      const at = receipts.findIndex((r) => r.id === receiptId);
+      if (at === -1) return Promise.resolve({ status: 'missing' as const });
+      if (receipts[at]!.status === 'processing') {
+        return Promise.resolve({ status: 'being_read' as const });
+      }
+      if (locked.has(receiptId)) return Promise.resolve({ status: 'locked' as const });
+      const { storageKey } = receipts[at]!;
+      receipts.splice(at, 1);
+      return Promise.resolve({ status: 'deleted' as const, storageKey });
+    },
   };
   /** Stands in for the workflow: both models read the receipt, then it is settled. */
   const read = (id: string, totals: [string, string], status: ReceiptRecord['status']) => {
@@ -1057,6 +1068,65 @@ describe('possible duplicates (FR-INT-18)', () => {
     const path = `/v1/receipts/${s.first}/duplicates/${s.copy}`;
     expect((await s.call('POST', path, undefined, { action: 'keep_both' })).status).toBe(401);
     expect((await s.call('POST', path, 'mallory', { action: 'keep_both' })).status).toBe(403);
+  });
+});
+
+describe('deleting a receipt filed by mistake (FR-CAP-11)', () => {
+  const DELETE = 'receipts.delete=on';
+  /** A file that isn't a receipt at all, such as a flight confirmation. */
+  const forwarded = async (flags = DELETE) => {
+    const s = setup({ flags });
+    const { body: ticket } = await s.call('POST', '/v1/receipts/uploads', 'riley', s.file);
+    await s.call('POST', '/v1/receipts', 'riley', {
+      id: ticket.receiptId,
+      source: 'upload',
+      ...s.file,
+    });
+    const id = ticket.receiptId as string;
+    s.files.put(`orgs/${ORG}/receipts/${id}`, new Uint8Array([1]));
+    return { ...s, id };
+  };
+
+  it('deletes it, then its file', async () => {
+    const s = await forwarded();
+    s.read(s.id, ['6.50', '6.50'], 'needs_review');
+    expect(await s.call('DELETE', `/v1/receipts/${s.id}`, 'riley')).toEqual({
+      status: 200,
+      body: { deleted: s.id },
+    });
+    expect(s.receipts).toEqual([]);
+    expect([...s.files.objects.keys()]).toEqual([]);
+    expect((await s.call('DELETE', `/v1/receipts/${s.id}`, 'riley')).status).toBe(404);
+  });
+
+  it('refuses one still being read, and one whose expense is submitted', async () => {
+    const s = await forwarded();
+    const reading = await s.call('DELETE', `/v1/receipts/${s.id}`, 'riley');
+    expect([reading.status, reading.body.code]).toEqual([409, 'being_read']);
+
+    s.read(s.id, ['6.50', '6.50'], 'extracted');
+    s.locked.add(s.id);
+    const locked = await s.call('DELETE', `/v1/receipts/${s.id}`, 'riley');
+    expect([locked.status, locked.body.code]).toEqual([409, 'locked']);
+    expect(s.receipts.map((r) => r.id)).toEqual([s.id]);
+  });
+
+  it('still deletes when the file can’t be removed, and needs a signed-in member', async () => {
+    const s = await forwarded();
+    s.read(s.id, ['6.50', '6.50'], 'needs_review');
+    expect((await s.call('DELETE', `/v1/receipts/${s.id}`)).status).toBe(401);
+    expect((await s.call('DELETE', `/v1/receipts/${s.id}`, 'mallory')).status).toBe(403);
+    s.files.remove = () => Promise.reject(new Error('storage down'));
+    expect((await s.call('DELETE', `/v1/receipts/${s.id}`, 'riley')).status).toBe(200);
+    expect(s.receipts).toEqual([]);
+  });
+
+  it('is not there while the feature is off', async () => {
+    const s = await forwarded('');
+    s.read(s.id, ['6.50', '6.50'], 'needs_review');
+    const off = await s.call('DELETE', `/v1/receipts/${s.id}`, 'riley');
+    expect([off.status, off.body.code]).toEqual([404, 'feature_off']);
+    expect(s.receipts.map((r) => r.id)).toEqual([s.id]);
   });
 });
 

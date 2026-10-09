@@ -1,7 +1,9 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page, type Request } from '@playwright/test';
+import { showDate } from '@expensewise/domain';
 import {
   BENCH_URL,
+  benchDay,
   E2E_SESSION_KEY,
   E2E_SUPABASE_URL,
   E2E_USER,
@@ -25,9 +27,17 @@ const press =
   (page) =>
     page.getByRole('button', { name }).first().click();
 const fill =
-  (label: string, value: string): Step =>
+  (label: string, value: string | (() => string)): Step =>
   (page) =>
-    page.getByLabel(label, { exact: true }).first().fill(value);
+    page
+      .getByLabel(label, { exact: true })
+      .first()
+      .fill(typeof value === 'string' ? value : value());
+
+/** The day `offset` days from the bench's day 0, worked out once the bench says which day it is. */
+const day = (offset: number) => () => benchDay(seeded.today, offset);
+/** Noon on that day, on the browser's clock. */
+const noon = (offset: number) => () => `${day(offset)()}T12:00:00`;
 
 /** The API's answer to a request that needs the second factor. */
 const needsTheCode = (detail: string) => ({
@@ -134,10 +144,12 @@ const refusesThisEmail =
  * one not let in. Letting one in answers as the API does.
  */
 const listsEmailsLetIn: Step = async (page) => {
+  // Let in for 24 hours, so it lapses tomorrow (#90).
+  const lapsesTomorrow = () => `${day(1)()}T15:00:00Z`;
   const signIn = (id: string, email: string, current: boolean, letIn: string, lapses?: string) => ({
     id: `0192f7a0-0000-7000-8000-0000000000e${id}`,
     email,
-    linkedAt: '2026-10-01T09:00:00Z',
+    linkedAt: `${day(-8)()}T09:00:00Z`,
     current,
     letIn,
     letInLapsesAt: lapses ?? null,
@@ -148,7 +160,7 @@ const listsEmailsLetIn: Step = async (page) => {
           json: {
             signIns: [
               signIn('1', `${E2E_USER}@example.com`, true, 'yes'),
-              signIn('2', 'riley@work.example', false, 'waiting', '2026-10-06T15:00:00Z'),
+              signIn('2', 'riley@work.example', false, 'waiting', lapsesTomorrow()),
               signIn('3', 'riley.old@example.net', false, 'no'),
             ],
             canLetIn: true,
@@ -158,7 +170,7 @@ const listsEmailsLetIn: Step = async (page) => {
   );
   await page.route('**/api/v1/me/sign-ins/*/let-in', (route) =>
     route.fulfill({
-      json: signIn('3', 'riley.old@example.net', false, 'waiting', '2026-10-06T15:00:00Z'),
+      json: signIn('3', 'riley.old@example.net', false, 'waiting', lapsesTomorrow()),
     }),
   );
 };
@@ -184,15 +196,16 @@ const noAuthenticatorsOfItsOwn: Step = (page) =>
  * the day decides what shows, the day it is on the person's clock, and the one console error
  * the state means to cause, such as the browser logging a refusal the screen then handles.
  */
-const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
+const SCREENS: [string, (s: Seeded) => string, Step[], (() => string)?, RegExp?][] = [
   ['Home', () => '/', []],
-  ['Home during a trip', () => '/', [], '2026-10-21T12:00:00'],
-  ['Home with a trip coming up', () => '/', [], '2026-11-01T12:00:00'],
+  ['Home during a trip', () => '/', [], noon(12)],
+  ['Home with a trip coming up', () => '/', [], noon(23)],
   [
-    'Home with October’s business miles',
+    'Home with this month’s business miles',
     () => '/',
     [(page) => expect(page.getByText('Business miles', { exact: true })).toBeVisible()],
-    '2026-10-12T12:00:00',
+    // The day of the drive home from Omaha, so its month is this one whatever the day.
+    noon(-8),
   ],
   ['Home with everything in Needs you open', () => '/', [press('Show all')]],
   [
@@ -248,21 +261,24 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
   ['a receipt the primary model read', (s) => `/receipts/${s.receipts.primaryRead}`, []],
   ['a receipt a back-up model read', (s) => `/receipts/${s.receipts.backupRead}`, []],
   ['a receipt filed with every AI model off', (s) => `/receipts/${s.receipts.notRead}`, []],
+  [
+    'deleting a receipt filed by mistake',
+    (s) => `/receipts/${s.receipts.notRead}`,
+    [
+      press('Delete this receipt'),
+      (page) => expect(page.getByRole('button', { name: 'Delete it' })).toBeVisible(),
+    ],
+  ],
   ['Expenses', () => '/expenses', []],
   [
     'expenses on no trip, opened from Home',
-    () => '/expenses?from=2026-10-01&to=2026-10-31&onTrip=no',
+    () => `/expenses?from=${day(-8)()}&to=${day(22)()}&onTrip=no`,
     [],
   ],
   [
     'searching expenses',
     () => '/expenses',
-    [
-      fill('Merchant', 'uber'),
-      fill('From', '2026-09-01'),
-      fill('To', '2026-10-31'),
-      press('Search'),
-    ],
+    [fill('Merchant', 'uber'), fill('From', day(-38)), fill('To', day(22)), press('Search')],
   ],
   ['an expense that differs from its receipt', (s) => `/expenses/${s.expenses.coffee}`, []],
   ['editing an expense', (s) => `/expenses/${s.expenses.coffee}`, [press('Edit')]],
@@ -280,7 +296,10 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
     'a flight with where it went and the day it departs',
     (s) => `/expenses/${s.expenses.flight}`,
     // On the expense, and under its receipt as read.
-    [(page) => expect(page.getByText('SFO → OMA, departs Sep 29, 2026').first()).toBeVisible()],
+    [
+      (page) =>
+        expect(page.getByText(`SFO → OMA, departs ${showDate(day(-10)())}`).first()).toBeVisible(),
+    ],
   ],
   ['a hotel stay with its nights', (s) => `/expenses/${s.expenses.stay}`, []],
   ['correcting a journey and a stay', (s) => `/expenses/${s.expenses.stay}`, [press('Edit')]],
@@ -291,7 +310,7 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
     'adding mileage',
     () => '/mileage/new',
     [
-      fill('Date', '2026-09-22'),
+      fill('Date', day(-17)),
       fill('Miles', '38.4'),
       fill('Destination', 'IAH airport'),
       fill('Business purpose', 'Drive to the airport for the Acme onsite'),
@@ -327,7 +346,12 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
   [
     'a fare in euros with the dollars its card was charged',
     (s) => `/expenses/${s.expenses.lufthansa}`,
-    [(page) => expect(page.getByText(/not at your card’s rate/)).toBeVisible()],
+    [
+      (page) => expect(page.getByText(/not at your card’s rate/)).toBeVisible(),
+      // The company's card paid it, so it is never claimed (FR-INT-25).
+      (page) =>
+        expect(page.getByText('Paid by the company (on its card ending 4417)')).toBeVisible(),
+    ],
   ],
   ['changing a drive', (s) => `/expenses/${s.expenses.mileage}`, [press('Change the drive')]],
   [
@@ -335,7 +359,7 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
     () => '/mileage/new',
     [
       press('By route'),
-      fill('Date', '2026-09-30'),
+      fill('Date', day(-9)),
       fill('Business purpose', 'Client visit at Acme'),
       fill('Start', '1520 Harney St, Omaha, NE'),
       press('Add a stop'),
@@ -361,8 +385,8 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
     () => '/trips',
     [
       fill('Name, purpose, city or merchant', 'Omaha'),
-      fill('From', '2026-09-01'),
-      fill('To', '2026-10-31'),
+      fill('From', day(-38)),
+      fill('To', day(22)),
       press('Search'),
     ],
   ],
@@ -372,8 +396,8 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
     [
       press('New trip'),
       fill('Name', 'Austin · Initech'),
-      fill('First day', '2026-11-02'),
-      fill('Last day', '2026-11-04'),
+      fill('First day', day(24)),
+      fill('Last day', day(26)),
     ],
   ],
   ['a past trip', (s) => `/trips/${s.trips.omaha}`, []],
@@ -381,7 +405,10 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
     'a trip’s cost, claimed and paid by the company',
     (s) => `/trips/${s.trips.omaha}`,
     [
-      (page) => expect(page.getByRole('definition').filter({ hasText: '$389.20' })).toBeVisible(),
+      // The flight by the policy for airfare, and the ride, the stay and the fare in euros because
+      // the company's card paid them (FR-INT-25).
+      (page) =>
+        expect(page.getByRole('definition').filter({ hasText: '€412.80 + $820.20' })).toBeVisible(),
       (page) => expect(page.getByText('Paid by the company', { exact: true })).toBeVisible(),
     ],
   ],
@@ -655,7 +682,7 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
   [
     'setting your own rate a mile',
     () => '/settings/mileage',
-    [fill('From', '2026-12-01'), fill('Rate a mile (USD)', '0.62')],
+    [fill('From', day(53)), fill('Rate a mile (USD)', '0.62')],
   ],
   [
     'going back to the IRS rate a mile',
@@ -692,7 +719,8 @@ const SCREENS: [string, (s: Seeded) => string, Step[], string?, RegExp?][] = [
     (s) => `/expenses/${s.expenses.seatUpgrade}`,
     [
       press('Show the receipt’s lines'),
-      (page) => expect(page.getByText('Bought Sep 12, 2026, card ending 4417')).toBeVisible(),
+      (page) =>
+        expect(page.getByText(`Bought ${showDate(day(-27)())}, card ending 4417`)).toBeVisible(),
     ],
   ],
   [
@@ -883,7 +911,7 @@ for (const [title, path, steps, at, expected] of SCREENS) {
     });
     const settled = requestsInFlight(page);
     const size = page.viewportSize()!;
-    if (at) await page.clock.setFixedTime(new Date(at));
+    if (at) await page.clock.setFixedTime(new Date(at()));
 
     for (const colorScheme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme });

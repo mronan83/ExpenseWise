@@ -373,6 +373,34 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none' },
     source: 'Product owner Oct 7',
     affects: ['GAP-43', 'GAP-44', 'FR-INT-25', 'FR-INT-26', 'F-66', 'FR-EXP-17'],
+    done: { date: '2026-10-07', in: 'PR #70' },
+  },
+  {
+    num: 99,
+    title: 'A receipt paid with the corporate card is the company’s as soon as it is read',
+    type: 'Feature',
+    detail:
+      'GAP-45, found building #98: a statement comes monthly, often after a trip’s report went in, and a submitted claim never changes who paid. A receipt’s reading already shows the card’s last four digits; once a statement has brought that card in, a receipt paid with it is Paid by the company the moment it is read, before its report is submitted, and the statement’s charge then only documents it.',
+    priority: 'P2',
+    effort: 'M',
+    severity: 'Medium',
+    blocker: { kind: 'none' },
+    source: 'GAP-45',
+    affects: ['GAP-45', 'FR-INT-25', 'F-66'],
+  },
+  {
+    num: 100,
+    title: 'Delete a receipt filed by mistake',
+    type: 'Feature',
+    detail:
+      'Your report of Oct 7 (GAP-46): a forwarded flight confirmation with no amounts was filed as a receipt and can’t be removed. A Delete on the receipt’s page, for its own member, confirmed once, through `delete_receipt()` (ADR-0028): its readings and expense go with it, a closed report it was on reopens, its file is removed once the deletion commits, and the audit trail keeps what it was. Refused once its expense is submitted. A card charge it documented is a missing receipt again.',
+    priority: 'P1',
+    effort: 'S',
+    severity: 'Medium',
+    blocker: { kind: 'none' },
+    source: 'Product owner Oct 7',
+    affects: ['GAP-46', 'FR-CAP-11', 'F-67'],
+    done: { date: '2026-10-07', in: 'PR #77' },
   },
   // P2: this month
   {
@@ -660,7 +688,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     title: 'Add the 2027 IRS mileage rate before January',
     type: 'Ops',
     detail:
-      'Mileage is paid at the IRS business rate on the drive’s date (R-MILEAGE-RATE, ADR-0038), known through Dec 31, 2026. A drive dated in 2027 is refused, not paid at the old rate, until the IRS announces the 2027 rate, usually in mid-December, and it is added. Each year the same: a one-line change and its test.',
+      'Mileage is paid at the IRS business rate on the drive’s date (R-MILEAGE-RATE, ADR-0038), known through Dec 31, 2026. A drive dated in 2027 is refused, not paid at the old rate, until the IRS announces the 2027 rate, usually in mid-December, and it is added. Each year the same: a one-line change and its test. From Jan 9 the signed-in checks’ bench stops too, naming this, since its drives are dated from the day it runs (PR #78).',
     priority: 'P2',
     effort: 'S',
     severity: 'Medium',
@@ -1422,7 +1450,8 @@ export const BACKLOG: readonly BacklogItem[] = [
 
 /** How to order the open work, beyond priority. */
 export const SEQUENCING: readonly string[] = [
-  '#97, in PR #68, brings in your corporate card’s statement from U.S. Bank Access Online and matches its transactions to your expenses (your answers to Q50 and Q51). Switch on Card statements, then bring in September’s statement or its downloaded list on the Card page. #98 is next, by your answer to Q52: matched charges become Paid by the company, and a charge whose expense has no receipt is flagged too; until it is built, mark matched expenses Paid by the company by hand.',
+  '#97, in PR #68, brings in your corporate card’s statement from U.S. Bank Access Online and matches its transactions to your expenses (your answers to Q50 and Q51). Switch on Card statements, then bring in September’s statement or its downloaded list on the Card page.',
+  '#98, in PR #70, makes what your card paid for Paid by the company and keeps any charge without an expense and its receipt flagged (your answer to Q52); switch on Paid by the company with Card statements. #99 then knows the card at the receipt, so a claim submitted before its statement comes is the company’s too.',
   '#96, in PR #66, reads each purchase on a receipt as its own group of lines (your answer to Q49), so a seat upgrade bought later on your own card can be left out with its own taxes and fees. Switch on Several purchases on one receipt, with itemized lines, then Read again each fare that holds one.',
   'Your batch of Oct 5 is built in PR #60: approval (#24) with the second factor (#8), a submitted claim keeping its names (#70), emails that filed nothing (#59), journeys and stays in the export (#83), business miles on Home (#73) and proof that no tools reach a model (#38), each behind its switch and off until you switch it on.',
   'With #85, #88 and #90 in PR #60, a session that skipped the code gets nothing for someone with an authenticator, and once a person has one, only an email they let in signs in; their other emails still forward receipts (Q44). #91, letting in first only the email a person first signed in with (your answer to Q45), is next; until then, set up your authenticator soon after release.',

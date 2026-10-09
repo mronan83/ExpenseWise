@@ -12,9 +12,10 @@ import {
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, sql } from 'drizzle-orm';
 import { appendAuditEvent, type AuditEntry } from './audit.ts';
 import type { Transaction } from './client.ts';
+import { followCardCharges } from './company-paid.ts';
 import { enqueueOutbox } from './outbox.ts';
 import type { CommittedEvent } from './receipts.ts';
-import { cardStatements, cardTransactions, expenses } from './schema.ts';
+import { cardStatements, cardTransactions, expenses, receipts } from './schema.ts';
 
 /*
  * A member's card statements and the transactions they bring in, matched to the expenses they
@@ -389,7 +390,8 @@ export async function matchCardTransactions(
     .where(
       and(
         eq(expenses.memberId, memberId),
-        ne(expenses.source, 'mileage'),
+        // Only an expense with its receipt documents a charge (FR-INT-26); a drive has none.
+        sql`EXISTS (SELECT 1 FROM receipts r WHERE r.org_id = ${expenses.orgId} AND r.expense_id = ${expenses.id})`,
         isNotNull(expenses.amountMinor),
         isNotNull(expenses.currency),
         gte(expenses.transactionDate, shift(dates[0]!, -7)),
@@ -425,6 +427,13 @@ export async function matchCardTransactions(
       payload: { expenseId: m.expenseId, by: 'auto' },
     });
   }
+  // The company's card paid for each, so none is claimed (FR-INT-25, Q52).
+  await followCardCharges(
+    tx,
+    orgId,
+    matches.map((m) => m.expenseId),
+    actor,
+  );
   return matches.length;
 }
 
@@ -518,7 +527,8 @@ export async function bringBackCardTransaction(
 /**
  * Matches a transaction to an expense a person chose (US-CAP-07 AC7), whatever its amount or
  * currency: a tip added after the receipt, or a charge abroad. The expense must be the same
- * member's and not paid by another transaction. Call inside withOrg(), as the caller.
+ * member's, have its receipt (FR-INT-26) and not be paid by another transaction. Call inside
+ * withOrg(), as the caller.
  */
 export async function matchCardTransactionTo(
   tx: Transaction,
@@ -535,11 +545,20 @@ export async function matchCardTransactionTo(
     .select({ memberId: expenses.memberId })
     .from(expenses)
     .where(eq(expenses.id, expenseId));
+  const [receipt] = await tx
+    .select({ id: receipts.id })
+    .from(receipts)
+    .where(eq(receipts.expenseId, expenseId))
+    .limit(1);
   const [taken] = await tx
     .select({ id: cardTransactions.id })
     .from(cardTransactions)
     .where(and(eq(cardTransactions.expenseId, expenseId), ne(cardTransactions.id, id)));
-  if (!expense || expense.memberId !== row.memberId || taken) return { status: 'not_matchable' };
+  // Only an expense with its receipt documents a charge (FR-INT-26): never a drive, nor one
+  // typed in with no receipt, which leaves the charge a missing receipt.
+  if (!expense || expense.memberId !== row.memberId || !receipt || taken) {
+    return { status: 'not_matchable' };
+  }
   await tx
     .update(cardTransactions)
     .set({ expenseId, matchedBy: 'person', matchedAt: new Date() })
@@ -550,6 +569,10 @@ export async function matchCardTransactionTo(
     entityId: id,
     action: 'card_transaction.matched',
     payload: { expenseId, by: 'person', ...(row.expenseId ? { previous: row.expenseId } : {}) },
+  });
+  await followCardCharges(tx, orgId, [expenseId, row.expenseId], {
+    type: 'user',
+    id: actorUserId,
   });
   return { status: 'changed' };
 }
@@ -575,6 +598,8 @@ export async function unmatchCardTransaction(
     action: 'card_transaction.unmatched',
     payload: { expenseId: row.expenseId, by: row.matchedBy },
   });
+  // Let go, the expense goes back to its type's policy (US-CAP-08 AC4).
+  await followCardCharges(tx, orgId, [row.expenseId], { type: 'user', id: actorUserId });
   return { status: 'changed' };
 }
 
@@ -624,6 +649,12 @@ export async function deleteCardStatement(
     .where(eq(cardStatements.id, statementId))
     .for('update');
   if (!statement) return undefined;
+  const paid = await tx
+    .select({ expenseId: cardTransactions.expenseId })
+    .from(cardTransactions)
+    .where(
+      and(eq(cardTransactions.statementId, statementId), isNotNull(cardTransactions.expenseId)),
+    );
   await tx.delete(cardStatements).where(eq(cardStatements.id, statementId));
   await appendAuditEvent(tx, orgId, {
     actor: { type: 'user', id: actorUserId },
@@ -632,6 +663,13 @@ export async function deleteCardStatement(
     action: 'card_statement.deleted',
     payload: { transactions: statement.added },
   });
+  // The expenses its charges paid for go back to their types' policy.
+  await followCardCharges(
+    tx,
+    orgId,
+    paid.map((p) => p.expenseId),
+    { type: 'user', id: actorUserId },
+  );
   return { storageKey: statement.storageKey };
 }
 
@@ -743,7 +781,7 @@ export async function matchableExpenses(
     .where(
       and(
         eq(expenses.memberId, memberId),
-        ne(expenses.source, 'mileage'),
+        sql`EXISTS (SELECT 1 FROM receipts r WHERE r.org_id = ${expenses.orgId} AND r.expense_id = ${expenses.id})`,
         gte(expenses.transactionDate, shift(-7)),
         lte(expenses.transactionDate, shift(7)),
         sql`NOT EXISTS (SELECT 1 FROM card_transactions m WHERE m.org_id = ${expenses.orgId} AND m.expense_id = ${expenses.id})`,

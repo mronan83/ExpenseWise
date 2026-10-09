@@ -607,6 +607,12 @@ export const ResolveDuplicateSchema = z
   ])
   .openapi('ResolveDuplicate');
 
+export const DeletedReceiptSchema = z
+  .object({
+    deleted: z.string().uuid().openapi({ description: 'The receipt deleted, with its expense.' }),
+  })
+  .openapi('DeletedReceipt');
+
 export const DuplicateResolutionSchema = z
   .object({
     outcome: z.enum(['kept_both', 'deleted', 'merged']),

@@ -21,8 +21,22 @@ export const E2E_SESSION_KEY = 'sb-e2e-auth-token';
 /** The bench signs a request in as whoever its bearer token names. */
 export const E2E_USER = 'riley';
 
+/**
+ * The day `offset` days from the bench's day 0, as YYYY-MM-DD. Every date the bench seeds and
+ * the spec types or expects is one of these, so each receipt, trip, drive and report stands
+ * where it was meant to against the day the checks run, whatever that day is: a receipt is
+ * never a year older than its upload, a past trip has ended and a future one hasn't begun.
+ */
+export function benchDay(today: string, offset: number): string {
+  const at = new Date(`${today}T00:00:00Z`);
+  at.setUTCDate(at.getUTCDate() + offset);
+  return at.toISOString().slice(0, 10);
+}
+
 /** What the bench seeded, by name, for the spec to open. */
 export interface Seeded {
+  /** The bench's day 0: the UTC day it started, which every seeded date counts from. */
+  readonly today: string;
   readonly trips: Record<'omaha' | 'houston' | 'long' | 'empty', string>;
   readonly receipts: Record<string, string>;
   readonly expenses: Record<string, string>;

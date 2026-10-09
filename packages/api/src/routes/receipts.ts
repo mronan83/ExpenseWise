@@ -2,6 +2,7 @@ import { createRoute, z } from '@hono/zod-openapi';
 import {
   ConfirmReceiptSchema,
   CorrectReceiptSchema,
+  DeletedReceiptSchema,
   DuplicateResolutionSchema,
   FileReceiptSchema,
   ProblemSchema,
@@ -196,6 +197,36 @@ export const correctReceiptRoute = createRoute({
         'submitted or further along (locked).',
     ),
     422: problem('A value is not valid, or it is filed so already (unchanged); field names which.'),
+  },
+});
+
+export const deleteReceiptRoute = createRoute({
+  method: 'delete',
+  path: '/v1/receipts/{receiptId}',
+  tags: ['Receipts'],
+  summary: 'Delete a receipt filed by mistake',
+  description:
+    'FR-CAP-11, behind `receipts.delete`. Deletes a receipt of the caller’s own, such as a ' +
+    'forwarded booking confirmation with no amounts, with its file, readings, confirmations ' +
+    'and expense, through the same deletion a duplicate’s uses (ADR-0028). The audit trail ' +
+    'records what it was. A card charge its expense documented is a missing receipt again.',
+  ...secured,
+  request: { params: receiptParam },
+  responses: {
+    200: {
+      description: 'Deleted.',
+      content: { 'application/json': { schema: DeletedReceiptSchema } },
+    },
+    ...common,
+    403: problem(
+      'The caller has no organization yet, or it is someone else’s receipt, or the caller is ' +
+        'an auditor (not_yours).',
+    ),
+    404: problem('No such receipt, or the feature is off (feature_off).'),
+    409: problem(
+      'being_read: it is still being read; try again in a few seconds. locked: its expense is ' +
+        'submitted or further along, so its claim stays as it went in.',
+    ),
   },
 });
 

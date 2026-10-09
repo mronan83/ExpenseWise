@@ -8,12 +8,12 @@ import {
   type PaidByProblem,
 } from '@expensewise/domain';
 import { and, eq, inArray, ne, not, or, sql } from 'drizzle-orm';
-import { appendAuditEvent, lockOrgWrites } from './audit.ts';
+import { appendAuditEvent, lockOrgWrites, type AuditEntry } from './audit.ts';
 import type { Transaction } from './client.ts';
 import { heldAsDuplicate } from './duplicates.ts';
 import { expenseColumns, type ReportExpenseRecord } from './expenses.ts';
 import { reopenChangedReports, reportsOfExpenses } from './report-touch.ts';
-import { expenses, expenseTypes, members, receipts, trips } from './schema.ts';
+import { cardTransactions, expenses, expenseTypes, members, receipts, trips } from './schema.ts';
 import { safeMinor } from './trips.ts';
 
 /*
@@ -35,6 +35,32 @@ export async function companyPaysType(tx: Transaction, typeId: string | null): P
     .from(expenseTypes)
     .where(eq(expenseTypes.id, typeId));
   return row?.companyPays ?? false;
+}
+
+/**
+ * Whether a card charge paid for this expense. A corporate card brought in is billed to the
+ * company, which pays the issuer (Q52), so the expense it paid is the company's, never claimed
+ * (FR-INT-25). Call inside withOrg().
+ */
+export async function paidByCardCharge(tx: Transaction, expenseId: string): Promise<boolean> {
+  const [charge] = await tx
+    .select({ id: cardTransactions.id })
+    .from(cardTransactions)
+    .where(eq(cardTransactions.expenseId, expenseId))
+    .limit(1);
+  return charge !== undefined;
+}
+
+/**
+ * Who the organization says paid an expense not set by hand: the company when its type is one
+ * the company pays (FR-EXP-18), or a card charge paid for it (FR-INT-25). Call inside withOrg().
+ */
+export async function policyPays(
+  tx: Transaction,
+  expenseId: string,
+  typeId: string | null,
+): Promise<boolean> {
+  return (await companyPaysType(tx, typeId)) || (await paidByCardCharge(tx, expenseId));
 }
 
 export type SetPaidByResult =
@@ -82,7 +108,7 @@ export async function setExpensePaidBy(
   const problem = paidByProblem(expense);
   if (problem) return { status: 'not_changeable', problem, current: expense.status };
 
-  const next = choosePaidBy(choice, await companyPaysType(tx, expense.typeId));
+  const next = choosePaidBy(choice, await policyPays(tx, expenseId, expense.typeId));
   if (next.companyPaid === expense.companyPaid && next.pinned === expense.pinned) {
     return { status: 'unchanged' };
   }
@@ -112,6 +138,68 @@ export async function setExpensePaidBy(
     );
   }
   return { status: 'set', ...next };
+}
+
+/**
+ * Brings who paid these expenses in line with the policy once a card charge is matched to one,
+ * or lets go of it (FR-INT-25, US-CAP-08): one not set by hand, not a drive and not yet
+ * submitted follows `policyPays`; a person's choice stands, and a submitted claim never changes.
+ * Each switch is audited, and a closed report one is on opens again. Returns those that switched.
+ * Call inside withOrg(), as whoever matched the charge.
+ */
+export async function followCardCharges(
+  tx: Transaction,
+  orgId: string,
+  expenseIds: readonly (string | null)[],
+  actor: AuditEntry['actor'],
+): Promise<string[]> {
+  const ids = [...new Set(expenseIds.filter((id): id is string => id !== null))];
+  if (ids.length === 0) return [];
+  // The organization's write lock before the rows, in the order every change of who paid takes them.
+  await lockOrgWrites(tx, orgId);
+  const rows = await tx
+    .select({
+      id: expenses.id,
+      status: expenses.status,
+      source: expenses.source,
+      typeId: expenses.typeId,
+      companyPaid: expenses.companyPaid,
+      pinned: expenses.companyPaidPinned,
+    })
+    .from(expenses)
+    .where(inArray(expenses.id, ids))
+    .orderBy(expenses.id)
+    .for('update');
+  const switched: string[] = [];
+  for (const expense of rows) {
+    if (!followsPolicyChange(expense)) continue;
+    const companyPaid = await policyPays(tx, expense.id, expense.typeId);
+    if (companyPaid === expense.companyPaid) continue;
+    await tx
+      .update(expenses)
+      .set({ companyPaid, updatedAt: new Date() })
+      .where(eq(expenses.id, expense.id));
+    await appendAuditEvent(tx, orgId, {
+      actor,
+      entityType: 'expense',
+      entityId: expense.id,
+      action: 'expense.paid_by_set',
+      payload: {
+        before: shownPaidBy(expense),
+        after: shownPaidBy({ companyPaid, pinned: false }),
+        byCard: true,
+      },
+    });
+    switched.push(expense.id);
+  }
+  await reopenChangedReports(
+    tx,
+    orgId,
+    await reportsOfExpenses(tx, switched),
+    actor,
+    'a card charge changed who paid an expense on it',
+  );
+  return switched;
 }
 
 /** Who is changing the policy: the member, for the row, and their sign-in, for the audit trail. */
@@ -170,6 +258,10 @@ export async function setTypeCompanyPays(
         ne(expenses.companyPaid, companyPays),
         // Submitted or later never changes (Q48); an approved one is locked besides.
         inArray(expenses.status, ['processing', 'needs_review', 'ready']),
+        // One a card charge paid for stays the company's, whatever its type (FR-INT-25).
+        companyPays
+          ? undefined
+          : sql`NOT EXISTS (SELECT 1 FROM card_transactions m WHERE m.org_id = ${expenses.orgId} AND m.expense_id = ${expenses.id})`,
       ),
     )
     .orderBy(expenses.id)
