@@ -87,6 +87,95 @@ for (const colorScheme of ['light', 'dark'] as const) {
   });
 }
 
+/** WCAG contrast of two colors given as #rrggbb. */
+function contrast(a: string, b: string): number {
+  const lum = (hex: string) => {
+    const [r, g, bl] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+    const f = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+    return 0.2126 * f(r!) + 0.7152 * f(g!) + 0.0722 * f(bl!);
+  };
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return (hi! + 0.05) / (lo! + 0.05);
+}
+
+/** The PNG's width and height, from its header. */
+const pngSize = (bytes: Buffer) => [bytes.readUInt32BE(16), bytes.readUInt32BE(20)];
+
+test.describe('the Carbon identity (ADR-0049)', () => {
+  test('names its icons in the manifest and serves each one, the iPhone’s too', async ({
+    request,
+  }) => {
+    const manifest = (await (await request.get('/manifest.webmanifest')).json()) as {
+      icons: { src: string; sizes: string; type: string; purpose?: string }[];
+    };
+    expect(manifest.icons.map((i) => i.sizes)).toEqual(['any', '192x192', '512x512', '512x512']);
+    for (const icon of manifest.icons) {
+      const res = await request.get(icon.src);
+      expect(res.status(), icon.src).toBe(200);
+      expect(res.headers()['content-type'], icon.src).toContain(icon.type);
+      if (icon.type === 'image/png') {
+        expect(pngSize(await res.body()).join('x'), icon.src).toBe(icon.sizes);
+      }
+    }
+    const apple = await request.get('/apple-icon.png');
+    expect(apple.status()).toBe(200);
+    expect(pngSize(await apple.body())).toEqual([180, 180]);
+  });
+
+  test('sets every screen in IBM Plex Sans, with figures in tabular numerals', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByRole('heading', { level: 1, name: 'Needs you' })).toBeVisible();
+    const fonts = await page.evaluate(async () => {
+      await document.fonts.ready;
+      return {
+        loaded: [...document.fonts]
+          .filter((f) => f.status === 'loaded')
+          .map((f) => f.family.replaceAll('"', '')),
+        body: getComputedStyle(document.body).fontFamily,
+        figures: getComputedStyle(document.body).fontVariantNumeric,
+      };
+    });
+    expect(fonts.loaded).toContain('IBM Plex Sans');
+    expect(fonts.body).toMatch(/^"?IBM Plex Sans/);
+    expect(fonts.figures).toBe('tabular-nums');
+  });
+
+  for (const colorScheme of ['light', 'dark'] as const) {
+    test(`keeps every text color at 4.5:1 or more on paper, sheet and wash, ${colorScheme}`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ colorScheme });
+      await page.goto('/');
+      const token = await page.evaluate(() => {
+        const css = getComputedStyle(document.documentElement);
+        const names = ['paper', 'sheet', 'carbon-wash', 'ink', 'ink-2', 'ink-3', 'carbon'];
+        const all = [...names, 'carbon-ink', 'ok', 'warn', 'bad'];
+        return Object.fromEntries(all.map((n) => [n, css.getPropertyValue(`--${n}`).trim()]));
+      });
+      const short: string[] = [];
+      for (const text of ['ink', 'ink-2', 'ink-3', 'carbon', 'ok', 'warn', 'bad']) {
+        for (const ground of ['paper', 'sheet', 'carbon-wash']) {
+          const ratio = contrast(token[text]!, token[ground]!);
+          if (ratio < 4.5) short.push(`${text} on ${ground}: ${ratio.toFixed(2)}`);
+        }
+      }
+      if (contrast(token['carbon-ink']!, token.carbon!) < 4.5) short.push('carbon-ink on carbon');
+      expect(short).toEqual([]);
+    });
+  }
+
+  test('draws an icon above each tab’s label', async ({ page }) => {
+    await page.goto('/');
+    const nav = page.getByRole('navigation', { name: 'Main' });
+    const links = nav.getByRole('link');
+    await expect(links).toHaveCount(5);
+    for (const label of ['Home', 'Expenses', 'Capture', 'Trips', 'Reports']) {
+      const link = nav.getByRole('link', { name: label, exact: true });
+      await expect(link.locator('svg')).toHaveCount(1);
+    }
+  });
+});
+
 test.describe('API through Next.js', () => {
   test('serves health and the OpenAPI contract under /api', async ({ request }) => {
     const health = await request.get('/api/v1/health');

@@ -236,6 +236,30 @@ export const GAPS: readonly Gap[] = [
     },
   },
   {
+    id: 'GAP-47',
+    title: 'The brand font never loaded, and the app had no icon a phone can install.',
+    affects: ['NFR-UX-07', 'F-68'],
+    severity: 'Low',
+    evidence:
+      'Found building your brand on Oct 9: the styles named IBM Plex Sans but nothing shipped it, so each device showed its own font and its own figures; only an SVG icon existed, which iOS ignores for Add to Home Screen and Android won’t install from.',
+    fix: 'Serve IBM Plex with the app and draw PNG icons for iOS and Android from the mark (#101).',
+    backlog: 101,
+    closed: {
+      date: '2026-10-09',
+      note: 'PR #81 (#101): IBM Plex is served from @fontsource and checked loaded by e2e/shell; the iPhone, Android and maskable icons are drawn from the mark and checked served.',
+    },
+  },
+  {
+    id: 'GAP-48',
+    title: 'A form field’s border is too faint to find the field by: 1.3:1, where WCAG asks 3:1.',
+    affects: ['NFR-UX-01'],
+    severity: 'Low',
+    evidence:
+      'Found checking the Carbon colors on Oct 9: a field is drawn by its `rule` border alone, `#dcdee7` on paper and sheet in light and `#272b3c` in dark, about 1.3:1. WCAG 2.2 AA (1.4.11) asks 3:1 for what shows where a control is. The colors before Carbon were the same. axe doesn’t check borders, so nothing caught it; each field has its label, which is why it reads at all.',
+    fix: 'A darker border for fields only, a `field` token at 3:1 or more on paper and sheet in both themes, leaving `rule` for dividers, and `e2e/shell` checking it (#102).',
+    backlog: 102,
+  },
+  {
     id: 'GAP-46',
     title: 'A receipt filed by mistake can’t be deleted: only a duplicate can.',
     affects: ['FR-CAP-11', 'F-67'],
@@ -1223,6 +1247,12 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-09',
+    change:
+      'Your brand, built in PR #81 (#101): direction A, Carbon, by your choice of Oct 9, keeping the name since the app won’t be sold (ADR-0049, D-51). The mark is a receipt whose torn edge is a W, on carbon blue, at the top of every screen, on the home screen and on a shared link; IBM Plex is now actually served, so figures line up the same on every device; the colors lean to the carbon blue, each text color at 4.5:1 or more in both themes; the tab bar has icons. The guide is docs/brand.md (NFR-UX-07, F-68, US-UX-06; GAP-47 closed). Found doing it: a form field’s border is about 1.3:1, as it was before, where WCAG 2.2 AA asks 3:1, which axe doesn’t measure; NFR-UX-01 is Partial until #102 fixes it (GAP-48).',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-09',
     change:

@@ -119,6 +119,7 @@ Jordan reviews one exception, not eight lines.
 ## 5.4 Design system and accessibility
 
 - **One set of tokens.** Color, type, spacing and radius live in one package, exported to CSS for web and to Swift for iOS with Style Dictionary, so both apps share one brand.
+- **One identity, Carbon.** The mark, the type, the colors, the icons and the voice are in the [brand guide](brand.md) ([ADR-0049](adr/0049-the-carbon-identity.md)).
 - **Components we own.** Tailwind CSS with shadcn/ui on Radix primitives gives us accessible components as source code instead of a library we have to fight.
 - **Every state designed.** Each screen has designed empty, loading, processing, offline and error states. "Processing" is a first-class state because extraction is asynchronous.
 - **Accessible by default.** WCAG 2.2 AA, fully keyboard-operable on web, Dynamic Type on iOS, and automated axe checks in CI (gate G5; see [quality gates](06-delivery-lifecycle.md#73-quality-gates)).

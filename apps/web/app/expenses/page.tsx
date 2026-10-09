@@ -11,6 +11,7 @@ import { CARD_STATEMENTS_FLAG } from '../../lib/card-statements';
 import { MILEAGE_FLAG } from '../../lib/mileage';
 import { formatMoney } from '../../lib/receipts';
 import { supabase } from '../../lib/supabase';
+import { Wordmark } from '../brand';
 
 type Load =
   | { state: 'loading' }
@@ -86,8 +87,8 @@ export default function ExpensesPage() {
   return (
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]">
       <header className="flex items-baseline justify-between py-3">
-        <Link href="/" className="tap font-mono text-xs tracking-widest text-ink-2 uppercase">
-          ExpenseWise
+        <Link href="/" className="tap">
+          <Wordmark />
         </Link>
         <span className="flex items-baseline gap-4">
           {featureOn(CARD_STATEMENTS_FLAG) ? (

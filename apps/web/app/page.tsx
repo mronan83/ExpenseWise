@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { connection } from 'next/server';
 import { flags } from '../lib/flags';
 import { HomeDashboard } from './home-dashboard';
+import { Wordmark } from './brand';
 
 /** Home: the Needs you inbox, then the person's trip, month and recent trips (FR-INS-01). */
 export default async function HomePage() {
@@ -13,7 +14,7 @@ export default async function HomePage() {
   return (
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]">
       <header className="flex items-baseline justify-between py-3">
-        <span className="font-mono text-xs tracking-widest text-ink-2 uppercase">ExpenseWise</span>
+        <Wordmark />
         <span className="flex items-baseline gap-3">
           {showBuild ? <span className="font-mono text-xs text-ink-3">build {build}</span> : null}
           <Link href="/settings/ai" className="tap text-xs font-semibold text-carbon">

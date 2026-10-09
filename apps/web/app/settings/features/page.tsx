@@ -8,6 +8,7 @@ import { loadFeatures, type Feature, type FeatureList } from '../../../lib/featu
 import { SECOND_FACTOR_FLAG } from '../../../lib/second-factor';
 import { supabase } from '../../../lib/supabase';
 import { SettingsNav } from '../nav';
+import { Wordmark } from '../../brand';
 
 type Load =
   | { state: 'loading' }
@@ -85,8 +86,8 @@ export default function FeaturesPage() {
   return (
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]">
       <header className="flex items-baseline justify-between py-3">
-        <Link href="/" className="tap font-mono text-xs tracking-widest text-ink-2 uppercase">
-          ExpenseWise
+        <Link href="/" className="tap">
+          <Wordmark />
         </Link>
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
