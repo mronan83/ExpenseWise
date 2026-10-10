@@ -12,12 +12,29 @@ import {
 } from '@expensewise/domain';
 import { z } from 'zod';
 import { documentBlock } from './claude.ts';
-import { costNanoUsd, MODELS, type ClaudeModelId, type TokenUsage } from './models.ts';
+import {
+  costNanoUsd,
+  MODELS,
+  type ClaudeModelId,
+  type ModelId,
+  type OpenAIModelId,
+  type TokenUsage,
+} from './models.ts';
+import {
+  httpError,
+  parseJson,
+  RESPONSES_URL,
+  responsesText,
+  responsesUsage,
+  strictJsonSchema,
+  type ResponsesAnswer,
+} from './openai.ts';
 
 /*
  * A card's monthly statement, read into its transactions (FR-CAP-10, ADR-0046, #97): its own
  * instructions and structure, apart from a receipt's, since a statement is never an expense.
- * Amounts stay decimal strings until normalizeStatement turns them into minor units.
+ * Any model the organization reads with can read it, Claude's or OpenAI's (FR-INT-16,
+ * ADR-0050). Amounts stay decimal strings until normalizeStatement turns them into minor units.
  */
 
 const DECIMAL =
@@ -104,17 +121,30 @@ export interface StatementRun {
   /** timed_out: no answer inside the client's limit. Not retried, since a long statement would only time out again, and each try is paid for. */
   readonly outcome: 'extracted' | 'refused' | 'truncated' | 'invalid' | 'timed_out';
   readonly statement: StatementExtraction | null;
-  readonly model: ClaudeModelId;
+  readonly model: ModelId;
   readonly version: string;
   readonly latencyMs: number;
   readonly usage: TokenUsage;
   readonly costNanoUsd: bigint;
 }
 
+/** Reads a statement PDF with one model, with its structure and no tools. */
+export interface StatementReader {
+  readonly model: ModelId;
+  read(pdf: Uint8Array): Promise<StatementRun>;
+}
+
 const FORMAT = zodOutputFormat(StatementSchema);
 
+const noUsage: TokenUsage = {
+  inputTokens: 0,
+  outputTokens: 0,
+  cacheReadTokens: 0,
+  cacheWriteTokens: 0,
+};
+
 /** Reads a statement PDF with Claude and structured outputs, with no tools. */
-export class StatementReader {
+export class ClaudeStatementReader implements StatementReader {
   constructor(
     private readonly client: Anthropic,
     readonly model: ClaudeModelId,
@@ -153,7 +183,7 @@ export class StatementReader {
         model: this.model,
         version: STATEMENT_VERSION,
         latencyMs: latencyMs(),
-        usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
+        usage: noUsage,
         costNanoUsd: 0n,
       };
     }
@@ -174,6 +204,101 @@ export class StatementReader {
     return {
       outcome,
       statement: outcome === 'extracted' ? response.parsed_output : null,
+      model: this.model,
+      version: STATEMENT_VERSION,
+      latencyMs: latencyMs(),
+      usage,
+      costNanoUsd: costNanoUsd(this.model, usage),
+    };
+  }
+}
+
+const OPENAI_SCHEMA = strictJsonSchema(z.toJSONSchema(StatementSchema));
+
+/**
+ * Reads a statement PDF with an OpenAI model through the Responses API and strict structured
+ * outputs: the same instructions and structure as Claude's, no tools, and nothing stored at
+ * OpenAI. An error answer is thrown as a ProviderHttpError, so the workflow can tell one that
+ * retrying won't fix, such as no credit, from an outage.
+ */
+export class OpenAIStatementReader implements StatementReader {
+  private readonly doFetch: typeof fetch;
+  private readonly timeoutMs: number;
+
+  constructor(
+    private readonly apiKey: string,
+    readonly model: OpenAIModelId,
+    options: { fetch?: typeof fetch; timeoutMs?: number } = {},
+  ) {
+    this.doFetch = options.fetch ?? fetch;
+    this.timeoutMs = options.timeoutMs ?? 90_000;
+  }
+
+  async read(pdf: Uint8Array): Promise<StatementRun> {
+    const { effort } = MODELS[this.model];
+    const started = performance.now();
+    const latencyMs = () => Math.ceil(performance.now() - started);
+    const data = `data:application/pdf;base64,${Buffer.from(pdf).toString('base64')}`;
+    // A timeout isn't tried again, as with Claude: a long statement would only time out again.
+    const res = await this.doFetch(RESPONSES_URL, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${this.apiKey}`, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: this.model,
+        instructions: STATEMENT_PROMPT,
+        input: [
+          {
+            role: 'user',
+            content: [
+              { type: 'input_file', filename: 'statement.pdf', file_data: data },
+              { type: 'input_text', text: 'Extract this statement.' },
+            ],
+          },
+        ],
+        text: {
+          format: {
+            type: 'json_schema',
+            name: 'card_statement',
+            schema: OPENAI_SCHEMA,
+            strict: true,
+          },
+        },
+        reasoning: { effort },
+        max_output_tokens: 32_000,
+        // A statement is personal data: nothing is kept at OpenAI for later retrieval.
+        store: false,
+      }),
+      signal: AbortSignal.timeout(this.timeoutMs),
+    }).catch((error: unknown) => {
+      if (error instanceof DOMException && error.name === 'TimeoutError') return null;
+      throw error;
+    });
+    if (!res) {
+      return {
+        outcome: 'timed_out',
+        statement: null,
+        model: this.model,
+        version: STATEMENT_VERSION,
+        latencyMs: latencyMs(),
+        usage: noUsage,
+        costNanoUsd: 0n,
+      };
+    }
+    if (!res.ok) throw await httpError(res, this.apiKey);
+    const answer = (await res.json()) as ResponsesAnswer;
+    const usage = responsesUsage(answer);
+    const { refused, text } = responsesText(answer);
+    const parsed = refused ? undefined : StatementSchema.safeParse(parseJson(text));
+    const outcome: StatementRun['outcome'] = refused
+      ? 'refused'
+      : answer.status === 'incomplete'
+        ? 'truncated'
+        : parsed?.success
+          ? 'extracted'
+          : 'invalid';
+    return {
+      outcome,
+      statement: outcome === 'extracted' && parsed?.success ? parsed.data : null,
       model: this.model,
       version: STATEMENT_VERSION,
       latencyMs: latencyMs(),

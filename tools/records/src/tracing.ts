@@ -260,6 +260,51 @@ export const GAPS: readonly Gap[] = [
     backlog: 102,
   },
   {
+    id: 'GAP-49',
+    title:
+      'A card statement was read by Claude Sonnet alone, whatever the organization’s primary AI model.',
+    affects: ['FR-INT-16', 'FR-CAP-10', 'F-65'],
+    severity: 'High',
+    evidence:
+      'Your report of Oct 10: your Cardholder Activity PDF failed to read. Production’s logs show four tries, each answered by Anthropic “Your credit balance is too low”. Building #97, ADR-0046 had the statement read by Claude Sonnet on the Anthropic key, Claude’s recommendation, never yours, though these records said since Oct 4 that you chose not to buy Anthropic credit. Your rule of Oct 10: the app’s features use the primary model you set.',
+    fix: 'Read a statement with the organization’s primary, then each back-up that is on, as a receipt is (FR-INT-16), with an OpenAI reader beside Claude’s, and fail a test when a workflow names a model of its own (#103, ADR-0050).',
+    backlog: 103,
+    closed: {
+      date: '2026-10-10',
+      note: 'PR #83 (#103): the statement is read by your primary, of either provider, and a back-up reads it only when the ones before couldn’t; `workflows/reading-plan` fails when a workflow names a model itself.',
+    },
+  },
+  {
+    id: 'GAP-50',
+    title:
+      'A provider that turned a statement down for good, such as for no credit, was asked four times, and the person was told only to try again.',
+    affects: ['FR-INT-16', 'F-65'],
+    severity: 'Medium',
+    evidence:
+      'Your report of Oct 10: the statement said “It couldn’t be read. Try again, or bring in a downloaded list.” Receipts tell an error retrying can’t fix apart (`permanentFailure`); the statement workflow didn’t, so each of its three retries asked again, and only the run’s failure settled it, with no cause.',
+    fix: 'Tell an error retrying can’t fix apart, as receipts do, hand the statement to the next back-up, and, when no model can read it, say what each one’s provider answered (#103).',
+    backlog: 103,
+    closed: {
+      date: '2026-10-10',
+      note: 'PR #83 (#103): a model turned down for good is asked once and the next one reads; when none can, the statement names each model and what its provider said, such as Anthropic’s “credit balance is too low”, and offers the downloaded list.',
+    },
+  },
+  {
+    id: 'GAP-51',
+    title:
+      'U.S. Bank’s Cardholder Activity report prints its purchases net of its credits, so a faithful reading of it would wait for a look.',
+    affects: ['FR-CAP-10', 'F-65'],
+    severity: 'Medium',
+    evidence:
+      'Found in your PDF of Oct 10: its Activity Totals print Purchases $703.57, which is $771.57 of charges less a $68.00 Hilton credit, and no credits apart. The totals check took printed purchases as charges alone, so it would have said “Its charges come to $771.57, but it prints $703.57.”',
+    fix: 'Let charges less credits make the printed purchases when the statement prints no credits apart (US-CAP-07 AC11, #103).',
+    backlog: 103,
+    closed: {
+      date: '2026-10-10',
+      note: 'PR #83 (#103): a statement whose charges less its credits make its printed purchases adds up, where it prints no credits of its own; a missed line still holds it for a look.',
+    },
+  },
+  {
     id: 'GAP-46',
     title: 'A receipt filed by mistake can’t be deleted: only a duplicate can.',
     affects: ['FR-CAP-11', 'F-67'],
@@ -1247,6 +1292,12 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-10',
+    change:
+      'Your rule of Oct 10, that every feature reads with the primary AI model you set (FR-INT-16): card statements were read by Claude Sonnet alone, so your Cardholder Activity PDF failed while the Anthropic account has no credit (GAP-49), and the statement said only to try again (GAP-50). Fixed in PR #83 (#103, ADR-0050, D-52): your primary reads a statement, then your back-ups; a provider that turns it down for good is asked once; when no model can read it, the statement names what each provider said. A test now fails if a workflow names a model itself. The same PDF, read, would have waited for a look, since Access Online prints its purchases net of credits; that adds up now too (GAP-51, US-CAP-07 AC11).',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-09',
     change:

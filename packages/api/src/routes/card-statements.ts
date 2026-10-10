@@ -80,8 +80,8 @@ export const fileStatementRoute = createRoute({
   summary: 'Bring in an uploaded statement PDF',
   description:
     'US-CAP-07 AC1. Records the statement and the event that has it read, in one transaction. ' +
-    'It is read by Claude with the organization’s Anthropic key, its transactions kept and ' +
-    'matched. Safe to retry with the same id.',
+    'It is read by the organization’s primary AI model, or a back-up when the primary can’t, ' +
+    'its transactions kept and matched. Safe to retry with the same id.',
   ...secured,
   request: { body: json(FileStatementSchema) },
   responses: {

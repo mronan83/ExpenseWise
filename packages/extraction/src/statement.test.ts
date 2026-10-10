@@ -2,10 +2,12 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { APIConnectionTimeoutError } from '@anthropic-ai/sdk';
 import { money } from '@expensewise/domain';
 import { describe, expect, it, vi } from 'vitest';
+import { ProviderHttpError } from './openai.ts';
 import {
+  ClaudeStatementReader,
   normalizeStatement,
+  OpenAIStatementReader,
   STATEMENT_PROMPT,
-  StatementReader,
   type StatementExtraction,
 } from './statement.ts';
 import {
@@ -17,6 +19,7 @@ import {
 } from './statement-list.ts';
 
 const usd = (cents: number) => money(cents, 'USD');
+const KEY = ['sk', 'proj', 'test'].join('-');
 
 /** A U.S. Bank corporate card statement for September, as Claude would read it. */
 const september: StatementExtraction = {
@@ -101,7 +104,7 @@ describe('reading a card statement (FR-CAP-10, statement-v1)', () => {
       parsed_output: september,
     });
     const client = { messages: { parse } } as unknown as Anthropic;
-    const run = await new StatementReader(client, 'claude-sonnet-5-5').read(
+    const run = await new ClaudeStatementReader(client, 'claude-sonnet-5-5').read(
       new Uint8Array([0x25, 0x50, 0x44, 0x46]),
     );
     expect(run).toMatchObject({
@@ -120,15 +123,65 @@ describe('reading a card statement (FR-CAP-10, statement-v1)', () => {
   it('says a statement timed out rather than throw, so it isn’t paid for again', async () => {
     const parse = vi.fn().mockRejectedValue(new APIConnectionTimeoutError());
     const client = { messages: { parse } } as unknown as Anthropic;
-    const run = await new StatementReader(client, 'claude-sonnet-5-5').read(
+    const run = await new ClaudeStatementReader(client, 'claude-sonnet-5-5').read(
       new Uint8Array([0x25, 0x50, 0x44, 0x46]),
     );
     expect(run).toMatchObject({ outcome: 'timed_out', statement: null });
     // Anything else is thrown, for the step to try again.
     parse.mockRejectedValue(new Error('Overloaded'));
     await expect(
-      new StatementReader(client, 'claude-sonnet-5-5').read(new Uint8Array([0x25])),
+      new ClaudeStatementReader(client, 'claude-sonnet-5-5').read(new Uint8Array([0x25])),
     ).rejects.toThrow('Overloaded');
+  });
+
+  it('asks an OpenAI model with the same instructions and structure, offers no tools and stores nothing', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+      Response.json({
+        status: 'completed',
+        output: [
+          {
+            type: 'message',
+            content: [{ type: 'output_text', text: JSON.stringify(september) }],
+          },
+        ],
+        usage: { input_tokens: 12_000, output_tokens: 900 },
+      }),
+    );
+    const run = await new OpenAIStatementReader(KEY, 'gpt-5.6-luna', { fetch }).read(
+      new Uint8Array([0x25, 0x50, 0x44, 0x46]),
+    );
+    expect(run).toMatchObject({
+      outcome: 'extracted',
+      statement: september,
+      model: 'gpt-5.6-luna',
+      version: 'statement-v1',
+    });
+    const body = JSON.parse(fetch.mock.calls[0]?.[1]?.body as string) as Record<string, unknown>;
+    expect(body.instructions).toBe(STATEMENT_PROMPT);
+    expect(body.store).toBe(false);
+    expect(body).not.toHaveProperty('tools');
+    expect(JSON.stringify(body.input)).toContain('data:application/pdf;base64,');
+    expect(run.costNanoUsd).toBeGreaterThan(0n);
+  });
+
+  it('throws what OpenAI answered when it refuses for good, such as no credit, without the key', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+      Response.json(
+        {
+          error: {
+            message: `You exceeded your current quota (key ${KEY}).`,
+            code: 'insufficient_quota',
+          },
+        },
+        { status: 429 },
+      ),
+    );
+    const error = await new OpenAIStatementReader(KEY, 'gpt-5.6-luna', { fetch })
+      .read(new Uint8Array([0x25]))
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(ProviderHttpError);
+    expect(error).toMatchObject({ status: 429, code: 'insufficient_quota' });
+    expect((error as ProviderHttpError).providerMessage).not.toContain(KEY);
   });
 });
 

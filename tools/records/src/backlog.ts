@@ -416,6 +416,20 @@ export const BACKLOG: readonly BacklogItem[] = [
     affects: ['GAP-47', 'NFR-UX-07', 'F-68'],
     done: { date: '2026-10-09', in: 'PR #81' },
   },
+  {
+    num: 103,
+    title: 'Card statements read with your AI model settings, saying why when none can',
+    type: 'Gap',
+    detail:
+      'Your report and rule of Oct 10 (GAP-49, GAP-50, GAP-51): a statement is read by your primary, then your back-ups, as receipts are, with an OpenAI reader beside Claude’s; a provider that turns it down for good, such as for no credit, is asked once and the next model reads; when none can, the statement names each model and what its provider said. A statement printing its purchases net of its credits adds up. A test fails if a workflow names a model itself.',
+    priority: 'P1',
+    effort: 'M',
+    severity: 'High',
+    blocker: { kind: 'none' },
+    source: 'Product owner Oct 10',
+    affects: ['GAP-49', 'GAP-50', 'GAP-51', 'FR-INT-16', 'FR-CAP-10', 'F-65'],
+    done: { date: '2026-10-10', in: 'PR #83' },
+  },
   // P2: this month
   {
     num: 102,

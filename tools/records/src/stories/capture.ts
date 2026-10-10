@@ -1468,8 +1468,33 @@ export const CAPTURE_STORIES: readonly Story[] = [
           'api/card-statements.int › answers feature_off on every route, and Needs you and expenses read as before',
         ],
       },
+      {
+        id: 'AC10',
+        given:
+          'no model of ours can read my statement: none is on, none has its key, or each one’s provider turns it down',
+        when: 'it has been tried',
+        then: 'it says it wasn’t read, naming each model tried and what its provider said, such as that the account has no credit, and offers the downloaded list; a model turned down for good is asked once',
+        decided: { by: 'claude' },
+        checks: [
+          'workflows/card-statements › says what each model’s provider answered when none can read it, and asks for the list (US-CAP-07 AC10)',
+          'workflows/card-statements › says no model can read it when none is on, or none has its provider’s key, and asks none (US-CAP-07 AC10)',
+          'workflows/card-statements › says a model whose key is missing or unreadable read nothing, and asks it nothing',
+          'extraction/statement › throws what OpenAI answered when it refuses for good, such as no credit, without the key',
+        ],
+      },
+      {
+        id: 'AC11',
+        given:
+          'a statement that prints its purchases net of its credits and no credits of its own, as Access Online’s Cardholder Activity report does',
+        when: 'it is read',
+        then: 'its charges less its credits making the printed purchases add up, and a missed line still holds it for a look',
+        decided: { by: 'claude' },
+        checks: [
+          'domain/card-transactions › passes a statement that prints its purchases net of its credits, with no credits apart (AC11)',
+        ],
+      },
     ],
-    note: 'Your requirement of Oct 7 and your answers to Q50 and Q51 (GAP-42, #97), built in PR #68 behind expenses.card-statements. No live connection reaches U.S. Bank Access Online, so the statement is the way in; a live feed, where a card’s site allows one, would bring the same transactions later. AC7 shows the card’s dollars on the expense rather than beside each conversion on its report and trip, which is where conversions show: Claude’s, yours to confirm.',
+    note: 'Your requirement of Oct 7 and your answers to Q50 and Q51 (GAP-42, #97), built in PR #68 behind expenses.card-statements. No live connection reaches U.S. Bank Access Online, so the statement is the way in; a live feed, where a card’s site allows one, would bring the same transactions later. AC7 shows the card’s dollars on the expense rather than beside each conversion on its report and trip, which is where conversions show: Claude’s, yours to confirm. AC10 and AC11 follow your report of Oct 10 (GAP-50, GAP-51, #103): how a statement no model could read says why, and that a report printing purchases net of credits adds up, are Claude’s, yours to confirm.',
   },
   {
     id: 'US-CAP-08',

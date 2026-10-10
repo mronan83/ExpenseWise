@@ -57,6 +57,7 @@ Each ADR records one decision with its context, the alternatives considered and 
 | [0047](0047-a-corporate-card-charge-is-paid-by-the-company.md) | What a corporate card paid for is the company's, and a charge is documented only by an expense with its receipt | D-49 | Accepted (the card billed to the employer and every charge documented by an expense with its receipt decided by product owner, Q52; no billing setting, a person's choice standing, letting a charge go handing it back to its type's policy and a submitted claim never changing recommended, no objection yet) | 2026-10-07 |
 | [0048](0048-the-release-waits-for-ci-on-main.md) | The release waits for CI to pass on the merged commit | D-50 | Accepted (decided by product owner, Oct 9) | 2026-10-09 |
 | [0049](0049-the-carbon-identity.md) | The brand is Carbon: the paperwork, settled | D-51 | Accepted (direction A, keeping the name, decided by product owner, Oct 9) | 2026-10-09 |
+| [0050](0050-every-ai-feature-reads-with-the-organizations-models.md) | Every AI feature reads with the organization's models | D-52 | Accepted (decided by product owner, Oct 10) | 2026-10-10 |
 
 ## How to add an ADR
 

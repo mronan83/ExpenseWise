@@ -1,7 +1,9 @@
+import { readdirSync, readFileSync } from 'node:fs';
 import type { Transaction } from '@expensewise/db';
+import { SETTINGS_MODELS } from '@expensewise/extraction';
 import { describe, expect, it } from 'vitest';
 import { featureOn } from './features.ts';
-import { readingPlanFor } from './reading-plan.ts';
+import { modelOrderFor, readingPlanFor } from './reading-plan.ts';
 
 const saved = {
   primary: 'gpt-5.6-luna',
@@ -72,5 +74,44 @@ describe('a feature, as a workflow reads it', () => {
     expect(
       await featureOn(unread, 'org', 'receipts.model-settings', 'receipts.model-settings=off'),
     ).toBe(false);
+  });
+});
+
+describe('the models every reading but a receipt’s comparison uses (FR-INT-16, ADR-0050)', () => {
+  it('reads with the primary, then the back-ups that are on, whatever is read', () => {
+    expect(modelOrderFor({ settingsOn: true, saved })).toEqual([
+      'gpt-5.6-luna',
+      'claude-haiku-4-5',
+    ]);
+  });
+
+  it('passes over a model whose provider has no key, or the operator stopped', () => {
+    expect(
+      modelOrderFor({ settingsOn: true, saved, keyed: new Set(['anthropic'] as const) }),
+    ).toEqual(['claude-haiku-4-5']);
+    expect(
+      modelOrderFor({ settingsOn: true, saved, overrides: 'operator.gpt-5.6-luna=off' }),
+    ).toEqual(['claude-haiku-4-5']);
+  });
+
+  it('reads with the defaults the settings start from while AI model settings are off', () => {
+    expect(modelOrderFor({ settingsOn: false, saved })).toEqual([
+      'claude-sonnet-5-5',
+      'claude-haiku-4-5',
+      'gpt-5.6-luna',
+    ]);
+  });
+
+  it('is the only way a workflow chooses a model: none names one itself', () => {
+    const dir = new URL('.', import.meta.url);
+    const named = readdirSync(dir)
+      .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
+      .flatMap((file) => {
+        const source = readFileSync(new URL(file, dir), 'utf8');
+        return SETTINGS_MODELS.filter((model) => source.includes(`'${model}'`)).map(
+          (model) => `${file}: ${model}`,
+        );
+      });
+    expect(named).toEqual([]);
   });
 });

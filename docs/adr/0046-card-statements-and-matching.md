@@ -7,6 +7,7 @@ A cardholder brings in their card's monthly statement as a PDF, uploaded or forw
 - **Deciders:** Product owner (Q50, Q51); Claude (principal architect), for the design
 - **Decision register:** D-48.
   - Amends [ADR-0007](0007-bank-and-card-feeds.md) (statement first).
+  - Amended by [ADR-0050](0050-every-ai-feature-reads-with-the-organizations-models.md) (Oct 10): a statement is read by the organization's primary AI model, then its back-ups, not by Claude Sonnet alone.
   - Builds on [ADR-0006](0006-receipt-extraction.md) (no tools reach a model), [ADR-0017](0017-read-receipts-with-two-models.md) (reading is a workflow), [ADR-0026](0026-email-in-through-a-bird-mailbox.md) (the receipts address), [ADR-0032](0032-features-switched-per-organization.md) (behind `expenses.card-statements`), [ADR-0034](0034-reference-rates-for-reimbursement.md) (conversion at the reference rate), [ADR-0035](0035-own-records-and-invite-links.md) (each person's records are their own) and [ADR-0041](0041-itemized-lines-splits-and-exclusions.md) (a reading whose sums miss waits for a look).
   - Delivers FR-CAP-10, FR-INT-24 and F-65 (#97).
 
@@ -28,8 +29,8 @@ What shapes the design:
 1. **Two entities, apart from receipts.**
    - `card_statements`: each statement or list a member brought in, unique by member and SHA-256. A PDF is kept beside receipts at `orgs/{org}/statements/{id}`; a list keeps no file.
    - `card_transactions`: each transaction, unique by member and a key. The key comes from the card, the day, the currency, the amount, the merchant's words and the reference, numbered when a statement prints two alike (`transactionKeys`). A later statement adds only what is new (AC4).
-2. **A PDF is read once by Claude Sonnet, with its own instructions and structure** (`statement-v1`). The reading never shares the receipt's prompt, schema or checks, and offers no tools.
-   - It runs in a workflow (`card-statement-reading`), on the organization's Anthropic key. Reading is one step; keeping and matching is another, so a retry after the model answered never pays twice.
+2. **A PDF is read once, with its own instructions and structure** (`statement-v1`), by the organization's primary AI model, then its back-ups (ADR-0050; until Oct 10, by Claude Sonnet alone). The reading never shares the receipt's prompt, schema or checks, and offers no tools.
+   - It runs in a workflow (`card-statement-reading`), on the organization's own keys. Reading is one step; keeping and matching is another, so a retry after the model answered never pays twice.
    - The model gets one attempt inside the step's limit. A timeout is not retried, since a long statement would only time out again, and the person is asked for the downloaded list instead.
    - The reading first says whether the document is a card account's statement at all. A hotel folio forwarded as a "statement" is turned away, with how to forward it as a receipt.
 3. **A downloaded list is read in the request, with no model.**

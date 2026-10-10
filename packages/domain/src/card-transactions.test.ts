@@ -196,6 +196,28 @@ describe('a statement that adds up (US-CAP-07 AC5)', () => {
       { addsUp: false, problem: 'credits', comesTo: usd(0), against: usd(2500) },
     );
   });
+  it('passes a statement that prints its purchases net of its credits, with no credits apart (AC11)', () => {
+    // U.S. Bank's Cardholder Activity: $420.60 of charges less a $25.00 credit, as "Purchases".
+    for (const credits of [null, usd(0)]) {
+      expect(checkStatement('USD', lines, { charges: usd(39_560), credits })).toEqual({
+        addsUp: true,
+      });
+    }
+    // Printed apart, the credits must make their own total, and the purchases theirs.
+    expect(checkStatement('USD', lines, { charges: usd(39_560), credits: usd(2500) })).toEqual({
+      addsUp: false,
+      problem: 'charges',
+      comesTo: usd(42_060),
+      against: usd(39_560),
+    });
+    // A missed line still shows, net or not.
+    expect(checkStatement('USD', lines.slice(1), { charges: usd(39_560), credits: null })).toEqual({
+      addsUp: false,
+      problem: 'charges',
+      comesTo: usd(1840),
+      against: usd(39_560),
+    });
+  });
 });
 
 describe('setting a transaction aside (US-CAP-07 AC3)', () => {

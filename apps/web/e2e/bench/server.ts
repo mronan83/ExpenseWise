@@ -61,7 +61,6 @@ import {
   conversionPorts,
   convertOrganization,
   readStatement,
-  STATEMENT_MODEL,
   measureRoute,
   readWith,
   receiptReadingPorts,
@@ -1099,11 +1098,14 @@ const pdfTicket = await call<{ statementId: string; path: string }>(
 );
 files.set(pdfTicket.path, statementPdf);
 await call('POST', '/v1/card-statements', { id: pdfTicket.statementId, ...pdfDescribed });
+// The bench's statements are read by an OpenAI model, as an organization whose primary is one
+// reads them (FR-INT-16, ADR-0050).
+const statementModel: ModelId = FALLBACK_MODEL;
 const statementPorts = {
   ...cardStatementReadingPorts({ db, files: store, providerKey: () => Promise.resolve('no_key') }),
   reader: () =>
     Promise.resolve({
-      model: STATEMENT_MODEL,
+      model: statementModel,
       read: () =>
         Promise.resolve({
           outcome: 'extracted' as const,
@@ -1128,7 +1130,7 @@ const statementPorts = {
               cardLastFour: null,
             })),
           },
-          model: STATEMENT_MODEL,
+          model: statementModel,
           version: 'statement-v1',
           latencyMs: 9000,
           usage: { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 },
@@ -1136,8 +1138,13 @@ const statementPorts = {
         }),
     } as unknown as StatementReader),
 };
-const statementRead = await readStatement(statementPorts, organization.id, pdfTicket.statementId);
-if (statementRead?.status !== 'needs_look')
+const statementRead = await readStatement(
+  statementPorts,
+  organization.id,
+  pdfTicket.statementId,
+  statementModel,
+);
+if (!statementRead || !('status' in statementRead) || statementRead.status !== 'needs_look')
   throw new Error('The bench statement should need a look');
 await statementPorts.settle(organization.id, pdfTicket.statementId, asReading(statementRead));
 

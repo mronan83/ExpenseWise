@@ -143,6 +143,8 @@ export function matchTransactions(
  * Whether a statement's transactions make the totals it prints (US-CAP-07 AC5): its charges come
  * to its purchases and other charges, and its credits to its credits, exactly, as printed
  * amounts do. A total it doesn't print can't be checked; a list with neither always passes.
+ * Some print their purchases net of credits, with no credits of their own, as U.S. Bank's
+ * Cardholder Activity does: charges less credits making that total adds up too (AC11, GAP-51).
  */
 export type StatementCheck =
   | { readonly addsUp: true }
@@ -168,6 +170,13 @@ export function checkStatement(
       (total, t) => add(total, { ...t.amount, amountMinor: -t.amount.amountMinor }),
       zero(currency),
     );
+  // No credits printed apart, or none at all: a "Payments $0.00" can be read as one.
+  const noCreditsApart = !printed.credits || printed.credits.amountMinor === 0;
+  const netOfCredits =
+    noCreditsApart &&
+    credits.amountMinor > 0 &&
+    printed.charges?.amountMinor === charges.amountMinor - credits.amountMinor;
+  if (netOfCredits) return { addsUp: true };
   if (printed.charges && printed.charges.amountMinor !== charges.amountMinor) {
     return { addsUp: false, problem: 'charges', comesTo: charges, against: printed.charges };
   }
