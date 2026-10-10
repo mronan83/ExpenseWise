@@ -167,12 +167,14 @@ test.describe('the Carbon identity (ADR-0049)', () => {
   test('draws an icon above each tab’s label', async ({ page }) => {
     await page.goto('/');
     const nav = page.getByRole('navigation', { name: 'Main' });
-    const links = nav.getByRole('link');
-    await expect(links).toHaveCount(5);
-    for (const label of ['Home', 'Expenses', 'Capture', 'Trips', 'Reports']) {
+    await expect(nav.getByRole('link')).toHaveCount(4);
+    for (const label of ['Home', 'Expenses', 'Trips', 'Reports']) {
       const link = nav.getByRole('link', { name: label, exact: true });
       await expect(link.locator('svg')).toHaveCount(1);
     }
+    // Capture is a button: it opens every way to bring something in (FR-CAP-12).
+    const capture = nav.getByRole('button', { name: 'Capture', exact: true });
+    await expect(capture.locator('svg')).toHaveCount(1);
   });
 });
 

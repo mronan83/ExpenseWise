@@ -1221,6 +1221,7 @@ const seeded: Seeded = {
   expenses,
   reports: { open, closed, toApprove, returned },
   invites: { join: join.token, revoked: revoked.token },
+  charges: { delta: chargeOf('DELTA AIR') },
 };
 
 const server = createServer((req, res) => {

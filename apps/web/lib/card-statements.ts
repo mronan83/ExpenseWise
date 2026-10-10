@@ -1,4 +1,4 @@
-import { SET_ASIDE_LABELS, type SetAsideReason } from '@expensewise/domain';
+import { SET_ASIDE_LABELS, showDate, type SetAsideReason } from '@expensewise/domain';
 import { api } from './api';
 import { sha256Hex } from './receipt-file';
 import { supabase } from './supabase';
@@ -74,6 +74,45 @@ export interface ExpenseCardCharge {
   amount: CardAmount;
   cardLastFour: string | null;
   matchedBy: 'auto' | 'person';
+}
+
+/** A statement waiting for the person's look, in Needs you (US-CAP-07 AC14). */
+export interface CardStatementInboxItem {
+  kind: 'card_statement';
+  statement: {
+    id: string;
+    periodStart: string | null;
+    periodEnd: string | null;
+    cardLastFour: string | null;
+    problem: string | null;
+  };
+  reason: { code: 'statement_needs_look' };
+}
+
+/** A statement's days, or the day it came in when it prints none. */
+export function statementPeriod(s: {
+  periodStart: string | null;
+  periodEnd: string | null;
+  createdAt?: string;
+}): string {
+  if (s.periodStart && s.periodEnd) return `${showDate(s.periodStart)} to ${showDate(s.periodEnd)}`;
+  return s.createdAt ? `brought in ${showDate(s.createdAt.slice(0, 10))}` : '';
+}
+
+/**
+ * Opens a statement's own PDF, as brought in, to check its lines against (US-CAP-07 AC15). The
+ * window opens on the tap, before the short-lived link arrives, so a phone doesn't block it.
+ */
+export async function openStatementFile(id: string): Promise<void> {
+  const opened = window.open('', '_blank');
+  try {
+    const { url } = await api<{ url: string }>(`/v1/card-statements/${id}/file`);
+    if (opened) opened.location.href = url;
+    else window.location.assign(url);
+  } catch (error) {
+    opened?.close();
+    throw error;
+  }
 }
 
 /** A missing receipt in Needs you (US-CAP-07 AC3). */

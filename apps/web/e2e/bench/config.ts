@@ -51,4 +51,6 @@ export interface Seeded {
    * owner revoked.
    */
   readonly invites: Record<'join' | 'revoked', string>;
+  /** Card charges by name: the flight's, with no expense, for adding its receipt (AC17). */
+  readonly charges: Record<'delta', string>;
 }

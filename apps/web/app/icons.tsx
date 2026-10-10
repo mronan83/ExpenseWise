@@ -60,3 +60,42 @@ export const CaptureIcon = () => (
     <path d="M12 6v12M6 12h12" />
   </Icon>
 );
+
+/** A camera: take a photo of a receipt (FR-CAP-12). */
+export const CameraIcon = () => (
+  <Icon>
+    <path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2.3l1.4-2h5.6l1.4 2h2.3A1.5 1.5 0 0 1 20 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 17.5z" />
+    <circle cx="12" cy="12.75" r="3.25" />
+  </Icon>
+);
+
+/** An arrow up out of a tray: upload a file. */
+export const UploadIcon = () => (
+  <Icon>
+    <path d="M12 15V4.5M8 8.5l4-4 4 4" />
+    <path d="M4.5 14.5V18a1.5 1.5 0 0 0 1.5 1.5h12a1.5 1.5 0 0 0 1.5-1.5v-3.5" />
+  </Icon>
+);
+
+/** A road's two edges and its centre line: a drive. */
+export const DriveIcon = () => (
+  <Icon>
+    <path d="M8.5 4 5 20M15.5 4 19 20M12 5v2.5M12 11v2.5M12 17v2.5" />
+  </Icon>
+);
+
+/** A card with its stripe: a card statement. */
+export const CardIcon = () => (
+  <Icon>
+    <rect x="3.5" y="6" width="17" height="12" rx="2" />
+    <path d="M3.5 10h17M7 14.5h3.5" />
+  </Icon>
+);
+
+/** Rows of a list: a downloaded transaction list. */
+export const ListIcon = () => (
+  <Icon>
+    <path d="M9 7h11M9 12h11M9 17h11" />
+    <path d="M4.5 7h.01M4.5 12h.01M4.5 17h.01" strokeWidth={2.4} />
+  </Icon>
+);

@@ -442,6 +442,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none' },
     source: 'Product owner Oct 10',
     affects: ['FR-CAP-12', 'F-69'],
+    done: { date: '2026-10-10', in: 'PR #85' },
   },
   {
     num: 105,
@@ -455,6 +456,20 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none' },
     source: 'Product owner Oct 10',
     affects: ['GAP-52', 'GAP-53', 'FR-CAP-10', 'FR-INT-24', 'F-65'],
+    done: { date: '2026-10-10', in: 'PR #85' },
+  },
+  {
+    num: 107,
+    title: 'Reconcile a statement line by line',
+    type: 'Feature',
+    detail:
+      'Your answer of Oct 10 (FR-CAP-13, GAP-55): a statement that doesn’t add up opens to its lines beside its PDF, with the difference shown live; a line can be corrected, removed or added, each change kept with what was read and who made it; the statement is matched once its lines make its totals, or with a note where a difference stays. A corrected charge keeps its place, so a later statement doesn’t bring it in twice.',
+    priority: 'P1',
+    effort: 'M',
+    severity: 'Medium',
+    blocker: { kind: 'none' },
+    source: 'Product owner Oct 10',
+    affects: ['GAP-55', 'FR-CAP-13', 'F-70'],
   },
   {
     num: 106,

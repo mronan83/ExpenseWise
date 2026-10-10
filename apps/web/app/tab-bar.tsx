@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { CaptureMenu } from './capture-menu';
 import { CaptureIcon, ExpensesIcon, HomeIcon, ReportsIcon, TripsIcon } from './icons';
 
 /** The five destinations of the tab bar, with capture in the middle (docs/04-app-design.md). */
@@ -55,16 +56,10 @@ export function TabBar() {
           const current = tab.section(path);
           const Icon = tab.icon;
           if ('primary' in tab) {
+            // Capture opens every way to bring something in (FR-CAP-12).
             return (
               <span key={tab.label} className="flex justify-center">
-                <Link
-                  href={tab.href}
-                  aria-current={current ? 'page' : undefined}
-                  className="grid size-11 place-items-center rounded-full bg-carbon text-carbon-ink"
-                >
-                  <Icon />
-                  <span className="sr-only">{tab.label}</span>
-                </Link>
+                <CaptureMenu current={current} />
               </span>
             );
           }

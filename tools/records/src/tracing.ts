@@ -314,6 +314,10 @@ export const GAPS: readonly Gap[] = [
       'Your report of Oct 10, with screenshots: your statement said “Its charges come to $771.57, but it prints $703.57.” under Needs a look, and you couldn’t tell where to look or how to approve it. The approval is “It’s right: match it” on the statement, at the foot of the Card page; Needs you lists charges with no receipt but not a statement waiting; and the statement’s PDF can’t be opened in the app to check against.',
     fix: 'Say what to check and how: the difference, the lines that could explain it, such as a credit, and what “It’s right: match it” does; open the statement’s PDF from it; list a statement waiting for a look in Needs you (#105).',
     backlog: 105,
+    closed: {
+      date: '2026-10-10',
+      note: 'PR #85 (#105): a statement needing a look says what to check and what It’s right does, opens its PDF, and waits in Needs you until you look.',
+    },
   },
   {
     id: 'GAP-53',
@@ -325,6 +329,21 @@ export const GAPS: readonly Gap[] = [
       'Your question of Oct 10: once matched, a charge links to its expense, and the expense to its charge (“See it on your card”) and its receipt, but the chain stops at the charge. No charge names the statement that brought it in, and no statement opens its file. Before a statement is matched, a charge links to nothing; “Add its receipt” opens Receipts without the charge, leaving the match to happen later on its own.',
     fix: 'Name on each charge the statement that brought it in, with its PDF opened by a short-lived link, as a receipt’s image is; carry the charge into “Add its receipt”, so the receipt is matched to it as soon as it is read (#105).',
     backlog: 105,
+    closed: {
+      date: '2026-10-10',
+      note: 'PR #85 (#105): each charge names the statement or list it came from and leads to it, the statement opens its PDF, and a receipt added from a charge offers to match it once read. With an expense’s charges (#106) and its receipt, the chain runs from the PDF to the receipt and back.',
+    },
+  },
+  {
+    id: 'GAP-55',
+    title:
+      'A line the reading got wrong can’t be corrected, removed or added on its own: the only fix is deleting the whole statement.',
+    affects: ['FR-CAP-13', 'FR-CAP-10', 'F-65'],
+    severity: 'Medium',
+    evidence:
+      'Your question of Oct 10, what to do if one line is wrong. Confirming a statement takes every line as read, so a misread amount stays wrong: it doesn’t match its expense, and a later statement listing it correctly adds it again as a second charge, since a charge is kept once by a key that includes its amount. The only fix is deleting the statement and bringing it in again, or the downloaded list.',
+    fix: 'Reconcile a statement line by line before it is matched: correct, remove or add a line beside its PDF, each change kept with what was read and who made it, matched once its lines make its totals (FR-CAP-13, #107).',
+    backlog: 107,
   },
   {
     id: 'GAP-54',
@@ -1329,6 +1348,12 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-10',
+    change:
+      'Built in PR #85, at your word of Oct 10. Capture opens every way to bring something in, a receipt photo first, each while its feature is on (FR-CAP-12, F-69, US-CAP-10, #104). A statement needing a look says what to check and what It’s right does, opens its PDF and waits in Needs you; each charge names its statement; a receipt added from a charge offers to match it (US-CAP-07 AC14 to AC17, GAP-52 and GAP-53 closed, #105). The Receipts page no longer says Haiku and Sonnet read every receipt where your primary does. Your answer that a wrong line is reconciled, not approved, recorded as Planned (FR-CAP-13, F-70, US-CAP-11, GAP-55, #107).',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-10',
     change:

@@ -22,8 +22,10 @@ import {
   type ReportForExport,
   type Transaction,
   type UnfiledEmailRecord,
+  type CardStatementRecord,
   type CardTransactionRecord,
   missingReceipts,
+  statementsNeedingLook,
   withReportAmounts,
 } from '@expensewise/db';
 import { reportsWaitingFor } from './approval.ts';
@@ -61,6 +63,8 @@ export interface ReportsNeedingYou {
   readonly emails?: UnfiledEmailRecord[];
   /** Asked for: the member's card charges with no expense, oldest first (US-CAP-07 AC3). */
   readonly cardCharges?: CardTransactionRecord[];
+  /** Asked for: the member's statements waiting for their look, oldest first (AC14). */
+  readonly cardStatements?: CardStatementRecord[];
 }
 
 /** What else Needs you is asked to read. */
@@ -173,7 +177,10 @@ export async function reportsNeedingYou(
         }
       : {}),
     ...(options.cardCharges
-      ? { cardCharges: (await missingReceipts(tx, memberId)).slice(0, limit) }
+      ? {
+          cardCharges: (await missingReceipts(tx, memberId)).slice(0, limit),
+          cardStatements: (await statementsNeedingLook(tx, memberId)).slice(0, limit),
+        }
       : {}),
   };
 }

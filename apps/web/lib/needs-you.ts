@@ -1,5 +1,9 @@
 import { showDate, showDateTime } from '@expensewise/domain';
-import type { CardInboxItem } from './card-statements';
+import {
+  statementPeriod,
+  type CardInboxItem,
+  type CardStatementInboxItem,
+} from './card-statements';
 import { categoryText, type ExpenseCategory } from './categories';
 import {
   formatMoney,
@@ -111,6 +115,25 @@ function cardCard({ transaction }: CardInboxItem): InboxCard {
   };
 }
 
+/**
+ * A statement waiting for the person's look (US-CAP-07 AC14, GAP-52): what doesn't add up, and
+ * where to look and match it, on the Card page.
+ */
+function statementCard({ statement }: CardStatementInboxItem): InboxCard {
+  const card = statement.cardLastFour ? `, card ending ${statement.cardLastFour}` : '';
+  return {
+    key: `statement-${statement.id}`,
+    title: 'Your card statement',
+    amount: null,
+    when: `${statementPeriod(statement)}${card}`,
+    status: { label: 'Needs a look', tone: 'text-warn' },
+    text: `${statement.problem ?? 'Its lines don’t make the totals it prints.'} Nothing on it is matched until you look: check its lines against the statement, then match it.`,
+    action: 'Look at it',
+    href: `/card#statement-${statement.id}`,
+    edge: 'warn',
+  };
+}
+
 /** What an inbox item says, and the one thing to do about it (FR-EXP-02). */
 export function inboxCard(item: InboxItem): InboxCard {
   switch (item.kind) {
@@ -158,6 +181,8 @@ export function inboxCard(item: InboxItem): InboxCard {
       return emailCard(item);
     case 'card':
       return cardCard(item);
+    case 'card_statement':
+      return statementCard(item);
     case 'report': {
       const { report, reason } = item;
       if (reason.code === 'returned') {

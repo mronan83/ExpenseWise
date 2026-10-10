@@ -5,6 +5,11 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { api, ApiProblem } from '../../../lib/api';
+import {
+  CARD_STATEMENTS_FLAG,
+  type CardStatements,
+  type CardTransaction,
+} from '../../../lib/card-statements';
 import { useFeatures } from '../../../lib/features';
 import {
   describeChecks,
@@ -207,6 +212,7 @@ export default function ReceiptPage() {
             {receipt.readings.length > 0 ? (
               <Comparison receipt={receipt} sources={sources} journeys={journeys} />
             ) : null}
+            {isOn(CARD_STATEMENTS_FLAG) ? <ForCharge receipt={receipt} /> : null}
             <div className="flex flex-wrap items-center gap-3">
               <button
                 type="button"
@@ -1452,5 +1458,103 @@ function Original({ receipt }: { receipt: ReceiptDetail }) {
       />
       <figcaption className="text-xs text-ink-2">The original, as uploaded.</figcaption>
     </figure>
+  );
+}
+
+/**
+ * The card charge this receipt was added for, from the Card page (US-CAP-07 AC17): once it is
+ * read, one tap matches it to that charge, unless it already matched on its own.
+ */
+function ForCharge({ receipt }: { receipt: ReceiptDetail }) {
+  const [chargeId, setChargeId] = useState<string | null>(null);
+  const [charge, setCharge] = useState<CardTransaction | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    // The charge comes in the link from the Card page, which only the browser can read.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setChargeId(new URLSearchParams(window.location.search).get('charge'));
+  }, []);
+
+  // Read again once the receipt has its expense: the matching may have paired them already.
+  useEffect(() => {
+    if (!chargeId) return;
+    let live = true;
+    api<CardStatements>('/v1/card-statements')
+      .then(({ transactions }) => {
+        if (live) setCharge(transactions.find((t) => t.id === chargeId) ?? null);
+      })
+      .catch(() => {
+        if (live) setCharge(null);
+      });
+    return () => {
+      live = false;
+    };
+  }, [chargeId, receipt.expenseId]);
+
+  if (!charge) return null;
+  const described = `${formatMoney(charge.amount)} at ${charge.merchant} on ${showDate(charge.transactionDate)}`;
+
+  async function match() {
+    if (!charge || !receipt.expenseId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const after = await api<CardStatements>(`/v1/card-transactions/${charge.id}/expense`, {
+        method: 'PUT',
+        body: JSON.stringify({ expenseId: receipt.expenseId }),
+      });
+      setCharge(after.transactions.find((t) => t.id === charge.id) ?? null);
+    } catch (e) {
+      setError(describeError(e));
+    }
+    setBusy(false);
+  }
+
+  const paid = charge.expense !== null && charge.expense.id === receipt.expenseId;
+  return (
+    <section
+      aria-labelledby="for-charge-title"
+      className="flex flex-col gap-2 rounded-xl border border-rule bg-sheet p-4 text-sm"
+    >
+      <h2 id="for-charge-title" className="text-base font-semibold">
+        Its card charge
+      </h2>
+      {paid ? (
+        <p>
+          It pays for {described}.{' '}
+          <Link href={`/card#charge-${charge.id}`} className="font-semibold text-carbon underline">
+            See it on your card
+          </Link>
+        </p>
+      ) : !receipt.expenseId ? (
+        <p className="text-ink-2">Once it is read, you can match it to {described}.</p>
+      ) : charge.state === 'missing' ? (
+        <>
+          <p>You added it for {described}.</p>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => void match()}
+            className="self-start rounded-lg bg-carbon px-4 py-2 text-sm font-semibold text-carbon-ink disabled:opacity-60"
+          >
+            {busy ? 'Matching…' : 'Match it to this charge'}
+          </button>
+        </>
+      ) : (
+        <p className="text-ink-2">
+          {described} is already matched or set aside.{' '}
+          <Link href={`/card#charge-${charge.id}`} className="font-semibold text-carbon underline">
+            See it on your card
+          </Link>
+        </p>
+      )}
+      {error ? (
+        <p role="alert" className="text-warn">
+          {error}
+        </p>
+      ) : null}
+    </section>
   );
 }
