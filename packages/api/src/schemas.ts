@@ -956,7 +956,10 @@ export const ExpenseDetailSchema = ExpenseSummarySchema.extend({
   // Only while splits and categories are switched on (FR-EXP-15).
   split: ExpenseSplitSchema.optional(),
   // Only while card statements are switched on, and a charge pays for it (FR-INT-24).
-  cardCharge: ExpenseCardChargeSchema.optional(),
+  cardCharges: z.array(ExpenseCardChargeSchema).min(1).optional().openapi({
+    description:
+      'The card charges that paid for it, while card statements are on: one, or several, such as a ride and its tip charged apart (ADR-0051).',
+  }),
   // Only while approval is switched on (FR-EXP-10, FR-GOV-13).
   claim: z
     .object({

@@ -34,6 +34,8 @@ export interface MatchableExpense {
   readonly transactionDate: string | null;
   readonly amountMinor: number | null;
   readonly currency: string | null;
+  /** What the charges already matched to it come to, in minor units: one expense can be paid by several (ADR-0051). */
+  readonly chargedMinor: number;
 }
 
 /** A downloaded transaction list, read in the request with no model (US-CAP-07 AC6). */

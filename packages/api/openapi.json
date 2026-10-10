@@ -3754,8 +3754,13 @@
               "split": {
                 "$ref": "#/components/schemas/ExpenseSplit"
               },
-              "cardCharge": {
-                "$ref": "#/components/schemas/ExpenseCardCharge"
+              "cardCharges": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ExpenseCardCharge"
+                },
+                "minItems": 1,
+                "description": "The card charges that paid for it, while card statements are on: one, or several, such as a ride and its tip charged apart (ADR-0051)."
               },
               "claim": {
                 "type": "object",
@@ -8774,13 +8779,42 @@
           "expenses": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/MatchedExpense"
+              "$ref": "#/components/schemas/MatchableExpense"
             },
-            "description": "The person’s expenses within a week of the charge, not yet matched, nearest first."
+            "description": "The person’s expenses with their receipts within a week of the charge, nearest first, with what any charges already matched to each come to."
           }
         },
         "required": [
           "expenses"
+        ]
+      },
+      "MatchableExpense": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/MatchedExpense"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "charged": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/CardAmount"
+                  },
+                  {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "description": "What the charges already matched to it come to; null with none. One expense can be paid by several charges, such as a ride and its tip (ADR-0051)."
+                  }
+                ]
+              }
+            },
+            "required": [
+              "charged"
+            ]
+          }
         ]
       }
     },
@@ -18569,7 +18603,7 @@
             }
           },
           "409": {
-            "description": "set_aside: bring it back first. not_matchable: the expense isn’t the person’s, or is paid by another charge.",
+            "description": "set_aside: bring it back first. not_matchable: the expense isn’t the person’s, or has no receipt. An expense another charge already pays for can take this one too (ADR-0051).",
             "content": {
               "application/problem+json": {
                 "schema": {

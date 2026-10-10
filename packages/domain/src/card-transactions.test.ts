@@ -143,11 +143,90 @@ describe('matching a transaction to the expense it paid for (FR-INT-24, US-CAP-0
     ).toEqual([]);
   });
 
-  it('matches each transaction and each expense at most once, whatever comes in', () => {
+  it('matches a ride and its tip, charged apart, to the one receipt they make up (AC13)', () => {
+    // Uber charges a trip and its tip on their own: $21.11 and $3.00 for a $24.11 receipt.
+    expect(
+      matchTransactions(
+        [
+          open('t1', 'UBER *TRIP HELP.UBER.COM, CA', '2026-09-29', 2111),
+          open('t2', 'UBER *TRIP HELP.UBER.COM, CA', '2026-09-29', 300),
+          open('t3', 'STARBUCKS', '2026-09-29', 300),
+        ],
+        [expense('e1', 'Uber', '2026-09-29', 2411)],
+      ),
+    ).toEqual([
+      { transactionId: 't1', expenseId: 'e1' },
+      { transactionId: 't2', expenseId: 'e1' },
+    ]);
+  });
+
+  it('leaves two charges for the person when another pair, or another merchant, could make it up', () => {
+    // Two $3.00 tips could each be the trip's: no guess.
+    expect(
+      matchTransactions(
+        [
+          open('t1', 'UBER *TRIP', '2026-09-29', 2111),
+          open('t2', 'UBER *TRIP', '2026-09-29', 300),
+          open('t3', 'UBER *TRIP', '2026-09-30', 300),
+        ],
+        [expense('e1', 'Uber', '2026-09-29', 2411)],
+      ),
+    ).toEqual([]);
+    // Charges of another merchant, or too far apart, never make it up.
+    expect(
+      matchTransactions(
+        [open('t1', 'UBER *TRIP', '2026-09-29', 2111), open('t2', 'STARBUCKS', '2026-09-29', 300)],
+        [expense('e1', 'Uber', '2026-09-29', 2411)],
+      ),
+    ).toEqual([]);
+    expect(
+      matchTransactions(
+        [open('t1', 'UBER *TRIP', '2026-09-29', 2111), open('t2', 'UBER *TRIP', '2026-10-05', 300)],
+        [expense('e1', 'Uber', '2026-09-29', 2411)],
+      ),
+    ).toEqual([]);
+    // A charge of another receipt's amount, left in a tie, is that tie's to settle, not a pair's.
+    expect(
+      matchTransactions(
+        [open('t1', 'UBER *TRIP', '2026-09-29', 2111), open('t2', 'UBER *TRIP', '2026-09-29', 300)],
+        [
+          expense('e1', 'Uber', '2026-09-29', 2411),
+          expense('e2', 'Uber', '2026-09-29', 300),
+          expense('e3', 'Uber', '2026-09-29', 300),
+        ],
+      ),
+    ).toEqual([]);
+    // A charge two receipts could each take is left with both.
+    expect(
+      matchTransactions(
+        [
+          open('t1', 'UBER *TRIP', '2026-09-29', 2111),
+          open('t2', 'UBER *TRIP', '2026-09-29', 300),
+          open('t3', 'UBER *TRIP', '2026-09-29', 1800),
+        ],
+        [expense('e1', 'Uber', '2026-09-29', 2411), expense('e2', 'Uber', '2026-09-29', 2100)],
+      ),
+    ).toEqual([]);
+  });
+
+  it('prefers one charge of the whole amount to a pair that makes it up', () => {
+    expect(
+      matchTransactions(
+        [
+          open('t1', 'UBER *TRIP', '2026-09-29', 2411),
+          open('t2', 'UBER *TRIP', '2026-09-29', 2111),
+          open('t3', 'UBER *TRIP', '2026-09-29', 300),
+        ],
+        [expense('e1', 'Uber', '2026-09-29', 2411)],
+      ),
+    ).toEqual([{ transactionId: 't1', expenseId: 'e1' }]);
+  });
+
+  it('matches each transaction at most once, and each expense to charges that make its amount, whatever comes in', () => {
     const date = fc
       .integer({ min: 1, max: 28 })
       .map((d) => `2026-09-${String(d).padStart(2, '0')}`);
-    const cents = fc.constantFrom(650, 1840, 40_220);
+    const cents = fc.constantFrom(300, 650, 950, 1840, 40_220);
     const name = fc.constantFrom('Lyft', 'Cafe', 'Delta Air', 'Starbucks');
     fc.assert(
       fc.property(
@@ -159,11 +238,16 @@ describe('matching a transaction to the expense it paid for (FR-INT-24, US-CAP-0
             es.map(([n, d, c], i) => expense(`e${i}`, n, d, c)),
           );
           expect(new Set(matches.map((m) => m.transactionId)).size).toBe(matches.length);
-          expect(new Set(matches.map((m) => m.expenseId)).size).toBe(matches.length);
+          // Each expense is paid by one charge of its amount, or two that make it up.
+          const paid = new Map<string, number[]>();
           for (const m of matches) {
             const [, , tc] = ts[Number(m.transactionId.slice(1))]!;
-            const [, , ec] = es[Number(m.expenseId.slice(1))]!;
-            expect(tc).toBe(ec);
+            paid.set(m.expenseId, [...(paid.get(m.expenseId) ?? []), tc]);
+          }
+          for (const [expenseId, charged] of paid) {
+            const [, , ec] = es[Number(expenseId.slice(1))]!;
+            expect(charged.length).toBeLessThanOrEqual(2);
+            expect(charged.reduce((a, b) => a + b, 0)).toBe(ec);
           }
         },
       ),

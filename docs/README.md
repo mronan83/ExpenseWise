@@ -78,6 +78,7 @@ ExpenseWise is a receipt-first, automation-first expense, receipt, mileage and t
 | D-50 | The release runs once CI has passed on the merged commit on `main`, never on a commit whose gates fail there; the manual run, kept for recoveries, is not gated | [ADR-0048](adr/0048-the-release-waits-for-ci-on-main.md) | Accepted (decided by product owner, Oct 9) |
 | D-51 | One identity, Carbon: a receipt whose torn edge is a W on carbon blue, IBM Plex served with the app, paper-and-ink tokens with every text color at AA in light and dark, icons in the tab bar and for every platform; the name stays, as the app won't be sold | [ADR-0049](adr/0049-the-carbon-identity.md) | Accepted (decided by product owner, Oct 9) |
 | D-52 | Every AI feature reads with the organization's primary model, then its back-ups, as receipts do; card statements included, with an OpenAI reader beside Claude's; no feature names a model of its own | [ADR-0050](adr/0050-every-ai-feature-reads-with-the-organizations-models.md) | Accepted (decided by product owner, Oct 10) |
+| D-53 | A card charge pays for at most one expense, and an expense may be paid by several, such as a ride and its tip: by hand, or on their own when two alike charges make up its amount exactly and are the only two that do | [ADR-0051](adr/0051-an-expense-paid-by-several-card-charges.md) | Accepted (several charges decided by product owner, Oct 10) |
 
 ## Visual version
 

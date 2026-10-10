@@ -97,11 +97,20 @@ export interface TransactionMatch {
 }
 
 /**
+ * How alike a charge's merchant must be to its expense's for two charges to be matched to it
+ * together: at least one of the expense's merchant words in the card's name (R-PAIR-LIKENESS).
+ */
+export const PAIR_LIKENESS = 0.5;
+
+/**
  * Which open transactions paid for which expenses (FR-INT-24, US-CAP-07 AC2): the same amount in
  * the same currency, dated within MATCH_DAYS of each other, each transaction to at most one
- * expense and each expense to at most one transaction. Where several fit, the closer merchant
- * name, then the nearer date, wins; a tie is left for the person, so nothing is guessed. A
- * credit, or a charge in another currency than its expense, is matched only by a person.
+ * expense. Where several fit, the closer merchant name, then the nearer date, wins; a tie is left
+ * for the person, so nothing is guessed. An expense no one charge paid for may have been billed
+ * in two, such as a ride and its tip: two charges of an alike merchant, each within MATCH_DAYS of
+ * it, that come to its amount exactly, are matched to it together, when they are the only two
+ * that do and no other expense could take either (US-CAP-07 AC13). A credit, or a charge in
+ * another currency than its expense, is matched only by a person.
  */
 export function matchTransactions(
   transactions: readonly OpenTransaction[],
@@ -136,7 +145,52 @@ export function matchTransactions(
     taken.add(p.e);
     matches.push({ transactionId: p.t, expenseId: p.e });
   }
-  return matches;
+  // A charge or expense that one charge of its amount could have matched is left out of pairs:
+  // a tie there is the person's to settle, not a pair's.
+  const single = new Set(pairs.flatMap((p) => [p.t, p.e]));
+  return [
+    ...matches,
+    ...matchPairs(
+      transactions.filter((t) => !taken.has(t.id) && !single.has(t.id)),
+      expenses.filter((e) => !taken.has(e.id) && !single.has(e.id)),
+    ),
+  ];
+}
+
+/** Two charges that together paid for an expense no single charge did (US-CAP-07 AC13). */
+function matchPairs(
+  transactions: readonly OpenTransaction[],
+  expenses: readonly MatchableExpense[],
+): TransactionMatch[] {
+  const found: { e: string; pair: [string, string] }[] = [];
+  for (const e of expenses) {
+    if (!e.amount || !e.merchant || !e.transactionDate || !isIsoDate(e.transactionDate)) continue;
+    const { amount, merchant, transactionDate } = e;
+    const near = transactions.filter(
+      (t) =>
+        t.amount.amountMinor > 0 &&
+        t.amount.currency === amount.currency &&
+        isIsoDate(t.transactionDate) &&
+        Math.abs(daysBetween(t.transactionDate, transactionDate)) <= MATCH_DAYS &&
+        merchantLikeness(t.merchant, merchant) >= PAIR_LIKENESS,
+    );
+    const ways: [string, string][] = [];
+    near.forEach((a, i) => {
+      for (const b of near.slice(i + 1)) {
+        if (a.amount.amountMinor + b.amount.amountMinor === amount.amountMinor) {
+          ways.push([a.id, b.id]);
+        }
+      }
+    });
+    // Only the one way to make it: two that could each be its partner leave it for the person.
+    if (ways.length === 1) found.push({ e: e.id, pair: ways[0]! });
+  }
+  // A charge two expenses could each take is left for the person, with both.
+  const uses = new Map<string, number>();
+  for (const { pair } of found) for (const t of pair) uses.set(t, (uses.get(t) ?? 0) + 1);
+  return found
+    .filter(({ pair }) => pair.every((t) => uses.get(t) === 1))
+    .flatMap(({ e, pair }) => pair.map((t) => ({ transactionId: t, expenseId: e })));
 }
 
 /**

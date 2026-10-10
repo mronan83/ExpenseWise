@@ -353,6 +353,14 @@ const SCREENS: [string, (s: Seeded) => string, Step[], (() => string)?, RegExp?]
         expect(page.getByText('Paid by the company (on its card ending 4417)')).toBeVisible(),
     ],
   ],
+  [
+    'a ride paid by two card charges, its fare and its tip',
+    (s) => `/expenses/${s.expenses.ride}`,
+    [
+      (page) => expect(page.getByRole('heading', { name: 'Its card charges' })).toBeVisible(),
+      (page) => expect(page.getByText(/^Together \$18\.40, the expense’s total\.$/)).toBeVisible(),
+    ],
+  ],
   ['changing a drive', (s) => `/expenses/${s.expenses.mileage}`, [press('Change the drive')]],
   [
     'adding a drive by its route',

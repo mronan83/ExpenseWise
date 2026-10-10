@@ -195,11 +195,18 @@ export const MatchToExpenseSchema = z
     description: 'Any of the person’s expenses not paid by another charge, whatever its amount.',
   });
 
+const MatchableExpenseSchema = MatchedExpenseSchema.extend({
+  charged: AmountSchema.nullable().openapi({
+    description:
+      'What the charges already matched to it come to; null with none. One expense can be paid by several charges, such as a ride and its tip (ADR-0051).',
+  }),
+}).openapi('MatchableExpense');
+
 export const MatchableExpensesSchema = z
   .object({
-    expenses: z.array(MatchedExpenseSchema).openapi({
+    expenses: z.array(MatchableExpenseSchema).openapi({
       description:
-        'The person’s expenses within a week of the charge, not yet matched, nearest first.',
+        'The person’s expenses with their receipts within a week of the charge, nearest first, with what any charges already matched to each come to.',
     }),
   })
   .openapi('MatchableExpenses');
@@ -229,7 +236,7 @@ export const CardInboxItemSchema = z
     description: 'A charge on the person’s card with no expense, while card statements are on.',
   });
 
-/** On an expense's page: the card charge that paid for it (US-CAP-07 AC2, AC7). */
+/** On an expense's page: a card charge that paid for it (US-CAP-07 AC2, AC7, AC12). */
 export const ExpenseCardChargeSchema = z
   .object({
     id: z.string().uuid(),

@@ -327,6 +327,21 @@ export const GAPS: readonly Gap[] = [
     backlog: 105,
   },
   {
+    id: 'GAP-54',
+    title:
+      'An expense could be paid by one card charge at most, so a receipt the card billed in parts, such as a ride and its tip, couldn’t be matched.',
+    affects: ['FR-INT-24', 'F-65'],
+    severity: 'Medium',
+    evidence:
+      'Your report of Oct 10: an Uber receipt of $24.11, charged to your card as $21.11 and $3.00. Neither charge is $24.11, so neither matched on its own, and by hand the second was refused: a database index held each expense to one charge (ADR-0046), and the app offered only expenses no charge paid for. Uber charges a trip’s tip apart, so it recurs on every ride with one; a hotel’s deposit and balance do the same.',
+    fix: 'Let an expense be paid by several charges: matched by hand to one already paid for, shown with what its charges come to; and on their own when two alike charges within three days make up its amount exactly and are the only two that do (#106, ADR-0051).',
+    backlog: 106,
+    closed: {
+      date: '2026-10-10',
+      note: 'PR #84 (#106): an expense shows each charge that paid for it and what they come to; your $21.11 and $3.00 Uber charges match your $24.11 receipt on their own, and any charge can be added to an expense by hand.',
+    },
+  },
+  {
     id: 'GAP-46',
     title: 'A receipt filed by mistake can’t be deleted: only a duplicate can.',
     affects: ['FR-CAP-11', 'F-67'],
@@ -1314,6 +1329,12 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-10',
+    change:
+      'Your report of Oct 10, an Uber receipt of $24.11 charged to your card as $21.11 and $3.00 (GAP-54): fixed in PR #84 (#106, ADR-0051, D-53). An expense can now be paid by several charges. By hand, any charge can join an expense another already pays for, and the choice shows what its charges come to. On their own, two charges of its merchant within three days that make up its amount exactly are matched together, when they are the only two that do (R-PAIR-LIKENESS); one charge of the whole amount still wins. The expense shows each charge and whether they make its total (US-CAP-07 AC12, AC13).',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-10',
     change:

@@ -9,7 +9,7 @@ import {
   type SetAsideProblem,
   type SetAsideReason,
 } from '@expensewise/domain';
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, ne, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lte, sql } from 'drizzle-orm';
 import { appendAuditEvent, type AuditEntry } from './audit.ts';
 import type { Transaction } from './client.ts';
 import { followCardCharges } from './company-paid.ts';
@@ -446,7 +446,7 @@ export type CardChangeResult =
   | { readonly status: 'matched' }
   /** Set aside: bring it back first. */
   | { readonly status: 'set_aside' }
-  /** The expense isn't one of the transaction's member's, or is paid by another transaction. */
+  /** The expense isn't one of the transaction's member's, or has no receipt. */
   | { readonly status: 'not_matchable' }
   /** Only a statement that needs a look is confirmed. */
   | { readonly status: 'not_waiting' }
@@ -550,13 +550,10 @@ export async function matchCardTransactionTo(
     .from(receipts)
     .where(eq(receipts.expenseId, expenseId))
     .limit(1);
-  const [taken] = await tx
-    .select({ id: cardTransactions.id })
-    .from(cardTransactions)
-    .where(and(eq(cardTransactions.expenseId, expenseId), ne(cardTransactions.id, id)));
   // Only an expense with its receipt documents a charge (FR-INT-26): never a drive, nor one
-  // typed in with no receipt, which leaves the charge a missing receipt.
-  if (!expense || expense.memberId !== row.memberId || !receipt || taken) {
+  // typed in with no receipt, which leaves the charge a missing receipt. One already paid by
+  // another charge can take this one too, such as a ride and its tip (ADR-0051).
+  if (!expense || expense.memberId !== row.memberId || !receipt) {
     return { status: 'not_matchable' };
   }
   await tx
@@ -751,8 +748,9 @@ export async function missingReceipts(
 }
 
 /**
- * Expenses a person might match a transaction to by hand: the member's own, not paid by another
- * transaction, dated within a week of it, nearest first. Call inside withOrg().
+ * Expenses a person might match a transaction to by hand: the member's own with their receipt,
+ * dated within a week of it, nearest first, each with what its card charges already come to,
+ * since one expense can be paid by several (ADR-0051). Call inside withOrg().
  */
 export async function matchableExpenses(
   tx: Transaction,
@@ -765,6 +763,8 @@ export async function matchableExpenses(
     readonly transactionDate: string | null;
     readonly amountMinor: number | null;
     readonly currency: string | null;
+    /** What the charges already matched to it come to, in minor units; 0 with none. */
+    readonly chargedMinor: number;
   }[]
 > {
   const shift = (by: number) =>
@@ -784,12 +784,30 @@ export async function matchableExpenses(
         sql`EXISTS (SELECT 1 FROM receipts r WHERE r.org_id = ${expenses.orgId} AND r.expense_id = ${expenses.id})`,
         gte(expenses.transactionDate, shift(-7)),
         lte(expenses.transactionDate, shift(7)),
-        sql`NOT EXISTS (SELECT 1 FROM card_transactions m WHERE m.org_id = ${expenses.orgId} AND m.expense_id = ${expenses.id})`,
       ),
     );
-  return rows.sort(
-    (a, b) =>
-      Math.abs(daysBetween(around, a.transactionDate ?? around)) -
-      Math.abs(daysBetween(around, b.transactionDate ?? around)),
-  );
+  const charged =
+    rows.length === 0
+      ? []
+      : await tx
+          .select({
+            expenseId: cardTransactions.expenseId,
+            minor: sql<number>`sum(${cardTransactions.amountMinor})`.mapWith(Number),
+          })
+          .from(cardTransactions)
+          .where(
+            inArray(
+              cardTransactions.expenseId,
+              rows.map((r) => r.id),
+            ),
+          )
+          .groupBy(cardTransactions.expenseId);
+  const chargedOf = new Map(charged.map((c) => [c.expenseId, c.minor]));
+  return rows
+    .map((r) => ({ ...r, chargedMinor: chargedOf.get(r.id) ?? 0 }))
+    .sort(
+      (a, b) =>
+        Math.abs(daysBetween(around, a.transactionDate ?? around)) -
+        Math.abs(daysBetween(around, b.transactionDate ?? around)),
+    );
 }

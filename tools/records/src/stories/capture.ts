@@ -1493,8 +1493,38 @@ export const CAPTURE_STORIES: readonly Story[] = [
           'domain/card-transactions › passes a statement that prints its purchases net of its credits, with no credits apart (AC11)',
         ],
       },
+      {
+        id: 'AC12',
+        given:
+          'a receipt my card charged in parts, such as a $24.11 Uber ride charged as $21.11 and its $3.00 tip',
+        when: 'I match a second charge to the expense another charge already pays for',
+        then: 'it pays for it too: the choice shows what the expense’s charges already come to, and the expense shows each charge and whether together they make its total',
+        decided: { by: 'owner', source: 'owner 2026-10-10' },
+        checks: [
+          'db/card-statements.int › sets one aside with a reason, brings it back, and matches one by hand to a nearby expense',
+          'api/card-statements.int › is matched by hand to an expense for another amount, and let go again',
+          'e2e/signed-in › a ride paid by two card charges, its fare and its tip',
+        ],
+      },
+      {
+        id: 'AC13',
+        given:
+          'two charges of the receipt’s merchant within three days of it that make up its amount exactly, with no one charge of the whole amount',
+        when: 'the statement is brought in',
+        then: 'both are matched to it on their own, when they are the only two that do and no other expense could take either; anything less clear is left for me',
+        decided: { by: 'claude' },
+        rules: ['R-MATCH-DAYS', 'R-PAIR-LIKENESS'],
+        checks: [
+          'domain/card-transactions › matches a ride and its tip, charged apart, to the one receipt they make up (AC13)',
+          'domain/card-transactions › leaves two charges for the person when another pair, or another merchant, could make it up',
+          'domain/card-transactions › prefers one charge of the whole amount to a pair that makes it up',
+          'db/card-statements.int › matches a ride and its tip, charged apart, to the one receipt on its own, and the company pays it (AC13)',
+          'api/card-statements.int › matches both to the one receipt on its own, and shows each on the expense',
+          'e2e/signed-in › a ride paid by two card charges, its fare and its tip',
+        ],
+      },
     ],
-    note: 'Your requirement of Oct 7 and your answers to Q50 and Q51 (GAP-42, #97), built in PR #68 behind expenses.card-statements. No live connection reaches U.S. Bank Access Online, so the statement is the way in; a live feed, where a card’s site allows one, would bring the same transactions later. AC7 shows the card’s dollars on the expense rather than beside each conversion on its report and trip, which is where conversions show: Claude’s, yours to confirm. AC10 and AC11 follow your report of Oct 10 (GAP-50, GAP-51, #103): how a statement no model could read says why, and that a report printing purchases net of credits adds up, are Claude’s, yours to confirm.',
+    note: 'Your requirement of Oct 7 and your answers to Q50 and Q51 (GAP-42, #97), built in PR #68 behind expenses.card-statements. No live connection reaches U.S. Bank Access Online, so the statement is the way in; a live feed, where a card’s site allows one, would bring the same transactions later. AC7 shows the card’s dollars on the expense rather than beside each conversion on its report and trip, which is where conversions show: Claude’s, yours to confirm. AC10 and AC11 follow your report of Oct 10 (GAP-50, GAP-51, #103): how a statement no model could read says why, and that a report printing purchases net of credits adds up, are Claude’s, yours to confirm. AC12 is your report of Oct 10 (GAP-54, #106); matching a pair on its own (AC13), and only the one pair that makes the amount, is Claude’s, yours to confirm.',
   },
   {
     id: 'US-CAP-08',

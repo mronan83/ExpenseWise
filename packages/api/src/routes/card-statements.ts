@@ -204,8 +204,8 @@ export const matchToExpenseRoute = createRoute({
     200: statements,
     ...common,
     409: problem(
-      'set_aside: bring it back first. not_matchable: the expense isn’t the person’s, or is ' +
-        'paid by another charge.',
+      'set_aside: bring it back first. not_matchable: the expense isn’t the person’s, or has no ' +
+        'receipt. An expense another charge already pays for can take this one too (ADR-0051).',
     ),
   },
 });

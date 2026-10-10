@@ -134,7 +134,7 @@ export function registerCardStatementRoutes(
         throw conflict(
           'not_matchable',
           'That expense can’t be matched to it',
-          'Choose one of your own expenses that no other charge pays for.',
+          'Choose one of your own expenses with its receipt.',
         );
       case 'not_waiting':
         throw conflict('not_waiting', 'It isn’t waiting for a look', 'Refresh and look again.');
@@ -334,6 +334,8 @@ export function registerCardStatementRoutes(
           merchant: e.merchant,
           date: e.transactionDate,
           amount: amountView(e.amountMinor, e.currency),
+          charged:
+            e.chargedMinor !== 0 && e.currency ? amountView(e.chargedMinor, e.currency) : null,
         })),
       },
       200,

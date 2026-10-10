@@ -354,12 +354,22 @@ describe('a missing receipt, set aside or matched by hand (US-CAP-07 AC3, AC7)',
         setAsideCardTransaction(tx, org.orgId, lyft!.id, { reason: 'personal' }, org.userId),
       ),
     ).toEqual({ status: 'matched' });
-    // Another transaction can't take an expense already matched.
+    // Another charge can pay for it too, such as a tip the card charged apart (AC12), and is
+    // offered with what the ride's charges already come to.
+    expect(
+      (await inOrg((tx) => matchableExpenses(tx, org.memberId, '2026-09-27'))).find(
+        (e) => e.id === ride,
+      ),
+    ).toMatchObject({ chargedMinor: 1840 });
     expect(
       await inOrg((tx) => matchCardTransactionTo(tx, org.orgId, dinner!.id, ride, org.userId)),
     ).toEqual({
-      status: 'not_matchable',
+      status: 'changed',
     });
+    expect(
+      (await inOrg((tx) => cardTransactionsOfExpenses(tx, [ride]))).map((t) => t.id).sort(),
+    ).toEqual([lyft!.id, dinner!.id].sort());
+    await inOrg((tx) => unmatchCardTransaction(tx, org.orgId, dinner!.id, org.userId));
     expect(
       await inOrg((tx) => unmatchCardTransaction(tx, org.orgId, lyft!.id, org.userId)),
     ).toEqual({
@@ -375,6 +385,55 @@ describe('a missing receipt, set aside or matched by hand (US-CAP-07 AC3, AC7)',
     expect((await inOrg((tx) => missingReceipts(tx, org.memberId))).map((t) => t.id)).toContain(
       lyft!.id,
     );
+  });
+
+  it('matches a ride and its tip, charged apart, to the one receipt on its own, and the company pays it (AC13)', async () => {
+    const org = await seedOrg(app.db, 'card-pair');
+    const ride = await expenseFrom(org, {
+      merchant: 'Uber',
+      transactionDate: '2026-09-29',
+      currency: 'USD',
+      amountMinor: 2411,
+    });
+    const { id } = await statementFor(org);
+    await withOrg(app.db, org.orgId, (tx) =>
+      settleCardStatement(
+        tx,
+        org.orgId,
+        id,
+        read([
+          charge('UBER *TRIP HELP.UBER.COM, CA', '2026-09-29', 2111),
+          charge('UBER *TRIP HELP.UBER.COM, CA', '2026-09-29', 300),
+        ]),
+      ),
+    );
+    const paid = await withMember(app.db, self(org), (tx) =>
+      cardTransactionsOfExpenses(tx, [ride]),
+    );
+    expect(paid.map((t) => [t.amountMinor, t.matchedBy]).sort()).toEqual([
+      [2111, 'auto'],
+      [300, 'auto'],
+    ]);
+    expect(await withMember(app.db, self(org), (tx) => missingReceipts(tx, org.memberId))).toEqual(
+      [],
+    );
+    const [expense] = await withOrg(app.db, org.orgId, (tx) =>
+      tx.select({ companyPaid: expenses.companyPaid }).from(expenses).where(eq(expenses.id, ride)),
+    );
+    expect(expense?.companyPaid).toBe(true);
+    // Letting the tip go leaves the ride's charge, so the company still pays it.
+    await withMember(app.db, self(org), (tx) =>
+      unmatchCardTransaction(
+        tx,
+        org.orgId,
+        paid.find((t) => t.amountMinor === 300)!.id,
+        org.userId,
+      ),
+    );
+    const [after] = await withOrg(app.db, org.orgId, (tx) =>
+      tx.select({ companyPaid: expenses.companyPaid }).from(expenses).where(eq(expenses.id, ride)),
+    );
+    expect(after?.companyPaid).toBe(true);
   });
 
   it('keeps each member’s statements to them, and deletes one with its transactions', async () => {

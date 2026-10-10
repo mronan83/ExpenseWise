@@ -914,8 +914,8 @@
       ],
       "indexes": [
         {
-          "name": "card_transactions_expense_key",
-          "definition": "CREATE UNIQUE INDEX card_transactions_expense_key ON public.card_transactions USING btree (org_id, expense_id) WHERE (expense_id IS NOT NULL)"
+          "name": "card_transactions_expense_idx",
+          "definition": "CREATE INDEX card_transactions_expense_idx ON public.card_transactions USING btree (org_id, expense_id) WHERE (expense_id IS NOT NULL)"
         },
         {
           "name": "card_transactions_member_open_idx",

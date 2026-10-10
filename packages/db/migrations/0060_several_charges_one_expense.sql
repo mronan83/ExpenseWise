@@ -1,0 +1,2 @@
+DROP INDEX "card_transactions_expense_key";--> statement-breakpoint
+CREATE INDEX "card_transactions_expense_idx" ON "card_transactions" USING btree ("org_id","expense_id") WHERE "card_transactions"."expense_id" IS NOT NULL;

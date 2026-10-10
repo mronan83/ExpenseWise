@@ -103,24 +103,32 @@ export function cardChargeItem(t: CardTransactionRecord) {
 }
 
 /**
- * The card charge that paid for an expense, for its page, while card statements are on
- * (US-CAP-07 AC2): what the card was charged, shown beside any conversion (AC7). Off, or with
- * none, the page reads as it always has.
+ * The card charges that paid for an expense, for its page, while card statements are on
+ * (US-CAP-07 AC2): one, or several, such as a ride and its tip (AC12), each with what the card
+ * was charged, shown beside any conversion (AC7), oldest first. Off, or with none, the page reads
+ * as it always has.
  */
 export function cardChargeSection(cards: CardStore | undefined, features: FeatureGate) {
   return async (orgId: string, expenseId: string) => {
     if (!cards || !(await features.isOn(orgId, CARD_STATEMENTS_FLAG))) return {};
-    const [t] = await cards.ofExpenses(orgId, [expenseId]);
-    if (!t || !t.matchedBy) return {};
+    const charges = (await cards.ofExpenses(orgId, [expenseId]))
+      .filter((t) => t.matchedBy)
+      .sort(
+        (a, b) =>
+          a.transactionDate.localeCompare(b.transactionDate) ||
+          b.amountMinor - a.amountMinor ||
+          a.id.localeCompare(b.id),
+      );
+    if (charges.length === 0) return {};
     return {
-      cardCharge: {
+      cardCharges: charges.map((t) => ({
         id: t.id,
         date: t.transactionDate,
         merchant: t.merchant,
         amount: amountOf(t.amountMinor, t.currency),
         cardLastFour: t.cardLastFour,
-        matchedBy: t.matchedBy,
-      },
+        matchedBy: t.matchedBy!,
+      })),
     };
   };
 }

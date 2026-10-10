@@ -421,6 +421,13 @@
       "when": 1791375134579,
       "tag": "0059_card_statements_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1791641048050,
+      "tag": "0060_several_charges_one_expense",
+      "breakpoints": true
     }
   ]
 }

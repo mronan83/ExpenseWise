@@ -41,6 +41,11 @@ export interface MatchedExpense {
   amount: CardAmount | null;
 }
 
+/** An expense offered for a charge: with what charges already matched to it come to (ADR-0051). */
+export interface MatchableExpense extends MatchedExpense {
+  charged: CardAmount | null;
+}
+
 export interface CardTransaction {
   id: string;
   statementId: string;
@@ -61,7 +66,7 @@ export interface CardStatements {
   missing: number;
 }
 
-/** On an expense's page: the card charge that paid for it (US-CAP-07 AC2, AC7). */
+/** On an expense's page: a card charge that paid for it (US-CAP-07 AC2, AC7, AC12). */
 export interface ExpenseCardCharge {
   id: string;
   date: string;

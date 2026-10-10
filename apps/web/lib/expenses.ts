@@ -90,7 +90,8 @@ export interface ExpenseDetail extends ExpenseSummary {
   /** How it holds up against its receipt, and why it claims less; while approval is on. */
   claim?: { reason: string | null; check: ReceiptCheck };
   /** The card charge that paid for it, while card statements are on (FR-INT-24). */
-  cardCharge?: ExpenseCardCharge;
+  /** One, or several, such as a ride and its tip charged apart (ADR-0051). */
+  cardCharges?: ExpenseCardCharge[];
 }
 
 export interface Journey {

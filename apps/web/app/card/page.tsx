@@ -16,6 +16,7 @@ import {
   type CardStatement,
   type CardStatements,
   type CardTransaction,
+  type MatchableExpense,
   type MatchedExpense,
 } from '../../lib/card-statements';
 import { COMPANY_PAID_FLAG } from '../../lib/company-paid';
@@ -454,14 +455,14 @@ function MatchForm({
   onCancel: () => void;
   onSaved: Saved;
 }) {
-  const [offered, setOffered] = useState<MatchedExpense[] | null>(null);
+  const [offered, setOffered] = useState<MatchableExpense[] | null>(null);
   const [chosen, setChosen] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let live = true;
-    api<{ expenses: MatchedExpense[] }>(`/v1/card-transactions/${charge.id}/expenses`)
+    api<{ expenses: MatchableExpense[] }>(`/v1/card-transactions/${charge.id}/expenses`)
       .then(({ expenses }) => {
         if (live) setOffered(expenses);
       })
@@ -499,7 +500,7 @@ function MatchForm({
         {offered === null && !error ? <p className="text-ink-2">Loading…</p> : null}
         {offered?.length === 0 ? (
           <p className="text-ink-2">
-            None of your expenses within a week of it is free to match. Add its receipt instead.
+            None of your expenses with a receipt is within a week of it. Add its receipt instead.
           </p>
         ) : null}
         {offered?.map((e) => (
@@ -512,7 +513,12 @@ function MatchForm({
               onChange={() => setChosen(e.id)}
               className="size-5"
             />
-            {expenseText(e)}
+            <span>
+              {expenseText(e)}
+              {e.charged ? (
+                <span className="text-ink-2"> · {formatMoney(e.charged)} already on its card</span>
+              ) : null}
+            </span>
           </label>
         ))}
       </fieldset>

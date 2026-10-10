@@ -1753,7 +1753,8 @@ export const cardStatements = pgTable(
  * One transaction on a member's card, brought in by the first statement that listed it and
  * kept once by its key, however often another lists it (US-CAP-07 AC4). It is matched to at most
  * one expense, by the matching or by the person, or set aside with a reason, such as a personal
- * charge; while neither, it is a missing receipt in Needs you (FR-INT-24).
+ * charge; while neither, it is a missing receipt in Needs you (FR-INT-24). An expense may be paid
+ * by several, such as a ride and its tip charged apart (ADR-0051).
  */
 export const cardTransactions = pgTable(
   'card_transactions',
@@ -1784,8 +1785,8 @@ export const cardTransactions = pgTable(
   (t) => [
     unique('card_transactions_org_id_id_key').on(t.orgId, t.id),
     unique('card_transactions_member_key').on(t.orgId, t.memberId, t.key),
-    // An expense is paid by one card transaction at most.
-    uniqueIndex('card_transactions_expense_key')
+    // The charges that paid each expense: one, or several, such as a ride and its tip (ADR-0051).
+    index('card_transactions_expense_idx')
       .on(t.orgId, t.expenseId)
       .where(sql`${t.expenseId} IS NOT NULL`),
     index('card_transactions_member_open_idx').on(t.orgId, t.memberId, t.transactionDate),
