@@ -1,6 +1,14 @@
 'use client';
 
-import { APPROVAL_NOTE_MAX, journeyLine, showDate, stayLine } from '@expensewise/domain';
+import {
+  APPROVAL_NOTE_MAX,
+  journeyLine,
+  money,
+  showDate,
+  stayLine,
+  sum,
+  toDecimal,
+} from '@expensewise/domain';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
@@ -172,8 +180,8 @@ export default function ExpensePage() {
               />
             ) : null}
             {/* Sent only while card statements are on, and a charge pays for it (FR-INT-24). */}
-            {expense.cardCharge ? (
-              <CardCharge charge={expense.cardCharge} expense={expense} />
+            {expense.cardCharges?.length ? (
+              <CardCharges charges={expense.cardCharges} expense={expense} />
             ) : null}
             <Proof expense={expense} />
           </>
@@ -559,35 +567,76 @@ function Drive({
 }
 
 /**
- * The charge on the person's card that paid for this expense (US-CAP-07 AC2). In another
- * currency, the dollars the card was charged show here, and the claim keeps its own amount,
- * converted on its report at its purchase date's reference rate (AC7, ADR-0034).
+ * The charges on the person's card that paid for this expense (US-CAP-07 AC2): one, or several,
+ * such as a ride and its tip charged apart, with what they come to beside the expense (AC12,
+ * ADR-0051). In another currency, the dollars the card was charged show here, and the claim keeps
+ * its own amount, converted on its report at its purchase date's reference rate (AC7, ADR-0034).
  */
-function CardCharge({ charge, expense }: { charge: ExpenseCardCharge; expense: ExpenseDetail }) {
-  const abroad = expense.amount !== null && expense.amount.currency !== charge.amount.currency;
-  const onCard = charge.cardLastFour ? ` ending ${charge.cardLastFour}` : '';
+function CardCharges({
+  charges,
+  expense,
+}: {
+  charges: readonly ExpenseCardCharge[];
+  expense: ExpenseDetail;
+}) {
+  const currency = charges[0]!.amount.currency;
+  const abroad = expense.amount !== null && expense.amount.currency !== currency;
+  const together =
+    charges.length > 1 && charges.every((c) => c.amount.currency === currency)
+      ? sum(
+          currency,
+          charges.map((c) => money(c.amount.amountMinor, currency)),
+        )
+      : null;
+  const shown = together ? { currency, decimal: toDecimal(together) } : null;
+  const makesIt =
+    together && expense.amount && expense.amount.currency === currency
+      ? together.amountMinor === expense.amount.amountMinor
+      : null;
   return (
     <section
       aria-labelledby="card-charge-title"
       className="flex flex-col gap-2 rounded-xl border border-rule bg-sheet p-4 text-sm"
     >
       <h2 id="card-charge-title" className="text-base font-semibold">
-        Its card charge
+        {charges.length === 1 ? 'Its card charge' : 'Its card charges'}
       </h2>
-      <p>
-        <span className="font-semibold tabular-nums">{formatMoney(charge.amount)}</span> charged to
-        your card{onCard} on {showDate(charge.date)}, as {charge.merchant}.{' '}
-        {charge.matchedBy === 'auto' ? 'Matched on its own.' : 'Matched by you.'}
-      </p>
+      <ul className="flex flex-col gap-2">
+        {charges.map((charge) => {
+          const onCard = charge.cardLastFour ? ` ending ${charge.cardLastFour}` : '';
+          return (
+            <li key={charge.id} className="flex flex-col gap-1">
+              <p>
+                <span className="font-semibold tabular-nums">{formatMoney(charge.amount)}</span>{' '}
+                charged to your card{onCard} on {showDate(charge.date)}, as {charge.merchant}.{' '}
+                {charge.matchedBy === 'auto' ? 'Matched on its own.' : 'Matched by you.'}
+              </p>
+              <Link
+                href={`/card#charge-${charge.id}`}
+                className="tap self-start text-sm font-semibold text-carbon"
+              >
+                See it on your card
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+      {shown ? (
+        <p className={makesIt === false ? 'text-warn' : 'text-ink-2'}>
+          Together <span className="font-semibold tabular-nums">{formatMoney(shown)}</span>
+          {makesIt === true
+            ? ', the expense’s total.'
+            : makesIt === false && expense.amount
+              ? `, where the expense is ${formatMoney(expense.amount)}.`
+              : '.'}
+        </p>
+      ) : null}
       {abroad && expense.amount ? (
         <p className="text-ink-2">
           It claims {formatMoney(expense.amount)}, which its report converts at its purchase date’s
           reference rate, not at your card’s rate.
         </p>
       ) : null}
-      <Link href={`/card#charge-${charge.id}`} className="tap text-sm font-semibold text-carbon">
-        See it on your card
-      </Link>
     </section>
   );
 }

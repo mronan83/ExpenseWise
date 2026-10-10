@@ -440,6 +440,18 @@ export const RULES: readonly Rule[] = [
     note: 'A card prints the day a charge was authorized or posted, a hotel the day you checked out: three days covers both without reaching the next trip. The same amount and currency are needed too, and a tie is left for you. Claude’s, yours to confirm.',
   },
   {
+    id: 'R-PAIR-LIKENESS',
+    name: 'How alike two card charges’ merchant must be to an expense for both to be matched to it',
+    value: 'Half: one of the expense’s two leading merchant words found in each charge’s',
+    decided: { by: 'claude', source: 'ADR-0051' },
+    code: {
+      file: 'packages/domain/src/card-transactions.ts',
+      constant: 'PAIR_LIKENESS',
+      literal: '0.5',
+    },
+    note: 'Two charges matched together, such as a ride and its tip, must each name the expense’s merchant, within three days of it, and come to its amount to the cent; only the one pair that does is matched, so two unrelated charges never make up an expense by chance. Claude’s, yours to confirm.',
+  },
+  {
     id: 'R-STATEMENT-ROWS-MAX',
     name: 'Most rows one downloaded card list may hold',
     value: '2,000 rows; a longer list is refused whole',

@@ -8,6 +8,7 @@ A cardholder brings in their card's monthly statement as a PDF, uploaded or forw
 - **Decision register:** D-48.
   - Amends [ADR-0007](0007-bank-and-card-feeds.md) (statement first).
   - Amended by [ADR-0050](0050-every-ai-feature-reads-with-the-organizations-models.md) (Oct 10): a statement is read by the organization's primary AI model, then its back-ups, not by Claude Sonnet alone.
+  - Amended by [ADR-0051](0051-an-expense-paid-by-several-card-charges.md) (Oct 10): an expense may be paid by several charges, such as a ride and its tip.
   - Builds on [ADR-0006](0006-receipt-extraction.md) (no tools reach a model), [ADR-0017](0017-read-receipts-with-two-models.md) (reading is a workflow), [ADR-0026](0026-email-in-through-a-bird-mailbox.md) (the receipts address), [ADR-0032](0032-features-switched-per-organization.md) (behind `expenses.card-statements`), [ADR-0034](0034-reference-rates-for-reimbursement.md) (conversion at the reference rate), [ADR-0035](0035-own-records-and-invite-links.md) (each person's records are their own) and [ADR-0041](0041-itemized-lines-splits-and-exclusions.md) (a reading whose sums miss waits for a look).
   - Delivers FR-CAP-10, FR-INT-24 and F-65 (#97).
 

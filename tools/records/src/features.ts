@@ -1101,7 +1101,7 @@ export const FEATURES: readonly Feature[] = [
     phase: 'P1',
     status: 'Verified',
     delivered: 'PR #68',
-    decisions: ['ADR-0046', 'ADR-0050', 'ADR-0007', 'ADR-0035'],
+    decisions: ['ADR-0046', 'ADR-0050', 'ADR-0051', 'ADR-0007', 'ADR-0035'],
     code: [
       'packages/domain/src/card-transactions.ts',
       'packages/extraction/src/statement.ts',
@@ -1109,6 +1109,7 @@ export const FEATURES: readonly Feature[] = [
       'packages/db/src/card-statements.ts',
       'packages/db/migrations/0058_card_statements.sql',
       'packages/db/migrations/0059_card_statements_rls.sql',
+      'packages/db/migrations/0060_several_charges_one_expense.sql',
       'packages/workflows/src/card-statements.ts',
       'packages/workflows/src/card-statement-ports.ts',
       'packages/workflows/src/reading-plan.ts',
@@ -1148,7 +1149,7 @@ export const FEATURES: readonly Feature[] = [
       'api/card-statements.int',
       'e2e/signed-in',
     ],
-    note: 'Built in PR #68 (#97, GAP-42), after your requirement of Oct 7 and your answers to Q50 and Q51. Behind `expenses.card-statements`. Your U.S. Bank statement comes in as a PDF, uploaded on the new Card page or forwarded to your receipts address with “statement” in the subject, and is read once by your primary AI model, or a back-up when it can’t, on your organization’s own key (`statement-v1`, its own instructions, no tools), for a few cents; until PR #83 Claude Sonnet read every statement, whatever your settings (GAP-49, ADR-0050). When no model can read one, it says what each provider answered (GAP-50). A transaction list downloaded as CSV comes in with no model and at no cost. Each transaction is kept once per person, however many statements list it. A statement whose lines don’t make the totals it prints waits for your look before anything is matched; one that prints its purchases net of its credits, as Access Online’s Cardholder Activity report does, adds up (GAP-51). A charge matches an expense of the same amount and currency within three days, the closer merchant name first, and a tie is left for you. A charge with no expense is a missing receipt in Needs you, until you add its receipt, match it to an expense yourself, whatever its amount, or set it aside with a reason. An expense shows the charge that paid for it, and the dollars of a charge abroad beside its own amount. Each person’s card is their own. Off, an emailed statement is read as receipts were and nothing is matched. Five screens in the signed-in checks.',
+    note: 'Built in PR #68 (#97, GAP-42), after your requirement of Oct 7 and your answers to Q50 and Q51. Behind `expenses.card-statements`. Your U.S. Bank statement comes in as a PDF, uploaded on the new Card page or forwarded to your receipts address with “statement” in the subject, and is read once by your primary AI model, or a back-up when it can’t, on your organization’s own key (`statement-v1`, its own instructions, no tools), for a few cents; until PR #83 Claude Sonnet read every statement, whatever your settings (GAP-49, ADR-0050). When no model can read one, it says what each provider answered (GAP-50). A transaction list downloaded as CSV comes in with no model and at no cost. Each transaction is kept once per person, however many statements list it. A statement whose lines don’t make the totals it prints waits for your look before anything is matched; one that prints its purchases net of its credits, as Access Online’s Cardholder Activity report does, adds up (GAP-51). A charge matches an expense of the same amount and currency within three days, the closer merchant name first, and a tie is left for you; since PR #84 an expense can be paid by several charges, such as a ride and its tip, matched by you or, when two alike charges make up its amount exactly, on their own (GAP-54, ADR-0051). A charge with no expense is a missing receipt in Needs you, until you add its receipt, match it to an expense yourself, whatever its amount, or set it aside with a reason. An expense shows the charge that paid for it, and the dollars of a charge abroad beside its own amount. Each person’s card is their own. Off, an emailed statement is read as receipts were and nothing is matched. Five screens in the signed-in checks.',
   },
   {
     id: 'F-64',

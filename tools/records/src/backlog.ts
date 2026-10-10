@@ -456,6 +456,20 @@ export const BACKLOG: readonly BacklogItem[] = [
     source: 'Product owner Oct 10',
     affects: ['GAP-52', 'GAP-53', 'FR-CAP-10', 'FR-INT-24', 'F-65'],
   },
+  {
+    num: 106,
+    title: 'Several card charges to one expense, such as a ride and its tip',
+    type: 'Gap',
+    detail:
+      'Your report of Oct 10 (GAP-54): an Uber receipt of $24.11 charged as $21.11 and $3.00. An expense is paid by one charge or several: by hand, a charge joins an expense another already pays for; on their own, two alike charges within three days that make up its amount exactly match it together. The expense shows each charge and what they come to.',
+    priority: 'P1',
+    effort: 'M',
+    severity: 'Medium',
+    blocker: { kind: 'none' },
+    source: 'Product owner Oct 10',
+    affects: ['GAP-54', 'FR-INT-24', 'F-65'],
+    done: { date: '2026-10-10', in: 'PR #84' },
+  },
   // P2: this month
   {
     num: 102,

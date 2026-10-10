@@ -150,7 +150,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   card_transactions: {
     about:
-      'One transaction on a member’s card, kept once per member by a key of its card, day, currency, amount, merchant words and reference, numbered when a statement prints two alike (US-CAP-07 AC4): its day and posting day, the merchant as printed, the amount in the card’s currency (a credit negative), the card and the reference. It pays for at most one expense, matched on its own by the domain’s rule (same amount and currency within three days, the closer merchant first, a tie left for the person) or by the person whatever its amount, or it is set aside with a reason, such as personal, and a note that other needs; never both (FR-INT-24). A charge of a statement read in full that is neither is a missing receipt in Needs you. Deleting its expense lets it go (`release_card_transactions`); deleting its statement deletes it. Its member’s own (ADR-0035).',
+      'One transaction on a member’s card, kept once per member by a key of its card, day, currency, amount, merchant words and reference, numbered when a statement prints two alike (US-CAP-07 AC4): its day and posting day, the merchant as printed, the amount in the card’s currency (a credit negative), the card and the reference. It pays for at most one expense, and an expense may be paid by several (ADR-0051): matched on its own by the domain’s rule (same amount and currency within three days, the closer merchant first, a tie left for the person; or two charges of its merchant that make up its amount exactly, the only two that do) or by the person whatever its amount, or it is set aside with a reason, such as personal, and a note that other needs; never both (FR-INT-24). A charge of a statement read in full that is neither is a missing receipt in Needs you. Deleting its expense lets it go (`release_card_transactions`); deleting its statement deletes it. Its member’s own (ADR-0035).',
   },
   inbound_emails: {
     about:
@@ -493,11 +493,11 @@ export const RULES: readonly Rule[] = [
     refs: ['FR-CAP-10', 'ADR-0046'],
   },
   {
-    rule: 'A card transaction pays for at most one expense of its member, or is set aside with a reason, never both.',
+    rule: 'A card transaction pays for at most one expense of its member, or is set aside with a reason, never both; an expense may be paid by several.',
     mechanism:
-      'An expense is matched by at most one transaction (a unique index on the expense), through a composite key in the same organization, and only an expense with its receipt is matched, so a matched charge is always documented (FR-INT-26); a match records who made it and when, and a set-aside its reason and when, each whole, and other needs a short note. Deleting the expense lets its transaction go first (`release_card_transactions`). That the expense is the same member’s, and the matching rule itself, are the domain’s and the API’s (`matchTransactions`).',
+      'A transaction points at the one expense it paid for, through a composite key in the same organization, and an expense may be paid by several, such as a ride and its tip (ADR-0051), found by an index on the expense; only an expense with its receipt is matched, so a matched charge is always documented (FR-INT-26); a match records who made it and when, and a set-aside its reason and when, each whole, and other needs a short note. Deleting the expense lets its transaction go first (`release_card_transactions`). That the expense is the same member’s, and the matching rule itself, are the domain’s and the API’s (`matchTransactions`).',
     objects: [
-      'card_transactions_expense_key',
+      'card_transactions_expense_idx',
       'card_transactions_expense_fk',
       'card_transactions_matched_or_set_aside',
       'card_transactions_matched_whole',
@@ -507,7 +507,7 @@ export const RULES: readonly Rule[] = [
       'card_transactions_released',
       'release_card_transactions',
     ],
-    refs: ['FR-INT-24', 'FR-INT-26', 'ADR-0046', 'ADR-0047'],
+    refs: ['FR-INT-24', 'FR-INT-26', 'ADR-0046', 'ADR-0047', 'ADR-0051'],
   },
   {
     rule: 'A split expense’s parts are each more than zero, in its own organization’s categories and types.',

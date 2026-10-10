@@ -1060,16 +1060,18 @@ for (const [n, subject, status, senderProblem] of [
 }
 
 // Riley's corporate card (FR-CAP-10, FR-INT-24, #97). The Omaha trip's transaction list, as Access
-// Online downloads it: the ride and the stay match their expenses on their own, the flight has
-// no expense, a coffee is set aside as personal, a credit needs no receipt and the payment to
-// the card is left out. The Lufthansa fare, in euros, is matched by hand to its dollar charge.
+// Online downloads it: the stay matches its expense on its own, and the ride, charged as its fare
+// and its tip apart, matches its one receipt on its own with both (ADR-0051); the flight has no
+// expense, a coffee is set aside as personal, a credit needs no receipt and the payment to the
+// card is left out. The Lufthansa fare, in euros, is matched by hand to its dollar charge.
 await call('POST', '/v1/card-statements/lists', {
   text: [
     'Transaction Date,Posting Date,Merchant Name,Amount,Card Number',
     `${printed(-11)},${printed(-10)},DELTA AIR 0062345678901 ATLANTA GA,402.20,XXXXXXXXXXXX4417`,
     `${printed(-11)},${printed(-9)},LUFTHANSA 2201234567890 FRANKFURT,483.94,XXXXXXXXXXXX4417`,
     `${printed(-10)},${printed(-9)},STARBUCKS STORE 2291 OMAHA NE,6.45,XXXXXXXXXXXX4417`,
-    `${printed(-9)},${printed(-8)},LYFT *RIDE WED 6PM,18.40,XXXXXXXXXXXX4417`,
+    `${printed(-9)},${printed(-8)},LYFT *RIDE WED 6PM,15.40,XXXXXXXXXXXX4417`,
+    `${printed(-9)},${printed(-8)},LYFT *RIDE WED 6PM,3.00,XXXXXXXXXXXX4417`,
     `${printed(-9)},${printed(-8)},HILTON OMAHA CREDIT,-20.00,XXXXXXXXXXXX4417`,
     `${printed(-8)},${printed(-7)},HILTON OMAHA,412.60,XXXXXXXXXXXX4417`,
     `${printed(-14)},${printed(-14)},PAYMENT - THANK YOU,-1000.00,XXXXXXXXXXXX4417`,

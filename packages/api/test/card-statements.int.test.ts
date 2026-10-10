@@ -116,11 +116,11 @@ interface Body {
   readonly items: { readonly kind: string; readonly transaction?: { readonly id: string } }[];
   readonly paidBy?: string;
   readonly paidByPinned?: boolean;
-  readonly cardCharge?: {
+  readonly cardCharges?: {
     readonly id: string;
     readonly amount: Amount;
     readonly matchedBy: string;
-  };
+  }[];
   readonly amount: Amount | null;
 }
 
@@ -260,13 +260,12 @@ describe('a downloaded list (US-CAP-07 AC6, AC2, AC3)', () => {
     ).toMatchObject({ paidBy: 'company', paidByPinned: false });
 
     // The expense shows the charge that paid for it; with the feature off, it doesn't.
-    expect((await call(owner, 'GET', `/v1/expenses/${lyft}`)).body.cardCharge).toMatchObject({
-      matchedBy: 'auto',
-      amount: { amountMinor: 1840 },
-    });
+    expect((await call(owner, 'GET', `/v1/expenses/${lyft}`)).body.cardCharges).toMatchObject([
+      { matchedBy: 'auto', amount: { amountMinor: 1840 } },
+    ]);
     expect(
       (await call(owner, 'GET', `/v1/expenses/${lyft}`, undefined, off)).body,
-    ).not.toHaveProperty('cardCharge');
+    ).not.toHaveProperty('cardCharges');
 
     // The missing receipt is in Needs you, and only while the feature is on.
     const delta = charge(shown, 'DELTA AIR 006').id;
@@ -332,25 +331,50 @@ describe('a charge with no expense (US-CAP-07 AC3)', () => {
     const offered = await call(owner, 'GET', `/v1/card-transactions/${delta.id}/expenses`);
     expect(offered.body.expenses.map((e) => e.id)).toContain(fare);
     expect(offered.body.expenses.map((e) => e.id)).not.toContain(lyft);
+    expect(offered.body.expenses.find((e) => e.id === fare)).toMatchObject({ charged: null });
 
     const path = `/v1/card-transactions/${delta.id}/expense`;
-    // An expense another charge pays for can't be matched to it.
-    expect(await call(owner, 'PUT', path, { expenseId: lyft })).toMatchObject({
-      status: 409,
-      body: { code: 'not_matchable' },
-    });
     const matched = await call(owner, 'PUT', path, { expenseId: fare });
     expect(charge(matched.body, 'DELTA AIR 006')).toMatchObject({
       state: 'matched',
       matchedBy: 'person',
       expense: { id: fare },
     });
-    expect((await call(owner, 'GET', `/v1/expenses/${fare}`)).body.cardCharge).toMatchObject({
-      matchedBy: 'person',
-      amount: { amountMinor: 40_220 },
-    });
+    expect((await call(owner, 'GET', `/v1/expenses/${fare}`)).body.cardCharges).toMatchObject([
+      { matchedBy: 'person', amount: { amountMinor: 40_220 } },
+    ]);
+    // Still offered, with what its charges now come to, so another can join it (AC12).
+    expect(
+      (await call(owner, 'GET', `/v1/card-transactions/${delta.id}/expenses`)).body.expenses.find(
+        (e) => e.id === fare,
+      ),
+    ).toMatchObject({ charged: { amountMinor: 40_220, currency: 'USD' } });
     const let_go = await call(owner, 'DELETE', path);
     expect(charge(let_go.body, 'DELTA AIR 006')).toMatchObject({ state: 'missing', expense: null });
+  });
+});
+
+describe('a ride and its tip, charged apart (US-CAP-07 AC13)', () => {
+  it('matches both to the one receipt on its own, and shows each on the expense', async () => {
+    const ride = await expenseFor(owner, {
+      merchant: 'Uber',
+      transactionDate: '2026-09-29',
+      amountMinor: 2411,
+    });
+    const list = [
+      'Date,Description,Amount',
+      '2026-09-29,UBER *TRIP HELP.UBER.COM CA,21.11',
+      '2026-09-29,UBER *TRIP HELP.UBER.COM CA,3.00',
+    ].join('\n');
+    expect(await call(owner, 'POST', '/v1/card-statements/lists', { text: list })).toMatchObject({
+      status: 201,
+      body: { added: 2, matched: 2 },
+    });
+    const shown = (await call(owner, 'GET', `/v1/expenses/${ride}`)).body;
+    expect(shown.cardCharges?.map((c) => [c.amount.amountMinor, c.matchedBy])).toEqual([
+      [2111, 'auto'],
+      [300, 'auto'],
+    ]);
   });
 });
 
@@ -376,10 +400,9 @@ describe('a charge abroad (US-CAP-07 AC7)', () => {
     )!;
     await call(owner, 'PUT', `/v1/card-transactions/${charge.id}/expense`, { expenseId: fare });
     const shown = (await call(owner, 'GET', `/v1/expenses/${fare}`)).body;
-    expect(shown.cardCharge).toMatchObject({
-      amount: { amountMinor: 48_394, currency: 'USD', decimal: '483.94' },
-      matchedBy: 'person',
-    });
+    expect(shown.cardCharges).toMatchObject([
+      { amount: { amountMinor: 48_394, currency: 'USD', decimal: '483.94' }, matchedBy: 'person' },
+    ]);
     expect(shown.amount).toMatchObject({ amountMinor: 41_280, currency: 'EUR' });
   });
 });
@@ -502,7 +525,7 @@ describe('a statement PDF (US-CAP-07 AC1, AC5)', () => {
     expect(gone.body.transactions.some((t) => t.statementId === statementId)).toBe(false);
     expect(removed).toContain(`orgs/${orgId}/statements/${statementId}`);
     expect((await call(owner, 'GET', `/v1/expenses/${hotel}`)).body).not.toHaveProperty(
-      'cardCharge',
+      'cardCharges',
     );
   });
 });
