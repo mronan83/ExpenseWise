@@ -1,13 +1,18 @@
 import { createHash } from 'node:crypto';
 import type { CardStatementRecord, StatementReading } from '@expensewise/db';
-import type { StatementExtraction, StatementReader, StatementRun } from '@expensewise/extraction';
+import type {
+  ModelId,
+  StatementExtraction,
+  StatementReader,
+  StatementRun,
+} from '@expensewise/extraction';
 import { InngestTestEngine } from '@inngest/test';
 import { describe, expect, it } from 'vitest';
 import {
   asReading,
   cardStatementReadingFunction,
+  noReadingProblem,
   readStatement,
-  STATEMENT_MODEL,
   type StatementReadingPorts,
 } from './card-statements.ts';
 import { createWorkflowClient } from './client.ts';
@@ -78,60 +83,114 @@ const statement = (over: Partial<CardStatementRecord> = {}): CardStatementRecord
   ...over,
 });
 
-/** A member's uploaded statement, and what the model answers, or why it can't be asked. */
+/** The primary in these tests: an OpenAI model, as an organization may choose (Q8). */
+const PRIMARY: ModelId = 'gpt-5.6-luna';
+const SONNET: ModelId = 'claude-sonnet-5-5';
+
+/** What Anthropic answers an account with no credit: a 400 that retrying never fixes. */
+const noCredit = () =>
+  Object.assign(new Error('400 credit balance too low'), {
+    status: 400,
+    error: {
+      type: 'error',
+      error: {
+        type: 'invalid_request_error',
+        message:
+          'Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.',
+      },
+    },
+  });
+
+type Answer = StatementExtraction | StatementRun['outcome'] | KeyProblem | Error;
+
+/**
+ * A member's uploaded statement, the models its organization reads with, in order, and what
+ * each answers, or why it can't be asked.
+ */
 function world(
-  answer: StatementExtraction | StatementRun['outcome'] | KeyProblem = september,
-  options: { record?: CardStatementRecord; file?: Uint8Array | null } = {},
+  answer: Answer = september,
+  options: {
+    record?: CardStatementRecord;
+    file?: Uint8Array | null;
+    order?: ModelId[];
+    answers?: Partial<Record<ModelId, Answer>>;
+  } = {},
 ) {
   const settled: StatementReading[] = [];
-  let calls = 0;
-  const reader = {
-    model: STATEMENT_MODEL,
-    read: (): Promise<StatementRun> => {
-      calls += 1;
-      const outcome =
-        typeof answer === 'string' ? (answer as StatementRun['outcome']) : 'extracted';
-      return Promise.resolve({
-        outcome,
-        statement: typeof answer === 'string' ? null : answer,
-        model: STATEMENT_MODEL,
-        version: 'statement-v1',
-        latencyMs: 9000,
-        usage: { inputTokens: 12_000, outputTokens: 900, cacheReadTokens: 0, cacheWriteTokens: 0 },
-        costNanoUsd: 33_000_000n,
-      });
-    },
-  } as unknown as StatementReader;
+  const calls: ModelId[] = [];
+  const answerOf = (model: ModelId) => options.answers?.[model] ?? answer;
+  const reader = (model: ModelId) =>
+    ({
+      model,
+      read: (): Promise<StatementRun> => {
+        calls.push(model);
+        const given = answerOf(model);
+        if (given instanceof Error) return Promise.reject(given);
+        const outcome =
+          typeof given === 'string' ? (given as StatementRun['outcome']) : 'extracted';
+        return Promise.resolve({
+          outcome,
+          statement: typeof given === 'string' ? null : given,
+          model,
+          version: 'statement-v1',
+          latencyMs: 9000,
+          usage: {
+            inputTokens: 12_000,
+            outputTokens: 900,
+            cacheReadTokens: 0,
+            cacheWriteTokens: 0,
+          },
+          costNanoUsd: 33_000_000n,
+        });
+      },
+    }) as StatementReader;
   const ports: StatementReadingPorts = {
     loadStatement: () => Promise.resolve(options.record ?? statement()),
     fetchFile: () => Promise.resolve(options.file === undefined ? PDF : options.file),
-    reader: () =>
-      Promise.resolve(answer === 'no_key' || answer === 'unreadable_key' ? answer : reader),
+    readingOrder: () => Promise.resolve(options.order ?? [PRIMARY]),
+    reader: (_org, model) => {
+      const given = answerOf(model);
+      return Promise.resolve(
+        given === 'no_key' || given === 'unreadable_key' ? given : reader(model),
+      );
+    },
     homeCurrency: () => Promise.resolve('USD'),
     settle: (_org, _id, reading) => {
       settled.push(reading);
       return Promise.resolve({ added: reading.transactions.length, matched: 0 });
     },
   };
-  return { ports, settled, calls: () => calls };
+  return { ports, settled, calls };
 }
+
+/** The primary's reading, settled: the statement read, held, or turned away. */
+async function settlementOf(ports: StatementReadingPorts) {
+  const result = await readStatement(ports, ORG, STATEMENT, PRIMARY);
+  if (!result || !('status' in result)) throw new Error('Expected the statement settled');
+  return result;
+}
+
+const run = (w: ReturnType<typeof world>) =>
+  new InngestTestEngine({
+    function: cardStatementReadingFunction(client, () => w.ports),
+    events: [{ name: 'card_statement.filed', data: { orgId: ORG, statementId: STATEMENT } }],
+  }).execute();
 
 describe('reading a card statement (FR-CAP-10, US-CAP-07)', () => {
   it('keeps each transaction with its date, merchant, amount and card, when its totals add up', async () => {
-    const w = world();
-    const reading = await readStatement(w.ports, ORG, STATEMENT);
+    const reading = await settlementOf(world().ports);
     expect(reading).toMatchObject({
       status: 'read',
       problem: null,
       cardLastFour: '4417',
       currency: 'USD',
-      model: STATEMENT_MODEL,
+      model: PRIMARY,
       version: 'statement-v1',
       costNanoUsd: 33_000_000,
     });
     // A step's result is plain JSON; the database gets money back.
     expect(JSON.parse(JSON.stringify(reading))).toEqual(reading);
-    const kept = asReading(reading!);
+    const kept = asReading(reading);
     expect(kept.charges).toEqual({ amountMinor: 42_060, currency: 'USD' });
     expect(
       kept.transactions.map((t) => [t.merchant, t.amount.amountMinor, t.cardLastFour]),
@@ -147,12 +206,12 @@ describe('reading a card statement (FR-CAP-10, US-CAP-07)', () => {
       ...september,
       transactions: september.transactions.slice(0, 1).concat(september.transactions[2]!),
     };
-    const reading = await readStatement(world(short).ports, ORG, STATEMENT);
+    const reading = await settlementOf(world(short).ports);
     expect(reading).toMatchObject({
       status: 'needs_look',
       problem: 'Its charges come to $402.20, but it prints $420.60.',
     });
-    expect(reading?.transactions).toHaveLength(2);
+    expect(reading.transactions).toHaveLength(2);
   });
 
   it('holds it for a look when a line couldn’t be read, rather than guess it', async () => {
@@ -163,20 +222,25 @@ describe('reading a card statement (FR-CAP-10, US-CAP-07)', () => {
         ...september.transactions.slice(1),
       ],
     };
-    expect(await readStatement(world(odd).ports, ORG, STATEMENT)).toMatchObject({
+    expect(await readStatement(world(odd).ports, ORG, STATEMENT, PRIMARY)).toMatchObject({
       status: 'needs_look',
       problem: 'A line couldn’t be read, so the transactions may be incomplete.',
     });
   });
 
-  it('says what to do when there is no key, and asks no model', async () => {
+  it('says a model whose key is missing or unreadable read nothing, and asks it nothing', async () => {
     const w = world('no_key');
-    expect(await readStatement(w.ports, ORG, STATEMENT)).toMatchObject({
-      status: 'failed',
-      problem: 'Add your Anthropic key in Settings › AI keys, then bring the statement in again.',
-      transactions: [],
+    expect(await readStatement(w.ports, ORG, STATEMENT, SONNET)).toEqual({
+      noReading: 'There is no Anthropic key in Settings › AI keys.',
+      tooLong: false,
+      costNanoUsd: 0,
     });
-    expect(w.calls()).toBe(0);
+    expect(await readStatement(world('unreadable_key').ports, ORG, STATEMENT, PRIMARY)).toEqual({
+      noReading: 'The OpenAI key can’t be read. Save it again in Settings › AI keys.',
+      tooLong: false,
+      costNanoUsd: 0,
+    });
+    expect(w.calls).toEqual([]);
   });
 
   it('turns away a hotel folio emailed as a “statement”, and says how to send it as a receipt', async () => {
@@ -186,6 +250,7 @@ describe('reading a card statement (FR-CAP-10, US-CAP-07)', () => {
         world(folio, { record: statement({ source: 'email' }) }).ports,
         ORG,
         STATEMENT,
+        PRIMARY,
       ),
     ).toMatchObject({
       status: 'failed',
@@ -197,11 +262,13 @@ describe('reading a card statement (FR-CAP-10, US-CAP-07)', () => {
   it('asks for the downloaded list when a statement is too long to read in one go, and tries once', async () => {
     for (const outcome of ['timed_out', 'truncated'] as const) {
       const w = world(outcome);
-      expect(await readStatement(w.ports, ORG, STATEMENT)).toMatchObject({
+      const result = await run(w);
+      expect(w.settled[0]).toMatchObject({
         status: 'failed',
         problem: 'It is too long to read in one go. Bring in a downloaded list instead.',
       });
-      expect(w.calls()).toBe(1);
+      expect(result.result).toEqual({ status: 'failed', transactions: 0 });
+      expect(w.calls).toEqual([PRIMARY]);
     }
   });
 
@@ -209,7 +276,7 @@ describe('reading a card statement (FR-CAP-10, US-CAP-07)', () => {
     const changed = world(september, {
       file: new TextEncoder().encode('%PDF-1.7\nsomething else'),
     });
-    expect(await readStatement(changed.ports, ORG, STATEMENT)).toMatchObject({
+    expect(await readStatement(changed.ports, ORG, STATEMENT, PRIMARY)).toMatchObject({
       status: 'failed',
       problem: 'The file changed after it was uploaded. Bring it in again.',
     });
@@ -221,27 +288,60 @@ describe('reading a card statement (FR-CAP-10, US-CAP-07)', () => {
         sha256: createHash('sha256').update(csv).digest('hex'),
       }),
     });
-    expect(await readStatement(notPdf.ports, ORG, STATEMENT)).toMatchObject({ status: 'failed' });
-    expect(changed.calls() + notPdf.calls()).toBe(0);
+    expect(await readStatement(notPdf.ports, ORG, STATEMENT, PRIMARY)).toMatchObject({
+      status: 'failed',
+    });
+    expect([...changed.calls, ...notPdf.calls]).toEqual([]);
   });
 
   it('leaves a statement already settled alone', async () => {
     const w = world(september, { record: statement({ status: 'read' }) });
-    expect(await readStatement(w.ports, ORG, STATEMENT)).toBeUndefined();
-    expect(w.calls()).toBe(0);
+    expect(await readStatement(w.ports, ORG, STATEMENT, PRIMARY)).toBeUndefined();
+    expect(w.calls).toEqual([]);
   });
 });
 
-describe('the statement event', () => {
-  it('reads the statement once, then keeps and matches its transactions', async () => {
-    const w = world();
-    const t = new InngestTestEngine({
-      function: cardStatementReadingFunction(client, () => w.ports),
-      events: [{ name: 'card_statement.filed', data: { orgId: ORG, statementId: STATEMENT } }],
-    });
-    const { result } = await t.execute();
+describe('the statement event, read with the organization’s models (FR-INT-16, US-READ-17 AC13)', () => {
+  it('reads the statement once with the primary, whichever provider it is, then keeps and matches its transactions', async () => {
+    const w = world(september, { order: [PRIMARY, SONNET] });
+    const { result } = await run(w);
     expect(result).toEqual({ status: 'read', transactions: 3 });
+    expect(w.calls).toEqual([PRIMARY]);
     expect(w.settled).toHaveLength(1);
+    expect(w.settled[0]).toMatchObject({ model: PRIMARY });
     expect(w.settled[0]?.transactions[0]?.amount).toEqual({ amountMinor: 40_220, currency: 'USD' });
+  });
+
+  it('hands it to the next back-up when the primary’s provider turns it down for good, such as no credit, and asks it once', async () => {
+    const w = world(september, { order: [SONNET, PRIMARY], answers: { [SONNET]: noCredit() } });
+    const { result } = await run(w);
+    expect(result).toEqual({ status: 'read', transactions: 3 });
+    expect(w.calls).toEqual([SONNET, PRIMARY]);
+    expect(w.settled[0]).toMatchObject({ status: 'read', problem: null, model: PRIMARY });
+  });
+
+  it('says what each model’s provider answered when none can read it, and asks for the list (US-CAP-07 AC10)', async () => {
+    const w = world(noCredit(), { order: [SONNET], answers: {} });
+    await run(w);
+    expect(w.settled[0]).toMatchObject({
+      status: 'failed',
+      problem:
+        'No model could read it. Sonnet 5.5: Anthropic answered “Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.” Change the models in Settings › AI models, or bring in a downloaded list.',
+      model: SONNET,
+    });
+    // Turned down for good: not asked again.
+    expect(w.calls).toEqual([SONNET]);
+  });
+
+  it('says no model can read it when none is on, or none has its provider’s key, and asks none (US-CAP-07 AC10)', async () => {
+    const w = world(september, { order: [] });
+    await run(w);
+    expect(w.settled[0]).toMatchObject({
+      status: 'failed',
+      problem: noReadingProblem([]),
+      transactions: [],
+    });
+    expect(noReadingProblem([])).toContain('Settings › AI models');
+    expect(w.calls).toEqual([]);
   });
 });

@@ -4,7 +4,7 @@ import { costNanoUsd, MODELS, type OpenAIModelId, type TokenUsage } from './mode
 import type { ReceiptExtraction } from './schema.ts';
 import { variantOf, type ExtractionVariant, type ExtractorOptions } from './variant.ts';
 
-const RESPONSES_URL = 'https://api.openai.com/v1/responses';
+export const RESPONSES_URL = 'https://api.openai.com/v1/responses';
 
 /**
  * An error answer from a provider's API, with its status, message and error code, such as
@@ -60,7 +60,7 @@ const jsonSchemaOf = (variant: ExtractionVariant) => {
   return schema;
 };
 
-interface ResponsesAnswer {
+export interface ResponsesAnswer {
   status?: string;
   incomplete_details?: { reason?: string } | null;
   output?: { type?: string; content?: { type?: string; text?: string; refusal?: string }[] }[];
@@ -130,32 +130,9 @@ export class OpenAIExtractor implements Extractor {
     if (!res.ok) throw await httpError(res, this.apiKey);
     const answer = (await res.json()) as ResponsesAnswer;
     const latencyMs = Math.ceil(performance.now() - started);
-
-    // OpenAI counts cached input inside input_tokens; Anthropic counts it apart. Split it so
-    // each token is priced once.
-    const cached = answer.usage?.input_tokens_details?.cached_tokens ?? 0;
-    const usage: TokenUsage = {
-      inputTokens: Math.max(0, (answer.usage?.input_tokens ?? 0) - cached),
-      outputTokens: answer.usage?.output_tokens ?? 0,
-      cacheReadTokens: cached,
-      cacheWriteTokens: 0,
-    };
-    const parts = (answer.output ?? [])
-      .filter((item) => item.type === 'message')
-      .flatMap((item) => item.content ?? []);
-    const refused =
-      parts.some((p) => p.type === 'refusal') ||
-      answer.incomplete_details?.reason === 'content_filter';
-    const parsed = refused
-      ? undefined
-      : variant.schema.safeParse(
-          parseJson(
-            parts
-              .filter((p) => p.type === 'output_text')
-              .map((p) => p.text ?? '')
-              .join(''),
-          ),
-        );
+    const usage = responsesUsage(answer);
+    const { refused, text } = responsesText(answer);
+    const parsed = refused ? undefined : variant.schema.safeParse(parseJson(text));
     const outcome: ExtractionRun['outcome'] = refused
       ? 'refused'
       : answer.status === 'incomplete'
@@ -177,6 +154,35 @@ export class OpenAIExtractor implements Extractor {
   }
 }
 
+/**
+ * What an answer cost in tokens. OpenAI counts cached input inside input_tokens; Anthropic
+ * counts it apart. Split it so each token is priced once.
+ */
+export function responsesUsage(answer: ResponsesAnswer): TokenUsage {
+  const cached = answer.usage?.input_tokens_details?.cached_tokens ?? 0;
+  return {
+    inputTokens: Math.max(0, (answer.usage?.input_tokens ?? 0) - cached),
+    outputTokens: answer.usage?.output_tokens ?? 0,
+    cacheReadTokens: cached,
+    cacheWriteTokens: 0,
+  };
+}
+
+/** The answer's text, or that the model refused. */
+export function responsesText(answer: ResponsesAnswer): { refused: boolean; text: string } {
+  const parts = (answer.output ?? [])
+    .filter((item) => item.type === 'message')
+    .flatMap((item) => item.content ?? []);
+  const refused =
+    parts.some((p) => p.type === 'refusal') ||
+    answer.incomplete_details?.reason === 'content_filter';
+  const text = parts
+    .filter((p) => p.type === 'output_text')
+    .map((p) => p.text ?? '')
+    .join('');
+  return { refused, text };
+}
+
 function fileBlock(input: ExtractionInput) {
   const data = `data:${input.mediaType};base64,${Buffer.from(input.bytes).toString('base64')}`;
   if (input.mediaType === 'application/pdf') {
@@ -186,7 +192,7 @@ function fileBlock(input: ExtractionInput) {
   return { type: 'input_image', image_url: data, detail: 'high' };
 }
 
-function parseJson(text: string): unknown {
+export function parseJson(text: string): unknown {
   try {
     return JSON.parse(text);
   } catch {
@@ -194,7 +200,8 @@ function parseJson(text: string): unknown {
   }
 }
 
-async function httpError(res: Response, apiKey: string): Promise<ProviderHttpError> {
+/** The provider's error answer, with the key taken out of anything it echoes back. */
+export async function httpError(res: Response, apiKey: string): Promise<ProviderHttpError> {
   const body = (await res.json().catch(() => undefined)) as
     { error?: { message?: unknown; code?: unknown } } | undefined;
   const message =

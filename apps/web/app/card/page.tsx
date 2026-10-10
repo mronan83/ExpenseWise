@@ -166,9 +166,9 @@ export default function CardPage() {
               </h2>
               <p className="text-ink-2">
                 Upload your card’s monthly statement as a PDF, or forward it to your receipts
-                address with “statement” in the subject. Reading one costs a few cents on your
-                Anthropic key. Or upload the transaction list you download as CSV, which is read
-                here at no cost.
+                address with “statement” in the subject. Your primary AI model reads it, for a few
+                cents on its key (Settings › AI models). Or upload the transaction list you download
+                as CSV, which is read here at no cost.
               </p>
               <div className="flex flex-wrap gap-2">
                 <label

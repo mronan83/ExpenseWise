@@ -421,7 +421,7 @@ function readingRequest(data: unknown): ReadingRequest {
   return { orgId, receiptId, requestId: outboxId };
 }
 
-const stepFailure = (error: unknown) =>
+export const stepFailure = (error: unknown) =>
   error instanceof Error ? error.message : 'the step failed after its retries';
 
 /**

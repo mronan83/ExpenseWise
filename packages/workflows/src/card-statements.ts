@@ -12,29 +12,32 @@ import {
   type CurrencyCode,
 } from '@expensewise/domain';
 import {
+  MODELS,
   normalizeStatement,
-  type ClaudeModelId,
+  type ModelId,
   type StatementReader,
 } from '@expensewise/extraction';
 import { NonRetriableError, type Inngest } from 'inngest';
-import type { KeyProblem } from './receipts.ts';
+import { permanentFailure, stepFailure, type KeyProblem } from './receipts.ts';
 
 /*
  * Reads a card statement PDF a member brought in, keeps its transactions and matches them to
- * the member's expenses (FR-CAP-10, FR-INT-24, ADR-0046, #97).
+ * the member's expenses (FR-CAP-10, FR-INT-24, ADR-0046, #97), with the organization's own
+ * models: its primary, then each back-up that is on, as a receipt is read (FR-INT-16,
+ * ADR-0050).
  */
 
-/**
- * The model that reads statements: one model, with the organization's Anthropic key. A
- * statement is long and its lines are what matter, so it gets the mid tier, not the smallest.
- */
-export const STATEMENT_MODEL: ClaudeModelId = 'claude-sonnet-5-5';
-
-/** What reading a statement needs from the database, storage and the provider. */
+/** What reading a statement needs from the database, storage and the providers. */
 export interface StatementReadingPorts {
   loadStatement(orgId: string, statementId: string): Promise<CardStatementRecord | undefined>;
   fetchFile(storageKey: string): Promise<Uint8Array | null>;
-  reader(orgId: string): Promise<StatementReader | KeyProblem>;
+  /**
+   * The models that read, in the order tried: the primary, then each back-up that is on, less
+   * any whose provider the organization has no key for. Read when each statement is read, so a
+   * change in Settings applies to the next one.
+   */
+  readingOrder(orgId: string): Promise<readonly ModelId[]>;
+  reader(orgId: string, model: ModelId): Promise<StatementReader | KeyProblem>;
   /** The organization's home currency, for a statement that prints none. */
   homeCurrency(orgId: string): Promise<CurrencyCode>;
   settle(orgId: string, statementId: string, reading: StatementReading): Promise<unknown>;
@@ -65,23 +68,67 @@ const failed = (problem: string, extra: Partial<Settlement> = {}): Settlement =>
   ...extra,
 });
 
-/** What a person reads about a key that can't read, as receipts say it (FR-INT-16). */
-const KEY_TEXT: Record<KeyProblem, string> = {
-  no_key: 'Add your Anthropic key in Settings › AI keys, then bring the statement in again.',
-  unreadable_key: 'Your Anthropic key can’t be read. Save it again in Settings › AI keys.',
+/**
+ * A model that gave no reading, and why, in words for the person: the next model that is on
+ * reads it instead. tooLong: it timed out or ran out of room, as any model would.
+ */
+export interface NoReading {
+  readonly noReading: string;
+  readonly tooLong: boolean;
+  readonly costNanoUsd: number;
+}
+
+const PROVIDER_NAME = { anthropic: 'Anthropic', openai: 'OpenAI' } as const;
+
+/** Why a model with a key problem gave no reading (FR-INT-16). */
+const keyText = (model: ModelId, problem: KeyProblem) => {
+  const provider = PROVIDER_NAME[MODELS[model].provider];
+  return problem === 'no_key'
+    ? `There is no ${provider} key in Settings › AI keys.`
+    : `The ${provider} key can’t be read. Save it again in Settings › AI keys.`;
 };
 
+/** What the provider said when it turned the request down for good, such as no credit. */
+const refusedText = (model: ModelId, permanent: string) => {
+  const provider = PROVIDER_NAME[MODELS[model].provider];
+  const [code, ...rest] = permanent.split(': ');
+  const said = rest.join(': ').trim();
+  return code === 'key_rejected'
+    ? `${provider} turned the key down: “${said}”`
+    : `${provider} answered “${said}”`;
+};
+
+const sentence = (text: string) => (/[.”]$/.test(text) ? text : `${text}.`);
+
 /**
- * Reads one statement: checks its file is the one uploaded, has the model read it, and works
- * out whether it can be matched at once (US-CAP-07 AC5). Lines that don't read, or that don't
- * make the totals the statement prints, hold it for a look; nothing read, or no file, fails it,
- * saying why. Never throws for what retrying can't fix.
+ * Why no model read it, naming each one tried and what stopped it, or that none is on. Every
+ * model too long for it asks for the downloaded list, as before.
+ */
+export function noReadingProblem(tried: readonly (NoReading & { model: ModelId })[]): string {
+  if (tried.length === 0) {
+    return 'No AI model can read it. Switch one on in Settings › AI models, with its provider’s key in Settings › AI keys, or bring in a downloaded list.';
+  }
+  if (tried.every((t) => t.tooLong)) {
+    return 'It is too long to read in one go. Bring in a downloaded list instead.';
+  }
+  const each = tried.map((t) => `${MODELS[t.model].label}: ${sentence(t.noReading)}`).join(' ');
+  return `No model could read it. ${each} Change the models in Settings › AI models, or bring in a downloaded list.`;
+}
+
+/**
+ * Reads one statement with one model: checks its file is the one uploaded, has the model read
+ * it, and works out whether it can be matched at once (US-CAP-07 AC5). Lines that don't read,
+ * or that don't make the totals the statement prints, hold it for a look; no file, or a file
+ * that isn't a statement, fails it, saying why. A model that gives no reading, from a key
+ * problem, a provider that turns it down for good or an answer that doesn't fit, says why, so
+ * the next model can read it. Throws only what retrying might fix, such as an outage.
  */
 export async function readStatement(
   ports: StatementReadingPorts,
   orgId: string,
   statementId: string,
-): Promise<Settlement | undefined> {
+  model: ModelId,
+): Promise<Settlement | NoReading | undefined> {
   const statement = await ports.loadStatement(orgId, statementId);
   if (!statement || statement.status !== 'reading' || !statement.storageKey) return undefined;
   const bytes = await ports.fetchFile(statement.storageKey);
@@ -93,21 +140,34 @@ export async function readStatement(
   if (String.fromCharCode(...bytes.subarray(0, 5)) !== '%PDF-') {
     return failed('It isn’t a PDF. Bring in the statement’s PDF, or a downloaded list.');
   }
-  const reader = await ports.reader(orgId);
-  if (typeof reader === 'string') return failed(KEY_TEXT[reader]);
-  const run = await reader.read(bytes);
+  const reader = await ports.reader(orgId, model);
+  if (typeof reader === 'string') {
+    return { noReading: keyText(model, reader), tooLong: false, costNanoUsd: 0 };
+  }
+  let run;
+  try {
+    run = await reader.read(bytes);
+  } catch (error) {
+    const permanent = permanentFailure(error);
+    if (!permanent) throw error;
+    return { noReading: refusedText(model, permanent), tooLong: false, costNanoUsd: 0 };
+  }
   const audit = {
     model: run.model,
     version: run.version,
     costNanoUsd: Number(run.costNanoUsd),
   };
   if (run.outcome !== 'extracted' || !run.statement) {
-    return failed(
-      run.outcome === 'truncated' || run.outcome === 'timed_out'
-        ? 'It is too long to read in one go. Bring in a downloaded list instead.'
-        : 'It couldn’t be read as a card statement.',
-      audit,
-    );
+    const tooLong = run.outcome === 'truncated' || run.outcome === 'timed_out';
+    return {
+      noReading: tooLong
+        ? 'It was too long to read in one go.'
+        : run.outcome === 'refused'
+          ? 'It declined to read it.'
+          : 'Its answer didn’t fit a card statement.',
+      tooLong,
+      costNanoUsd: audit.costNanoUsd,
+    };
   }
   if (!run.statement.cardStatement) {
     return failed(
@@ -164,9 +224,11 @@ function statementRequest(data: unknown): { orgId: string; statementId: string }
 }
 
 /**
- * Reads a card statement after it is uploaded or emailed: read it once with the model, then keep
- * its transactions and match them, in steps, so a retry after the model answered never pays for
- * it twice. If the run itself fails, the statement is settled as not read, so it never stays
+ * Reads a card statement after it is uploaded or emailed: the primary reads it, and each
+ * back-up that is on only when the models before it gave no reading, each in a step of its
+ * own, so a retry after a model answered never pays for it twice; then its transactions are
+ * kept and matched. A model whose step runs out of retries, such as in an outage, hands it to
+ * the next. If the run itself fails, the statement is settled as not read, so it never stays
  * "reading".
  */
 export function cardStatementReadingFunction(client: Inngest, ports: () => StatementReadingPorts) {
@@ -189,13 +251,35 @@ export function cardStatementReadingFunction(client: Inngest, ports: () => State
     },
     async ({ event, step }) => {
       const { orgId, statementId } = statementRequest(event.data);
-      const reading = await step.run('read the statement', () =>
-        readStatement(ports(), orgId, statementId),
-      );
-      if (!reading) return { status: 'already settled' };
+      const order = await step.run('choose the models', () => ports().readingOrder(orgId));
+      const tried: (NoReading & { model: ModelId })[] = [];
+      let reading: Settlement | undefined;
+      for (const model of order) {
+        const { label } = MODELS[model];
+        const result = await step
+          .run(`read with ${label}`, () => readStatement(ports(), orgId, statementId, model))
+          .catch((error: unknown) => ({
+            noReading: `It wasn’t available: ${stepFailure(error)}`.slice(0, 200),
+            tooLong: false,
+            costNanoUsd: 0,
+          }));
+        if (!result) return { status: 'already settled' };
+        if ('status' in result) {
+          reading = result;
+          break;
+        }
+        tried.push({ ...result, model });
+      }
+      // What every model tried cost, the one that read it included.
+      const spent = tried.reduce((total, t) => total + t.costNanoUsd, 0);
+      const last = tried.at(-1);
+      reading = reading
+        ? { ...reading, costNanoUsd: (reading.costNanoUsd ?? 0) + spent }
+        : failed(noReadingProblem(tried), last ? { model: last.model, costNanoUsd: spent } : {});
+      const settlement = reading;
       return step.run('keep and match its transactions', async () => {
-        await ports().settle(orgId, statementId, asReading(reading));
-        return { status: reading.status, transactions: reading.transactions.length };
+        await ports().settle(orgId, statementId, asReading(settlement));
+        return { status: settlement.status, transactions: settlement.transactions.length };
       });
     },
   );

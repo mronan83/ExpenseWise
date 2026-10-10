@@ -59,7 +59,8 @@ const AiModelSchema = z
 export const AiModelSettingsSchema = z
   .object({
     primary: z.string().nullable().openapi({
-      description: 'The model that reads every receipt; null when every model is off.',
+      description:
+        'The model that reads every receipt and card statement; null when every model is off.',
     }),
     models: z.array(AiModelSchema).openapi({
       description: 'Every model, in the order back-ups are tried.',
@@ -101,9 +102,9 @@ export const getModelSettingsRoute = createRoute({
   method: 'get',
   path: '/v1/settings/ai-models',
   tags: ['Settings'],
-  summary: 'Which AI models read receipts',
+  summary: 'Which AI models read receipts and statements',
   description:
-    'Each model, on or off, the primary that reads every receipt and the back-ups that read ' +
+    'Each model, on or off, the primary that reads every receipt and statement and the back-ups that read ' +
     'only when it cannot, with how each has read the organization’s receipts (FR-INT-16).',
   ...secured,
   responses: {

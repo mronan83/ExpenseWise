@@ -75,7 +75,7 @@ const sameDraft = (a: Draft, b: Draft) =>
 function doing(m: AiModel, place: number): string {
   if (m.stopped) return 'Stopped for every organization for now: it reads nothing';
   if (!m.keyConfigured) return `Off: add an ${PROVIDER[m.provider]} key in AI providers first`;
-  if (m.reads === 'primary') return 'Reads every receipt';
+  if (m.reads === 'primary') return 'Reads every receipt and statement';
   if (m.reads === 'backup') return `Back-up ${place}: reads only when the ones before it can’t`;
   return 'Off';
 }
@@ -184,9 +184,10 @@ export default function AiModelsPage() {
         <SettingsNav current="/settings/ai-models" />
         <h1 className="text-2xl font-bold">AI models</h1>
         <p className="text-sm text-ink-2">
-          One model, the primary, reads every receipt, and one confident reading makes it Ready. The
-          others you switch on are back-ups: each reads a receipt only when the ones before it
-          couldn’t, in the order below. With every model off, receipts are filed for you to fill in.
+          One model, the primary, reads every receipt and card statement, and one confident reading
+          makes a receipt Ready. The others you switch on are back-ups: each reads only when the
+          ones before it couldn’t, in the order below. With every model off, receipts are filed for
+          you to fill in.
         </p>
         {load.state === 'loading' ? <p className="text-sm text-ink-2">Loading…</p> : null}
         {load.state === 'signed-out' ? (

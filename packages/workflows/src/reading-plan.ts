@@ -1,5 +1,6 @@
 import type { StoredModelSettings } from '@expensewise/db';
 import {
+  defaultModelSettings,
   MODELS,
   modelSettingsFrom,
   readingOrder,
@@ -36,11 +37,31 @@ export function readingPlanFor(input: {
   /** The providers the organization has a key for; every one when not given. */
   readonly keyed?: ReadonlySet<ModelProvider> | undefined;
 }): ReadingPlan {
-  const overrides = parseOverrides(input.overrides);
-  const stopped = SETTINGS_MODELS.filter((model) => modelStopped(model, overrides));
+  const stopped = stoppedModels(input.overrides);
   if (!input.settingsOn) return { mode: 'compare', stopped };
-  const order = readingOrder(modelSettingsFrom(input.saved)).filter(
+  return { mode: 'primary', order: modelOrderFor(input) };
+}
+
+const stoppedModels = (overrides: string | undefined) => {
+  const parsed = parseOverrides(overrides);
+  return SETTINGS_MODELS.filter((model) => modelStopped(model, parsed));
+};
+
+/**
+ * The models anything but a receipt's side-by-side comparison reads with, in the order tried:
+ * the organization's primary, then each back-up that is on (FR-INT-16, ADR-0050). With AI
+ * model settings off, the defaults the settings start from. A model whose provider it has no
+ * key for, or the operator stopped, is passed over.
+ */
+export function modelOrderFor(input: {
+  readonly settingsOn: boolean;
+  readonly saved?: StoredModelSettings | undefined;
+  readonly overrides?: string | undefined;
+  readonly keyed?: ReadonlySet<ModelProvider> | undefined;
+}): ModelId[] {
+  const stopped = stoppedModels(input.overrides);
+  const settings = input.settingsOn ? modelSettingsFrom(input.saved) : defaultModelSettings();
+  return readingOrder(settings).filter(
     (model) => !stopped.includes(model) && (input.keyed?.has(MODELS[model].provider) ?? true),
   );
-  return { mode: 'primary', order };
 }

@@ -7744,7 +7744,7 @@
               "string",
               "null"
             ],
-            "description": "The model that reads every receipt; null when every model is off."
+            "description": "The model that reads every receipt and card statement; null when every model is off."
           },
           "models": {
             "type": "array",
@@ -16884,8 +16884,8 @@
         "tags": [
           "Settings"
         ],
-        "summary": "Which AI models read receipts",
-        "description": "Each model, on or off, the primary that reads every receipt and the back-ups that read only when it cannot, with how each has read the organization’s receipts (FR-INT-16).",
+        "summary": "Which AI models read receipts and statements",
+        "description": "Each model, on or off, the primary that reads every receipt and statement and the back-ups that read only when it cannot, with how each has read the organization’s receipts (FR-INT-16).",
         "security": [
           {
             "bearerAuth": []
@@ -17845,7 +17845,7 @@
           "Card statements"
         ],
         "summary": "Bring in an uploaded statement PDF",
-        "description": "US-CAP-07 AC1. Records the statement and the event that has it read, in one transaction. It is read by Claude with the organization’s Anthropic key, its transactions kept and matched. Safe to retry with the same id.",
+        "description": "US-CAP-07 AC1. Records the statement and the event that has it read, in one transaction. It is read by the organization’s primary AI model, or a back-up when the primary can’t, its transactions kept and matched. Safe to retry with the same id.",
         "security": [
           {
             "bearerAuth": []
