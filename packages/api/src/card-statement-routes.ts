@@ -22,11 +22,15 @@ import {
   matchAgainRoute,
   matchToExpenseRoute,
   setAsideRoute,
+  statementFileRoute,
   statementListRoute,
   statementUploadRoute,
   unmatchRoute,
 } from './routes/card-statements.ts';
 import type { WorkspaceStore } from './workspace.ts';
+
+/** How long a link to a statement's PDF lasts, as a receipt's image link does. */
+const STATEMENT_LINK_SECONDS = 300;
 
 export interface CardStatementRouteOptions {
   readonly verifyToken?: TokenVerifier;
@@ -70,6 +74,7 @@ export function registerCardStatementRoutes(
       listStatementsRoute,
       confirmStatementRoute,
       deleteStatementRoute,
+      statementFileRoute,
       matchAgainRoute,
       setAsideRoute,
       bringBackRoute,
@@ -273,6 +278,22 @@ export function registerCardStatementRoutes(
     if (!removed) throw notFound('statement');
     if (removed.storageKey) await removeFile(removed.storageKey);
     return c.json(await view(who), 200);
+  });
+
+  app.openapi(statementFileRoute, async (c) => {
+    const who = await member(c.var.identity.userId);
+    const { statementId } = c.req.valid('param');
+    const kept = await stores().cards.list(who.orgId, who.memberId);
+    const statement = kept.statements.find((s) => s.id === statementId);
+    if (!statement) throw notFound('statement');
+    if (!statement.storageKey) {
+      throw new ProblemError(404, 'no-file', 'It keeps no file', {
+        code: 'no_file',
+        detail: 'A downloaded list is read as it comes in, and no file is kept.',
+      });
+    }
+    const url = await files().signedDownloadUrl(statement.storageKey, STATEMENT_LINK_SECONDS);
+    return c.json({ url, expiresInSeconds: STATEMENT_LINK_SECONDS }, 200);
   });
 
   app.openapi(matchAgainRoute, async (c) => {

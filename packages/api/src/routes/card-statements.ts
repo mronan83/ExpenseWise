@@ -7,6 +7,7 @@ import {
   MatchToExpenseSchema,
   SetAsideSchema,
   StatementListRequestSchema,
+  StatementFileLinkSchema,
   StatementListResultSchema,
   StatementUploadRequestSchema,
   StatementUploadTicketSchema,
@@ -148,6 +149,22 @@ export const deleteStatementRoute = createRoute({
   ...secured,
   request: { params: statementParams },
   responses: { 200: statements, ...common },
+});
+
+export const statementFileRoute = createRoute({
+  method: 'get',
+  path: '/v1/card-statements/{statementId}/file',
+  tags,
+  summary: 'Open a statement’s PDF',
+  description:
+    'US-CAP-07 AC15. A link to the person’s own statement PDF as brought in, signed for five ' +
+    'minutes, to check its lines against. A downloaded list keeps no file: 404 no_file.',
+  ...secured,
+  request: { params: statementParams },
+  responses: {
+    200: answer('A short-lived link to the PDF.', StatementFileLinkSchema),
+    ...common,
+  },
 });
 
 export const matchAgainRoute = createRoute({

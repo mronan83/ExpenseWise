@@ -1523,8 +1523,49 @@ export const CAPTURE_STORIES: readonly Story[] = [
           'e2e/signed-in › a ride paid by two card charges, its fare and its tip',
         ],
       },
+      {
+        id: 'AC14',
+        given: 'a statement whose lines don’t make the totals it prints',
+        when: 'I open the Card page or Needs you',
+        then: 'Needs you lists it until I look, and the Card page says what to check and what It’s right does: its charges are then matched, each match undoable, and a wrong line means bringing it in again',
+        decided: { by: 'owner', source: 'owner 2026-10-10' },
+        checks: [
+          'api/card-statements.int › holds a statement whose lines miss its totals until it is confirmed, then matches it',
+          'e2e/signed-in › a card statement that needs a look, with what to check and its PDF',
+          'e2e/signed-in › a card statement that needs a look, in Needs you',
+        ],
+      },
+      {
+        id: 'AC15',
+        given: 'a statement brought in as a PDF',
+        when: 'I tap Open the statement',
+        then: 'its PDF opens, as brought in, by a link that lasts five minutes; a downloaded list keeps no file to open',
+        decided: { by: 'claude' },
+        checks: [
+          'api/card-statements.int › holds a statement whose lines miss its totals until it is confirmed, then matches it',
+          'e2e/signed-in › a card statement that needs a look, with what to check and its PDF',
+        ],
+      },
+      {
+        id: 'AC16',
+        given: 'any charge on the Card page',
+        when: 'I look at it',
+        then: 'it names the statement or list it came from, by its days, and leads to it',
+        decided: { by: 'owner', source: 'owner 2026-10-10' },
+        checks: [
+          'e2e/signed-in › a card statement that needs a look, with what to check and its PDF',
+        ],
+      },
+      {
+        id: 'AC17',
+        given: 'a charge with no receipt',
+        when: 'I add its receipt from the charge',
+        then: 'the receipt’s page offers to match it to that charge once it is read, unless it already matched on its own',
+        decided: { by: 'claude' },
+        checks: ['e2e/signed-in › a receipt added for a card charge, offered to match it'],
+      },
     ],
-    note: 'Your requirement of Oct 7 and your answers to Q50 and Q51 (GAP-42, #97), built in PR #68 behind expenses.card-statements. No live connection reaches U.S. Bank Access Online, so the statement is the way in; a live feed, where a card’s site allows one, would bring the same transactions later. AC7 shows the card’s dollars on the expense rather than beside each conversion on its report and trip, which is where conversions show: Claude’s, yours to confirm. AC10 and AC11 follow your report of Oct 10 (GAP-50, GAP-51, #103): how a statement no model could read says why, and that a report printing purchases net of credits adds up, are Claude’s, yours to confirm. AC12 is your report of Oct 10 (GAP-54, #106); matching a pair on its own (AC13), and only the one pair that makes the amount, is Claude’s, yours to confirm.',
+    note: 'Your requirement of Oct 7 and your answers to Q50 and Q51 (GAP-42, #97), built in PR #68 behind expenses.card-statements. No live connection reaches U.S. Bank Access Online, so the statement is the way in; a live feed, where a card’s site allows one, would bring the same transactions later. AC7 shows the card’s dollars on the expense rather than beside each conversion on its report and trip, which is where conversions show: Claude’s, yours to confirm. AC10 and AC11 follow your report of Oct 10 (GAP-50, GAP-51, #103): how a statement no model could read says why, and that a report printing purchases net of credits adds up, are Claude’s, yours to confirm. AC12 is your report of Oct 10 (GAP-54, #106); matching a pair on its own (AC13), and only the one pair that makes the amount, is Claude’s, yours to confirm. AC14 to AC17 answer your questions of Oct 10, where to look and approve, and where the trace back to the statement is (GAP-52, GAP-53, #105, PR #85): the five-minute link and offering the match on the receipt’s page, rather than making it unasked, are Claude’s, yours to confirm.',
   },
   {
     id: 'US-CAP-08',
@@ -1663,7 +1704,7 @@ export const CAPTURE_STORIES: readonly Story[] = [
     soThat: 'I never have to remember which page takes a receipt, a statement, a list or a drive',
     feature: 'F-69',
     requirements: ['FR-CAP-12'],
-    status: 'Planned',
+    status: 'Delivered',
     criteria: [
       {
         id: 'AC1',
@@ -1671,7 +1712,10 @@ export const CAPTURE_STORIES: readonly Story[] = [
         when: 'I tap +',
         then: 'a sheet offers Take a photo of a receipt, Upload a receipt, Add a drive, Card statement and Downloaded list, and shows my receipts address to forward to',
         decided: { by: 'owner', source: 'owner 2026-10-10' },
-        checks: [],
+        checks: [
+          'e2e/signed-in › the Capture menu, every way to bring something in',
+          'e2e/receipts › opens from the Capture button on the home page',
+        ],
       },
       {
         id: 'AC2',
@@ -1679,7 +1723,9 @@ export const CAPTURE_STORIES: readonly Story[] = [
         when: 'I choose Take a photo',
         then: 'the camera opens at once: a receipt photo is still two taps from any screen, as before',
         decided: { by: 'claude' },
-        checks: [],
+        checks: [
+          'e2e/receipts › takes a photo straight from the Capture menu: its choice is the camera itself',
+        ],
       },
       {
         id: 'AC3',
@@ -1687,7 +1733,7 @@ export const CAPTURE_STORIES: readonly Story[] = [
         when: 'I open the sheet',
         then: 'its choice isn’t offered',
         decided: { by: 'claude' },
-        checks: [],
+        checks: ['e2e/receipts › offers only receipts while no feature is on, as when signed out'],
       },
       {
         id: 'AC4',
@@ -1695,7 +1741,9 @@ export const CAPTURE_STORIES: readonly Story[] = [
         when: 'I pick the file',
         then: 'it is brought in as on the Card page, and I am taken there to see it read',
         decided: { by: 'claude' },
-        checks: [],
+        checks: [
+          'e2e/signed-in › brings in a downloaded list from the Capture menu, then shows the Card page',
+        ],
       },
       {
         id: 'AC5',
@@ -1703,9 +1751,66 @@ export const CAPTURE_STORIES: readonly Story[] = [
         when: 'I use it by touch, keyboard or screen reader',
         then: 'each choice is a 44-point target with its icon and words, Escape or a tap outside closes it, focus returns to +, and it passes WCAG 2.2 AA',
         decided: { by: 'blueprint', source: 'design DP5' },
+        checks: [
+          'e2e/signed-in › the Capture menu, every way to bring something in',
+          'e2e/receipts › closes the Capture menu on Escape, handing focus back to Capture',
+        ],
+      },
+    ],
+    note: 'Your requirement of Oct 10, built in PR #85 (#104). The order, the photo first, what is hidden while its feature is off and taking a statement on to the Card page are Claude’s, for you to confirm. The receipts address shows once NEXT_PUBLIC_RECEIPTS_ADDRESS is set in Vercel; until then the sheet says “your receipts address”.',
+  },
+  {
+    id: 'US-CAP-11',
+    title: 'Reconcile a statement that doesn’t add up, line by line',
+    as: 'Alex, who travels for work on a corporate card',
+    want: 'to put right a line the reading got wrong, before anything on the statement is matched',
+    soThat:
+      'every charge is kept as the card billed it, and nothing is matched, or brought in twice, on a misread line',
+    feature: 'F-70',
+    requirements: ['FR-CAP-13'],
+    status: 'Planned',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'a statement whose lines don’t make the totals it prints',
+        when: 'I open it to look',
+        then: 'I see its lines beside its PDF, with the difference shown as I go',
+        decided: { by: 'owner', source: 'owner 2026-10-10' },
+        checks: [],
+      },
+      {
+        id: 'AC2',
+        given: 'a line read wrong',
+        when: 'I correct its date, merchant or amount',
+        then: 'the line shows what I set, and keeps what was read and who changed it',
+        decided: { by: 'claude' },
+        checks: [],
+      },
+      {
+        id: 'AC3',
+        given: 'a line the statement doesn’t print, or one the reading missed',
+        when: 'I remove it, or add it',
+        then: 'the lines change and the difference with them, each change kept with who made it',
+        decided: { by: 'claude' },
+        checks: [],
+      },
+      {
+        id: 'AC4',
+        given: 'my lines now make the totals it prints',
+        when: 'I finish',
+        then: 'it is matched; and where a difference stays, I can match it with a note saying why',
+        decided: { by: 'claude' },
+        checks: [],
+      },
+      {
+        id: 'AC5',
+        given: 'a line I corrected',
+        when: 'a later statement lists the same charge, as the card billed it',
+        then: 'it is kept once, not brought in again as a second charge',
+        decided: { by: 'claude' },
         checks: [],
       },
     ],
-    note: 'Your requirement of Oct 10 (#104). The order, the photo first, what is hidden while its feature is off and taking a statement on to the Card page are Claude’s, for you to confirm.',
+    note: 'Your answer of Oct 10, that reconciling is the way to handle a wrong line, rather than approving the statement whole (GAP-55, #107). The details are Claude’s, for you to confirm.',
   },
 ];

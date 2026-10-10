@@ -2,6 +2,7 @@
 
 import { SET_ASIDE_NOTE_MAX, showDate, type SetAsideReason } from '@expensewise/domain';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 import { api, ApiProblem } from '../../lib/api';
 import {
@@ -11,8 +12,10 @@ import {
   cardText,
   listOutcome,
   SET_ASIDE_CHOICES,
+  openStatementFile,
   SOURCE_LABEL,
   STATEMENT_STATUS,
+  statementPeriod,
   type CardStatement,
   type CardStatements,
   type CardTransaction,
@@ -21,7 +24,8 @@ import {
 } from '../../lib/card-statements';
 import { COMPANY_PAID_FLAG } from '../../lib/company-paid';
 import { loadFeatures } from '../../lib/features';
-import { formatMoney } from '../../lib/receipts';
+import { ReceiptFileError } from '../../lib/receipt-file';
+import { captureReceipt, formatMoney } from '../../lib/receipts';
 import { supabase } from '../../lib/supabase';
 
 type Load =
@@ -32,11 +36,13 @@ type Load =
   | { state: 'ready'; data: CardStatements };
 
 const describeError = (error: unknown) =>
-  error instanceof ApiProblem
-    ? [error.message, error.detail].filter(Boolean).join('. ')
-    : error instanceof Error
-      ? error.message
-      : 'Something went wrong. Try again.';
+  error instanceof ReceiptFileError
+    ? error.message
+    : error instanceof ApiProblem
+      ? [error.message, error.detail].filter(Boolean).join('. ')
+      : error instanceof Error
+        ? error.message
+        : 'Something went wrong. Try again.';
 
 const card = 'flex flex-col gap-3 rounded-xl border border-rule bg-sheet p-4 text-sm';
 const primary =
@@ -242,7 +248,12 @@ export default function CardPage() {
                 </h2>
                 <ul className="flex flex-col divide-y divide-rule">
                   {others.map((t) => (
-                    <ChargeRow key={t.id} charge={t} onSaved={saved} />
+                    <ChargeRow
+                      key={t.id}
+                      charge={t}
+                      statement={data.statements.find((s) => s.id === t.statementId)}
+                      onSaved={saved}
+                    />
                   ))}
                 </ul>
               </section>
@@ -296,13 +307,18 @@ function Missing({
       </h2>
       <p className="text-ink-2">
         A charge matches an expense of the same amount within three days, the closest merchant
-        first. Add the receipt for one that has none, match it to an expense yourself, or say why
-        there isn’t one.
+        first, and a ride and its tip charged apart match their receipt together. Add the receipt
+        for one that has none, match it to an expense yourself, or say why there isn’t one.
       </p>
       {missing.length > 0 ? (
         <ul className="flex flex-col divide-y divide-rule">
           {missing.map((t) => (
-            <ChargeRow key={t.id} charge={t} onSaved={onSaved} />
+            <ChargeRow
+              key={t.id}
+              charge={t}
+              statement={statements.find((s) => s.id === t.statementId)}
+              onSaved={onSaved}
+            />
           ))}
         </ul>
       ) : null}
@@ -331,9 +347,22 @@ const STATE_TEXT: Record<CardTransaction['state'], string> = {
   waiting: 'Waiting',
 };
 
-/** One charge, and what can be done about it where it stands. */
-function ChargeRow({ charge, onSaved }: { charge: CardTransaction; onSaved: Saved }) {
+/**
+ * One charge, the statement it came from, and what can be done about it where it stands
+ * (US-CAP-07 AC16).
+ */
+function ChargeRow({
+  charge,
+  statement,
+  onSaved,
+}: {
+  charge: CardTransaction;
+  statement: CardStatement | undefined;
+  onSaved: Saved;
+}) {
+  const router = useRouter();
   const [mode, setMode] = useState<'idle' | 'match' | 'aside'>('idle');
+  const [progress, setProgress] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const path = `/v1/card-transactions/${charge.id}`;
@@ -347,6 +376,23 @@ function ChargeRow({ charge, onSaved }: { charge: CardTransaction; onSaved: Save
       setError(describeError(e));
     }
     setBusy(false);
+  }
+
+  /** Its receipt, uploaded here, goes on with the charge, to be matched to it once read (AC17). */
+  function addReceipt(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    if (!file) return;
+    setError(null);
+    void (async () => {
+      try {
+        const { id } = await captureReceipt(file, 'upload', setProgress);
+        router.push(`/receipts/${id}?charge=${charge.id}`);
+      } catch (e) {
+        setError(describeError(e));
+        setProgress(null);
+      }
+    })();
   }
 
   const onCard = cardText(charge.cardLastFour);
@@ -364,6 +410,15 @@ function ChargeRow({ charge, onSaved }: { charge: CardTransaction; onSaved: Save
           {STATE_TEXT[charge.state]}
         </span>
       </p>
+      {statement ? (
+        <p className="text-xs text-ink-2">
+          From{' '}
+          <a href={`#statement-${statement.id}`} className="font-semibold text-carbon underline">
+            {statement.source === 'list' ? 'the downloaded list' : 'the statement'}{' '}
+            {statementPeriod(statement)}
+          </a>
+        </p>
+      ) : null}
       {charge.state === 'matched' && charge.expense ? (
         <>
           <p>
@@ -414,9 +469,18 @@ function ChargeRow({ charge, onSaved }: { charge: CardTransaction; onSaved: Save
       ) : null}
       {charge.state === 'missing' && mode === 'idle' ? (
         <div className="flex flex-wrap gap-2">
-          <Link href="/receipts" className={primary}>
+          <label
+            className={`cursor-pointer ${primary} ${progress ? 'pointer-events-none opacity-60' : ''}`}
+          >
             Add its receipt
-          </Link>
+            <input
+              type="file"
+              accept="image/*,application/pdf"
+              className="sr-only"
+              disabled={progress !== null}
+              onChange={addReceipt}
+            />
+          </label>
           <button type="button" onClick={() => setMode('match')} className={secondary}>
             Match to an expense
           </button>
@@ -424,6 +488,11 @@ function ChargeRow({ charge, onSaved }: { charge: CardTransaction; onSaved: Save
             Set it aside
           </button>
         </div>
+      ) : null}
+      {progress ? (
+        <p role="status" className="text-ink-2">
+          {progress}
+        </p>
       ) : null}
       {mode === 'match' ? (
         <MatchForm charge={charge} onCancel={() => setMode('idle')} onSaved={onSaved} />
@@ -640,7 +709,7 @@ function StatementRow({ statement, onSaved }: { statement: CardStatement; onSave
   }
 
   return (
-    <li className="flex flex-col gap-2 py-3">
+    <li id={`statement-${statement.id}`} className="flex scroll-mt-4 flex-col gap-2 py-3">
       <div className="flex items-baseline justify-between gap-3">
         <span className="font-semibold">{SOURCE_LABEL[statement.source]}</span>
         <span className={`shrink-0 text-xs font-semibold ${status.tone}`}>{status.label}</span>
@@ -655,6 +724,16 @@ function StatementRow({ statement, onSaved }: { statement: CardStatement; onSave
           {statement.problem}
         </p>
       ) : null}
+      {statement.status === 'needs_look' ? (
+        // What to check, and what each choice does (US-CAP-07 AC14, GAP-52).
+        <p className="text-ink-2">
+          Nothing on it is matched until you look. Check its charges below against{' '}
+          {statement.source === 'list' ? 'your list' : 'the statement'}. If they’re right, as when
+          the statement prints its purchases after a credit, tap It’s right: its charges are then
+          matched to your expenses, and each match can be undone. If one was read wrong, delete it
+          and bring it in again, or bring in the downloaded list instead.
+        </p>
+      ) : null}
       <div className="flex flex-wrap gap-2">
         {statement.status === 'needs_look' ? (
           <button
@@ -664,6 +743,19 @@ function StatementRow({ statement, onSaved }: { statement: CardStatement; onSave
             className={primary}
           >
             It’s right: match it
+          </button>
+        ) : null}
+        {statement.source !== 'list' ? (
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => {
+              setError(null);
+              openStatementFile(statement.id).catch((e: unknown) => setError(describeError(e)));
+            }}
+            className={secondary}
+          >
+            Open the statement
           </button>
         ) : null}
         <button

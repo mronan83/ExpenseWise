@@ -87,6 +87,24 @@ export function cardStatementsView(kept: {
   };
 }
 
+/**
+ * A statement waiting for the person's look, as Needs you shows it (US-CAP-07 AC14): what it
+ * says doesn't add up, and nothing on it is matched until they look.
+ */
+export function cardStatementItem(s: CardStatementRecord) {
+  return {
+    kind: 'card_statement' as const,
+    statement: {
+      id: s.id,
+      periodStart: s.periodStart,
+      periodEnd: s.periodEnd,
+      cardLastFour: s.cardLastFour,
+      problem: s.problem,
+    },
+    reason: { code: 'statement_needs_look' as const },
+  };
+}
+
 /** A missing receipt, as Needs you shows it (US-CAP-07 AC3). */
 export function cardChargeItem(t: CardTransactionRecord) {
   return {

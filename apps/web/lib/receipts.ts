@@ -1,6 +1,6 @@
 import { isIsoDate, showDate, stayLine } from '@expensewise/domain';
 import { api, ApiProblem } from './api';
-import type { CardInboxItem } from './card-statements';
+import type { CardInboxItem, CardStatementInboxItem } from './card-statements';
 import type { ExpenseCategory } from './categories';
 import type { ExpenseAmount } from './expenses';
 import type { ReportSummary } from './reports';
@@ -284,7 +284,12 @@ export interface EmailInboxItem {
 }
 
 export type InboxItem =
-  ReceiptInboxItem | ReportInboxItem | ExpenseInboxItem | EmailInboxItem | CardInboxItem;
+  | ReceiptInboxItem
+  | ReportInboxItem
+  | ExpenseInboxItem
+  | EmailInboxItem
+  | CardInboxItem
+  | CardStatementInboxItem;
 
 const CHECK_REASONS: Record<ReadingCheck, string> = {
   sums: 'Its parts don’t come to its total.',

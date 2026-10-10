@@ -328,6 +328,44 @@ const SCREENS: [string, (s: Seeded) => string, Step[], (() => string)?, RegExp?]
       (page) => expect(page.getByText('Personal.')).toBeVisible(),
     ],
   ],
+  [
+    'a card statement that needs a look, with what to check and its PDF',
+    () => '/card',
+    [
+      (page) => expect(page.getByText(/^Nothing on it is matched until you look\./)).toBeVisible(),
+      (page) => expect(page.getByRole('button', { name: 'Open the statement' })).toBeVisible(),
+      // Each charge names the statement or list it came from (AC16).
+      (page) => expect(page.getByRole('link', { name: /^the statement / }).first()).toBeVisible(),
+    ],
+  ],
+  [
+    'a card statement that needs a look, in Needs you',
+    () => '/',
+    [
+      press('Show all'),
+      (page) => expect(page.getByText('Your card statement', { exact: true })).toBeVisible(),
+      (page) => expect(page.getByRole('link', { name: 'Look at it' })).toBeVisible(),
+    ],
+  ],
+  [
+    'a receipt added for a card charge, offered to match it',
+    (s) => `/receipts/${s.receipts.flight}?charge=${s.charges.delta}`,
+    [
+      (page) => expect(page.getByText(/^You added it for \$402\.20 at DELTA AIR/)).toBeVisible(),
+      (page) => expect(page.getByRole('button', { name: 'Match it to this charge' })).toBeVisible(),
+    ],
+  ],
+  [
+    'the Capture menu, every way to bring something in',
+    () => '/',
+    [
+      press('Capture'),
+      (page) => expect(page.getByRole('heading', { name: 'Bring something in' })).toBeVisible(),
+      (page) => expect(page.getByText('Take a photo of a receipt')).toBeVisible(),
+      (page) => expect(page.getByText('Bring in a card statement')).toBeVisible(),
+      (page) => expect(page.getByRole('link', { name: 'Add a drive' })).toBeVisible(),
+    ],
+  ],
   ['setting a card charge aside', () => '/card', [press('Set it aside')]],
   [
     'matching a card charge to an expense by hand',
@@ -954,6 +992,40 @@ for (const [title, path, steps, at, expected] of SCREENS) {
     expect(errors, 'errors in the console').toEqual([]);
   });
 }
+
+test('brings in a downloaded list from the Capture menu, then shows the Card page', async ({
+  page,
+}) => {
+  // Reading the list is the API's (api/card-statements.int); this is the menu's part, with the
+  // bench's own data left as it is.
+  await page.route('**/api/v1/card-statements/lists', (route) =>
+    route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        statementId: '0192f7a0-0000-7000-8000-0000000000f1',
+        added: 0,
+        matched: 0,
+        skipped: 0,
+      }),
+    }),
+  );
+  await page.goto('/', { waitUntil: 'networkidle' });
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('button', { name: 'Capture' })
+    .click();
+  await page
+    .getByRole('dialog', { name: 'Bring something in' })
+    .getByLabel(/^Bring in a downloaded list/)
+    .setInputFiles({
+      name: 'activity.csv',
+      mimeType: 'text/csv',
+      buffer: Buffer.from('Date,Description,Amount\n'),
+    });
+  await expect(page).toHaveURL(/\/card$/);
+  await expect(page.getByRole('heading', { level: 1, name: 'Card' })).toBeVisible();
+});
 
 test('a receipt opens its history in the audit trail, under the chain checked intact', async ({
   page,

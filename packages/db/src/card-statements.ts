@@ -717,6 +717,21 @@ export async function cardTransactionsOfExpenses(
 }
 
 /**
+ * A member's statements that wait for their look, oldest first, for Needs you (US-CAP-07
+ * AC14, GAP-52). Call inside withOrg().
+ */
+export async function statementsNeedingLook(
+  tx: Transaction,
+  memberId: string,
+): Promise<CardStatementRecord[]> {
+  return tx
+    .select(statementColumns)
+    .from(cardStatements)
+    .where(and(eq(cardStatements.memberId, memberId), eq(cardStatements.status, 'needs_look')))
+    .orderBy(asc(cardStatements.createdAt));
+}
+
+/**
  * A member's missing receipts (US-CAP-07 AC3): transactions of statements read in full, charges
  * not matched or set aside, oldest first. Call inside withOrg().
  */

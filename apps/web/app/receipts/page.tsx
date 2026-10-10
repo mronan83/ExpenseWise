@@ -126,8 +126,9 @@ export default function ReceiptsPage() {
                 Add a receipt
               </h2>
               <p className="text-sm text-ink-2">
-                Each receipt is read by both Haiku and Sonnet, so you can see which reads your
-                receipts well enough. Reading one costs about two cents on your Anthropic key.
+                {isOn('receipts.model-settings')
+                  ? 'Your primary AI model reads each receipt, and a back-up only when it can’t (Settings › AI models). Reading one costs a cent or two on its key.'
+                  : 'Each receipt is read by both Haiku and Sonnet, so you can see which reads your receipts well enough. Reading one costs about two cents on your Anthropic key.'}
               </p>
               <div className="flex flex-wrap gap-2">
                 <label

@@ -1146,6 +1146,9 @@
           },
           {
             "$ref": "#/components/schemas/CardInboxItem"
+          },
+          {
+            "$ref": "#/components/schemas/CardStatementInboxItem"
           }
         ],
         "discriminator": {
@@ -1155,7 +1158,8 @@
             "report": "#/components/schemas/ReportInboxItem",
             "expense": "#/components/schemas/ExpenseInboxItem",
             "email": "#/components/schemas/EmailInboxItem",
-            "card": "#/components/schemas/CardInboxItem"
+            "card": "#/components/schemas/CardInboxItem",
+            "card_statement": "#/components/schemas/CardStatementInboxItem"
           }
         }
       },
@@ -1891,6 +1895,81 @@
           "currency",
           "decimal"
         ]
+      },
+      "CardStatementInboxItem": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "card_statement"
+            ]
+          },
+          "statement": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "periodStart": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              "periodEnd": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+              },
+              "cardLastFour": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "problem": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "What it says doesn’t add up."
+              }
+            },
+            "required": [
+              "id",
+              "periodStart",
+              "periodEnd",
+              "cardLastFour",
+              "problem"
+            ]
+          },
+          "reason": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "statement_needs_look"
+                ],
+                "description": "Its lines don’t make the totals it prints: nothing on it is matched until the person looks."
+              }
+            },
+            "required": [
+              "code"
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "statement",
+          "reason"
+        ],
+        "description": "A card statement waiting for the person’s look, while card statements are on."
       },
       "ReceiptDetail": {
         "allOf": [
@@ -8721,6 +8800,23 @@
         },
         "required": [
           "text"
+        ]
+      },
+      "StatementFileLink": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "format": "uri",
+            "description": "A signed link to the PDF as brought in."
+          },
+          "expiresInSeconds": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "url",
+          "expiresInSeconds"
         ]
       },
       "MatchAgainResult": {
@@ -18234,6 +18330,83 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/CardStatements"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet, or it is another member’s, which only its member changes (not_yours).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such statement or transaction, or the feature is off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in, the database or file storage is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/card-statements/{statementId}/file": {
+      "get": {
+        "tags": [
+          "Card statements"
+        ],
+        "summary": "Open a statement’s PDF",
+        "description": "US-CAP-07 AC15. A link to the person’s own statement PDF as brought in, signed for five minutes, to check its lines against. A downloaded list keeps no file: 404 no_file.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "statementId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A short-lived link to the PDF.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatementFileLink"
                 }
               }
             }

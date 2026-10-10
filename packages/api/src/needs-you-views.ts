@@ -14,7 +14,7 @@ import { reportItem, unjustifiedItem } from './report-views.ts';
 import { reportSummary } from './report-views.ts';
 import type { ReportsNeedingYou, ReturnedNeedingYou } from './reports.ts';
 import { unfiledEmailItem } from './unfiled-emails.ts';
-import { cardChargeItem } from './card-statement-views.ts';
+import { cardChargeItem, cardStatementItem } from './card-statement-views.ts';
 
 export interface ReceiptsNeedingYou {
   readonly receipts: readonly ReceiptRecord[];
@@ -130,8 +130,8 @@ function toApproveItem(
  * its last week with something left; while approval is on, each report that came back with
  * its rejected expenses (FR-GOV-12), then reports waiting for the person's decision; then
  * receipts that need a look, newest first, then, while they are on, emails that filed
- * nothing, newest first (#59), then, while card statements are on, card charges with no
- * expense, oldest first (US-CAP-07 AC3), then local expenses that need a justification, oldest first,
+ * nothing, newest first (#59), then, while card statements are on, statements waiting for a
+ * look (AC14) and card charges with no expense, oldest first (US-CAP-07 AC3), then local expenses that need a justification, oldest first,
  * then, while categories are on, expenses with no category and type, oldest first (Q27), then
  * reports ready to close. A report that came back is listed as that, not as ready to close.
  * With `converting`, reports total in their reimbursement currency (FR-EXP-13); with
@@ -163,6 +163,7 @@ export function needsYouItems(
     ...(reports.toApprove ?? []).map((r) => toApproveItem(r, now, converting, companyPaid)),
     ...receiptItems,
     ...(reports.emails ?? []).map(unfiledEmailItem),
+    ...(reports.cardStatements ?? []).map(cardStatementItem),
     ...(reports.cardCharges ?? []).map(cardChargeItem),
     ...reports.unjustified.map(unjustifiedItem),
     ...uncodedItems(reports.uncoded),

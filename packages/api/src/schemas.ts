@@ -8,7 +8,11 @@ import {
 } from '@expensewise/domain';
 import { CORRECTABLE_FIELDS, READING_CHECKS } from '@expensewise/extraction';
 import { z } from '@hono/zod-openapi';
-import { CardInboxItemSchema, ExpenseCardChargeSchema } from './card-statement-schemas.ts';
+import {
+  CardInboxItemSchema,
+  CardStatementInboxItemSchema,
+  ExpenseCardChargeSchema,
+} from './card-statement-schemas.ts';
 import { ExpenseCategorySchema } from './category-schemas.ts';
 import { ExpenseSplitSchema, ItemizedSchema } from './itemized-schemas.ts';
 import { ORG_FEATURE_KEYS, type OrgFeatureKey } from './features.ts';
@@ -1675,6 +1679,7 @@ export const InboxItemSchema = z
     ExpenseInboxItemSchema,
     EmailInboxItemSchema,
     CardInboxItemSchema,
+    CardStatementInboxItemSchema,
   ])
   .openapi('InboxItem');
 

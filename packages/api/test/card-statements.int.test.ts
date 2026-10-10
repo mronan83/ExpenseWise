@@ -113,7 +113,12 @@ interface Body {
   readonly transactions: Transaction[];
   readonly missing: number;
   readonly expenses: { readonly id: string; readonly merchant: string | null }[];
-  readonly items: { readonly kind: string; readonly transaction?: { readonly id: string } }[];
+  readonly items: {
+    readonly kind: string;
+    readonly transaction?: { readonly id: string };
+    readonly statement?: { readonly id: string };
+  }[];
+  readonly url?: string;
   readonly paidBy?: string;
   readonly paidByPinned?: boolean;
   readonly cardCharges?: {
@@ -508,6 +513,34 @@ describe('a statement PDF (US-CAP-07 AC1, AC5)', () => {
     });
     expect(charge(held, 'HOTEL')).toMatchObject({ state: 'waiting', expense: null });
 
+    // It waits in Needs you, saying what doesn't add up (AC14).
+    expect(
+      (await call(owner, 'GET', '/v1/inbox')).body.items.find((i) => i.kind === 'card_statement'),
+    ).toMatchObject({
+      statement: {
+        id: statementId,
+        problem: 'Its charges come to $1,104.00, but it prints $1,204.00.',
+      },
+      reason: { code: 'statement_needs_look' },
+    });
+    // Its PDF opens by a short-lived link to check its lines against (AC15); a list keeps none.
+    expect(await call(owner, 'GET', `/v1/card-statements/${statementId}/file`)).toMatchObject({
+      status: 200,
+      body: {
+        url: `https://files.test/orgs/${orgId}/statements/${statementId}`,
+        expiresInSeconds: 300,
+      },
+    });
+    const brought = await call(owner, 'POST', '/v1/card-statements/lists', {
+      text: 'Date,Description,Amount\n2026-10-03,PARKING OMAHA NE,7.00',
+    });
+    expect(brought.status).toBe(201);
+    const listId = (brought.body as unknown as { statementId: string }).statementId;
+    expect(await call(owner, 'GET', `/v1/card-statements/${listId}/file`)).toMatchObject({
+      status: 404,
+      body: { code: 'no_file' },
+    });
+
     const confirmed = await call(owner, 'POST', `/v1/card-statements/${statementId}/confirm`);
     expect(charge(confirmed.body, 'HOTEL')).toMatchObject({
       state: 'matched',
@@ -518,6 +551,10 @@ describe('a statement PDF (US-CAP-07 AC1, AC5)', () => {
       status: 409,
       body: { code: 'not_waiting' },
     });
+    // Looked at, it leaves Needs you.
+    expect(
+      (await call(owner, 'GET', '/v1/inbox')).body.items.some((i) => i.kind === 'card_statement'),
+    ).toBe(false);
 
     // Deleted as brought in by mistake: its transactions go, and its file.
     const gone = await call(owner, 'DELETE', `/v1/card-statements/${statementId}`);

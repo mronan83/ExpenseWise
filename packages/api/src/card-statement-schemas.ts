@@ -215,6 +215,36 @@ export const MatchAgainResultSchema = z
   .object({ matched: z.number().int() })
   .openapi('MatchAgainResult');
 
+/** A statement waiting for the person's look, as Needs you shows it (US-CAP-07 AC14). */
+export const CardStatementInboxItemSchema = z
+  .object({
+    kind: z.literal('card_statement'),
+    statement: z.object({
+      id: z.string().uuid(),
+      periodStart: isoDate().nullable(),
+      periodEnd: isoDate().nullable(),
+      cardLastFour: z.string().nullable(),
+      problem: z.string().nullable().openapi({ description: 'What it says doesn’t add up.' }),
+    }),
+    reason: z.object({
+      code: z.literal('statement_needs_look').openapi({
+        description:
+          'Its lines don’t make the totals it prints: nothing on it is matched until the person looks.',
+      }),
+    }),
+  })
+  .openapi('CardStatementInboxItem', {
+    description: 'A card statement waiting for the person’s look, while card statements are on.',
+  });
+
+/** A short-lived link to a statement's own PDF (US-CAP-07 AC15). */
+export const StatementFileLinkSchema = z
+  .object({
+    url: z.string().url().openapi({ description: 'A signed link to the PDF as brought in.' }),
+    expiresInSeconds: z.number().int(),
+  })
+  .openapi('StatementFileLink');
+
 /** A missing receipt, as Needs you shows it (US-CAP-07 AC3). */
 export const CardInboxItemSchema = z
   .object({

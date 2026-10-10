@@ -8,9 +8,56 @@ test.describe('receipts', () => {
     await page.goto('/');
     await page
       .getByRole('navigation', { name: 'Main' })
-      .getByRole('link', { name: 'Capture' })
+      .getByRole('button', { name: 'Capture' })
       .click();
+    // Capture opens every way in, a receipt photo first, and Receipts beneath (FR-CAP-12).
+    const menu = page.getByRole('dialog', { name: 'Bring something in' });
+    await expect(menu.getByText('Take a photo of a receipt')).toBeVisible();
+    await menu.getByRole('link', { name: 'See all receipts' }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Receipts' })).toBeVisible();
+  });
+
+  test('takes a photo straight from the Capture menu: its choice is the camera itself', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page
+      .getByRole('navigation', { name: 'Main' })
+      .getByRole('button', { name: 'Capture' })
+      .click();
+    // One tap on the choice opens the camera: + and the photo are two taps from any screen.
+    const photo = page
+      .getByRole('dialog', { name: 'Bring something in' })
+      .getByLabel('Take a photo of a receipt');
+    await expect(photo).toHaveAttribute('type', 'file');
+    await expect(photo).toHaveAttribute('capture', 'environment');
+    await expect(photo).toHaveAttribute('accept', 'image/*');
+  });
+
+  test('offers only receipts while no feature is on, as when signed out', async ({ page }) => {
+    await page.goto('/', { waitUntil: 'networkidle' });
+    await page
+      .getByRole('navigation', { name: 'Main' })
+      .getByRole('button', { name: 'Capture' })
+      .click();
+    const menu = page.getByRole('dialog', { name: 'Bring something in' });
+    await expect(menu.getByText('Upload a receipt')).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    await expect(menu.getByText('Add a drive')).toHaveCount(0);
+    await expect(menu.getByText('Bring in a card statement')).toHaveCount(0);
+    await expect(menu.getByText('Bring in a downloaded list')).toHaveCount(0);
+  });
+
+  test('closes the Capture menu on Escape, handing focus back to Capture', async ({ page }) => {
+    await page.goto('/');
+    const capture = page.getByRole('navigation', { name: 'Main' }).getByRole('button', {
+      name: 'Capture',
+    });
+    await capture.click();
+    await expect(page.getByRole('dialog', { name: 'Bring something in' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('dialog', { name: 'Bring something in' })).toBeHidden();
+    await expect(capture).toBeFocused();
   });
 
   test('asks a signed-out visitor to sign in before showing any receipts', async ({ page }) => {
