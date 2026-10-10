@@ -112,92 +112,95 @@ export function CaptureMenu({ current }: { current: boolean }) {
         }}
         className="mx-auto mt-auto mb-0 w-full max-w-md rounded-t-2xl border border-rule bg-sheet p-0 text-ink backdrop:bg-ink/40"
       >
-        <div className="flex flex-col gap-1 px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-left">
-          <div className="flex items-center justify-between pb-1">
-            <h2 id="capture-menu-title" className="text-lg font-semibold">
-              Bring something in
-            </h2>
-            <button
-              type="button"
-              onClick={close}
-              className="tap min-h-11 px-2 text-sm font-semibold text-carbon"
-            >
-              Close
-            </button>
-          </div>
-          <ul className="flex flex-col">
-            <FileChoice
-              icon={<CameraIcon />}
-              label="Take a photo of a receipt"
-              accept="image/*"
-              capture
-              disabled={busy}
-              onChange={receipt('camera')}
-            />
-            <FileChoice
-              icon={<UploadIcon />}
-              label="Upload a receipt"
-              hint="A photo or a PDF"
-              accept="image/*,application/pdf"
-              disabled={busy}
-              onChange={receipt('upload')}
-            />
-            {on.has(MILEAGE_FLAG) ? (
-              <li>
-                <Link href="/mileage/new" onClick={close} className={choice}>
-                  <span className="text-carbon">
-                    <DriveIcon />
-                  </span>
-                  <span>Add a drive</span>
-                </Link>
-              </li>
-            ) : null}
-            {on.has(CARD_STATEMENTS_FLAG) ? (
-              <>
-                <FileChoice
-                  icon={<CardIcon />}
-                  label="Bring in a card statement"
-                  hint="Its PDF"
-                  accept="application/pdf,.pdf"
-                  disabled={busy}
-                  onChange={statement}
-                />
-                <FileChoice
-                  icon={<ListIcon />}
-                  label="Bring in a downloaded list"
-                  hint="A CSV from your card’s site, read at no cost"
-                  accept=".csv,.tsv,.txt,text/csv,text/plain,text/tab-separated-values"
-                  disabled={busy}
-                  onChange={list}
-                />
-              </>
-            ) : null}
-          </ul>
-          <p role="status" className="min-h-5 px-3 text-sm text-ink-2">
-            {progress}
-          </p>
-          {problem ? (
-            <p role="alert" className="px-3 text-sm text-warn">
-              {problem}
+        {/* Its contents exist only while it is open, so no page carries a hidden copy. */}
+        {shown ? (
+          <div className="flex flex-col gap-1 px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] text-left">
+            <div className="flex items-center justify-between pb-1">
+              <h2 id="capture-menu-title" className="text-lg font-semibold">
+                Bring something in
+              </h2>
+              <button
+                type="button"
+                onClick={close}
+                className="tap min-h-11 px-2 text-sm font-semibold text-carbon"
+              >
+                Close
+              </button>
+            </div>
+            <ul className="flex flex-col">
+              <FileChoice
+                icon={<CameraIcon />}
+                label="Take a photo of a receipt"
+                accept="image/*"
+                capture
+                disabled={busy}
+                onChange={receipt('camera')}
+              />
+              <FileChoice
+                icon={<UploadIcon />}
+                label="Upload a receipt"
+                hint="A photo or a PDF"
+                accept="image/*,application/pdf"
+                disabled={busy}
+                onChange={receipt('upload')}
+              />
+              {on.has(MILEAGE_FLAG) ? (
+                <li>
+                  <Link href="/mileage/new" onClick={close} className={choice}>
+                    <span className="text-carbon">
+                      <DriveIcon />
+                    </span>
+                    <span>Add a drive</span>
+                  </Link>
+                </li>
+              ) : null}
+              {on.has(CARD_STATEMENTS_FLAG) ? (
+                <>
+                  <FileChoice
+                    icon={<CardIcon />}
+                    label="Bring in a card statement"
+                    hint="Its PDF"
+                    accept="application/pdf,.pdf"
+                    disabled={busy}
+                    onChange={statement}
+                  />
+                  <FileChoice
+                    icon={<ListIcon />}
+                    label="Bring in a downloaded list"
+                    hint="A CSV from your card’s site, read at no cost"
+                    accept=".csv,.tsv,.txt,text/csv,text/plain,text/tab-separated-values"
+                    disabled={busy}
+                    onChange={list}
+                  />
+                </>
+              ) : null}
+            </ul>
+            <p role="status" className="min-h-5 px-3 text-sm text-ink-2">
+              {progress}
             </p>
-          ) : null}
-          <p className="px-3 text-sm text-ink-2">
-            Or forward a receipt by email to{' '}
-            {RECEIPTS_ADDRESS ? (
-              <span className="font-semibold text-ink">{RECEIPTS_ADDRESS}</span>
-            ) : (
-              'your receipts address'
-            )}
-            .
-          </p>
-          <Link
-            href="/receipts"
-            onClick={close}
-            className="tap min-h-11 self-start px-3 py-2 text-sm font-semibold text-carbon"
-          >
-            See all receipts
-          </Link>
-        </div>
+            {problem ? (
+              <p role="alert" className="px-3 text-sm text-warn">
+                {problem}
+              </p>
+            ) : null}
+            <p className="px-3 text-sm text-ink-2">
+              Or forward a receipt by email to{' '}
+              {RECEIPTS_ADDRESS ? (
+                <span className="font-semibold text-ink">{RECEIPTS_ADDRESS}</span>
+              ) : (
+                'your receipts address'
+              )}
+              .
+            </p>
+            <Link
+              href="/receipts"
+              onClick={close}
+              className="tap min-h-11 self-start px-3 py-2 text-sm font-semibold text-carbon"
+            >
+              See all receipts
+            </Link>
+          </div>
+        ) : null}
       </dialog>
     </>
   );
