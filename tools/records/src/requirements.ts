@@ -149,6 +149,16 @@ export const FUNCTIONAL: readonly Requirement[] = [
     note: 'Built in PR #77 (#100), by your report of Oct 7: a flight confirmation you forwarded, with no amounts, was filed as a receipt and couldn’t be removed. A receipt’s page has Delete this receipt, behind `receipts.delete`, through the same `delete_receipt()` a duplicate’s deletion uses (ADR-0028), so a submitted claim still never changes.',
   },
   {
+    id: 'FR-CAP-12',
+    text: 'The Capture button in the tab bar opens every way to bring something in: take a photo of a receipt, first; upload a receipt’s photo or PDF; add a drive; bring in a card statement’s PDF or a downloaded transaction list. Each is offered only while its feature is on, and the receipts address is shown for forwarding.',
+    sources: ['owner 2026-10-10'],
+    priority: 'Should',
+    phase: 'P1',
+    status: 'Planned',
+    features: ['F-69'],
+    note: 'Your requirement of Oct 10: Capture opens Receipts today, so a statement, a list or a drive is reached only from its own page. A photo stays two taps from any screen, as now (#104).',
+  },
+  {
     id: 'FR-CAP-07',
     text: 'The iPhone app captures offline and syncs each receipt exactly once.',
     sources: ['ADR-0004', 'arch §6.10', 'roadmap P3'],

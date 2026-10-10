@@ -430,6 +430,32 @@ export const BACKLOG: readonly BacklogItem[] = [
     affects: ['GAP-49', 'GAP-50', 'GAP-51', 'FR-INT-16', 'FR-CAP-10', 'F-65'],
     done: { date: '2026-10-10', in: 'PR #83' },
   },
+  {
+    num: 104,
+    title: 'One Capture menu for every way in',
+    type: 'Feature',
+    detail:
+      'Your requirement of Oct 10 (FR-CAP-12): the + in the tab bar opens a sheet of every way to bring something in, Take a photo of a receipt first, then Upload a receipt, Add a drive, Card statement and Downloaded list, each only while its feature is on, with the receipts address to forward to. A photo stays two taps from any screen, as Capture is now; a statement or list goes on to the Card page to be read.',
+    priority: 'P1',
+    effort: 'S',
+    severity: 'Low',
+    blocker: { kind: 'none' },
+    source: 'Product owner Oct 10',
+    affects: ['FR-CAP-12', 'F-69'],
+  },
+  {
+    num: 105,
+    title: 'A statement’s look made plain, and every charge traced to its statement',
+    type: 'Gap',
+    detail:
+      'Your report of Oct 10 (GAP-52, GAP-53): a statement needing a look says what to check, opens its PDF and says what “It’s right: match it” does, and is listed in Needs you; each charge names the statement that brought it in; “Add its receipt” carries the charge, so the receipt matches it once read.',
+    priority: 'P1',
+    effort: 'M',
+    severity: 'Medium',
+    blocker: { kind: 'none' },
+    source: 'Product owner Oct 10',
+    affects: ['GAP-52', 'GAP-53', 'FR-CAP-10', 'FR-INT-24', 'F-65'],
+  },
   // P2: this month
   {
     num: 102,

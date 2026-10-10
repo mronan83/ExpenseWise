@@ -305,6 +305,28 @@ export const GAPS: readonly Gap[] = [
     },
   },
   {
+    id: 'GAP-52',
+    title:
+      'A statement that needs a look doesn’t say what to check, isn’t in Needs you, and is approved by a button at the foot of the Card page.',
+    affects: ['FR-CAP-10', 'F-65'],
+    severity: 'Medium',
+    evidence:
+      'Your report of Oct 10, with screenshots: your statement said “Its charges come to $771.57, but it prints $703.57.” under Needs a look, and you couldn’t tell where to look or how to approve it. The approval is “It’s right: match it” on the statement, at the foot of the Card page; Needs you lists charges with no receipt but not a statement waiting; and the statement’s PDF can’t be opened in the app to check against.',
+    fix: 'Say what to check and how: the difference, the lines that could explain it, such as a credit, and what “It’s right: match it” does; open the statement’s PDF from it; list a statement waiting for a look in Needs you (#105).',
+    backlog: 105,
+  },
+  {
+    id: 'GAP-53',
+    title:
+      'A card charge doesn’t lead back to the statement it came from, and a statement’s PDF can’t be opened.',
+    affects: ['FR-CAP-10', 'FR-INT-24', 'F-65'],
+    severity: 'Medium',
+    evidence:
+      'Your question of Oct 10: once matched, a charge links to its expense, and the expense to its charge (“See it on your card”) and its receipt, but the chain stops at the charge. No charge names the statement that brought it in, and no statement opens its file. Before a statement is matched, a charge links to nothing; “Add its receipt” opens Receipts without the charge, leaving the match to happen later on its own.',
+    fix: 'Name on each charge the statement that brought it in, with its PDF opened by a short-lived link, as a receipt’s image is; carry the charge into “Add its receipt”, so the receipt is matched to it as soon as it is read (#105).',
+    backlog: 105,
+  },
+  {
     id: 'GAP-46',
     title: 'A receipt filed by mistake can’t be deleted: only a duplicate can.',
     affects: ['FR-CAP-11', 'F-67'],
@@ -1292,6 +1314,12 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-10',
+    change:
+      'Your requirement and report of Oct 10, recorded as Planned: the Capture button opens every way to bring something in, a receipt photo first, then an upload, a drive, a statement and a list, each while its feature is on (FR-CAP-12, F-69, US-CAP-10, #104). From your screenshots: a statement that needs a look doesn’t say what to check or where to approve it, and isn’t in Needs you (GAP-52); and a charge doesn’t lead back to its statement, whose PDF can’t be opened (GAP-53); both #105.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-10',
     change:
