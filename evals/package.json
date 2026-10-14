@@ -11,10 +11,10 @@
     "spike": "tsx src/run.ts"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.131.0",
+    "@anthropic-ai/sdk": "^0.133.0",
     "@expensewise/domain": "workspace:*",
     "@expensewise/extraction": "workspace:*",
-    "playwright-core": "1.63.0"
+    "playwright-core": "1.64.0"
   },
   "devDependencies": {
     "tsx": "^4.23.15",

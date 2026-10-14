@@ -19,10 +19,10 @@
     "@expensewise/flags": "workspace:*",
     "@expensewise/storage": "workspace:*",
     "html-to-text": "^9.0.5",
-    "inngest": "^4.21.1",
-    "mailauth": "^7.1.1",
+    "inngest": "^4.23.0",
+    "mailauth": "^7.3.0",
     "pdf-lib": "^1.17.1",
-    "postal-mime": "^4.0.4"
+    "postal-mime": "^4.0.5"
   },
   "devDependencies": {
     "@inngest/test": "^1.0.0",
