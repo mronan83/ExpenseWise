@@ -335,6 +335,21 @@ export const GAPS: readonly Gap[] = [
     },
   },
   {
+    id: 'GAP-57',
+    title:
+      'The app on the iPhone’s Home Screen couldn’t be refreshed: it has no Safari bar to reload from.',
+    affects: ['NFR-UX-08', 'F-74'],
+    severity: 'Medium',
+    evidence:
+      'Your requirement of Oct 19. The app is installed standalone (its manifest), so Safari’s reload and pull to refresh aren’t there; a screen showed what it had loaded until the app was closed and opened again, and a new release wasn’t picked up.',
+    fix: 'Pull down from the top of any screen to refresh it, or tap the refresh button in its header (#111).',
+    backlog: 111,
+    closed: {
+      date: '2026-10-19',
+      note: 'PR #90: every screen refreshes by pulling down from the top, or by its header’s refresh button.',
+    },
+  },
+  {
     id: 'GAP-56',
     title:
       'A stop could only be typed in full, and was measured to whichever place OpenRouteService ranked first for it, so a landmark or a chain could be routed to the wrong place.',
@@ -1383,10 +1398,58 @@ export const QUESTIONS: readonly Question[] = [
       text: 'A: near the drive’s stops and inside your country, never your location (ADR-0052).',
     },
   },
+  {
+    id: 'Q55',
+    title: 'What a route’s display name is',
+    ask: 'A: a name on each drive, shown in lists, on its report and in the export instead of its end address, going by its start and end without one. B: a saved route, its stops named once and reused for later drives. C: both.',
+    why: 'A drive by its route went by its end address, such as “Eppley Airfield, 4501 Abbott Drive, Omaha, NE, USA”, everywhere it was listed.',
+    recommendation: 'A, a name per drive.',
+    affects: ['FR-CAP-15', 'FR-CAP-16', 'F-72', 'F-73'],
+    answer: {
+      date: '2026-10-19',
+      text: 'C: both. A name for each drive now (#109), and saved routes to reuse built right after (#110).',
+    },
+  },
+  {
+    id: 'Q56',
+    title: 'How a screen is refreshed',
+    ask: 'Pull to refresh on every screen. A: and a small refresh button at the top right of each screen, for anyone who can’t drag. B: pull to refresh only.',
+    why: 'WCAG 2.5.1 asks that anything done by dragging can also be done without it.',
+    recommendation: 'A.',
+    affects: ['NFR-UX-08', 'F-74'],
+    answer: { date: '2026-10-19', text: 'A: pull to refresh, and a small button on each screen.' },
+  },
+  {
+    id: 'Q57',
+    title: 'How notifications reach the phone',
+    ask: 'A: web push now, to the app on the Home Screen (iOS 16.4 or later), through Apple’s push service, with no new vendor or cost, allowed once in Settings › Notifications. B: wait for the native app’s push (Phase 3). C: email first, which needs a sender domain (#27).',
+    why: 'The blueprint put push in the native app (FR-PLT-08); the Home Screen app can take it now.',
+    recommendation: 'A.',
+    affects: ['FR-PLT-12', 'F-75', 'FR-PLT-08', 'FR-PLT-06'],
+    answer: { date: '2026-10-19', text: 'A: web push now (#112).' },
+  },
+  {
+    id: 'Q58',
+    title: 'What a notification shows on the lock screen',
+    ask: 'A: what and where, never an amount, such as “Receipt from Delta filed” or “September report needs your approval”. B: with amounts. C: generic only, “Something needs you in ExpenseWise”.',
+    why: 'A lock screen is seen by whoever is near the phone.',
+    recommendation: 'A.',
+    affects: ['FR-PLT-12', 'F-75'],
+    answer: {
+      date: '2026-10-19',
+      text: 'A: what and where, never an amount.',
+    },
+  },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-19',
+    change:
+      'Your three requirements of Oct 19 recorded, with your answers to Q55 to Q58. Built in PR #90: a drive by its route takes a name, which its expense is listed and exported by, and without one goes by its start and end, such as “Office → Eppley Airfield” (FR-CAP-15, F-72, US-MILE-13, #109); every screen refreshes by pulling down from the top or by its header’s button, since the Home Screen app has no reload (NFR-UX-08, F-74, US-UX-07, GAP-57, #111). Recorded as Planned: saved routes to reuse (FR-CAP-16, F-73, US-MILE-14, #110), and push notifications to the Home Screen app, what and where but never an amount (FR-PLT-12, F-75, US-INBOX-03, #112).',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-19',
     change:

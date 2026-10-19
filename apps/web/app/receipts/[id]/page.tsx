@@ -36,6 +36,7 @@ import {
 import { placeOf } from '../../../lib/expenses';
 import { supabase } from '../../../lib/supabase';
 import { HistoryLink } from '../../history-link';
+import { RefreshButton } from '../../refresh';
 
 type Load =
   | { state: 'loading' }
@@ -164,7 +165,10 @@ export default function ReceiptPage() {
         <Link href="/receipts" className="tap text-sm font-semibold text-carbon">
           ← Receipts
         </Link>
-        <HistoryLink entityType="receipt" entityId={id} />
+        <span className="flex items-baseline gap-3">
+          <HistoryLink entityType="receipt" entityId={id} />
+          <RefreshButton />
+        </span>
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <h1 className="text-2xl font-bold">{receipt?.merchant ?? 'Receipt'}</h1>

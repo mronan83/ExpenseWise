@@ -32,6 +32,63 @@ test.describe('app shell', () => {
     await expect(page.getByRole('navigation', { name: 'Main' })).toHaveCount(0);
   });
 
+  test('refreshes the screen from the Refresh button in its header, as the Home Screen app has no reload', async ({
+    page,
+  }) => {
+    await page.goto('/', { waitUntil: 'networkidle' });
+    await page.evaluate(() => Object.assign(window, { beforeRefresh: true }));
+    await page.getByRole('button', { name: 'Refresh' }).click();
+    await expect
+      // Mid-reload there is no page to ask yet: that counts as not refreshed so far.
+      .poll(() => page.evaluate(() => 'beforeRefresh' in window).catch(() => true), {
+        timeout: 10_000,
+      })
+      .toBe(false);
+    await expect(page.getByRole('heading', { level: 1, name: 'Needs you' })).toBeVisible();
+  });
+
+  test('refreshes the screen when pulled down from the top and let go, and not on a short pull', async ({
+    page,
+  }) => {
+    await page.goto('/', { waitUntil: 'networkidle' });
+    await page.evaluate(() => Object.assign(window, { beforeRefresh: true }));
+    /**
+     * A one-finger drag down the screen from y 100 to `to`, or letting go (`to` null). WebKit
+     * on Linux has no Touch or TouchEvent constructor, so each is a plain event carrying the
+     * touches the app reads.
+     */
+    const touch = (to: number | null) =>
+      page.evaluate((to) => {
+        const target = document.querySelector('main') ?? document.body;
+        const send = (type: string, ys: number[]) => {
+          const event = new Event(type, { bubbles: true, cancelable: true });
+          const touches = ys.map((y) => ({ identifier: 1, target, clientX: 160, clientY: y }));
+          Object.defineProperty(event, 'touches', { value: touches });
+          target.dispatchEvent(event);
+        };
+        if (to === null) return send('touchend', []);
+        send('touchstart', [100]);
+        send('touchmove', [to]);
+      }, to);
+    // A short pull shows the circle, then lets go without refreshing.
+    await touch(140);
+    await expect(page.getByText('Pull to refresh')).toBeVisible();
+    await touch(null);
+    await expect(page.getByText('Pull to refresh')).toHaveCount(0);
+    expect(await page.evaluate(() => 'beforeRefresh' in window)).toBe(true);
+    // Far enough, it says so, and letting go refreshes the screen.
+    await touch(260);
+    await expect(page.getByText('Let go to refresh')).toBeVisible();
+    // Letting go starts the reload, which can end the page before it answers.
+    await touch(null).catch(() => undefined);
+    await expect
+      // Mid-reload there is no page to ask yet: that counts as not refreshed so far.
+      .poll(() => page.evaluate(() => 'beforeRefresh' in window).catch(() => true), {
+        timeout: 10_000,
+      })
+      .toBe(false);
+  });
+
   test('keeps two date fields side by side inside a narrow card', async ({ page }) => {
     // iOS Safari gives a native date field a minimum width of its own; the app turns the
     // native look off so the field fits its column (globals.css).

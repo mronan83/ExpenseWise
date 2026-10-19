@@ -99,3 +99,23 @@ export const ListIcon = () => (
     <path d="M4.5 7h.01M4.5 12h.01M4.5 17h.01" strokeWidth={2.4} />
   </Icon>
 );
+
+/** Two arrows chasing round a circle: refresh the screen (#111). Smaller, beside small text. */
+export const RefreshIcon = () => (
+  <svg
+    viewBox="0 0 24 24"
+    className="size-5"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth={1.75}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+    focusable="false"
+  >
+    <path d="M19.5 12a7.5 7.5 0 0 1-12.8 5.3" />
+    <path d="M4.5 12a7.5 7.5 0 0 1 12.8-5.3" />
+    <path d="M17.5 3.5v3.4h-3.4" />
+    <path d="M6.5 20.5v-3.4h3.4" />
+  </svg>
+);

@@ -122,6 +122,7 @@ export function RouteDriveDetails({
               initial={{
                 date: drive.mileage.date,
                 purpose: drive.mileage.purpose,
+                name: route.name ?? '',
                 stops: route.stops.map(stopDraft),
                 roundTrip: route.roundTrip,
               }}
@@ -137,6 +138,7 @@ export function RouteDriveDetails({
                 const changed = {
                   ...(draft.date !== drive.mileage.date ? { date: draft.date } : {}),
                   ...(draft.purpose !== drive.mileage.purpose ? { purpose: draft.purpose } : {}),
+                  ...((draft.name || null) !== route.name ? { name: draft.name || null } : {}),
                   ...(stopsChanged ? { stops: draft.stops.map(stopBody) } : {}),
                   ...(draft.roundTrip !== route.roundTrip ? { roundTrip: draft.roundTrip } : {}),
                 };
@@ -160,6 +162,7 @@ export function RouteDriveDetails({
             <>
               <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
                 <Row label="Date" value={showDate(drive.mileage.date)} />
+                {route.name ? <Row label="Name" value={route.name} /> : null}
                 <Row label="Purpose" value={drive.mileage.purpose} />
               </dl>
               <ol className="flex flex-col gap-2" aria-label="Its stops, in order">

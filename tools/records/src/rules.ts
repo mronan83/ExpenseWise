@@ -301,6 +301,18 @@ export const RULES: readonly Rule[] = [
     note: 'For a used-up allowance (429) or a failure on its side (5xx). A refused key is not asked again.',
   },
   {
+    id: 'R-ROUTE-NAME-MAX',
+    name: 'Longest name a person gives a drive by its route',
+    value: '80 characters',
+    decided: { by: 'claude' },
+    code: {
+      file: 'packages/domain/src/route-mileage.ts',
+      constant: 'ROUTE_NAME_MAX',
+      literal: '80',
+    },
+    note: 'Long enough for “Acme visit, then the airport and back”, short enough to read in a list on a phone.',
+  },
+  {
     id: 'R-SUGGEST-MIN',
     name: 'Fewest characters typed in a stop before places are suggested',
     value: '3 characters',

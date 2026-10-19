@@ -8,6 +8,7 @@ import { assuranceLevels, authenticators, type Authenticator } from '../../../li
 import { supabase } from '../../../lib/supabase';
 import { CodeForm } from '../../second-factor';
 import { Wordmark } from '../../brand';
+import { RefreshButton } from '../../refresh';
 
 type Load =
   | { state: 'loading' }
@@ -67,11 +68,18 @@ export default function CodePage() {
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]">
       <header className="flex items-baseline justify-between py-3">
         <Wordmark />
-        {load.state === 'ready' || load.state === 'error' ? (
-          <button type="button" onClick={() => void signOut()} className="tap text-sm text-carbon">
-            Sign out
-          </button>
-        ) : null}
+        <span className="flex items-baseline gap-3">
+          {load.state === 'ready' || load.state === 'error' ? (
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              className="tap text-sm text-carbon"
+            >
+              Sign out
+            </button>
+          ) : null}
+          <RefreshButton />
+        </span>
       </header>
       <main className="flex flex-1 flex-col gap-4">
         <h1 className="text-2xl font-bold">Enter your code</h1>

@@ -19,6 +19,7 @@ export function routeDriveView(entry: RouteDriveEntry, sealPick: PickSealer) {
     route: {
       status: route.status,
       problem: route.problem,
+      name: route.name,
       roundTrip: route.roundTrip,
       stops: route.stops.map((s) => {
         const place =

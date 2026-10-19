@@ -9,6 +9,7 @@ import { OtherSignInError, supabase, withOtherSignIn } from '../../../lib/supaba
 import { SettingsNav } from '../nav';
 import { Authenticators } from './authenticators';
 import { Wordmark } from '../../brand';
+import { RefreshButton } from '../../refresh';
 
 interface SignIn {
   id: string;
@@ -168,11 +169,18 @@ export default function SignInsPage() {
         <Link href="/" className="tap">
           <Wordmark />
         </Link>
-        {load.state === 'ready' || load.state === 'error' || load.state === 'held' ? (
-          <button type="button" onClick={() => void signOut()} className="tap text-sm text-carbon">
-            Sign out
-          </button>
-        ) : null}
+        <span className="flex items-baseline gap-3">
+          {load.state === 'ready' || load.state === 'error' || load.state === 'held' ? (
+            <button
+              type="button"
+              onClick={() => void signOut()}
+              className="tap text-sm text-carbon"
+            >
+              Sign out
+            </button>
+          ) : null}
+          <RefreshButton />
+        </span>
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <SettingsNav current="/settings/sign-ins" />

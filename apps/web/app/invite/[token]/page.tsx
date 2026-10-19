@@ -7,6 +7,7 @@ import { api, ApiProblem } from '../../../lib/api';
 import { roleName, shortDate, type InvitePreview } from '../../../lib/people';
 import { supabase } from '../../../lib/supabase';
 import { Wordmark } from '../../brand';
+import { RefreshButton } from '../../refresh';
 
 type Load =
   | { state: 'loading' }
@@ -94,6 +95,7 @@ export default function InvitePage() {
         <Link href="/" className="tap">
           <Wordmark />
         </Link>
+        <RefreshButton />
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <h1 className="text-2xl font-bold">

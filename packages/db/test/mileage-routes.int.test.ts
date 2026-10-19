@@ -142,7 +142,8 @@ describe('logging a route drive (FR-CAP-04, ADR-0039)', () => {
     expect(await w.expense(id)).toMatchObject({
       status: 'processing',
       source: 'mileage',
-      merchant: 'Eppley Airfield, Omaha',
+      // Without a name of its own, a drive goes by its start and end (FR-CAP-15).
+      merchant: '12 Elm St → Eppley Airfield',
       transactionDate: '2026-09-29',
       amountMinor: null,
       justification: 'Client visit at Acme',
@@ -510,6 +511,56 @@ describe('the route tables’ own rules', () => {
           .where(eq(mileageRouteStops.expenseId, id)),
       ),
       /mileage_route_stops_pin_whole/,
+    );
+  });
+});
+
+describe('a drive’s name (FR-CAP-15, Q55)', () => {
+  it('lists a drive by its name, or its start and end with saved places by name, and renames it without measuring it again', async () => {
+    const w = await workspace('route-names');
+    await w.as(w.owner, (tx) =>
+      savePlace(
+        tx,
+        w.org.orgId,
+        w.owner.memberId,
+        null,
+        {
+          name: 'Home',
+          address: '12 Elm St, Omaha, NE',
+        },
+        w.org.userId,
+      ),
+    );
+    const unnamed = await w.log();
+    expect((await w.expense(unnamed.expenseId))?.merchant).toBe('Home → Eppley Airfield');
+
+    const named = await w.log({ name: 'Acme visit and the airport' });
+    expect((await w.expense(named.expenseId))?.merchant).toBe('Acme visit and the airport');
+    expect((await w.drive(named.expenseId))?.route.name).toBe('Acme visit and the airport');
+    const [created] = await w.audit(named.expenseId);
+    expect(created?.payload).toMatchObject({ name: 'Acme visit and the airport' });
+
+    const renamed = await w.change(named.expenseId, { name: 'Acme, then the airport' });
+    expect(renamed).toMatchObject({
+      status: 'changed',
+      remeasured: false,
+      changes: [
+        { field: 'name', from: 'Acme visit and the airport', to: 'Acme, then the airport' },
+      ],
+    });
+    expect((await w.expense(named.expenseId))?.merchant).toBe('Acme, then the airport');
+    // Cleared, it goes by its start and end again.
+    await w.change(named.expenseId, { name: null });
+    expect((await w.expense(named.expenseId))?.merchant).toBe('Home → Eppley Airfield');
+    expect((await w.drive(named.expenseId))?.route.name).toBeNull();
+    await expectDbError(
+      w.inOrg((tx) =>
+        tx
+          .update(mileageRoutes)
+          .set({ name: '' })
+          .where(eq(mileageRoutes.expenseId, named.expenseId)),
+      ),
+      /mileage_routes_name_length/,
     );
   });
 });

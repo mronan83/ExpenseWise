@@ -45,6 +45,9 @@ export const ROUTE_MAX_STOPS = 25;
 /** Longest address kept for a stop or a saved place: as long as a drive's destination. */
 export const ROUTE_ADDRESS_MAX = 200;
 
+/** Longest name a person gives a drive, such as Acme visit and the airport (R-ROUTE-NAME-MAX). */
+export const ROUTE_NAME_MAX = 80;
+
 /** Longest reason for claiming other miles than were measured (R-MILES-REASON-MAX). */
 export const ROUTE_REASON_MAX = 500;
 
@@ -139,7 +142,7 @@ export function routePoints<T>(stops: readonly T[], roundTrip: boolean): T[] {
   return roundTrip && start !== undefined ? [...stops, start] : [...stops];
 }
 
-export const ROUTE_FIELDS = ['date', 'purpose', 'stops', 'roundTrip'] as const;
+export const ROUTE_FIELDS = ['date', 'purpose', 'name', 'stops', 'roundTrip'] as const;
 export type RouteField = (typeof ROUTE_FIELDS)[number];
 
 /** What is wrong with a route drive, a claimed distance or a saved place, and where. */
@@ -158,6 +161,26 @@ export function stopName(index: number, count: number): string {
   if (index === 0) return 'the start';
   if (index === count - 1) return 'the end';
   return `stop ${index + 1}`;
+}
+
+/** An address's first part, such as "1520 Harney St" of "1520 Harney St, Omaha, NE". */
+const firstPart = (address: string) => address.split(',')[0]!.trim() || address;
+
+/**
+ * What a drive is called wherever it is listed, its claim and its report's export among them
+ * (FR-CAP-15): the name its person gave it, or else its start and end, such as
+ * "Office → Eppley Airfield", and "and back" on a round trip. A stop at one of the person's
+ * saved places goes by the place's name; any other by its address's first part.
+ */
+export function routeDisplayName(
+  values: Pick<RouteDriveValues, 'name' | 'stops' | 'roundTrip'>,
+  savedNames: ReadonlyMap<string, string> = new Map(),
+): string {
+  if (values.name) return values.name;
+  const called = (address: string) => savedNames.get(address.toLowerCase()) ?? firstPart(address);
+  const start = called(values.stops[0] ?? '');
+  const end = called(values.stops[values.stops.length - 1] ?? '');
+  return `${start} → ${end}${values.roundTrip ? ' and back' : ''}`;
 }
 
 /**
@@ -191,6 +214,8 @@ export interface RouteDriveValues {
   readonly date: IsoDate;
   /** Why the drive was for business. It is also its expense's justification. */
   readonly purpose: string;
+  /** The name its person gave it, shown in place of its stops; left out when it has none. */
+  readonly name?: string;
   /** The addresses as typed, or as picked, start first and end last. */
   readonly stops: readonly string[];
   /**
@@ -209,6 +234,8 @@ export type RouteStopInput = string | { readonly address: string; readonly pin: 
 export interface RouteDriveInput {
   readonly date?: string;
   readonly purpose?: string;
+  /** Its name, or null to go back to the name its stops give it. */
+  readonly name?: string | null;
   readonly stops?: readonly RouteStopInput[];
   readonly roundTrip?: boolean;
 }
@@ -216,7 +243,8 @@ export interface RouteDriveInput {
 export interface RouteDriveChange {
   readonly field: RouteField;
   readonly from: string | boolean | readonly string[] | null;
-  readonly to: string | boolean | readonly string[];
+  /** Null when a name is taken away. */
+  readonly to: string | boolean | readonly string[] | null;
 }
 
 const sameStops = (a: RouteDriveValues, b: RouteDriveValues) =>
@@ -288,19 +316,36 @@ export function applyRouteDriveInput(
     if (!checked.ok) return checked;
     ({ stops, pins } = checked.value);
   }
+  let name = current?.name ?? null;
+  if (input.name !== undefined) {
+    name = input.name === null ? null : input.name.trim().replace(/\s+/g, ' ') || null;
+    if (name !== null && name.length > ROUTE_NAME_MAX) {
+      return problem('name', `Keep the name to ${ROUTE_NAME_MAX} characters.`);
+    }
+  }
   const roundTrip = input.roundTrip ?? current?.roundTrip ?? false;
   if (date === undefined) return problem('date', 'Enter the date.');
   if (purpose === undefined) return problem('purpose', 'Enter what the drive was for.');
   if (stops === undefined) {
     return problem('stops', 'Enter where the drive starts and where it ends.');
   }
-  const values: RouteDriveValues = { date, purpose, stops, ...(pins ? { pins } : {}), roundTrip };
+  const values: RouteDriveValues = {
+    date,
+    purpose,
+    ...(name !== null ? { name } : {}),
+    stops,
+    ...(pins ? { pins } : {}),
+    roundTrip,
+  };
 
   const changes: RouteDriveChange[] = [];
   if (current?.date !== date)
     changes.push({ field: 'date', from: current?.date ?? null, to: date });
   if (current?.purpose !== purpose) {
     changes.push({ field: 'purpose', from: current?.purpose ?? null, to: purpose });
+  }
+  if ((current?.name ?? null) !== name) {
+    changes.push({ field: 'name', from: current?.name ?? null, to: name });
   }
   if (!current || !sameStops(current, values)) {
     changes.push({ field: 'stops', from: current?.stops ?? null, to: stops });

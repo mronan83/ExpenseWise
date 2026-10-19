@@ -1,5 +1,6 @@
 'use client';
 
+import { routeDisplayName } from '@expensewise/domain';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api, ApiProblem } from '../../lib/api';
 import { useFeatures } from '../../lib/features';
@@ -8,6 +9,7 @@ import {
   PLACE_SUGGESTIONS_FLAG,
   ROUTE_ADDRESS_MAX,
   ROUTE_MAX_STOPS,
+  ROUTE_NAME_MAX,
   stopBody,
   stopLabel,
   typedStop,
@@ -23,6 +25,8 @@ import { PlaceField } from './place-field';
 export interface RouteDraft {
   date: string;
   purpose: string;
+  /** What it is called; empty, it goes by its start and end (FR-CAP-15). */
+  name: string;
   stops: StopDraft[];
   roundTrip: boolean;
 }
@@ -30,6 +34,7 @@ export interface RouteDraft {
 /** A drive as the API takes it: each stop an address typed, or a place picked with its pick. */
 export const routeBody = (draft: RouteDraft) => ({
   ...draft,
+  name: draft.name.trim() || null,
   stops: draft.stops.map(stopBody),
 });
 
@@ -138,6 +143,7 @@ export function RouteForm({
       await onSubmit({
         date: draft.date.trim(),
         purpose: draft.purpose.trim(),
+        name: draft.name.trim(),
         stops: draft.stops.map((s) => ({ ...s, address: s.address.trim() })),
         roundTrip: draft.roundTrip,
       });
@@ -153,6 +159,14 @@ export function RouteForm({
   const small =
     'tap rounded-lg border border-rule px-3 py-1.5 text-xs font-semibold disabled:opacity-40';
   const count = draft.stops.length;
+  // What it goes by until it is named, as the API names it: saved places by their names.
+  const filled = draft.stops.every((s) => s.address.trim() !== '');
+  const unnamed = filled
+    ? routeDisplayName(
+        { stops: draft.stops.map((s) => s.address.trim()), roundTrip: draft.roundTrip },
+        new Map(places.map((p) => [p.address.toLowerCase(), p.name])),
+      )
+    : 'Its start and end, such as Office → Eppley Airfield';
 
   return (
     <form onSubmit={(e) => void save(e)} className="flex flex-col gap-3">
@@ -184,6 +198,18 @@ export function RouteForm({
           </label>
         </>
       ) : null}
+      <label className={label}>
+        Name (optional)
+        <input
+          name="name"
+          maxLength={ROUTE_NAME_MAX}
+          autoComplete="off"
+          placeholder={unnamed}
+          value={draft.name}
+          onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+          className={field}
+        />
+      </label>
       <fieldset className="flex min-w-0 flex-col gap-3">
         <legend className="mb-1 text-xs font-medium text-ink-2">
           Where the drive went, in order

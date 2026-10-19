@@ -11,6 +11,7 @@ import { supabase } from '../../../lib/supabase';
 import { localToday } from '../../../lib/trips';
 import { MileageForm } from '../mileage-form';
 import { routeBody, RouteForm } from '../route-form';
+import { RefreshButton } from '../../refresh';
 
 type Load =
   | { state: 'loading' }
@@ -52,6 +53,7 @@ export default function NewMileagePage() {
         <Link href="/expenses" className="tap text-sm font-semibold text-carbon">
           ← Expenses
         </Link>
+        <RefreshButton />
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <h1 className="text-2xl font-bold">Add mileage</h1>
@@ -114,6 +116,7 @@ export default function NewMileagePage() {
                   initial={{
                     date: today,
                     purpose: '',
+                    name: '',
                     stops: [typedStop(), typedStop()],
                     roundTrip: false,
                   }}

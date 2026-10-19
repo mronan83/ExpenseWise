@@ -1,0 +1,2 @@
+ALTER TABLE "mileage_routes" ADD COLUMN "name" text;--> statement-breakpoint
+ALTER TABLE "mileage_routes" ADD CONSTRAINT "mileage_routes_name_length" CHECK ("mileage_routes"."name" IS NULL OR length("mileage_routes"."name") BETWEEN 1 AND 80);

@@ -16,6 +16,7 @@ import type { FeatureList } from '../../../lib/features';
 import { supabase } from '../../../lib/supabase';
 import { SettingsNav } from '../nav';
 import { Wordmark } from '../../brand';
+import { RefreshButton } from '../../refresh';
 
 interface Details {
   id: string;
@@ -169,6 +170,7 @@ export default function OrganizationSettingsPage() {
         <Link href="/" className="tap">
           <Wordmark />
         </Link>
+        <RefreshButton />
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <SettingsNav current="/settings/organization" />

@@ -7,6 +7,7 @@ import { indented, type Catalog, type Category, type ExpenseType } from '../../.
 import { supabase } from '../../../lib/supabase';
 import { SettingsNav } from '../nav';
 import { Wordmark } from '../../brand';
+import { RefreshButton } from '../../refresh';
 
 type Load =
   | { state: 'loading' }
@@ -71,6 +72,7 @@ export default function CategoriesPage() {
         <Link href="/" className="tap">
           <Wordmark />
         </Link>
+        <RefreshButton />
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <SettingsNav current="/settings/categories" />

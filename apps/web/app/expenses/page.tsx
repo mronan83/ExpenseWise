@@ -12,6 +12,7 @@ import { MILEAGE_FLAG } from '../../lib/mileage';
 import { formatMoney } from '../../lib/receipts';
 import { supabase } from '../../lib/supabase';
 import { Wordmark } from '../brand';
+import { RefreshButton } from '../refresh';
 
 type Load =
   | { state: 'loading' }
@@ -104,6 +105,7 @@ export default function ExpensesPage() {
           <Link href="/receipts" className="tap text-xs font-semibold text-carbon">
             Capture
           </Link>
+          <RefreshButton />
         </span>
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">

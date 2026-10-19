@@ -30,6 +30,7 @@ import { APPROVAL_FLAG } from '../../../lib/approval';
 import type { CompanyPaidSection } from '../../../lib/company-paid';
 import { ApprovalPanel } from './approval';
 import { ByCategory } from './by-category';
+import { RefreshButton } from '../../refresh';
 
 type Load =
   | { state: 'loading' }
@@ -187,7 +188,10 @@ export default function ReportPage() {
         <Link href="/reports" className="tap text-sm font-semibold text-carbon">
           ← Reports
         </Link>
-        <HistoryLink entityType="report" entityId={id} />
+        <span className="flex items-baseline gap-3">
+          <HistoryLink entityType="report" entityId={id} />
+          <RefreshButton />
+        </span>
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <h1 className="text-2xl font-bold">{report ? reportName(report) : 'Report'}</h1>

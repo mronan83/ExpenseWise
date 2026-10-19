@@ -7,6 +7,7 @@ import {
   plainMiles,
   quoteMileage,
   reimburse,
+  routeDisplayName,
   routePoints,
   type ExpenseStatus,
   type IsoDate,
@@ -38,6 +39,7 @@ import {
 } from './schema.ts';
 import { fileExpenseToTrip } from './trips.ts';
 import { mileagePolicy } from './mileage-rates.ts';
+import { listSavedPlaces } from './saved-places.ts';
 
 /*
  * Route-based mileage (FR-CAP-04, ADR-0039). A route drive is a drive like one logged by hand
@@ -80,6 +82,8 @@ export interface RouteStopRecord {
 export interface RouteRecord {
   readonly status: RouteStatus;
   readonly roundTrip: boolean;
+  /** The name its person gave it; null when it goes by its start and end. */
+  readonly name: string | null;
   readonly requestId: string;
   readonly problem: string | null;
   readonly provider: RouteProvider | null;
@@ -101,6 +105,7 @@ export interface RouteDrive {
 const routeColumns = {
   status: mileageRoutes.status,
   roundTrip: mileageRoutes.roundTrip,
+  name: mileageRoutes.name,
   requestId: mileageRoutes.requestId,
   problem: mileageRoutes.problem,
   provider: mileageRoutes.provider,
@@ -199,6 +204,16 @@ const stopRows = (orgId: string, expenseId: string, values: RouteDriveValues) =>
       : { orgId, expenseId, position, address };
   });
 
+/**
+ * What the drive's expense is called (FR-CAP-15): its name, or its start and end, each stop at
+ * one of the member's saved places by the place's name.
+ */
+async function driveName(tx: Transaction, memberId: string, values: RouteDriveValues) {
+  if (values.name) return values.name;
+  const places = await listSavedPlaces(tx, memberId);
+  return routeDisplayName(values, new Map(places.map((p) => [p.address.toLowerCase(), p.name])));
+}
+
 /** The places picked for a drive's stops, for its audit event: none when every stop was typed. */
 const pickedPayload = (values: RouteDriveValues) => {
   const picked = (values.pins ?? []).flatMap((pin, stop) => (pin ? [{ stop, ...pin }] : []));
@@ -264,7 +279,7 @@ export async function logRouteMileage(
     memberId,
     status: 'processing',
     source: 'mileage',
-    merchant: end,
+    merchant: await driveName(tx, memberId, values),
     transactionDate: values.date,
     justification: values.purpose,
   });
@@ -286,6 +301,7 @@ export async function logRouteMileage(
     orgId,
     expenseId: id,
     roundTrip: values.roundTrip,
+    name: values.name ?? null,
     status: 'measuring',
     requestId: event.outboxId,
   });
@@ -300,6 +316,7 @@ export async function logRouteMileage(
       method: 'route',
       status: 'processing',
       date: values.date,
+      ...(values.name ? { name: values.name } : {}),
       stops: values.stops,
       ...pickedPayload(values),
       roundTrip: values.roundTrip,
@@ -387,6 +404,7 @@ export async function changeRouteDrive(
   const current: RouteDriveValues = {
     date: found.date,
     purpose: found.purpose,
+    ...(route.name ? { name: route.name } : {}),
     stops: route.stops.map((s) => s.address),
     ...(pins ? { pins } : {}),
     roundTrip: route.roundTrip,
@@ -401,6 +419,15 @@ export async function changeRouteDrive(
   const actor = { type: 'user', id: actorUserId } as const;
   const now = new Date();
   const end = values.stops[values.stops.length - 1]!;
+  const renamed = changes.some(
+    (c) => c.field === 'name' || c.field === 'stops' || c.field === 'roundTrip',
+  );
+  if (changes.some((c) => c.field === 'name')) {
+    await tx
+      .update(mileageRoutes)
+      .set({ name: values.name ?? null, updatedAt: now })
+      .where(eq(mileageRoutes.expenseId, expenseId));
+  }
   let event: CommittedEvent | null = null;
   let claim: MileageReimbursement | null = null;
   if (remeasured) {
@@ -434,7 +461,7 @@ export async function changeRouteDrive(
   await tx
     .update(expenses)
     .set({
-      merchant: end,
+      ...(renamed ? { merchant: await driveName(tx, memberId, values) } : {}),
       transactionDate: values.date,
       justification: values.purpose,
       ...(remeasured ? { status: 'processing' as const, amountMinor: null, currency: null } : {}),

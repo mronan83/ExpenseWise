@@ -10,6 +10,7 @@ import { formatMoney } from '../../../lib/receipts';
 import { supabase } from '../../../lib/supabase';
 import { dayLabel, tripDates, type TripDetail } from '../../../lib/trips';
 import { TripFields } from '../trip-fields';
+import { RefreshButton } from '../../refresh';
 
 type Load =
   | { state: 'loading' }
@@ -54,6 +55,7 @@ export default function TripPage() {
         <Link href="/trips" className="tap text-sm font-semibold text-carbon">
           ← Trips
         </Link>
+        <RefreshButton />
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <h1 className="text-2xl font-bold">{trip?.name ?? 'Trip'}</h1>
