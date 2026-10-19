@@ -52,37 +52,35 @@ test.describe('app shell', () => {
   }) => {
     await page.goto('/', { waitUntil: 'networkidle' });
     await page.evaluate(() => Object.assign(window, { beforeRefresh: true }));
-    /** A one-finger drag down the screen from y 100 to `to`, let go when `release`. */
-    const drag = (to: number, release: boolean) =>
-      page.evaluate(
-        ([to, release]) => {
-          const target = document.querySelector('main') ?? document.body;
-          const at = (y: number) =>
-            new Touch({ identifier: 1, target, clientX: 160, clientY: y, pageX: 160, pageY: y });
-          const send = (type: string, touches: Touch[]) =>
-            target.dispatchEvent(
-              new TouchEvent(type, { touches, bubbles: true, cancelable: true }),
-            );
-          send('touchstart', [at(100)]);
-          send('touchmove', [at(to)]);
-          if (release) send('touchend', []);
-        },
-        [to, release] as const,
-      );
+    /**
+     * A one-finger drag down the screen from y 100 to `to`, or letting go (`to` null). WebKit
+     * on Linux has no Touch or TouchEvent constructor, so each is a plain event carrying the
+     * touches the app reads.
+     */
+    const touch = (to: number | null) =>
+      page.evaluate((to) => {
+        const target = document.querySelector('main') ?? document.body;
+        const send = (type: string, ys: number[]) => {
+          const event = new Event(type, { bubbles: true, cancelable: true });
+          const touches = ys.map((y) => ({ identifier: 1, target, clientX: 160, clientY: y }));
+          Object.defineProperty(event, 'touches', { value: touches });
+          target.dispatchEvent(event);
+        };
+        if (to === null) return send('touchend', []);
+        send('touchstart', [100]);
+        send('touchmove', [to]);
+      }, to);
     // A short pull shows the circle, then lets go without refreshing.
-    await drag(140, false);
+    await touch(140);
     await expect(page.getByText('Pull to refresh')).toBeVisible();
-    await page.evaluate(() =>
-      document.body.dispatchEvent(new TouchEvent('touchend', { touches: [], bubbles: true })),
-    );
+    await touch(null);
     await expect(page.getByText('Pull to refresh')).toHaveCount(0);
     expect(await page.evaluate(() => 'beforeRefresh' in window)).toBe(true);
     // Far enough, it says so, and letting go refreshes the screen.
-    await drag(260, false);
+    await touch(260);
     await expect(page.getByText('Let go to refresh')).toBeVisible();
-    await page.evaluate(() =>
-      document.body.dispatchEvent(new TouchEvent('touchend', { touches: [], bubbles: true })),
-    );
+    // Letting go starts the reload, which can end the page before it answers.
+    await touch(null).catch(() => undefined);
     await expect
       // Mid-reload there is no page to ask yet: that counts as not refreshed so far.
       .poll(() => page.evaluate(() => 'beforeRefresh' in window).catch(() => true), {
