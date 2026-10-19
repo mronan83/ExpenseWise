@@ -20,6 +20,7 @@ export * from './lifecycle/expense.ts';
 export * from './lifecycle/report.ts';
 export * from './mileage.ts';
 export * from './money.ts';
+export * from './notifications.ts';
 export * from './organization.ts';
 export * from './report-export.ts';
 export * from './reference-rates.ts';

@@ -34,6 +34,7 @@ export * from './receipt-corrections.ts';
 export * from './receipts.ts';
 export * from './saved-places.ts';
 export * from './saved-routes.ts';
+export * from './notifications.ts';
 export * from './schema.ts';
 export * from './sign-ins.ts';
 export * from './trips.ts';

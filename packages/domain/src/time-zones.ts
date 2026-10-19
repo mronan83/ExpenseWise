@@ -57,6 +57,11 @@ export function dateIn(at: Date, timeZone: string): IsoDate {
   return isoOf(y, m, d);
 }
 
+/** The hour on a zone's clock at a moment, 0 to 23. */
+export function hourIn(at: Date, timeZone: string): number {
+  return clock(at.getTime(), timeZone)[3] ?? 0;
+}
+
 /** A date a number of days on (or back, when negative). */
 export function addDays(day: IsoDate, days: number): IsoDate {
   const [y = 0, m = 1, d = 1] = assertIsoDate(day).split('-').map(Number);
