@@ -206,7 +206,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   mileage_routes: {
     about:
-      'The route behind a drive logged by its stops, one per drive, beside its mileage log (FR-CAP-04, ADR-0039). Whether it is measuring, measured or failed, with the reason in plain words when it failed; whether it is a round trip; and the measuring it waits for, the outbox event’s id, so a measurement made for stops since changed is never recorded. Once measured it keeps, copied on, the distance in whole metres (the sum of its legs, the way back included), the way back alone on a round trip, its miles in hundredths, the provider, the profile and when (NFR-DAT-04); it is never measured again unless its person changes its stops before it is submitted (Q33). The reason the miles claimed differ from those measured, or were entered by hand, is here too. Written by the member’s requests and by the measuring workflow, which acts for the system.',
+      'The route behind a drive logged by its stops, one per drive, beside its mileage log (FR-CAP-04, ADR-0039). Whether it is measuring, measured or failed, with the reason in plain words when it failed; whether it is a round trip; and the measuring it waits for, the outbox event’s id, so a measurement made for stops since changed is never recorded. Once measured it keeps, copied on, the distance in whole metres (the sum of its legs, the way back included), the way back alone on a round trip, its miles in hundredths, the provider, the profile and when (NFR-DAT-04); it is never measured again unless its person changes its stops before it is submitted (Q33). The reason the miles claimed differ from those measured, or were entered by hand, is here too. Written by the member’s requests and by the measuring workflow, which acts for the system. It keeps the name its person gave it, up to 80 characters, which its expense is listed and exported by; without one the expense goes by its start and end (FR-CAP-15).',
   },
   mileage_route_stops: {
     about:
@@ -639,8 +639,9 @@ export const RULES: readonly Rule[] = [
       'mileage_routes_problem_when_failed',
       'mileage_routes_distance_nonnegative',
       'mileage_routes_reason_length',
+      'mileage_routes_name_length',
     ],
-    refs: ['NFR-DAT-04', 'FR-CAP-04', 'Q33', 'ADR-0039'],
+    refs: ['NFR-DAT-04', 'FR-CAP-04', 'FR-CAP-15', 'Q33', 'ADR-0039'],
   },
   {
     rule: 'A route drive’s stops are in order, each place once, and a found or picked place is whole.',

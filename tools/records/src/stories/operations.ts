@@ -1506,4 +1506,55 @@ export const OPERATIONS_STORIES: readonly Story[] = [
     ],
     note: 'Your request of Oct 9 for a full brand; you chose direction A, Carbon, of three, and to keep the name, since the app won’t be sold. The guide is docs/brand.md (ADR-0049, #101).',
   },
+  {
+    id: 'US-UX-07',
+    title: 'Refresh a screen on my iPhone',
+    as: 'Alex, who opens ExpenseWise from the iPhone home screen between flights',
+    want: 'to refresh the screen I’m on, by pulling it down or with a button',
+    soThat: 'I see what just came in, such as a receipt I emailed, without closing the app',
+    feature: 'F-74',
+    requirements: ['NFR-UX-08'],
+    status: 'Delivered',
+    criteria: [
+      {
+        id: 'AC1',
+        given: 'any screen, at its top',
+        when: 'I pull it down far enough and let go',
+        then: 'it says “Let go to refresh”, then reloads, with what has changed and any new release',
+        decided: { by: 'owner', source: 'owner 2026-10-19' },
+        checks: [
+          'e2e/shell › refreshes the screen when pulled down from the top and let go, and not on a short pull',
+        ],
+      },
+      {
+        id: 'AC2',
+        given: 'any screen',
+        when: 'I tap the refresh button in its header',
+        then: 'it reloads the same way',
+        decided: { by: 'owner', source: 'Q56' },
+        checks: [
+          'e2e/shell › refreshes the screen from the Refresh button in its header, as the Home Screen app has no reload',
+        ],
+      },
+      {
+        id: 'AC3',
+        given: 'a pull that is short, starts in a field or an open dialog, or below the top',
+        when: 'I let go',
+        then: 'nothing reloads, so nothing I am typing is lost',
+        decided: { by: 'claude' },
+        checks: [
+          'e2e/shell › refreshes the screen when pulled down from the top and let go, and not on a short pull',
+        ],
+      },
+      {
+        id: 'AC4',
+        given: 'the button, in light or dark',
+        when: 'I use it by touch, keyboard or screen reader',
+        then: 'it is named Refresh, is a 44-point target tall, needs no drag (WCAG 2.5.1) and fits every screen’s header',
+        decided: { by: 'blueprint', source: 'design DP5' },
+        checks: ['e2e/signed-in'],
+      },
+    ],
+    note: 'Your requirement of Oct 19 and your answer to Q56, built in PR #90 (#111).',
+  },
 ];
