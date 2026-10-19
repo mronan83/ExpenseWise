@@ -10,7 +10,6 @@ import {
   SUGGEST_MIN_CHARS,
   type MemberRole,
   type MileageProblem,
-  type RouteDriveInput,
   type RouteProblem,
   type RouteStopInput,
 } from '@expensewise/domain';
@@ -36,21 +35,26 @@ import {
   recentPlaceView,
   routeDriveView,
   routeKeyStatus,
+  savedRouteView,
   suggestionView,
   type PickSealer,
 } from './route-mileage-views.ts';
 import {
   addPlaceRoute,
+  addRouteRoute,
   changePlaceRoute,
   changeRouteDriveRoute,
+  changeRouteRoute,
   claimRouteMilesRoute,
   deleteRouteKeyRoute,
   getRouteDriveRoute,
   getRouteKeyRoute,
   listPlacesRoute,
+  listRoutesRoute,
   logRouteDriveRoute,
   recentPlacesRoute,
   removePlaceRoute,
+  removeRouteRoute,
   setRouteKeyRoute,
   suggestPlacesRoute,
 } from './routes/route-mileage.ts';
@@ -114,6 +118,10 @@ export function registerRouteMileageRoutes(
     deleteRouteKeyRoute,
     suggestPlacesRoute,
     recentPlacesRoute,
+    listRoutesRoute,
+    addRouteRoute,
+    changeRouteRoute,
+    removeRouteRoute,
   ];
   for (const path of new Set(routes.map((r) => r.getRoutingPath()))) app.use(path, auth);
 
@@ -200,13 +208,11 @@ export function registerRouteMileageRoutes(
    * here, made up or from another organization, is refused, so a stop is only ever measured
    * from a place the server suggested, found or kept (Q53).
    */
-  const withPicks = (
+  const withPicks = <T extends { stops?: readonly (string | { address: string; pick: string })[] }>(
     orgId: string,
-    body: Omit<RouteDriveInput, 'stops'> & {
-      stops?: readonly (string | { address: string; pick: string })[];
-    },
-  ): RouteDriveInput => {
-    if (!body.stops) return body as RouteDriveInput;
+    body: T,
+  ): Omit<T, 'stops'> & { stops?: RouteStopInput[] } => {
+    if (!body.stops) return body as Omit<T, 'stops'>;
     const count = body.stops.length;
     const stops: RouteStopInput[] = body.stops.map((stop, i) => {
       if (typeof stop === 'string') return stop;
@@ -406,6 +412,69 @@ export function registerRouteMileageRoutes(
     const who = await suggesting(c.var.identity.userId);
     const places = await drives().recentPlaces(who.orgId, who.memberId);
     return c.json({ places: places.map((p) => recentPlaceView(p, sealer(who.orgId))) }, 200);
+  });
+
+  const routeTaken = () =>
+    new ProblemError(409, 'name-taken', 'You keep a route by that name already', {
+      code: 'name_taken',
+    });
+  const noRoute = () => new ProblemError(404, 'not-found', 'No such route', { code: 'not_found' });
+  const routeAnswer = (
+    who: Membership,
+    result: Awaited<ReturnType<RouteMileageStore['saveRoute']>>,
+  ) => {
+    if (result.status === 'invalid') throw invalid(result.problem);
+    if (result.status === 'taken') throw routeTaken();
+    if (result.status === 'missing') throw noRoute();
+    return savedRouteView(result.route, sealer(who.orgId));
+  };
+
+  app.openapi(listRoutesRoute, async (c) => {
+    const who = await member(c.var.identity.userId);
+    const routes = await drives().routes(who.orgId, who.memberId);
+    return c.json({ routes: routes.map((r) => savedRouteView(r, sealer(who.orgId))) }, 200);
+  });
+
+  app.openapi(addRouteRoute, async (c) => {
+    const caller = c.var.identity;
+    const who = await member(caller.userId);
+    const result = await drives().saveRoute(
+      who.orgId,
+      who.memberId,
+      null,
+      withPicks(who.orgId, c.req.valid('json')),
+      caller.userId,
+    );
+    return c.json(routeAnswer(who, result), 201);
+  });
+
+  app.openapi(changeRouteRoute, async (c) => {
+    const caller = c.var.identity;
+    const who = await member(caller.userId);
+    const result = await drives().saveRoute(
+      who.orgId,
+      who.memberId,
+      c.req.valid('param').routeId,
+      withPicks(who.orgId, c.req.valid('json')),
+      caller.userId,
+    );
+    return c.json(routeAnswer(who, result), 200);
+  });
+
+  app.openapi(removeRouteRoute, async (c) => {
+    const caller = c.var.identity;
+    const who = await member(caller.userId);
+    if (
+      !(await drives().removeRoute(
+        who.orgId,
+        who.memberId,
+        c.req.valid('param').routeId,
+        caller.userId,
+      ))
+    ) {
+      throw noRoute();
+    }
+    return c.body(null, 204);
   });
 
   app.openapi(getRouteKeyRoute, async (c) => {

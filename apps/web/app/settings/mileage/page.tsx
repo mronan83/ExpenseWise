@@ -10,9 +10,11 @@ import { MILEAGE_FLAG } from '../../../lib/mileage';
 import {
   PLACE_NAME_MAX,
   ROUTE_ADDRESS_MAX,
+  ROUTE_NAME_MAX,
   ROUTE_MILEAGE_FLAG,
   type RouteKeyStatus,
   type SavedPlace,
+  type SavedRoute,
 } from '../../../lib/route-mileage';
 import { supabase } from '../../../lib/supabase';
 import { SettingsNav } from '../nav';
@@ -34,6 +36,8 @@ type Load =
       /** The key, or null for a member who isn't an owner or finance admin. */
       key: RouteKeyStatus | null;
       places: SavedPlace[];
+      /** The person's saved routes (FR-CAP-16). */
+      routeList: SavedRoute[];
     };
 
 type Message = { tone: 'ok' | 'warn'; text: string } | null;
@@ -64,7 +68,7 @@ export default function MileageSettingsPage() {
       if (!on(ROUTE_MILEAGE_FLAG)) {
         setLoad(
           on(MILEAGE_FLAG)
-            ? { state: 'ready', routes: false, rates: true, key: null, places: [] }
+            ? { state: 'ready', routes: false, rates: true, key: null, places: [], routeList: [] }
             : { state: 'off' },
         );
         return;
@@ -76,8 +80,11 @@ export default function MileageSettingsPage() {
           throw error;
         },
       );
-      const { places } = await api<{ places: SavedPlace[] }>('/v1/me/places');
-      setLoad({ state: 'ready', routes: true, rates: on(MILEAGE_FLAG), key, places });
+      const [{ places }, { routes: routeList }] = await Promise.all([
+        api<{ places: SavedPlace[] }>('/v1/me/places'),
+        api<{ routes: SavedRoute[] }>('/v1/me/routes'),
+      ]);
+      setLoad({ state: 'ready', routes: true, rates: on(MILEAGE_FLAG), key, places, routeList });
     } catch (error) {
       setLoad({ state: 'error', message: describeError(error) });
     }
@@ -128,6 +135,10 @@ export default function MileageSettingsPage() {
           <>
             <RouteMeasuring status={load.key} onChange={(key) => setLoad({ ...load, key })} />
             <SavedPlaces places={load.places} onChange={(places) => setLoad({ ...load, places })} />
+            <SavedRoutes
+              routes={load.routeList}
+              onChange={(routeList) => setLoad({ ...load, routeList })}
+            />
           </>
         ) : null}
       </main>
@@ -451,6 +462,151 @@ function SavedPlaces({
           </button>
         </div>
       </form>
+      <p
+        role="status"
+        className={`min-h-5 text-sm ${message?.tone === 'warn' ? 'text-warn' : 'text-ok'}`}
+      >
+        {message?.text}
+      </p>
+    </section>
+  );
+}
+
+/**
+ * A person's saved routes (FR-CAP-16), to log a drive from: renamed or removed here, saved
+ * from a drive's page. A drive logged from one keeps what it was logged with.
+ */
+function SavedRoutes({
+  routes,
+  onChange,
+}: {
+  routes: SavedRoute[];
+  onChange: (next: SavedRoute[]) => void;
+}) {
+  const [editing, setEditing] = useState<string | null>(null);
+  const [message, setMessage] = useState<Message>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function run(action: () => Promise<void>) {
+    setBusy(true);
+    setMessage(null);
+    try {
+      await action();
+    } catch (error) {
+      setMessage({ tone: 'warn', text: describeError(error) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const rename = (id: string) => (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    void run(async () => {
+      const route = await api<SavedRoute>(`/v1/me/routes/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ name: formText(data, 'name') }),
+      });
+      onChange(
+        routes
+          .map((r) => (r.id === id ? route : r))
+          .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })),
+      );
+      setEditing(null);
+      setMessage({ tone: 'ok', text: `${route.name} is saved.` });
+    });
+  };
+
+  const remove = (route: SavedRoute) =>
+    void run(async () => {
+      await api(`/v1/me/routes/${route.id}`, { method: 'DELETE' });
+      onChange(routes.filter((r) => r.id !== route.id));
+      setMessage({ tone: 'ok', text: `${route.name} is removed.` });
+    });
+
+  const field = 'w-full min-w-0 rounded-lg border border-rule bg-paper px-3 py-2 text-base';
+  /** "1520 Harney St → Eppley Airfield · 3 stops, round trip". */
+  const summary = (route: SavedRoute) => {
+    const first = (address: string) => address.split(',')[0]!.trim();
+    const start = route.stops[0]?.address ?? '';
+    const end = route.stops[route.stops.length - 1]?.address ?? '';
+    return `${first(start)} → ${first(end)} · ${route.stops.length} stops${route.roundTrip ? ', round trip' : ''}`;
+  };
+
+  return (
+    <section
+      aria-labelledby="routes-title"
+      className="flex flex-col gap-3 rounded-xl border border-rule bg-sheet p-5 text-sm"
+    >
+      <h2 id="routes-title" className="text-base font-semibold">
+        Saved routes
+      </h2>
+      <p className="text-ink-2">
+        Routes you drive often, to log a drive from with its stops filled in. Save one from a
+        drive’s page with Save as a route. Only your own.
+      </p>
+      {routes.length === 0 ? <p className="text-ink-2">No routes saved yet.</p> : null}
+      <ul className="flex flex-col gap-3">
+        {routes.map((route) =>
+          editing === route.id ? (
+            <li key={route.id}>
+              <form onSubmit={rename(route.id)} className="flex flex-col gap-2">
+                <label className="flex min-w-0 flex-col gap-1 text-xs font-medium text-ink-2">
+                  Name
+                  <input
+                    name="name"
+                    required
+                    maxLength={ROUTE_NAME_MAX}
+                    autoComplete="off"
+                    defaultValue={route.name}
+                    className={field}
+                  />
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="submit"
+                    disabled={busy}
+                    className="rounded-lg bg-carbon px-4 py-2 text-sm font-semibold text-carbon-ink disabled:opacity-60"
+                  >
+                    Save
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditing(null)}
+                    className="rounded-lg border border-rule px-4 py-2 text-sm font-semibold"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            </li>
+          ) : (
+            <li key={route.id} className="flex flex-col gap-1">
+              <span className="font-semibold break-words">{route.name}</span>
+              <span className="break-words text-ink-2">{summary(route)}</span>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditing(route.id)}
+                  aria-label={`Rename ${route.name}`}
+                  className="tap rounded-lg border border-rule px-3 py-1.5 text-xs font-semibold"
+                >
+                  Rename
+                </button>
+                <button
+                  type="button"
+                  onClick={() => remove(route)}
+                  disabled={busy}
+                  aria-label={`Remove ${route.name}`}
+                  className="tap rounded-lg border border-rule px-3 py-1.5 text-xs font-semibold disabled:opacity-60"
+                >
+                  Remove
+                </button>
+              </div>
+            </li>
+          ),
+        )}
+      </ul>
       <p
         role="status"
         className={`min-h-5 text-sm ${message?.tone === 'warn' ? 'text-warn' : 'text-ok'}`}

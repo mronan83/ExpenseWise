@@ -23,6 +23,7 @@ import {
 } from '../src/mileage-routes.ts';
 import { deleteRouteKey, getRouteKey, saveRouteKey } from '../src/route-keys.ts';
 import { listSavedPlaces, removePlace, savePlace } from '../src/saved-places.ts';
+import { listSavedRoutes, removeRoute, saveRoute } from '../src/saved-routes.ts';
 import {
   auditEvents,
   expenses,
@@ -33,6 +34,8 @@ import {
   outboxEvents,
   routeServiceKeys,
   savedPlaces,
+  savedRoutes,
+  savedRouteStops,
 } from '../src/schema.ts';
 import { createTrip } from '../src/trips.ts';
 import { connectAs, expectDbError, seedOrg } from './helpers.ts';
@@ -791,5 +794,129 @@ describe('the organization’s route key (Q31)', () => {
       'route_service_key.removed',
     ]);
     expect(JSON.stringify(trail)).not.toMatch(/sealed/);
+  });
+});
+
+describe('saved routes (FR-CAP-16, Q55)', () => {
+  const acme = { label: 'Acme HQ, Omaha, NE, USA', longitude: '-95.932468', latitude: '41.261511' };
+
+  it('keeps a member’s routes, each name once, with their stops and picked places, the trail without addresses', async () => {
+    const w = await workspace('saved-routes');
+    const as = <T>(work: Parameters<typeof withOrg<T>>[2]) => w.as(w.owner, work);
+    const saved = await as((tx) =>
+      saveRoute(
+        tx,
+        w.org.orgId,
+        w.owner.memberId,
+        null,
+        {
+          name: 'Office → Acme',
+          stops: ['1520 Harney St, Omaha, NE', { address: 'Acme HQ, 1200 Dodge St', pin: acme }],
+          roundTrip: true,
+        },
+        w.org.userId,
+      ),
+    );
+    if (saved.status !== 'saved') throw new Error(saved.status);
+    expect(await as((tx) => listSavedRoutes(tx, w.owner.memberId))).toEqual([
+      {
+        id: saved.route.id,
+        name: 'Office → Acme',
+        roundTrip: true,
+        stops: [
+          { address: '1520 Harney St, Omaha, NE', pin: null },
+          { address: 'Acme HQ, 1200 Dodge St', pin: acme },
+        ],
+      },
+    ]);
+    const save = (routeId: string | null, input: Parameters<typeof saveRoute>[4]) =>
+      as((tx) => saveRoute(tx, w.org.orgId, w.owner.memberId, routeId, input, w.org.userId));
+    expect(await save(null, { name: 'office → ACME', stops: ['A', 'B'] })).toEqual({
+      status: 'taken',
+    });
+    expect(await save(saved.route.id, { name: 'Office → Acme' })).toMatchObject({
+      status: 'unchanged',
+    });
+    const changed = await save(saved.route.id, {
+      name: 'Acme loop',
+      stops: ['1520 Harney St, Omaha, NE', 'Acme HQ, 1200 Dodge St', 'Eppley Airfield'],
+    });
+    expect(changed).toMatchObject({ status: 'saved', route: { name: 'Acme loop' } });
+    expect((await as((tx) => listSavedRoutes(tx, w.owner.memberId)))[0]?.stops).toHaveLength(3);
+
+    expect(
+      await as((tx) =>
+        removeRoute(tx, w.org.orgId, w.owner.memberId, saved.route.id, w.org.userId),
+      ),
+    ).toBe(true);
+    // Its stops go with it.
+    expect(await w.inOrg((tx) => tx.select().from(savedRouteStops))).toEqual([]);
+    const trail = await w.audit(saved.route.id);
+    expect(trail.map((e) => e.action)).toEqual([
+      'saved_route.added',
+      'saved_route.changed',
+      'saved_route.removed',
+    ]);
+    expect(trail[1]?.payload).toMatchObject({
+      name: { from: 'Office → Acme', to: 'Acme loop' },
+      stops: 3,
+      stopsChanged: true,
+    });
+    expect(JSON.stringify(trail)).not.toMatch(/Harney|Dodge/);
+  });
+
+  it('shows and changes only a member’s own routes, and keeps a route’s rules in the database', async () => {
+    const w = await workspace('saved-routes-own');
+    const jordan = await w.colleague();
+    const theirs = await w.as(jordan, (tx) =>
+      saveRoute(
+        tx,
+        w.org.orgId,
+        jordan.memberId,
+        null,
+        { name: 'Mine', stops: ['A', 'B'] },
+        w.org.userId,
+      ),
+    );
+    if (theirs.status !== 'saved') throw new Error(theirs.status);
+    expect(await w.as(w.owner, (tx) => listSavedRoutes(tx, w.owner.memberId))).toEqual([]);
+    expect(
+      await w.as(w.owner, (tx) =>
+        saveRoute(
+          tx,
+          w.org.orgId,
+          w.owner.memberId,
+          theirs.route.id,
+          { name: 'Taken' },
+          w.org.userId,
+        ),
+      ),
+    ).toEqual({ status: 'missing' });
+    expect(
+      await w.as(w.owner, (tx) =>
+        removeRoute(tx, w.org.orgId, w.owner.memberId, theirs.route.id, w.org.userId),
+      ),
+    ).toBe(false);
+    await expectDbError(
+      w.as(w.owner, (tx) =>
+        tx.update(savedRoutes).set({ name: 'Taken' }).where(eq(savedRoutes.id, theirs.route.id)),
+      ),
+      /own_records/,
+    );
+    await expectDbError(
+      w.inOrg((tx) =>
+        tx.update(savedRoutes).set({ name: '' }).where(eq(savedRoutes.id, theirs.route.id)),
+      ),
+      /saved_routes_name_length/,
+    );
+    await expectDbError(
+      w.inOrg((tx) =>
+        tx
+          .update(savedRouteStops)
+          .set({ label: 'Somewhere' })
+          .where(eq(savedRouteStops.routeId, theirs.route.id)),
+      ),
+      /saved_route_stops_place_whole/,
+    );
   });
 });

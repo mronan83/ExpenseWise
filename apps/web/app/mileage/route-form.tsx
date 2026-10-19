@@ -15,8 +15,10 @@ import {
   typedStop,
   WHAT_IS_SENT,
   WHAT_IS_SENT_WITH_SUGGESTIONS,
+  savedRouteStops,
   type RecentPlace,
   type SavedPlace,
+  type SavedRoute,
   type StopDraft,
 } from '../../lib/route-mileage';
 import { PlaceField } from './place-field';
@@ -79,6 +81,7 @@ export function RouteForm({
   const [error, setError] = useState<string | null>(null);
   const [places, setPlaces] = useState<SavedPlace[]>([]);
   const [recent, setRecent] = useState<RecentPlace[]>([]);
+  const [routes, setRoutes] = useState<SavedRoute[]>([]);
   const suggest = useFeatures()(PLACE_SUGGESTIONS_FLAG);
   // A key per stop, so a moved stop keeps its own input.
   const next = useRef(initial.stops.length);
@@ -97,6 +100,27 @@ export function RouteForm({
       live = false;
     };
   }, []);
+
+  useEffect(() => {
+    let live = true;
+    void api<{ routes: SavedRoute[] }>('/v1/me/routes').then(
+      (found) => {
+        if (live) setRoutes(found.routes);
+      },
+      // Without saved routes the stops are typed: nothing to say.
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  /** Fills the drive from a saved route: its name, stops and round trip (FR-CAP-16). */
+  const fromRoute = (route: SavedRoute) => {
+    const stops = savedRouteStops(route);
+    setDraft({ ...draft, name: route.name, stops, roundTrip: route.roundTrip });
+    setKeys(stops.map(() => next.current++));
+  };
 
   useEffect(() => {
     if (!suggest) return;
@@ -197,6 +221,26 @@ export function RouteForm({
             />
           </label>
         </>
+      ) : null}
+      {routes.length > 0 ? (
+        <label className={label}>
+          Start from a saved route
+          <select
+            value=""
+            onChange={(e) => {
+              const route = routes.find((r) => r.id === e.target.value);
+              if (route) fromRoute(route);
+            }}
+            className={field}
+          >
+            <option value="">Choose a route…</option>
+            {routes.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+        </label>
       ) : null}
       <label className={label}>
         Name (optional)

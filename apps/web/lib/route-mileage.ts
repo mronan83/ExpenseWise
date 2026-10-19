@@ -62,6 +62,22 @@ export interface RouteDrive extends MileageEntry {
   route: Route;
 }
 
+/** A route a person saved to log drives from (FR-CAP-16): its name, stops and round trip. */
+export interface SavedRoute {
+  id: string;
+  name: string;
+  roundTrip: boolean;
+  stops: { address: string; place: StopPlace | null; pick: string | null }[];
+}
+
+/** A saved route's stops as the form takes them: picked stops stay picked. */
+export const savedRouteStops = (route: SavedRoute): StopDraft[] =>
+  route.stops.map((s) =>
+    s.pick && s.place
+      ? { address: s.address, pick: s.pick, place: s.place }
+      : { address: s.address, pick: null, place: null },
+  );
+
 /** A place a person keeps to pick for a stop: only its address is ever used. */
 export interface SavedPlace {
   id: string;

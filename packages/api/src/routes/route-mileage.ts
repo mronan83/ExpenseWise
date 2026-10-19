@@ -2,6 +2,7 @@ import { createRoute, z } from '@hono/zod-openapi';
 import {
   ChangePlaceSchema,
   ChangeRouteDriveSchema,
+  ChangeRouteSchema,
   ClaimRouteMilesSchema,
   LogRouteDriveSchema,
   PlaceSuggestionListSchema,
@@ -10,7 +11,10 @@ import {
   RouteKeyStatusSchema,
   SavedPlaceListSchema,
   SavedPlaceSchema,
+  SavedRouteListSchema,
+  SavedRouteSchema,
   SavePlaceSchema,
+  SaveRouteSchema,
   SetRouteKeySchema,
   SuggestPlacesSchema,
 } from '../route-mileage-schemas.ts';
@@ -252,6 +256,91 @@ export const removePlaceRoute = createRoute({
     204: { description: 'Removed.' },
     ...common,
     404: problem(`No such place of the caller’s, or ${OFF.toLowerCase()}.`),
+  },
+});
+
+const routeParam = z.object({
+  routeId: z
+    .string()
+    .uuid()
+    .openapi({ param: { name: 'routeId', in: 'path' } }),
+});
+
+const savedRoute = (description: string) => ({
+  description,
+  content: { 'application/json': { schema: SavedRouteSchema } },
+});
+
+export const listRoutesRoute = createRoute({
+  method: 'get',
+  path: '/v1/me/routes',
+  tags: ['Mileage'],
+  summary: 'The caller’s saved routes',
+  description:
+    'FR-CAP-16. Each with its stops in order and a pick for each stop picked from the suggestions, to log a drive from it.',
+  ...secured,
+  responses: {
+    200: {
+      description: 'By name.',
+      content: { 'application/json': { schema: SavedRouteListSchema } },
+    },
+    ...common,
+    404: problem(`${OFF}.`),
+  },
+});
+
+export const addRouteRoute = createRoute({
+  method: 'post',
+  path: '/v1/me/routes',
+  tags: ['Mileage'],
+  summary: 'Save a route to log drives from',
+  description:
+    'FR-CAP-16. Its name, stops and round trip; a stop picked from the suggestions keeps its place (Q53). Its name is never sent anywhere.',
+  ...secured,
+  request: {
+    body: { content: { 'application/json': { schema: SaveRouteSchema } }, required: true },
+  },
+  responses: {
+    201: savedRoute('The route.'),
+    ...common,
+    404: problem(`${OFF}.`),
+    409: problem('The caller keeps a route of that name already (name_taken).'),
+    422: problem('The name or a stop is not valid; field names which.'),
+  },
+});
+
+export const changeRouteRoute = createRoute({
+  method: 'patch',
+  path: '/v1/me/routes/{routeId}',
+  tags: ['Mileage'],
+  summary: 'Rename a saved route or change its stops',
+  description: 'Drives already logged from it keep what they were logged with.',
+  ...secured,
+  request: {
+    params: routeParam,
+    body: { content: { 'application/json': { schema: ChangeRouteSchema } }, required: true },
+  },
+  responses: {
+    200: savedRoute('The route as it is now.'),
+    ...common,
+    404: problem(`No such route of the caller’s, or ${OFF.toLowerCase()}.`),
+    409: problem('The caller keeps a route of that name already (name_taken).'),
+    422: problem('The name or a stop is not valid; field names which.'),
+  },
+});
+
+export const removeRouteRoute = createRoute({
+  method: 'delete',
+  path: '/v1/me/routes/{routeId}',
+  tags: ['Mileage'],
+  summary: 'Remove a saved route',
+  description: 'Drives logged from it keep what they were logged with.',
+  ...secured,
+  request: { params: routeParam },
+  responses: {
+    204: { description: 'Removed.' },
+    ...common,
+    404: problem(`No such route of the caller’s, or ${OFF.toLowerCase()}.`),
   },
 });
 

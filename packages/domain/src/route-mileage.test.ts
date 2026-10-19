@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   applyPlaceInput,
   applyRouteDriveInput,
+  applySavedRouteInput,
   checkRouteStops,
   isStopPin,
   PLACE_LABEL_MAX,
@@ -323,6 +324,47 @@ describe('saved places', () => {
     expect(applyPlaceInput(null, { name: 'Home' })).toMatchObject({
       ok: false,
       error: { field: 'address' },
+    });
+  });
+});
+
+describe('a saved route (FR-CAP-16, Q55)', () => {
+  const pin = { label: 'Acme HQ, Omaha, NE, USA', longitude: '-95.932468', latitude: '41.261511' };
+  it('keeps a name, stops typed or picked, and a round trip', () => {
+    const saved = applySavedRouteInput(null, {
+      name: '  Office   to Acme ',
+      stops: ['1520 Harney St, Omaha, NE', { address: 'Acme HQ, 1200 Dodge St', pin }],
+      roundTrip: true,
+    });
+    expect(saved).toEqual({
+      ok: true,
+      value: {
+        name: 'Office to Acme',
+        stops: ['1520 Harney St, Omaha, NE', 'Acme HQ, 1200 Dodge St'],
+        pins: [null, pin],
+        roundTrip: true,
+      },
+    });
+    if (!saved.ok) return;
+    const renamed = applySavedRouteInput(saved.value, { name: 'Acme loop' });
+    expect(renamed.ok && renamed.value).toMatchObject({ name: 'Acme loop', pins: [null, pin] });
+  });
+
+  it('needs a name of up to the most characters, and a start and an end', () => {
+    expect(applySavedRouteInput(null, { name: ' ', stops: ['A', 'B'] })).toMatchObject({
+      ok: false,
+      error: { field: 'name' },
+    });
+    expect(
+      applySavedRouteInput(null, { name: 'x'.repeat(ROUTE_NAME_MAX + 1), stops: ['A', 'B'] }),
+    ).toMatchObject({ ok: false, error: { field: 'name' } });
+    expect(applySavedRouteInput(null, { name: 'Office', stops: ['A'] })).toMatchObject({
+      ok: false,
+      error: { field: 'stops' },
+    });
+    expect(applySavedRouteInput(null, { name: 'Office' })).toMatchObject({
+      ok: false,
+      error: { field: 'stops' },
     });
   });
 });
