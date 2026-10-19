@@ -9,7 +9,11 @@ import {
   EXPENSE_STATUSES,
   LINE_KINDS,
   MEMBER_ROLES,
+  NOTIFICATION_BODY_MAX,
+  NOTIFICATION_KINDS,
+  NOTIFICATION_TITLE_MAX,
   ORGANIZATION_SIZES,
+  PUSH_SEND_TRIES,
   REPORT_STATUSES,
   ROUTE_PROVIDERS,
   ROUTE_STATUSES,
@@ -67,6 +71,7 @@ export const aiProvider = pgEnum('ai_provider', ['anthropic', 'openai']);
 export const aiAuthScheme = pgEnum('ai_auth_scheme', ['api_key', 'bearer']);
 export const routeProvider = pgEnum('route_provider', ROUTE_PROVIDERS);
 export const routeStatus = pgEnum('route_status', ROUTE_STATUSES);
+export const notificationKind = pgEnum('notification_kind', NOTIFICATION_KINDS);
 
 const id = () => uuid('id').primaryKey().$defaultFn(newId);
 const createdAt = () => timestamp('created_at', { withTimezone: true }).notNull().defaultNow();
@@ -1477,6 +1482,139 @@ export const savedRouteStops = pgTable(
       'saved_route_stops_coordinates_range',
       sql`${t.longitude} BETWEEN -180 AND 180 AND ${t.latitude} BETWEEN -90 AND 90`,
     ),
+  ],
+);
+
+/**
+ * Where a member's notifications go (FR-PLT-12, ADR-0053): one browser's push subscription,
+ * the app on an iPhone's Home Screen most often. The address is at a push service, and the
+ * keys encrypt what is sent so the service can't read it. Only its member sees it, not even
+ * an owner: the address and keys are enough to push to that device.
+ */
+export const pushSubscriptions = pgTable(
+  'push_subscriptions',
+  {
+    id: id(),
+    orgId: orgId(),
+    memberId: uuid('member_id').notNull(),
+    endpoint: text('endpoint').notNull(),
+    /** The browser's P-256 public key and authentication secret, base64url. */
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    /** The device's time zone, for the morning reminder (R-PUSH-REMINDER); null if not known. */
+    timeZone: text('time_zone'),
+    createdAt: createdAt(),
+    /** When a push last reached its service. */
+    lastSentAt: timestamp('last_sent_at', { withTimezone: true }),
+  },
+  (t) => [
+    unique('push_subscriptions_org_id_id_key').on(t.orgId, t.id),
+    unique('push_subscriptions_endpoint_key').on(t.orgId, t.memberId, t.endpoint),
+    foreignKey({
+      name: 'push_subscriptions_member_fk',
+      columns: [t.orgId, t.memberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    check(
+      'push_subscriptions_endpoint_https',
+      sql`${t.endpoint} LIKE 'https://%' AND length(${t.endpoint}) <= 1024`,
+    ),
+    check(
+      'push_subscriptions_keys_length',
+      sql`length(${t.p256dh}) = 87 AND length(${t.auth}) = 22`,
+    ),
+  ],
+);
+
+/**
+ * A kind of notification a member switched off or back on (FR-PLT-12). A kind with no row is
+ * on, so everything is sent until the person says otherwise.
+ */
+export const notificationPreferences = pgTable(
+  'notification_preferences',
+  {
+    id: id(),
+    orgId: orgId(),
+    memberId: uuid('member_id').notNull(),
+    kind: notificationKind('kind').notNull(),
+    enabled: boolean('enabled').notNull(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('notification_preferences_org_id_id_key').on(t.orgId, t.id),
+    unique('notification_preferences_kind_key').on(t.orgId, t.memberId, t.kind),
+    foreignKey({
+      name: 'notification_preferences_member_fk',
+      columns: [t.orgId, t.memberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+  ],
+);
+
+/**
+ * A notification made for a member (FR-PLT-12): what it says and opens, never an amount (Q58).
+ * Its key makes it once per person, so a change is never notified twice and a report is
+ * reminded of once a day. It is sent with the others made at the same time as one push, and
+ * kept 90 days (R-PUSH-KEEP).
+ */
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: id(),
+    orgId: orgId(),
+    memberId: uuid('member_id').notNull(),
+    kind: notificationKind('kind').notNull(),
+    dedupeKey: text('dedupe_key').notNull(),
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    /** Where tapping it goes, in the app: a path. */
+    url: text('url').notNull(),
+    createdAt: createdAt(),
+    /** When it reached the push service; null while it waits or after it was given up. */
+    sentAt: timestamp('sent_at', { withTimezone: true }),
+    /** Tries so far; given up after three (R-PUSH-TRIES). */
+    tries: integer('tries').notNull().default(0),
+  },
+  (t) => [
+    unique('notifications_org_id_id_key').on(t.orgId, t.id),
+    unique('notifications_dedupe_key').on(t.orgId, t.memberId, t.dedupeKey),
+    index('notifications_unsent_idx')
+      .on(t.orgId, t.createdAt)
+      .where(sql`sent_at IS NULL`),
+    foreignKey({
+      name: 'notifications_member_fk',
+      columns: [t.orgId, t.memberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    check(
+      'notifications_text_length',
+      sql`length(${t.title}) BETWEEN 1 AND ${sql.raw(String(NOTIFICATION_TITLE_MAX))} AND length(${t.body}) BETWEEN 1 AND ${sql.raw(String(NOTIFICATION_BODY_MAX))}`,
+    ),
+    check('notifications_url_path', sql`${t.url} LIKE '/%' AND ${t.url} NOT LIKE '//%'`),
+    check(
+      'notifications_tries_range',
+      sql`${t.tries} BETWEEN 0 AND ${sql.raw(String(PUSH_SEND_TRIES))}`,
+    ),
+  ],
+);
+
+/**
+ * How far an organization's audit trail has been read for notifications (ADR-0053): the last
+ * sequence the sweep looked at. Made when its first member allows notifications, at the end of
+ * the trail then, so nothing from before is notified.
+ */
+export const pushCursors = pgTable(
+  'push_cursors',
+  {
+    id: id(),
+    orgId: orgId(),
+    sequence: bigint('sequence', { mode: 'number' }).notNull(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('push_cursors_org_id_id_key').on(t.orgId, t.id),
+    unique('push_cursors_org_key').on(t.orgId),
+    check('push_cursors_sequence_range', sql`${t.sequence} >= 0`),
   ],
 );
 

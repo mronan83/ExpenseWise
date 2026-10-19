@@ -23,7 +23,12 @@ const config: NextConfig = {
     '@expensewise/storage',
     '@expensewise/workflows',
   ],
-  headers: () => Promise.resolve([{ source: '/:path*', headers: securityHeaders }]),
+  headers: () =>
+    Promise.resolve([
+      { source: '/:path*', headers: securityHeaders },
+      // The service worker that shows notifications is checked for a new copy on every load.
+      { source: '/sw.js', headers: [{ key: 'Cache-Control', value: 'no-cache' }] },
+    ]),
 };
 
 // Error tracking (Sentry). Source maps upload only when SENTRY_AUTH_TOKEN is set; without it

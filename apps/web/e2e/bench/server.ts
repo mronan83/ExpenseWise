@@ -28,6 +28,7 @@ import {
   dbMileageRateStore,
   dbMileageStore,
   dbModelSettingsStore,
+  dbNotificationStore,
   dbReimbursementStore,
   dbPeopleStore,
   dbReportStore,
@@ -37,6 +38,7 @@ import {
   dbUnfiledEmailStore,
   dbWorkspaceStore,
   ORG_FEATURE_KEYS,
+  vapidKeys,
 } from '@expensewise/api';
 import {
   createDatabase,
@@ -382,6 +384,9 @@ const app = createHttpApp({
   modelSettings: dbModelSettingsStore(db),
   reimbursement: dbReimbursementStore(db),
   emails: dbUnfiledEmailStore(db),
+  // A device is allowed for real; nothing is sent from the bench, which runs no sweep.
+  notifications: dbNotificationStore(db),
+  pushPublicKey: vapidKeys('bench-only-secret-0123456789').publicKey,
   files: store,
   dispatch,
   secrets: createSecretBox('bench-only-secret-0123456789'),

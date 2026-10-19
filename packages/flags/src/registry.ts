@@ -173,6 +173,15 @@ export const FLAGS = {
       'lines on, a whole purchase can be left out of the claim with a reason (FR-INT-23, ' +
       'FR-EXP-20, #96). A receipt read before is grouped when read again.',
   },
+  'notifications.push': {
+    name: 'Notifications',
+    description:
+      'Push notifications on the phone, to the app on its Home Screen: a receipt emailed in and ' +
+      'filed, a receipt or email needing a look, a trip put on its report, a report closed or ' +
+      'ready to submit, a report to approve, one approved or come back, a statement needing a ' +
+      'look and a drive that couldn’t be measured. Each person allows them in Settings › ' +
+      'Notifications and switches each kind; what and where, never an amount (FR-PLT-12, #112).',
+  },
   // The operator's switch per AI model (FR-INT-16, US-READ-18). Unlike a feature, it acts
   // only when FLAG_OVERRIDES turns it off: then that model reads no organization's receipts,
   // whatever each has chosen. Unset or on, each organization decides. See modelStopped().

@@ -68,6 +68,12 @@ export const DOMAINS: readonly Domain[] = [
     ],
   },
   {
+    name: 'Notifications',
+    about:
+      'Push notifications to a person’s phone (FR-PLT-12, ADR-0053): the devices they allowed, the kinds they switched off, each notification made for them and whether it was sent, and how far each organization’s audit trail has been read for them.',
+    tables: ['push_subscriptions', 'notification_preferences', 'notifications', 'push_cursors'],
+  },
+  {
     name: 'Card statements',
     about:
       'A member’s corporate card: each statement or downloaded list they brought in, and every transaction on it, kept once, matched to the expense it paid for or set aside with why (FR-CAP-10, FR-INT-24, ADR-0046).',
@@ -226,6 +232,22 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
     about:
       'A saved route’s stops in order, the start at 0, each an address and, for one picked from the suggestions, the place it is measured from, its name and point to six places (Q53). Its member’s own, as its route is, and removed with it.',
   },
+  push_subscriptions: {
+    about:
+      'A device a member allowed notifications on, most often ExpenseWise on an iPhone’s Home Screen: its push service’s address, the browser’s P-256 key and authentication secret, which encrypt each push so the service can’t read it, the device’s time zone for the morning reminder, and when a push last reached it. Only at a push service’s address, over HTTPS; up to ten a member, the oldest going past that (R-PUSH-DEVICES). Removed when the push service says it has ended. The member’s alone: the address and keys are enough to push to that phone, so not even an owner, a finance admin or an auditor sees another’s (own_only, beside the own-records rules). The audit trail names the push service, never the address.',
+  },
+  notification_preferences: {
+    about:
+      'A kind of notification a member switched off, or back on. A kind with no row is on. The member’s alone, as their devices are; each switch is audited.',
+  },
+  notifications: {
+    about:
+      'A notification made for a member: its kind, what it says and the path in the app it opens, never an amount (Q58); titles up to 80 characters and bodies up to 200. Its key is unique for the member, so a change is notified once and a report reminded of once a day. Sent with the others waiting for the member as one push, then marked sent; tried three times at most (R-PUSH-TRIES) within a day, and kept 90 days (R-PUSH-KEEP). The member’s alone.',
+  },
+  push_cursors: {
+    about:
+      'How far an organization’s audit trail has been read for notifications: the last sequence the sweep looked at. Made at the end of the trail when the organization’s first device is allowed, so nothing from before is notified; only the sweep (no member) moves it on.',
+  },
   reports: {
     about:
       'A member’s claim for reimbursement: the trips and local expenses that point at it, when it closes itself (day 28, later if reopened), and when it closed. Open, then closed by the person or on day 28, reopenable until submitted; with approval on, submitted by its member and waiting for approval, then approved, or returned and open again (FR-EXP-05, FR-EXP-12, ADR-0029, ADR-0043). One that has been through approval is never dropped. Its currency is the one it is reimbursed in: while currency conversion is on, its member’s, which it opens in and follows until it is submitted; otherwise the organization’s home currency (FR-EXP-13, ADR-0034).',
@@ -304,6 +326,8 @@ export const FUNCTIONS: Readonly<Record<string, string>> = {
     'Which organizations have amounts to convert at a moment: an open or closed report in another currency than its member’s, or an amount on one in another currency than the report’s with no conversion recorded for exactly it, its purchase date before that day. Only organizations whose owner switched currency conversion on count, unless the server’s override has it on for all. The hourly sweep asks it outside any organization; it runs as its owner and answers with organization ids only (ADR-0034).',
   report_work_due:
     'Which organizations have report work due at a moment: a trip or local expense whose time to join a report has come, an open report on its day 28, or one with nothing to claim that has never been through approval. The 24 hours are counted in the organization’s time zone when it keeps one, and at UTC−12 otherwise; it reads the zone whether or not the feature is on, so it may name an organization a few hours early, never late, and the run inside finds nothing due (ADR-0037). The hourly schedule asks it outside any organization; it runs as its owner and answers with organization ids only (ADR-0029).',
+  push_work_due:
+    'Which organizations have notifications to make or send at a moment: one with a device allowed and either a change on its audit trail past its cursor that may be notified, or a notification made in the last day still to send; asked for reminders, also one with a closed report not reminded of in the last 23 hours. The sweep asks it outside any organization every five minutes, reminders in the first sweep of each hour; it runs as its owner and answers with organization ids only (ADR-0053).',
   member_for_sign_in_email:
     'Which member signs in with an email address, case aside, and that sign-in’s user, for an arriving email that names no organization yet. Runs as its owner and returns ids only, so the app still can’t read sign-ins outside an organization (ADR-0026).',
   sign_in_has_authenticator:
@@ -698,6 +722,28 @@ export const RULES: readonly Rule[] = [
       'saved_route_stops_coordinates_range',
     ],
     refs: ['FR-CAP-16', 'ADR-0035'],
+  },
+  {
+    rule: 'A device, a kind switched and a notification are their member’s alone; a device is at a push service, and a notification opens only a path in the app, once.',
+    mechanism:
+      'Each points at its member by a composite key, under the own-records policy and trigger and a stricter own_only policy that even an owner or auditor can’t see past. A device is one per member and address, its address HTTPS and at most 1,024 characters, its keys exactly a P-256 key and a 16-byte secret in base64url; the API also holds it to a push service’s host. A kind is switched once per member. A notification is unique by member and key, its title 1 to 80 characters and body 1 to 200, its link a path in the app and never another site, tried 0 to 3 times. The cursor is one per organization, and only the sweep moves it. push_work_due() names the organizations with work, ids only.',
+    objects: [
+      'push_subscriptions_endpoint_key',
+      'push_subscriptions_member_fk',
+      'push_subscriptions_endpoint_https',
+      'push_subscriptions_keys_length',
+      'notification_preferences_kind_key',
+      'notification_preferences_member_fk',
+      'notifications_dedupe_key',
+      'notifications_member_fk',
+      'notifications_text_length',
+      'notifications_url_path',
+      'notifications_tries_range',
+      'push_cursors_org_key',
+      'push_cursors_sequence_range',
+      'push_work_due',
+    ],
+    refs: ['FR-PLT-12', 'ADR-0053', 'ADR-0035'],
   },
   {
     rule: 'An organization has one routing key per provider, and shows only its last four characters.',

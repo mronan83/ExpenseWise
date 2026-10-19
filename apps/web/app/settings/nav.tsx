@@ -17,6 +17,7 @@ const PAGES: readonly { href: string; label: string; flag?: string | readonly st
   { href: '/settings/ai-models', label: 'AI models', flag: 'receipts.model-settings' },
   { href: '/settings/sign-ins', label: 'Sign-ins' },
   { href: '/settings/currency', label: 'Currency', flag: 'reports.currency-conversion' },
+  { href: '/settings/notifications', label: 'Notifications', flag: 'notifications.push' },
   {
     href: '/settings/mileage',
     label: 'Mileage',

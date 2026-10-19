@@ -269,3 +269,100 @@ test.describe('API through Next.js', () => {
     expect(res.headers()['content-type']).toContain('application/problem+json');
   });
 });
+
+test.describe('the service worker (ADR-0053)', () => {
+  test('is served fresh, so a new one takes over on the next load', async ({ request }) => {
+    const res = await request.get('/sw.js');
+    expect(res.status()).toBe(200);
+    expect(res.headers()['cache-control']).toBe('no-cache');
+    expect(res.headers()['content-type']).toMatch(/javascript/);
+  });
+
+  test('shows each push as a notification, and opens only a path in the app when tapped', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    // public/sw.js as served, run against a stand-in for its worker scope: no engine here can
+    // deliver a push or tap a notification, so its listeners are called as the browser would.
+    const seen = await page.evaluate(async () => {
+      const source = await (await fetch('/sw.js')).text();
+      const listeners: Record<string, (event: unknown) => void> = {};
+      const shown: { title: string; body?: string; tag?: string; url?: unknown }[] = [];
+      const moves: string[] = [];
+      const work: Promise<unknown>[] = [];
+      const scope = {
+        location: { origin: location.origin },
+        addEventListener: (type: string, listener: (event: unknown) => void) => {
+          listeners[type] = listener;
+        },
+        skipWaiting: () => Promise.resolve(),
+        registration: {
+          showNotification: (title: string, options: NotificationOptions) => {
+            shown.push({
+              title,
+              body: options.body,
+              tag: options.tag,
+              url: (options.data as { url?: unknown }).url,
+            });
+            return Promise.resolve();
+          },
+        },
+        clients: {
+          claim: () => Promise.resolve(),
+          matchAll: () =>
+            Promise.resolve([
+              {
+                url: `${location.origin}/expenses`,
+                navigate: (url: string) => {
+                  moves.push(url.replace(location.origin, ''));
+                  return Promise.resolve({ focus: () => Promise.resolve() });
+                },
+              },
+            ]),
+          openWindow: (url: string) => {
+            moves.push(`new window ${url.replace(location.origin, '')}`);
+            return Promise.resolve(null);
+          },
+        },
+      };
+      // The script as served is what is checked, so it is evaluated as the worker would.
+      // eslint-disable-next-line @typescript-eslint/no-implied-eval
+      const run = new Function('self', source) as (self: unknown) => void;
+      run(scope);
+      const extendable = { waitUntil: (p: Promise<unknown>) => work.push(p) };
+      const push = (data: unknown) =>
+        listeners.push!({ ...extendable, data: data === null ? null : { json: () => data } });
+      const tap = (url: unknown) =>
+        listeners.notificationclick!({
+          ...extendable,
+          notification: { close: () => undefined, data: { url } },
+        });
+      push({
+        title: 'Receipt from Delta filed',
+        body: 'The receipt you emailed is read and filed.',
+        url: '/receipts/r1',
+        tag: 'expensewise-m1',
+      });
+      push({ title: 'Somewhere else', url: 'https://elsewhere.example/sign-in' });
+      push(null);
+      tap('/receipts/r1');
+      tap('//elsewhere.example');
+      tap('https://elsewhere.example/sign-in');
+      await Promise.all(work);
+      return { shown, moves };
+    });
+    expect(seen.shown).toEqual([
+      {
+        title: 'Receipt from Delta filed',
+        body: 'The receipt you emailed is read and filed.',
+        tag: 'expensewise-m1',
+        url: '/receipts/r1',
+      },
+      { title: 'Somewhere else', body: '', tag: 'expensewise', url: '/' },
+      // Every push shows something: Safari stops sending to an app whose push shows nothing.
+      { title: 'ExpenseWise', body: '', tag: 'expensewise', url: '/' },
+    ]);
+    // The app already open moves to what the notification is about, and never elsewhere.
+    expect(seen.moves).toEqual(['/receipts/r1', '/', '/']);
+  });
+});

@@ -335,6 +335,17 @@ export const GAPS: readonly Gap[] = [
     },
   },
   {
+    id: 'GAP-58',
+    title:
+      'Nobody is told when the organization’s AI or OpenRouteService key stops working, so receipts and drives can wait unread with no one knowing why.',
+    affects: ['FR-PLT-12', 'F-75'],
+    severity: 'Low',
+    evidence:
+      'Recommended with your notifications requirement of Oct 19. A refused or used-up key leaves a receipt needing a look, or a drive not measured, each saying why, and the person is told of those; but the owner who keeps the key isn’t told the key is the cause.',
+    fix: 'A push to owners and finance admins when a key is refused or used up, once until it works again (US-INBOX-04, #113).',
+    backlog: 113,
+  },
+  {
     id: 'GAP-57',
     title:
       'The app on the iPhone’s Home Screen couldn’t be refreshed: it has no Safari bar to reload from.',
@@ -1444,6 +1455,12 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-19',
+    change:
+      'Built in PR #92, your requirement of Oct 19 with your answers to Q57 and Q58: push notifications to ExpenseWise on your iPhone’s Home Screen (FR-PLT-12, F-75, US-INBOX-03, #112, ADR-0053, D-55). Allow them in Settings › Notifications and switch each kind. You hear of a receipt you emailed being filed, a receipt or email needing a look, a trip put on its report, a report closed on its day or still to submit (once a day from 9:00), a report to approve, one approved or come back, a card statement needing a look and a drive that couldn’t be measured: what and where, never an amount, several at once as one. Sent through Apple’s push service every five minutes, a test at once; nothing new to set. Telling owners when a key stops working is still to come (GAP-58, #113). Behind `notifications.push`: switch it on in Settings › Features.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-19',
     change:
