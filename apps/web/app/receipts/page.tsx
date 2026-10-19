@@ -18,6 +18,7 @@ import {
 } from '../../lib/receipts';
 import { supabase } from '../../lib/supabase';
 import { Wordmark } from '../brand';
+import { RefreshButton } from '../refresh';
 
 type Load =
   | { state: 'loading' }
@@ -95,9 +96,12 @@ export default function ReceiptsPage() {
         <Link href="/" className="tap">
           <Wordmark />
         </Link>
-        <Link href="/settings/ai" className="tap text-xs font-semibold text-carbon">
-          Settings
-        </Link>
+        <span className="flex items-baseline gap-3">
+          <Link href="/settings/ai" className="tap text-xs font-semibold text-carbon">
+            Settings
+          </Link>
+          <RefreshButton />
+        </span>
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <h1 className="text-2xl font-bold">Receipts</h1>

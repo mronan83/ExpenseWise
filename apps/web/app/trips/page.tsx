@@ -11,6 +11,7 @@ import { supabase } from '../../lib/supabase';
 import { localToday, tripDates, type TripDetail, type TripSummary } from '../../lib/trips';
 import { TripFields } from './trip-fields';
 import { Wordmark } from '../brand';
+import { RefreshButton } from '../refresh';
 
 type Load =
   | { state: 'loading' }
@@ -66,9 +67,12 @@ export default function TripsPage() {
         <Link href="/" className="tap">
           <Wordmark />
         </Link>
-        <Link href="/expenses" className="tap text-xs font-semibold text-carbon">
-          Expenses
-        </Link>
+        <span className="flex items-baseline gap-3">
+          <Link href="/expenses" className="tap text-xs font-semibold text-carbon">
+            Expenses
+          </Link>
+          <RefreshButton />
+        </span>
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <h1 className="text-2xl font-bold">Trips</h1>

@@ -7,6 +7,7 @@ import { formText } from '../../lib/form';
 import { codeNeeded } from '../../lib/second-factor';
 import { supabase } from '../../lib/supabase';
 import { Wordmark } from '../brand';
+import { RefreshButton } from '../refresh';
 
 /**
  * Where to go after signing in: an invite link that sent the person here (#29). Only a path
@@ -55,6 +56,7 @@ export default function SignInPage() {
         <Link href="/" className="tap">
           <Wordmark />
         </Link>
+        <RefreshButton />
       </header>
       <main className="flex flex-1 flex-col gap-4">
         <h1 className="text-2xl font-bold">Sign in</h1>

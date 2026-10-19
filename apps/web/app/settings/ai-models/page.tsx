@@ -8,6 +8,7 @@ import { formatCost, formatSeconds } from '../../../lib/receipts';
 import { supabase } from '../../../lib/supabase';
 import { SettingsNav } from '../nav';
 import { Wordmark } from '../../brand';
+import { RefreshButton } from '../../refresh';
 
 /** One AI model, as Settings › AI models shows it (FR-INT-16). */
 interface AiModel {
@@ -179,6 +180,7 @@ export default function AiModelsPage() {
         <Link href="/" className="tap">
           <Wordmark />
         </Link>
+        <RefreshButton />
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <SettingsNav current="/settings/ai-models" />

@@ -15,6 +15,7 @@ import {
   SecondFactorGate,
   StepUpPrompt,
 } from './second-factor';
+import { PullToRefresh } from './refresh';
 import { TabBar } from './tab-bar';
 
 export const metadata: Metadata = {
@@ -38,6 +39,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body className="flex min-h-dvh flex-col font-sans antialiased">
+        <PullToRefresh />
         {children}
         <TabBar />
         <StepUpPrompt />

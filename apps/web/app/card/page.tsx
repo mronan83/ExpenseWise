@@ -27,6 +27,7 @@ import { loadFeatures } from '../../lib/features';
 import { ReceiptFileError } from '../../lib/receipt-file';
 import { captureReceipt, formatMoney } from '../../lib/receipts';
 import { supabase } from '../../lib/supabase';
+import { RefreshButton } from '../refresh';
 
 type Load =
   | { state: 'loading' }
@@ -138,6 +139,7 @@ export default function CardPage() {
         <Link href="/expenses" className="tap text-sm font-semibold text-carbon">
           ← Expenses
         </Link>
+        <RefreshButton />
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <h1 className="text-2xl font-bold">Card</h1>

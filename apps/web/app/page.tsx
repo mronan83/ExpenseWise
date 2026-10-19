@@ -3,6 +3,7 @@ import { connection } from 'next/server';
 import { flags } from '../lib/flags';
 import { HomeDashboard } from './home-dashboard';
 import { Wordmark } from './brand';
+import { RefreshButton } from './refresh';
 
 /** Home: the Needs you inbox, then the person's trip, month and recent trips (FR-INS-01). */
 export default async function HomePage() {
@@ -20,6 +21,7 @@ export default async function HomePage() {
           <Link href="/settings/ai" className="tap text-xs font-semibold text-carbon">
             Settings
           </Link>
+          <RefreshButton />
         </span>
       </header>
 

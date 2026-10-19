@@ -6,6 +6,7 @@ import { api, ApiProblem } from '../../../lib/api';
 import { supabase } from '../../../lib/supabase';
 import { SettingsNav } from '../nav';
 import { Wordmark } from '../../brand';
+import { RefreshButton } from '../../refresh';
 
 /** The person's reimbursement currency (FR-EXP-13, Q23), as the API answers it. */
 interface ReimbursementCurrency {
@@ -93,6 +94,7 @@ export default function CurrencyPage() {
         <Link href="/" className="tap">
           <Wordmark />
         </Link>
+        <RefreshButton />
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <SettingsNav current="/settings/currency" />

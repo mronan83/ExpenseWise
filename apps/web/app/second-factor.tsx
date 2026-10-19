@@ -15,6 +15,7 @@ import {
 import { onAuthenticatorRequired, onNotLetIn, onStepUp } from '../lib/step-up';
 import { supabase } from '../lib/supabase';
 import { Wordmark } from './brand';
+import { RefreshButton } from './refresh';
 
 const explain = (error: unknown) =>
   error instanceof SecondFactorError ? error.message : 'Something went wrong. Try again.';
@@ -176,8 +177,9 @@ export function StepUpPrompt() {
       data-step-up
       className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]"
     >
-      <header className="py-3">
+      <header className="flex items-baseline justify-between py-3">
         <Wordmark />
+        <RefreshButton />
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <h1 className="text-2xl font-bold">Enter your code to continue</h1>
@@ -270,9 +272,12 @@ export function AuthenticatorRequiredScreen() {
     >
       <header className="flex items-baseline justify-between py-3">
         <Wordmark />
-        <button type="button" onClick={() => void signOut()} className="tap text-sm text-carbon">
-          Sign out
-        </button>
+        <span className="flex items-baseline gap-3">
+          <button type="button" onClick={() => void signOut()} className="tap text-sm text-carbon">
+            Sign out
+          </button>
+          <RefreshButton />
+        </span>
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <h1 className="text-2xl font-bold">This email needs its own authenticator</h1>
@@ -357,8 +362,9 @@ export function NotLetInScreen() {
       data-step-up
       className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]"
     >
-      <header className="py-3">
+      <header className="flex items-baseline justify-between py-3">
         <Wordmark />
+        <RefreshButton />
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <h1 className="text-2xl font-bold">This email isn’t let in to sign in</h1>

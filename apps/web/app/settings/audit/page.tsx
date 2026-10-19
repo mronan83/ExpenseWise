@@ -20,6 +20,7 @@ import { formText } from '../../../lib/form';
 import { supabase } from '../../../lib/supabase';
 import { SettingsNav } from '../nav';
 import { Wordmark } from '../../brand';
+import { RefreshButton } from '../../refresh';
 
 /** One record to show the history of, or none for the whole trail. */
 type Target = { entityType: string; entityId: string };
@@ -140,6 +141,7 @@ export default function AuditTrailPage() {
         <Link href="/" className="tap">
           <Wordmark />
         </Link>
+        <RefreshButton />
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <SettingsNav current="/settings/audit" />

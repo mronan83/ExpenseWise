@@ -18,6 +18,7 @@ import { supabase } from '../../../lib/supabase';
 import { SettingsNav } from '../nav';
 import { RateSection } from './rate-section';
 import { Wordmark } from '../../brand';
+import { RefreshButton } from '../../refresh';
 
 type Load =
   | { state: 'loading' }
@@ -94,6 +95,7 @@ export default function MileageSettingsPage() {
         <Link href="/" className="tap">
           <Wordmark />
         </Link>
+        <RefreshButton />
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <SettingsNav current="/settings/mileage" />

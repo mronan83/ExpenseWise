@@ -49,6 +49,7 @@ import { MileageForm } from '../../mileage/mileage-form';
 import { RouteDriveDetails } from '../../mileage/route-drive';
 import { ItemizedLines, SplitParts } from './itemized';
 import { WhoPaid } from './who-paid';
+import { RefreshButton } from '../../refresh';
 
 type Load =
   | { state: 'loading' }
@@ -96,7 +97,10 @@ export default function ExpensePage() {
         <Link href="/expenses" className="tap text-sm font-semibold text-carbon">
           ← Expenses
         </Link>
-        <HistoryLink entityType="expense" entityId={id} />
+        <span className="flex items-baseline gap-3">
+          <HistoryLink entityType="expense" entityId={id} />
+          <RefreshButton />
+        </span>
       </header>
       <main className="flex flex-1 flex-col gap-4 pb-8">
         <h1 className="text-2xl font-bold">{expense?.merchant ?? 'Expense'}</h1>
