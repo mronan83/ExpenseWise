@@ -539,6 +539,20 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none' },
     source: 'Product owner Oct 19',
     affects: ['FR-PLT-12', 'F-75'],
+    done: { date: '2026-10-19', in: 'PR #92' },
+  },
+  {
+    num: 113,
+    title: 'Tell owners when a key stops working',
+    type: 'Gap',
+    detail:
+      'Recommended with FR-PLT-12 (GAP-58, US-INBOX-04): a push to the organization’s owners and finance admins when its Anthropic, OpenAI or OpenRouteService key is refused or used up, once until it works again, opening Settings where the key is kept. The readings and the measuring already record why they failed; the sweep would read those.',
+    priority: 'P2',
+    effort: 'S',
+    severity: 'Low',
+    blocker: { kind: 'none' },
+    source: 'Claude Oct 19',
+    affects: ['FR-PLT-12', 'GAP-58'],
   },
   {
     num: 106,

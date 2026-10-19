@@ -419,6 +419,20 @@ describe('the sweep (FR-PLT-12, R-PUSH-EVERY)', () => {
     ]);
   });
 
+  it('keeps a notification 90 days, then lets it go, sent or not', async () => {
+    const w = await world('push-keep');
+    await w.allow(w.asAlex, w.alex.userId, 1);
+    await emailedReceipt(w.org.orgId, w.alex.id, w.alex.userId, 'extracted');
+    await preparePush(app.db, w.org.orgId, NOW);
+    const kept = () =>
+      withOrg(app.db, w.org.orgId, (tx) => tx.select({ id: notifications.id }).from(notifications));
+    expect(await kept()).toHaveLength(1);
+    await preparePush(app.db, w.org.orgId, new Date(NOW.getTime() + 89 * 86_400_000));
+    expect(await kept()).toHaveLength(1);
+    await preparePush(app.db, w.org.orgId, new Date(NOW.getTime() + 91 * 86_400_000));
+    expect(await kept()).toEqual([]);
+  });
+
   it('sends a test the person asks for, through the outbox', async () => {
     const w = await world('push-test');
     expect(

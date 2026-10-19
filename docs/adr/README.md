@@ -60,6 +60,7 @@ Each ADR records one decision with its context, the alternatives considered and 
 | [0050](0050-every-ai-feature-reads-with-the-organizations-models.md) | Every AI feature reads with the organization's models | D-52 | Accepted (decided by product owner, Oct 10) | 2026-10-10 |
 | [0051](0051-an-expense-paid-by-several-card-charges.md) | An expense can be paid by several card charges | D-53 | Accepted (several charges decided by product owner, Oct 10; pairing on its own recommended) | 2026-10-10 |
 | [0052](0052-places-suggested-as-a-stop-is-typed.md) | Places are suggested as a stop is typed, and a place picked is measured from where it is | D-54 | Accepted (suggestions decided by product owner, Oct 19; a picked place measured from its point, Q53; ranked near the drive's stops, never the device's location, Q54; OpenRouteService in the request, sealed picks, the limits and the flag recommended) | 2026-10-19 |
+| [0053](0053-push-notifications-to-the-home-screen-app.md) | Push notifications to the app on the Home Screen, made by a sweep of the audit trail | D-55 | Accepted (notifications decided by product owner, Oct 19; web push now, Q57; what and where, never an amount, Q58; the other kinds, the sweep, batching, the reminder, the keys and the limits recommended) | 2026-10-19 |
 
 ## How to add an ADR
 
