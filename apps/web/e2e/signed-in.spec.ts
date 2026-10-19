@@ -192,29 +192,57 @@ const noAuthenticatorsOfItsOwn: Step = (page) =>
   );
 
 /**
- * Headless Chromium has no push service, so a subscription stands in for the one Apple's would
- * give, with notifications allowed; the page then loads again with it. What the API keeps is
- * real, in the bench's database.
+ * Notifications allowed in the app on the Home Screen, as on an iPhone. No browser here has a
+ * push service, so the browser's side stands in, the same in every engine: notifications
+ * allowed, a service worker and a subscription like the one Apple's would give. The page then
+ * loads again with it. What the API keeps is real, in the bench's database.
  */
 const pushAllowed: Step = async (page) => {
-  await page.context().grantPermissions(['notifications']);
   await page.addInitScript(() => {
     const endpoint = 'https://web.push.apple.com/bench-device';
     const keys = { p256dh: `B${'A'.repeat(86)}`, auth: 'A'.repeat(22) };
-    let current: PushSubscription | null = null;
-    PushManager.prototype.subscribe = function (options?: PushSubscriptionOptionsInit) {
-      current = {
-        endpoint,
-        options: { applicationServerKey: options?.applicationServerKey ?? null },
-        toJSON: () => ({ endpoint, keys }),
-        unsubscribe: () => {
-          current = null;
-          return Promise.resolve(true);
+    let current: unknown = null;
+    const registration = {
+      pushManager: {
+        subscribe: (options?: PushSubscriptionOptionsInit) => {
+          current = {
+            endpoint,
+            options: { applicationServerKey: options?.applicationServerKey ?? null },
+            toJSON: () => ({ endpoint, keys }),
+            unsubscribe: () => {
+              current = null;
+              return Promise.resolve(true);
+            },
+          };
+          return Promise.resolve(current);
         },
-      } as unknown as PushSubscription;
-      return Promise.resolve(current);
+        getSubscription: () => Promise.resolve(current),
+      },
     };
-    PushManager.prototype.getSubscription = () => Promise.resolve(current);
+    const allowed = { permission: 'granted', requestPermission: () => Promise.resolve('granted') };
+    Object.defineProperty(window, 'Notification', { value: allowed, configurable: true });
+    Object.defineProperty(window, 'PushManager', { value: class {}, configurable: true });
+    Object.defineProperty(navigator, 'serviceWorker', {
+      value: {
+        register: () => Promise.resolve(registration),
+        ready: Promise.resolve(registration),
+        getRegistration: () => Promise.resolve(registration),
+      },
+      configurable: true,
+    });
+  });
+  await page.reload({ waitUntil: 'networkidle' });
+};
+
+/** Safari on an iPhone, ExpenseWise not yet on the Home Screen: no push at all. */
+const safariOnIphone: Step = async (page) => {
+  await page.addInitScript(() => {
+    delete (window as { PushManager?: unknown }).PushManager;
+    Object.defineProperty(navigator, 'userAgent', {
+      get: () =>
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 18_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.6 Mobile/15E148 Safari/604.1',
+      configurable: true,
+    });
   });
   await page.reload({ waitUntil: 'networkidle' });
 };
@@ -857,6 +885,11 @@ const SCREENS: [string, (s: Seeded) => string, Step[], (() => string)?, RegExp?]
     [pushAllowed, press('Allow notifications on this device')],
   ],
   [
+    'notification settings, in Safari before ExpenseWise is on the Home Screen',
+    () => '/settings/notifications',
+    [safariOnIphone],
+  ],
+  [
     'mileage settings, with the route key, saved places and saved routes',
     () => '/settings/mileage',
     [(page) => expect(page.getByRole('heading', { name: 'Saved routes' })).toBeVisible()],
@@ -1197,6 +1230,21 @@ test('allows notifications on this device, sends a test, and switches a kind', a
   await expect(
     page.getByRole('button', { name: 'Allow notifications on this device' }),
   ).toBeVisible();
+});
+
+test('on an iPhone in Safari, says to add ExpenseWise to the Home Screen for notifications', async ({
+  page,
+}) => {
+  await page.goto('/settings/notifications', { waitUntil: 'networkidle' });
+  await safariOnIphone(page);
+  await expect(
+    page.getByText(/^On an iPhone, notifications come to ExpenseWise on your Home Screen\./),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Allow notifications on this device' }),
+  ).toHaveCount(0);
+  // The kinds can still be switched, ready for when it is.
+  await expect(page.getByRole('switch', { name: 'A receipt you emailed is filed' })).toBeVisible();
 });
 
 test('saves a drive’s route under a name, a picked stop with its pick', async ({ page }) => {

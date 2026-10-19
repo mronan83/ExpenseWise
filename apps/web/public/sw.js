@@ -20,7 +20,7 @@ const inApp = (url) =>
 self.addEventListener('push', (event) => {
   let message = {};
   try {
-    message = event.data ? event.data.json() : {};
+    message = (event.data ? event.data.json() : null) ?? {};
   } catch {
     message = {};
   }
@@ -45,10 +45,9 @@ self.addEventListener('notificationclick', (event) => {
     (async () => {
       const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
       const open = windows.find((w) => new URL(w.url).origin === self.location.origin);
-      if (open) {
-        await open.focus();
-        return open.navigate(url);
-      }
+      // The app already open moves to it; one this worker doesn't control can't be moved.
+      const moved = open ? await open.navigate(url).catch(() => null) : null;
+      if (moved) return moved.focus().catch(() => moved);
       return self.clients.openWindow(url);
     })(),
   );
