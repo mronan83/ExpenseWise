@@ -33,6 +33,8 @@ import type { ExpenseStore } from './expenses.ts';
 import type { ItemizedStore } from './itemized.ts';
 import { registerItemizedRoutes } from './itemized-routes.ts';
 import type { MileageStore } from './mileage.ts';
+import { registerNotificationRoutes } from './notification-routes.ts';
+import type { NotificationStore } from './notifications.ts';
 import type { MileageRateStore } from './mileage-rates.ts';
 import { registerMileageRateRoutes } from './mileage-rate-routes.ts';
 import { registerMileageRoutes } from './mileage-routes.ts';
@@ -143,6 +145,10 @@ export interface ApiOptions
   readonly reimbursement?: ReimbursementStore;
   /** People and invite links (#29). Without it, those routes answer 503. */
   readonly people?: PeopleStore;
+  /** Push notifications' kinds, devices and tests (FR-PLT-12). Without it, those answer 503. */
+  readonly notifications?: NotificationStore;
+  /** The server's VAPID public key (ADR-0053). Without it, no device can be allowed. */
+  readonly pushPublicKey?: string;
   /** Encrypts AI provider keys at rest. Without it, saving or testing a key answers 503. */
   readonly secrets?: SecretBox;
   /** Checks AI provider keys with a free call to the provider. */
@@ -308,6 +314,7 @@ export function createApi(options: ApiOptions) {
   registerPeopleRoutes(app, routes);
   registerUnfiledEmailRoutes(app, routes);
   registerCardStatementRoutes(app, routes);
+  registerNotificationRoutes(app, routes);
 
   app.doc31('/v1/openapi.json', OPENAPI_INFO);
 

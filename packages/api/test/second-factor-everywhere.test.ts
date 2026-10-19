@@ -234,6 +234,8 @@ function setup(switchedOn: readonly string[], flagOverrides = '', passed: Passed
     modelSettings: store,
     reimbursement: store,
     people: store,
+    notifications: store,
+    pushPublicKey: `B${'A'.repeat(86)}`,
     receipts: store,
     files: store,
     dispatch: () => Promise.resolve(),
