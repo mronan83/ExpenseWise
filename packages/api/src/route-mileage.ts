@@ -6,9 +6,12 @@ import {
   getRouteDrive,
   getRouteKey,
   listSavedPlaces,
+  listSavedRoutes,
   logRouteMileage,
   recentPlaces,
   removePlace,
+  removeRoute,
+  saveRoute,
   savePlace,
   saveRouteKey,
   withOrg,
@@ -22,7 +25,9 @@ import {
   type RouteKeyWrite,
   type RouteRecord,
   type SavedPlace,
+  type SavedRoute,
   type SavePlaceResult,
+  type SaveRouteResult,
   type StoredRouteKey,
 } from '@expensewise/db';
 import {
@@ -31,6 +36,7 @@ import {
   type IsoDate,
   type RouteDriveInput,
   type RouteProvider,
+  type RouteStopInput,
   type StopPin,
 } from '@expensewise/domain';
 import { asCaller } from './caller.ts';
@@ -91,6 +97,26 @@ export interface RouteMileageStore {
     placeId: string,
     actorUserId: string,
   ): Promise<boolean>;
+  /** The member's saved routes, by name (FR-CAP-16). */
+  routes(orgId: string, memberId: string): Promise<SavedRoute[]>;
+  /** Saves a new route (routeId null) or changes one of the member's. */
+  saveRoute(
+    orgId: string,
+    memberId: string,
+    routeId: string | null,
+    input: {
+      readonly name?: string;
+      readonly stops?: readonly RouteStopInput[];
+      readonly roundTrip?: boolean;
+    },
+    actorUserId: string,
+  ): Promise<SaveRouteResult>;
+  removeRoute(
+    orgId: string,
+    memberId: string,
+    routeId: string,
+    actorUserId: string,
+  ): Promise<boolean>;
 }
 
 /** Route drives and saved places on Postgres, as expensewise_app and as the caller. */
@@ -117,6 +143,11 @@ export function dbRouteMileageStore(db: Database): RouteMileageStore {
       inOrg(orgId, (tx) => savePlace(tx, orgId, memberId, placeId, input, actor)),
     removePlace: (orgId, memberId, placeId, actor) =>
       inOrg(orgId, (tx) => removePlace(tx, orgId, memberId, placeId, actor)),
+    routes: (orgId, memberId) => inOrg(orgId, (tx) => listSavedRoutes(tx, memberId)),
+    saveRoute: (orgId, memberId, routeId, input, actor) =>
+      inOrg(orgId, (tx) => saveRoute(tx, orgId, memberId, routeId, input, actor)),
+    removeRoute: (orgId, memberId, routeId, actor) =>
+      inOrg(orgId, (tx) => removeRoute(tx, orgId, memberId, routeId, actor)),
   };
 }
 

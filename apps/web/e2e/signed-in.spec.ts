@@ -441,6 +441,11 @@ const SCREENS: [string, (s: Seeded) => string, Step[], (() => string)?, RegExp?]
     ],
   ],
   [
+    'saving a drive’s route to log drives from',
+    (s) => `/expenses/${s.expenses.routeMeasured}`,
+    [press('Save as a route')],
+  ],
+  [
     'changing the miles of a measured drive',
     (s) => `/expenses/${s.expenses.routeMeasured}`,
     [press('Change the miles'), fill('Miles', '41')],
@@ -813,7 +818,11 @@ const SCREENS: [string, (s: Seeded) => string, Step[], (() => string)?, RegExp?]
   ],
   ['AI model settings', () => '/settings/ai-models', []],
   ['reimbursement currency settings', () => '/settings/currency', []],
-  ['mileage settings, with the route key and saved places', () => '/settings/mileage', []],
+  [
+    'mileage settings, with the route key, saved places and saved routes',
+    () => '/settings/mileage',
+    [(page) => expect(page.getByRole('heading', { name: 'Saved routes' })).toBeVisible()],
+  ],
   ['people settings, with a member and a link not used yet', () => '/settings/people', []],
   ['removing someone', () => '/settings/people', [press('Remove sam')]],
   [
@@ -1072,19 +1081,21 @@ test('fills a drive’s stops from a saved place and a landmark suggested, and s
   await page.getByLabel('Business purpose', { exact: true }).fill('Flight to the Denver office');
 
   // Before anything is typed, the start offers the person's saved places; arrows and Enter pick.
-  const start = page.getByRole('combobox', { name: 'Start' });
+  const start = page.getByRole('combobox', { name: 'Start', exact: true });
   await start.focus();
-  await expect(page.getByRole('option', { name: /^Office\b/ })).toBeVisible();
+  const startPlaces = page.getByRole('listbox', { name: 'Places for start' });
+  await expect(startPlaces.getByRole('option', { name: /^Office\b/ })).toBeVisible();
   await start.press('ArrowDown');
   await start.press('Enter');
   await expect(start).toHaveValue('Acme HQ, 1200 Dodge St, Omaha, NE');
-  await expect(page.getByRole('option')).toHaveCount(0);
+  await expect(startPlaces).toBeHidden();
 
   // Typed, the end offers the place driven to before, then OpenRouteService's landmarks.
-  const end = page.getByRole('combobox', { name: 'End' });
+  const end = page.getByRole('combobox', { name: 'End', exact: true });
   await end.fill('epp');
-  await expect(page.getByRole('option', { name: /Driven before/ })).toBeVisible();
-  const parking = page.getByRole('option', { name: /^Eppley Airfield Parking/ });
+  const endPlaces = page.getByRole('listbox', { name: 'Places for end' });
+  await expect(endPlaces.getByRole('option', { name: /Driven before/ })).toBeVisible();
+  const parking = endPlaces.getByRole('option', { name: /^Eppley Airfield Parking/ });
   await expect(parking).toBeVisible();
   await parking.click();
   await expect(end).toHaveValue('Eppley Airfield Parking, Abbott Drive, Omaha, NE, USA');
@@ -1103,6 +1114,56 @@ test('fills a drive’s stops from a saved place and a landmark suggested, and s
   // Typed over, it is a stop typed again, searched as typed when measured.
   await end.fill('Eppley Airfield Parking');
   await expect(page.getByText(/^Picked, so it is measured/)).toHaveCount(0);
+});
+
+test('fills a drive from a saved route: its name, stops and round trip', async ({ page }) => {
+  await page.goto('/mileage/new', { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'By route' }).click();
+  await page.getByLabel('Start from a saved route').selectOption({ label: 'Office → Acme HQ' });
+  await expect(page.getByLabel('Name (optional)', { exact: true })).toHaveValue('Office → Acme HQ');
+  await expect(page.getByLabel('Start', { exact: true })).toHaveValue('1520 Harney St, Omaha, NE');
+  await expect(page.getByLabel('End', { exact: true })).toHaveValue(
+    'Acme HQ, 1200 Dodge St, Omaha, NE',
+  );
+  await expect(page.getByLabel('Round trip: back to the start after the end')).toBeChecked();
+});
+
+test('saves a drive’s route under a name, a picked stop with its pick', async ({ page }) => {
+  // Saving it is the API's (api/route-mileage); this is the page's part, the bench left as is.
+  let sent: { name?: string; stops?: unknown; roundTrip?: boolean } | undefined;
+  await page.route('**/api/v1/me/routes', async (route) => {
+    if (route.request().method() !== 'POST') return route.fallback();
+    sent = route.request().postDataJSON() as typeof sent;
+    await route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        id: '0192f7a0-0000-7000-8000-0000000000f2',
+        name: sent?.name,
+        roundTrip: true,
+        stops: [],
+      }),
+    });
+  });
+  await page.goto(`/expenses/${seeded.expenses.routeMeasured}`, { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'Save as a route' }).click();
+  const name = page.getByLabel('Route name', { exact: true });
+  await expect(name).toHaveValue('Acme visit and the airport');
+  await name.fill('Airport run');
+  await page.getByRole('button', { name: 'Save the route' }).click();
+  await expect(page.getByText(/^Saved as Airport run\./)).toBeVisible();
+  expect(sent).toMatchObject({
+    name: 'Airport run',
+    roundTrip: true,
+    stops: [
+      '1520 Harney St, Omaha, NE',
+      'Acme HQ, 1200 Dodge St, Omaha, NE',
+      {
+        address: expect.stringMatching(/^Eppley Airfield/) as unknown,
+        pick: expect.stringMatching(/^v1\./) as unknown,
+      },
+    ],
+  });
 });
 
 test('a receipt opens its history in the audit trail, under the chain checked intact', async ({

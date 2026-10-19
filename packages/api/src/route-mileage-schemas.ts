@@ -338,3 +338,53 @@ export const RecentPlaceListSchema = z
     }),
   })
   .openapi('RecentPlaceList');
+
+export const SavedRouteSchema = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string().openapi({ example: 'Office → Acme HQ' }),
+    roundTrip: z.boolean(),
+    stops: z
+      .array(
+        z.object({
+          address: z.string().openapi({ example: '1520 Harney St, Omaha, NE' }),
+          place: z
+            .object({ label: z.string(), longitude: z.string(), latitude: z.string() })
+            .nullable()
+            .openapi({
+              description: 'Where it was picked, for a stop picked from the suggestions.',
+            }),
+          pick: z.string().nullable().openapi({
+            description: 'Send it with the stop, as in PickedStop, to log a drive from it pinned.',
+          }),
+        }),
+      )
+      .openapi({ description: 'In order: the start first.' }),
+  })
+  .openapi('SavedRoute');
+
+export const SavedRouteListSchema = z
+  .object({ routes: z.array(SavedRouteSchema) })
+  .openapi('SavedRouteList');
+
+export const SaveRouteSchema = z
+  .object({
+    name: z
+      .string()
+      .max(400)
+      .openapi({
+        description: `Up to ${ROUTE_NAME_MAX} characters, once per person. Never sent anywhere.`,
+        example: 'Office → Acme HQ',
+      }),
+    stops,
+    roundTrip: z.boolean().optional().openapi({ description: 'Back to the start after the end.' }),
+  })
+  .strict()
+  .openapi('SaveRoute');
+
+export const ChangeRouteSchema = SaveRouteSchema.partial()
+  .strict()
+  .refine((m) => Object.values(m).some((v) => v !== undefined), {
+    message: 'Change at least one field.',
+  })
+  .openapi('ChangeRoute');

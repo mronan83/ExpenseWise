@@ -1407,6 +1407,80 @@ export const savedPlaces = pgTable(
 );
 
 /**
+ * A route a member saved to log drives from (FR-CAP-16): a name, once per person, its stops in
+ * saved_route_stops and whether it is a round trip. A drive logged from it copies all three;
+ * changing or removing the route never touches a drive.
+ */
+export const savedRoutes = pgTable(
+  'saved_routes',
+  {
+    id: id(),
+    orgId: orgId(),
+    memberId: uuid('member_id').notNull(),
+    name: text('name').notNull(),
+    roundTrip: boolean('round_trip').notNull().default(false),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    unique('saved_routes_org_id_id_key').on(t.orgId, t.id),
+    uniqueIndex('saved_routes_member_name_key').on(t.orgId, t.memberId, sql`lower(${t.name})`),
+    foreignKey({
+      name: 'saved_routes_member_fk',
+      columns: [t.orgId, t.memberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    check('saved_routes_name_length', sql`length(${t.name}) BETWEEN 1 AND 80`),
+  ],
+);
+
+/**
+ * A saved route's stops, in order, each an address and, when it was picked from the
+ * suggestions, the place it is measured from (Q53). Its member's own, as its route is.
+ */
+export const savedRouteStops = pgTable(
+  'saved_route_stops',
+  {
+    id: id(),
+    orgId: orgId(),
+    memberId: uuid('member_id').notNull(),
+    routeId: uuid('route_id').notNull(),
+    /** 0 is the start; the highest is the end. */
+    position: integer('position').notNull(),
+    address: text('address').notNull(),
+    /** The place picked for it; all three or none. */
+    label: text('label'),
+    longitude: numeric('longitude', { precision: 9, scale: 6 }),
+    latitude: numeric('latitude', { precision: 8, scale: 6 }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique('saved_route_stops_org_id_id_key').on(t.orgId, t.id),
+    unique('saved_route_stops_position_key').on(t.orgId, t.routeId, t.position),
+    foreignKey({
+      name: 'saved_route_stops_route_fk',
+      columns: [t.orgId, t.routeId],
+      foreignColumns: [savedRoutes.orgId, savedRoutes.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'saved_route_stops_member_fk',
+      columns: [t.orgId, t.memberId],
+      foreignColumns: [members.orgId, members.id],
+    }),
+    check('saved_route_stops_position_range', sql`${t.position} BETWEEN 0 AND 24`),
+    check('saved_route_stops_address_length', sql`length(${t.address}) BETWEEN 1 AND 200`),
+    check(
+      'saved_route_stops_place_whole',
+      sql`(${t.label} IS NULL) = (${t.longitude} IS NULL) AND (${t.label} IS NULL) = (${t.latitude} IS NULL)`,
+    ),
+    check(
+      'saved_route_stops_coordinates_range',
+      sql`${t.longitude} BETWEEN -180 AND 180 AND ${t.latitude} BETWEEN -90 AND 90`,
+    ),
+  ],
+);
+
+/**
  * One step of a report's approval (FR-GOV-02, #24): the approver it went to, then the decision,
  * when and with what comment; a return needs one. Single-step in Phase 1, so each submission adds
  * one step, numbered by `sequence`; the steps of earlier rounds stay as they were decided.

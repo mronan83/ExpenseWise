@@ -63,6 +63,8 @@ export const DOMAINS: readonly Domain[] = [
       'mileage_routes',
       'mileage_route_stops',
       'saved_places',
+      'saved_routes',
+      'saved_route_stops',
     ],
   },
   {
@@ -215,6 +217,14 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   saved_places: {
     about:
       'A place a member keeps to pick for a stop, such as Home or Office: a name, once per member whatever its case, and an address (FR-CAP-04). Picking one copies its address onto the stop; its name is never sent anywhere (Q32). A member’s own under the own-records rules (ADR-0035). The audit trail records its name and that its address changed, never the address.',
+  },
+  saved_routes: {
+    about:
+      'A route a member keeps to log drives from (FR-CAP-16): a name, once per member whatever its case, up to 80 characters, and whether it is a round trip; its stops are saved_route_stops. A drive logged from one copies its name, stops and round trip, so changing or removing the route never touches a drive. A member’s own, under the own-records rules (ADR-0035); the audit trail keeps its name and how many stops, never an address.',
+  },
+  saved_route_stops: {
+    about:
+      'A saved route’s stops in order, the start at 0, each an address and, for one picked from the suggestions, the place it is measured from, its name and point to six places (Q53). Its member’s own, as its route is, and removed with it.',
   },
   reports: {
     about:
@@ -670,6 +680,24 @@ export const RULES: readonly Rule[] = [
       'saved_places_address_length',
     ],
     refs: ['FR-CAP-04', 'ADR-0035'],
+  },
+  {
+    rule: 'A member keeps a route by a name once, its stops in order, and only their own.',
+    mechanism:
+      'A unique index over the organization, the member and the name in lower case, a name of 1 to 80 characters; each stop points at its route by a composite key and goes when the route does, one stop per route and position, 0 to 24, an address of 1 to 200 characters and a picked place whole or absent, within the globe. The own-records policy and trigger keep both tables to their member.',
+    objects: [
+      'saved_routes_member_name_key',
+      'saved_routes_member_fk',
+      'saved_routes_name_length',
+      'saved_route_stops_position_key',
+      'saved_route_stops_route_fk',
+      'saved_route_stops_member_fk',
+      'saved_route_stops_position_range',
+      'saved_route_stops_address_length',
+      'saved_route_stops_place_whole',
+      'saved_route_stops_coordinates_range',
+    ],
+    refs: ['FR-CAP-16', 'ADR-0035'],
   },
   {
     rule: 'An organization has one routing key per provider, and shows only its last four characters.',

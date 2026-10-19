@@ -5987,6 +5987,170 @@
           "pick"
         ]
       },
+      "SavedRouteList": {
+        "type": "object",
+        "properties": {
+          "routes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SavedRoute"
+            }
+          }
+        },
+        "required": [
+          "routes"
+        ]
+      },
+      "SavedRoute": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "example": "Office → Acme HQ"
+          },
+          "roundTrip": {
+            "type": "boolean"
+          },
+          "stops": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "address": {
+                  "type": "string",
+                  "example": "1520 Harney St, Omaha, NE"
+                },
+                "place": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "properties": {
+                    "label": {
+                      "type": "string"
+                    },
+                    "longitude": {
+                      "type": "string"
+                    },
+                    "latitude": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "label",
+                    "longitude",
+                    "latitude"
+                  ],
+                  "description": "Where it was picked, for a stop picked from the suggestions."
+                },
+                "pick": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": "Send it with the stop, as in PickedStop, to log a drive from it pinned."
+                }
+              },
+              "required": [
+                "address",
+                "place",
+                "pick"
+              ]
+            },
+            "description": "In order: the start first."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "roundTrip",
+          "stops"
+        ]
+      },
+      "SaveRoute": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 400,
+            "description": "Up to 80 characters, once per person. Never sent anywhere.",
+            "example": "Office → Acme HQ"
+          },
+          "stops": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 1000
+                },
+                {
+                  "$ref": "#/components/schemas/PickedStop"
+                }
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 50,
+            "description": "The stops in order, start first and end last: 2 to 25, each an address of up to 200 characters, sent as typed to be measured, or a place picked from the suggestions, measured from where it is.",
+            "example": [
+              "12 Elm St, Omaha, NE",
+              "Acme HQ, 1520 Harney St, Omaha",
+              "Eppley Airfield"
+            ]
+          },
+          "roundTrip": {
+            "type": "boolean",
+            "description": "Back to the start after the end."
+          }
+        },
+        "required": [
+          "name",
+          "stops"
+        ],
+        "additionalProperties": false
+      },
+      "ChangeRoute": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 400,
+            "description": "Up to 80 characters, once per person. Never sent anywhere.",
+            "example": "Office → Acme HQ"
+          },
+          "stops": {
+            "type": "array",
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 1000
+                },
+                {
+                  "$ref": "#/components/schemas/PickedStop"
+                }
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 50,
+            "description": "The stops in order, start first and end last: 2 to 25, each an address of up to 200 characters, sent as typed to be measured, or a place picked from the suggestions, measured from where it is.",
+            "example": [
+              "12 Elm St, Omaha, NE",
+              "Acme HQ, 1520 Harney St, Omaha",
+              "Eppley Airfield"
+            ]
+          },
+          "roundTrip": {
+            "type": "boolean",
+            "description": "Back to the start after the end."
+          }
+        },
+        "additionalProperties": false
+      },
       "RouteKeyStatus": {
         "type": "object",
         "properties": {
@@ -13683,6 +13847,341 @@
           },
           "404": {
             "description": "Route mileage or place suggestions are switched off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/routes": {
+      "get": {
+        "tags": [
+          "Mileage"
+        ],
+        "summary": "The caller’s saved routes",
+        "description": "FR-CAP-16. Each with its stops in order and a pick for each stop picked from the suggestions, to log a drive from it.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "By name.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedRouteList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Route mileage is switched off for this organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Mileage"
+        ],
+        "summary": "Save a route to log drives from",
+        "description": "FR-CAP-16. Its name, stops and round trip; a stop picked from the suggestions keeps its place (Q53). Its name is never sent anywhere.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SaveRoute"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The route.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedRoute"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Route mileage is switched off for this organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The caller keeps a route of that name already (name_taken).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The name or a stop is not valid; field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/routes/{routeId}": {
+      "patch": {
+        "tags": [
+          "Mileage"
+        ],
+        "summary": "Rename a saved route or change its stops",
+        "description": "Drives already logged from it keep what they were logged with.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "routeId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangeRoute"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The route as it is now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedRoute"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such route of the caller’s, or route mileage is switched off for this organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The caller keeps a route of that name already (name_taken).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The name or a stop is not valid; field names which.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Mileage"
+        ],
+        "summary": "Remove a saved route",
+        "description": "Drives logged from it keep what they were logged with.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "routeId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed."
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such route of the caller’s, or route mileage is switched off for this organization (feature_off).",
             "content": {
               "application/problem+json": {
                 "schema": {

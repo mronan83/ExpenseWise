@@ -1,4 +1,4 @@
-import type { RecentPlace, SavedPlace, StoredRouteKey } from '@expensewise/db';
+import type { RecentPlace, SavedPlace, SavedRoute, StoredRouteKey } from '@expensewise/db';
 import { ROUTE_ATTRIBUTION, sixPlaces, type StopPin } from '@expensewise/domain';
 import { mileageEntry } from './mileage-views.ts';
 import type { RouteDriveEntry, SuggestedPlace } from './route-mileage.ts';
@@ -59,6 +59,18 @@ export function routeDriveView(entry: RouteDriveEntry, sealPick: PickSealer) {
 }
 
 export const placeView = (p: SavedPlace) => ({ id: p.id, name: p.name, address: p.address });
+
+/** A saved route, each stop picked from the suggestions with its pick (FR-CAP-16). */
+export const savedRouteView = (route: SavedRoute, sealPick: PickSealer) => ({
+  id: route.id,
+  name: route.name,
+  roundTrip: route.roundTrip,
+  stops: route.stops.map((s) => ({
+    address: s.address,
+    place: s.pin,
+    pick: s.pin ? sealPick(s.pin) : null,
+  })),
+});
 
 /** A place suggested for a stop, with its pick (FR-CAP-14). */
 export function suggestionView(place: SuggestedPlace, pick: string) {

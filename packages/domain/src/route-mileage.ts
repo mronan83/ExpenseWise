@@ -423,3 +423,52 @@ export function applyPlaceInput(
   }
   return ok({ name, address });
 }
+
+/** A route a member keeps to log drives from (FR-CAP-16): a name, its stops and a round trip. */
+export interface SavedRouteValues {
+  readonly name: string;
+  readonly stops: readonly string[];
+  /** The place picked for each stop, null for one typed; left out when none was picked. */
+  readonly pins?: readonly (StopPin | null)[];
+  readonly roundTrip: boolean;
+}
+
+/**
+ * A saved route as given, or changed: a name of up to ROUTE_NAME_MAX characters, and stops as
+ * a drive's are, each typed or picked from the suggestions.
+ */
+export function applySavedRouteInput(
+  current: SavedRouteValues | null,
+  input: {
+    readonly name?: string;
+    readonly stops?: readonly RouteStopInput[];
+    readonly roundTrip?: boolean;
+  },
+): Result<SavedRouteValues, RouteProblem> {
+  const name = (input.name ?? current?.name ?? '').trim().replace(/\s+/g, ' ');
+  if (name === '') return problem('name', 'Give the route a name, such as Office → Acme HQ.');
+  if (name.length > ROUTE_NAME_MAX) {
+    return problem('name', `Keep the name to ${ROUTE_NAME_MAX} characters.`);
+  }
+  let stops = current?.stops;
+  let pins = current?.pins ?? null;
+  if (input.stops !== undefined) {
+    const checked = checkStopInputs(input.stops);
+    if (!checked.ok) return checked;
+    ({ stops, pins } = checked.value);
+  }
+  if (stops === undefined) return problem('stops', 'Enter where the route starts and ends.');
+  return ok({
+    name,
+    stops,
+    ...(pins ? { pins } : {}),
+    roundTrip: input.roundTrip ?? current?.roundTrip ?? false,
+  });
+}
+
+/** Whether a saved route is the same as another: its name, stops, picks and round trip. */
+export const sameSavedRoute = (a: SavedRouteValues, b: SavedRouteValues): boolean =>
+  a.name === b.name &&
+  a.roundTrip === b.roundTrip &&
+  a.stops.length === b.stops.length &&
+  a.stops.every((s, i) => s === b.stops[i] && samePin(a.pins?.[i], b.pins?.[i]));

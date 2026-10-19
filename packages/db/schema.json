@@ -6253,6 +6253,321 @@
       }
     },
     {
+      "name": "saved_route_stops",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "member_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "route_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "position",
+          "type": "integer",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "address",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "label",
+          "type": "text",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "longitude",
+          "type": "numeric(9,6)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "latitude",
+          "type": "numeric(8,6)",
+          "nullable": true,
+          "default": null
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "saved_route_stops_member_fk",
+          "columns": [
+            "org_id",
+            "member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "saved_route_stops_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "saved_route_stops_route_fk",
+          "columns": [
+            "org_id",
+            "route_id"
+          ],
+          "table": "saved_routes",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "saved_route_stops_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "saved_route_stops_position_key",
+          "columns": [
+            "org_id",
+            "route_id",
+            "position"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "saved_route_stops_address_length",
+          "definition": "CHECK (((length(address) >= 1) AND (length(address) <= 200)))"
+        },
+        {
+          "name": "saved_route_stops_coordinates_range",
+          "definition": "CHECK ((((longitude >= ('-180'::integer)::numeric) AND (longitude <= (180)::numeric)) AND ((latitude >= ('-90'::integer)::numeric) AND (latitude <= (90)::numeric))))"
+        },
+        {
+          "name": "saved_route_stops_place_whole",
+          "definition": "CHECK ((((label IS NULL) = (longitude IS NULL)) AND ((label IS NULL) = (latitude IS NULL))))"
+        },
+        {
+          "name": "saved_route_stops_position_range",
+          "definition": "CHECK (((\"position\" >= 0) AND (\"position\" <= 24)))"
+        }
+      ],
+      "indexes": [],
+      "policies": [
+        {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (member_id = app_current_member()))",
+          "check": null
+        },
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.saved_route_stops FOR EACH ROW EXECUTE FUNCTION enforce_own_records('member')"
+        }
+      ],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
+      "name": "saved_routes",
+      "rls": {
+        "enabled": true,
+        "forced": true
+      },
+      "columns": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "org_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "member_id",
+          "type": "uuid",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": false,
+          "default": null
+        },
+        {
+          "name": "round_trip",
+          "type": "boolean",
+          "nullable": false,
+          "default": "false"
+        },
+        {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        },
+        {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "nullable": false,
+          "default": "now()"
+        }
+      ],
+      "primaryKey": [
+        "id"
+      ],
+      "foreignKeys": [
+        {
+          "name": "saved_routes_member_fk",
+          "columns": [
+            "org_id",
+            "member_id"
+          ],
+          "table": "members",
+          "references": [
+            "org_id",
+            "id"
+          ]
+        },
+        {
+          "name": "saved_routes_org_id_organizations_id_fk",
+          "columns": [
+            "org_id"
+          ],
+          "table": "organizations",
+          "references": [
+            "id"
+          ]
+        }
+      ],
+      "uniques": [
+        {
+          "name": "saved_routes_org_id_id_key",
+          "columns": [
+            "org_id",
+            "id"
+          ]
+        }
+      ],
+      "checks": [
+        {
+          "name": "saved_routes_name_length",
+          "definition": "CHECK (((length(name) >= 1) AND (length(name) <= 80)))"
+        }
+      ],
+      "indexes": [
+        {
+          "name": "saved_routes_member_name_key",
+          "definition": "CREATE UNIQUE INDEX saved_routes_member_name_key ON public.saved_routes USING btree (org_id, member_id, lower(name))"
+        }
+      ],
+      "policies": [
+        {
+          "name": "own_records",
+          "command": "SELECT",
+          "permissive": false,
+          "roles": [
+            "public"
+          ],
+          "using": "(app_sees_every_member() OR (member_id = app_current_member()))",
+          "check": null
+        },
+        {
+          "name": "tenant_isolation",
+          "command": "ALL",
+          "permissive": true,
+          "roles": [
+            "public"
+          ],
+          "using": "(org_id = app_current_org())",
+          "check": "(org_id = app_current_org())"
+        }
+      ],
+      "triggers": [
+        {
+          "name": "own_records",
+          "definition": "CREATE TRIGGER own_records BEFORE INSERT OR DELETE OR UPDATE ON public.saved_routes FOR EACH ROW EXECUTE FUNCTION enforce_own_records('member')"
+        }
+      ],
+      "grants": {
+        "expensewise_app": [
+          "DELETE",
+          "INSERT",
+          "SELECT",
+          "UPDATE"
+        ]
+      }
+    },
+    {
       "name": "trips",
       "rls": {
         "enabled": true,

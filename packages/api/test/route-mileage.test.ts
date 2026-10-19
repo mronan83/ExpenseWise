@@ -6,11 +6,13 @@ import type {
   ReportForExport,
   RouteRecord,
   SavedPlace,
+  SavedRoute,
   StoredRouteKey,
 } from '@expensewise/db';
 import {
   applyPlaceInput,
   applyRouteDriveInput,
+  applySavedRouteInput,
   claimRouteMiles,
   isExpenseEditable,
   milesFromMetres,
@@ -69,6 +71,7 @@ interface Entry {
 function fakeRoutes() {
   const entries = new Map<string, Entry>();
   const places = new Map<string, SavedPlace & { memberId: string }>();
+  const routes = new Map<string, SavedRoute & { memberId: string }>();
   let next = 0;
   const id = () => `0192f7a0-0000-7000-8000-00000000f0${String(next++).padStart(2, '0')}`;
   const request = (expenseId: string): CommittedEvent => ({
@@ -263,6 +266,45 @@ function fakeRoutes() {
       places.delete(placeId);
       return Promise.resolve(true);
     },
+    routes: (_org, memberId) =>
+      Promise.resolve([...routes.values()].filter((r) => r.memberId === memberId)),
+    saveRoute: (_org, memberId, routeId, input) => {
+      const current = routeId === null ? undefined : routes.get(routeId);
+      if (routeId !== null && current?.memberId !== memberId) {
+        return Promise.resolve({ status: 'missing' });
+      }
+      const before = current && {
+        name: current.name,
+        stops: current.stops.map((st) => st.address),
+        pins: current.stops.map((st) => st.pin),
+        roundTrip: current.roundTrip,
+      };
+      const applied = applySavedRouteInput(before ?? null, input);
+      if (!applied.ok) return Promise.resolve({ status: 'invalid', problem: applied.error });
+      const v = applied.value;
+      const taken = [...routes.values()].some(
+        (r) =>
+          r.memberId === memberId &&
+          r.id !== routeId &&
+          r.name.toLowerCase() === v.name.toLowerCase(),
+      );
+      if (taken) return Promise.resolve({ status: 'taken' });
+      const route = {
+        id: routeId ?? id(),
+        memberId,
+        name: v.name,
+        roundTrip: v.roundTrip,
+        stops: v.stops.map((address, i) => ({ address, pin: v.pins?.[i] ?? null })),
+      };
+      routes.set(route.id, route);
+      return Promise.resolve({ status: 'saved', route });
+    },
+    removeRoute: (_org, memberId, routeId) => {
+      const found = routes.get(routeId);
+      if (found?.memberId !== memberId) return Promise.resolve(false);
+      routes.delete(routeId);
+      return Promise.resolve(true);
+    },
   };
   /** As the workflow would record it: legs in whole metres, priced at the rate on the day. */
   const measure = (expenseId: string, legs: number[]) => {
@@ -424,6 +466,10 @@ describe('route mileage, switched off (ADR-0032)', () => {
     ['POST', '/v1/me/places', { name: 'Home', address: '12 Elm St' }],
     ['PATCH', `/v1/me/places/${ID}`, { name: 'Office' }],
     ['DELETE', `/v1/me/places/${ID}`, undefined],
+    ['GET', '/v1/me/routes', undefined],
+    ['POST', '/v1/me/routes', { name: 'Office', stops: ['A', 'B'] }],
+    ['PATCH', `/v1/me/routes/${ID}`, { name: 'Office' }],
+    ['DELETE', `/v1/me/routes/${ID}`, undefined],
     ['GET', '/v1/settings/mileage/route-key', undefined],
     ['PUT', '/v1/settings/mileage/route-key', { apiKey: ORS_KEY }],
     ['DELETE', '/v1/settings/mileage/route-key', undefined],
@@ -960,5 +1006,76 @@ describe('place suggestions for a stop (FR-CAP-14, ADR-0052)', () => {
       pinned: true,
       place: EPPLEY_PIN,
     });
+  });
+});
+
+describe('saved routes (FR-CAP-16, Q55)', () => {
+  it('saves a route with its stops, a picked one pinned, and lists only the caller’s own', async () => {
+    const s = setup();
+    const pick = sealPick(secrets, ORG, EPPLEY_PIN);
+    const saved = await s.call('POST', '/v1/me/routes', {
+      name: 'Office → the airport',
+      stops: ['1520 Harney St, Omaha, NE', { address: EPPLEY.address, pick }],
+      roundTrip: true,
+    });
+    expect(saved.status).toBe(201);
+    expect(saved.body).toMatchObject({
+      name: 'Office → the airport',
+      roundTrip: true,
+      stops: [
+        { address: '1520 Harney St, Omaha, NE', place: null, pick: null },
+        {
+          address: EPPLEY.address,
+          place: EPPLEY_PIN,
+          pick: expect.stringMatching(/^v1\./) as unknown,
+        },
+      ],
+    });
+    await s.call('POST', '/v1/me/routes', { name: 'Theirs', stops: ['A', 'B'] }, 'jordan');
+    const mine = await s.call('GET', '/v1/me/routes');
+    expect((mine.body.routes as { name: string }[]).map((r) => r.name)).toEqual([
+      'Office → the airport',
+    ]);
+    // Its stops, sent back with their picks, log a drive pinned as the route was.
+    const stops = (saved.body.stops as { address: string; pick: string | null }[]).map((st) =>
+      st.pick ? { address: st.address, pick: st.pick } : st.address,
+    );
+    const drove = await s.call('POST', '/v1/mileage/routes', {
+      date: drive.date,
+      purpose: drive.purpose,
+      name: 'Office → the airport',
+      stops,
+      roundTrip: true,
+    });
+    expect(drove.status).toBe(201);
+    expect((drove.body.route?.stops as Record<string, unknown>[])[1]).toMatchObject({
+      pinned: true,
+      place: EPPLEY_PIN,
+    });
+  });
+
+  it('renames a route or changes its stops, each name once, and removes only the caller’s own', async () => {
+    const s = setup();
+    const a = await s.call('POST', '/v1/me/routes', { name: 'Office → Acme', stops: ['A', 'B'] });
+    await s.call('POST', '/v1/me/routes', { name: 'Home → Office', stops: ['C', 'D'] });
+    const id = a.body.id as string;
+    const renamed = await s.call('PATCH', `/v1/me/routes/${id}`, { name: 'Acme loop' });
+    expect(renamed.body).toMatchObject({
+      name: 'Acme loop',
+      stops: [{ address: 'A' }, { address: 'B' }],
+    });
+    const taken = await s.call('PATCH', `/v1/me/routes/${id}`, { name: 'home → office' });
+    expect(taken.status).toBe(409);
+    expect(taken.body.code).toBe('name_taken');
+    const invalid = await s.call('POST', '/v1/me/routes', { name: ' ', stops: ['A', 'B'] });
+    expect(invalid.body).toMatchObject({ code: 'invalid_value', field: 'name' });
+    const forged = await s.call('POST', '/v1/me/routes', {
+      name: 'Forged',
+      stops: ['A', { address: 'B', pick: 'v1.made-up' }],
+    });
+    expect(forged.body).toMatchObject({ code: 'invalid_value', field: 'stops', stop: 1 });
+    expect((await s.call('DELETE', `/v1/me/routes/${id}`, undefined, 'jordan')).status).toBe(404);
+    expect((await s.call('DELETE', `/v1/me/routes/${id}`)).status).toBe(204);
+    expect((await s.call('GET', '/v1/me/routes')).body.routes).toHaveLength(1);
   });
 });
