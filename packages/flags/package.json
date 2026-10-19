@@ -12,9 +12,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "posthog-node": "^5.55.0"
+    "posthog-node": "^5.56.2"
   },
   "devDependencies": {
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.5"
   }
 }
