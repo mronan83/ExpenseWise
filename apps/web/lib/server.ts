@@ -1,4 +1,10 @@
-import { createSecretBox, storedKeyReader, storedRouteKeyReader } from '@expensewise/api';
+import {
+  createSecretBox,
+  storedKeyReader,
+  storedRouteKeyReader,
+  vapidKeys,
+  type VapidKeys,
+} from '@expensewise/api';
 import { createDatabase, type Database } from '@expensewise/db';
 import { SUPPORTED_MEDIA_TYPES } from '@expensewise/extraction';
 import {
@@ -7,7 +13,11 @@ import {
   supabaseStorage,
   type ObjectStore,
 } from '@expensewise/storage';
-import { committedWorkflowEvent, createWorkflowClient } from '@expensewise/workflows';
+import {
+  committedWorkflowEvent,
+  createWorkflowClient,
+  type VapidIdentity,
+} from '@expensewise/workflows';
 import type { CommittedEvent } from '@expensewise/db';
 
 /*
@@ -115,4 +125,28 @@ export function routeKeyReader() {
   const secrets = secretBox();
   if (!db || !secrets) return undefined;
   return storedRouteKeyReader(db, secrets);
+}
+
+let vapid: VapidKeys | null | undefined;
+/**
+ * The server's VAPID keys for push notifications (ADR-0053), derived from the same secret as
+ * the key box, so there is nothing more to set. Undefined without that secret.
+ */
+export function pushKeys(): VapidKeys | undefined {
+  if (vapid === undefined) {
+    const secret = encryptionSecret();
+    vapid = (secret && optional('The push keys', () => vapidKeys(secret))) || null;
+  }
+  return vapid ?? undefined;
+}
+
+/**
+ * Who sends pushes, as the push services see it: the production address Vercel gives every
+ * deployment, so Apple can reach whoever runs it. Undefined without the keys.
+ */
+export function pushIdentity(): VapidIdentity | undefined {
+  const keys = pushKeys();
+  if (!keys) return undefined;
+  const host = env('VERCEL_PROJECT_PRODUCTION_URL') ?? 'localhost';
+  return { subject: `https://${host}`, ...keys };
 }

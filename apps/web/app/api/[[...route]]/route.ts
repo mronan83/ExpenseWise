@@ -12,6 +12,7 @@ import {
   dbMileageRateStore,
   dbMileageStore,
   dbModelSettingsStore,
+  dbNotificationStore,
   dbReimbursementStore,
   dbPeopleStore,
   dbReportStore,
@@ -30,6 +31,7 @@ import { handle } from 'hono/vercel';
 import {
   appDatabase,
   dispatchEvents,
+  pushKeys,
   receiptFiles,
   routeKeyReader,
   secretBox,
@@ -71,6 +73,10 @@ const handler = handle(
     reimbursement: db && dbReimbursementStore(db),
     people: db && dbPeopleStore(db),
     emails: db && dbUnfiledEmailStore(db),
+    // Push notifications: a member's kinds and devices, and the key a browser subscribes with,
+    // derived from the server's secret (ADR-0053).
+    notifications: db && dbNotificationStore(db),
+    pushPublicKey: pushKeys()?.publicKey,
     files: receiptFiles(),
     dispatch: dispatchEvents,
     secrets: secretBox(),

@@ -192,6 +192,34 @@ const noAuthenticatorsOfItsOwn: Step = (page) =>
   );
 
 /**
+ * Headless Chromium has no push service, so a subscription stands in for the one Apple's would
+ * give, with notifications allowed; the page then loads again with it. What the API keeps is
+ * real, in the bench's database.
+ */
+const pushAllowed: Step = async (page) => {
+  await page.context().grantPermissions(['notifications']);
+  await page.addInitScript(() => {
+    const endpoint = 'https://web.push.apple.com/bench-device';
+    const keys = { p256dh: `B${'A'.repeat(86)}`, auth: 'A'.repeat(22) };
+    let current: PushSubscription | null = null;
+    PushManager.prototype.subscribe = function (options?: PushSubscriptionOptionsInit) {
+      current = {
+        endpoint,
+        options: { applicationServerKey: options?.applicationServerKey ?? null },
+        toJSON: () => ({ endpoint, keys }),
+        unsubscribe: () => {
+          current = null;
+          return Promise.resolve(true);
+        },
+      } as unknown as PushSubscription;
+      return Promise.resolve(current);
+    };
+    PushManager.prototype.getSubscription = () => Promise.resolve(current);
+  });
+  await page.reload({ waitUntil: 'networkidle' });
+};
+
+/**
  * Each screen and state: what it shows, where it is, what a person does to get there, where
  * the day decides what shows, the day it is on the person's clock, and the one console error
  * the state means to cause, such as the browser logging a refusal the screen then handles.
@@ -819,6 +847,16 @@ const SCREENS: [string, (s: Seeded) => string, Step[], (() => string)?, RegExp?]
   ['AI model settings', () => '/settings/ai-models', []],
   ['reimbursement currency settings', () => '/settings/currency', []],
   [
+    'notification settings, before this device is allowed',
+    () => '/settings/notifications',
+    [(page) => expect(page.getByRole('heading', { name: 'What to tell you' })).toBeVisible()],
+  ],
+  [
+    'notification settings, this device allowed',
+    () => '/settings/notifications',
+    [pushAllowed, press('Allow notifications on this device')],
+  ],
+  [
     'mileage settings, with the route key, saved places and saved routes',
     () => '/settings/mileage',
     [(page) => expect(page.getByRole('heading', { name: 'Saved routes' })).toBeVisible()],
@@ -1126,6 +1164,39 @@ test('fills a drive from a saved route: its name, stops and round trip', async (
     'Acme HQ, 1200 Dodge St, Omaha, NE',
   );
   await expect(page.getByLabel('Round trip: back to the start after the end')).toBeChecked();
+});
+
+test('allows notifications on this device, sends a test, and switches a kind', async ({ page }) => {
+  await page.goto('/settings/notifications', { waitUntil: 'networkidle' });
+  await pushAllowed(page);
+  await page.getByRole('button', { name: 'Allow notifications on this device' }).click();
+  await expect(page.getByRole('status')).toHaveText('This device gets your notifications now.');
+  await expect(page.getByText('It gets your notifications.')).toBeVisible();
+  await expect(page.getByText(/^(One|\d+) of your devices gets? notifications\.$/)).toBeVisible();
+
+  await page.getByRole('button', { name: 'Send a test notification' }).click();
+  await expect(page.getByRole('status')).toHaveText(
+    'A test notification is on its way. It takes a few seconds.',
+  );
+
+  // Each kind switches, and stays as switched; it is put back as it was for the other checks.
+  const receipts = page.getByRole('switch', { name: 'A receipt you emailed is filed' });
+  const was = await receipts.getAttribute('aria-checked');
+  const flipped = was === 'true' ? 'false' : 'true';
+  await receipts.click();
+  await expect(receipts).toHaveAttribute('aria-checked', flipped);
+  await page.reload({ waitUntil: 'networkidle' });
+  await expect(receipts).toHaveAttribute('aria-checked', flipped);
+  await receipts.click();
+  await expect(receipts).toHaveAttribute('aria-checked', was!);
+
+  // The page loads again with the stand-in's subscription gone, so allow it once more to stop it.
+  await page.getByRole('button', { name: 'Allow notifications on this device' }).click();
+  await page.getByRole('button', { name: 'Stop on this device' }).click();
+  await expect(page.getByRole('status')).toHaveText('This device gets no more notifications.');
+  await expect(
+    page.getByRole('button', { name: 'Allow notifications on this device' }),
+  ).toBeVisible();
 });
 
 test('saves a drive’s route under a name, a picked stop with its pick', async ({ page }) => {

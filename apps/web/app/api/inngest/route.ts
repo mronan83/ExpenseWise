@@ -8,6 +8,8 @@ import {
   emailReadingFunction,
   emailReadingPorts,
   outboxRelayFunction,
+  pushSweepFunction,
+  pushSweepPorts,
   receiptReadingFunction,
   receiptReadingPorts,
   relayPorts,
@@ -15,8 +17,10 @@ import {
   reportSchedulePorts,
   routeMeasuringFunction,
   routeMeasuringPorts,
+  webPushSender,
   type ConversionPorts,
   type EmailReadingPorts,
+  type PushSweepPorts,
   type StatementReadingPorts,
   type ReceiptReadingPorts,
   type RelayPorts,
@@ -28,6 +32,7 @@ import {
   appDatabase,
   birdApiKey,
   providerKeyReader,
+  pushIdentity,
   receiptFiles,
   routeKeyReader,
   workflowClient,
@@ -128,6 +133,19 @@ function measuringPorts(): RouteMeasuringPorts {
   return measuring;
 }
 
+let pushing: PushSweepPorts | undefined;
+function pushPorts(): PushSweepPorts {
+  if (pushing) return pushing;
+  const db = appDatabase();
+  const identity = pushIdentity();
+  if (!db || !identity) {
+    throw new Error('Push notifications need DATABASE_URL and SUPABASE_SECRET_KEY');
+  }
+  // Signed with the server's own VAPID key, to Apple's push service and the browsers' (ADR-0053).
+  pushing = pushSweepPorts(db, webPushSender(identity));
+  return pushing;
+}
+
 const handler = workflowsServed
   ? serve({
       client: workflowClient,
@@ -140,6 +158,7 @@ const handler = workflowsServed
         amountConversionFunction(workflowClient, convertingPorts),
         conversionSweepFunction(workflowClient, convertingPorts),
         routeMeasuringFunction(workflowClient, measuringPorts),
+        pushSweepFunction(workflowClient, pushPorts),
       ],
     })
   : undefined;
