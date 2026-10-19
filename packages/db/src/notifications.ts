@@ -644,8 +644,15 @@ export function preparePush(db: Database, orgId: string, now: Date): Promise<Pus
       )
       .orderBy(asc(auditEvents.sequence))
       .limit(CHANGES_PER_SWEEP);
-    const last = rows.at(-1)?.sequence;
-    if (last !== undefined) {
+    // Read to the end, the cursor moves past the changes that tell no one too, so they aren't
+    // read again. Each event takes its sequence under the organization's lock until it commits
+    // (appendAuditEvent), so one still to commit comes after every sequence seen here.
+    const [end] =
+      rows.length < CHANGES_PER_SWEEP
+        ? await tx.select({ sequence: sql<string>`max(${auditEvents.sequence})` }).from(auditEvents)
+        : [];
+    const last = Math.max(cursor.sequence, rows.at(-1)?.sequence ?? 0, Number(end?.sequence ?? 0));
+    if (last > cursor.sequence) {
       await tx
         .update(pushCursors)
         .set({ sequence: last, updatedAt: now })

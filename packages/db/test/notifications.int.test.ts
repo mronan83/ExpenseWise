@@ -1,6 +1,6 @@
 import { checkPushSubscription, newId, NOTABLE_ACTIONS } from '@expensewise/domain';
 import { readFileSync } from 'node:fs';
-import { eq } from 'drizzle-orm';
+import { desc, eq } from 'drizzle-orm';
 import { afterAll, describe, expect, it } from 'vitest';
 import { appendAuditEvent } from '../src/audit.ts';
 import { withMember, withOrg } from '../src/client.ts';
@@ -306,6 +306,26 @@ describe('the sweep (FR-PLT-12, R-PUSH-EVERY)', () => {
     );
     expect(await pendingPushes(app.db, w.org.orgId, later(1))).toEqual([]);
     expect(await pushWorkDue(app.db, later(1), false)).not.toContain(w.org.orgId);
+  });
+
+  it('moves the cursor past changes that tell no one, so they are not read again', async () => {
+    const w = await world('push-cursor');
+    await w.allow(w.asAlex, w.alex.userId, 1);
+    // A kind switched is on the trail but tells no one.
+    await withMember(app.db, w.asAlex, (tx) =>
+      setNotificationKind(tx, w.org.orgId, w.alex.id, 'card', false, w.alex.userId),
+    );
+    await emailedReceipt(w.org.orgId, w.alex.id, w.alex.userId, 'extracted');
+    await preparePush(app.db, w.org.orgId, NOW);
+    const [cursor] = await withOrg(app.db, w.org.orgId, (tx) => tx.select().from(pushCursors));
+    const [end] = await withOrg(app.db, w.org.orgId, (tx) =>
+      tx
+        .select({ sequence: auditEvents.sequence })
+        .from(auditEvents)
+        .orderBy(desc(auditEvents.sequence))
+        .limit(1),
+    );
+    expect(cursor!.sequence).toBe(end!.sequence);
   });
 
   it('makes nothing for a kind switched off, a person with no device, or the feature off', async () => {
