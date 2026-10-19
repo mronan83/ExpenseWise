@@ -428,6 +428,13 @@
       "when": 1791641048050,
       "tag": "0060_several_charges_one_expense",
       "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1792415946642,
+      "tag": "0061_picked_stop_places",
+      "breakpoints": true
     }
   ]
 }

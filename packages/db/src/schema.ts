@@ -1320,7 +1320,9 @@ export const mileageRoutes = pgTable(
 
 /**
  * A route drive's stops, in order: each address as the person typed it, which is what is
- * sent to be measured (Q32), and once measured the place it was found at and the leg to it.
+ * sent to be measured (Q32), and once measured the place it was found at and the leg to it. A
+ * stop picked from the suggestions is pinned: its place is kept as it is saved and the drive
+ * is measured from exactly there, its address never searched (FR-CAP-14, Q53).
  */
 export const mileageRouteStops = pgTable(
   'mileage_route_stops',
@@ -1333,6 +1335,8 @@ export const mileageRouteStops = pgTable(
     address: text('address').notNull(),
     /** The place the address was found at, as the routing service names it. */
     label: text('label'),
+    /** Picked from the suggestions: its place below is where it is measured from (Q53). */
+    pinned: boolean('pinned').notNull().default(false),
     longitude: numeric('longitude', { precision: 9, scale: 6 }),
     latitude: numeric('latitude', { precision: 8, scale: 6 }),
     /** The leg from the stop before this one, in whole metres; none for the start. */
@@ -1353,6 +1357,7 @@ export const mileageRouteStops = pgTable(
       'mileage_route_stops_place_whole',
       sql`(${t.label} IS NULL) = (${t.longitude} IS NULL) AND (${t.label} IS NULL) = (${t.latitude} IS NULL)`,
     ),
+    check('mileage_route_stops_pin_whole', sql`NOT ${t.pinned} OR ${t.label} IS NOT NULL`),
     check(
       'mileage_route_stops_coordinates_range',
       sql`${t.longitude} BETWEEN -180 AND 180 AND ${t.latitude} BETWEEN -90 AND 90`,

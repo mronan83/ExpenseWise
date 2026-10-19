@@ -1,0 +1,2 @@
+ALTER TABLE "mileage_route_stops" ADD COLUMN "pinned" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "mileage_route_stops" ADD CONSTRAINT "mileage_route_stops_pin_whole" CHECK (NOT "mileage_route_stops"."pinned" OR "mileage_route_stops"."label" IS NOT NULL);

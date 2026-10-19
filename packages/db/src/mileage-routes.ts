@@ -20,8 +20,9 @@ import {
   type RouteProblem,
   type RouteProvider,
   type RouteStatus,
+  type StopPin,
 } from '@expensewise/domain';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, desc, eq, isNotNull } from 'drizzle-orm';
 import { appendAuditEvent, lockOrgWrites, type AuditEntry } from './audit.ts';
 import type { Transaction } from './client.ts';
 import { getMileage, type MileageRecord } from './mileage.ts';
@@ -50,19 +51,27 @@ import { mileagePolicy } from './mileage-rates.ts';
 /** The flag route mileage ships behind (ADR-0032). */
 export const ROUTE_MILEAGE_FLAG = 'expenses.route-mileage';
 
+/** The flag place suggestions for a drive's stops ship behind (FR-CAP-14, ADR-0052). */
+export const PLACE_SUGGESTIONS_FLAG = 'expenses.place-suggestions';
+
 /** Asks the measuring workflow to measure a route drive's stops as they are now. */
 export const ROUTE_MEASURE_REQUESTED = 'mileage.route_measure_requested';
 
 /** The workflow, as the audit trail names it. */
 const MEASURING: AuditEntry['actor'] = { type: 'system', id: 'route-measuring' };
 
-/** One stop of a route drive: as typed, and where it was found once measured. */
+/**
+ * One stop of a route drive: as typed, and where it was found once measured, or as picked from
+ * the suggestions, with the place it is measured from (FR-CAP-14).
+ */
 export interface RouteStopRecord {
   readonly position: number;
   readonly address: string;
   readonly label: string | null;
   readonly longitude: string | null;
   readonly latitude: string | null;
+  /** Picked from the suggestions: measured from its place, its address never searched. */
+  readonly pinned: boolean;
   /** The leg to it from the stop before, in whole metres; null for the start. */
   readonly legMetres: number | null;
 }
@@ -122,6 +131,7 @@ async function routeOf(
       label: mileageRouteStops.label,
       longitude: mileageRouteStops.longitude,
       latitude: mileageRouteStops.latitude,
+      pinned: mileageRouteStops.pinned,
       legMetres: mileageRouteStops.legMetres,
     })
     .from(mileageRouteStops)
@@ -180,8 +190,30 @@ async function requestMeasuring(
   return { outboxId, topic: ROUTE_MEASURE_REQUESTED, orgId, payload };
 }
 
-const stopRows = (orgId: string, expenseId: string, stops: readonly string[]) =>
-  stops.map((address, position) => ({ orgId, expenseId, position, address }));
+/** Each stop's row: a stop picked from the suggestions keeps its place, pinned, from the start. */
+const stopRows = (orgId: string, expenseId: string, values: RouteDriveValues) =>
+  values.stops.map((address, position) => {
+    const pin = values.pins?.[position];
+    return pin
+      ? { orgId, expenseId, position, address, ...pin, pinned: true }
+      : { orgId, expenseId, position, address };
+  });
+
+/** The places picked for a drive's stops, for its audit event: none when every stop was typed. */
+const pickedPayload = (values: RouteDriveValues) => {
+  const picked = (values.pins ?? []).flatMap((pin, stop) => (pin ? [{ stop, ...pin }] : []));
+  return picked.length > 0 ? { picked } : {};
+};
+
+/** The places a drive's stops were picked at, beside its stops, or none when all were typed. */
+function pinsOf(stops: readonly RouteStopRecord[]): (StopPin | null)[] | undefined {
+  const pins = stops.map((s) =>
+    s.pinned && s.label !== null && s.longitude !== null && s.latitude !== null
+      ? { label: s.label, longitude: s.longitude, latitude: s.latitude }
+      : null,
+  );
+  return pins.some((p) => p !== null) ? pins : undefined;
+}
 
 /** The route as it is before it is measured: nothing measured, nothing claimed. */
 const unmeasured = {
@@ -257,7 +289,7 @@ export async function logRouteMileage(
     status: 'measuring',
     requestId: event.outboxId,
   });
-  await tx.insert(mileageRouteStops).values(stopRows(orgId, id, values.stops));
+  await tx.insert(mileageRouteStops).values(stopRows(orgId, id, values));
   await appendAuditEvent(tx, orgId, {
     actor,
     entityType: 'expense',
@@ -269,6 +301,7 @@ export async function logRouteMileage(
       status: 'processing',
       date: values.date,
       stops: values.stops,
+      ...pickedPayload(values),
       roundTrip: values.roundTrip,
       rate: { perUnit: rate.perUnit, currency: rate.currency, effectiveFrom: rate.effectiveFrom },
     },
@@ -350,10 +383,12 @@ export async function changeRouteDrive(
   const { route } = found;
   if (!route) return { status: 'not_route' };
   if (!routeEditable(found.status)) return { status: 'not_editable', current: found.status };
+  const pins = pinsOf(route.stops);
   const current: RouteDriveValues = {
     date: found.date,
     purpose: found.purpose,
     stops: route.stops.map((s) => s.address),
+    ...(pins ? { pins } : {}),
     roundTrip: route.roundTrip,
   };
   const applied = applyRouteDriveInput(current, input, today, rates ?? (await mileagePolicy(tx)));
@@ -371,7 +406,7 @@ export async function changeRouteDrive(
   if (remeasured) {
     event = await requestMeasuring(tx, orgId, expenseId);
     await tx.delete(mileageRouteStops).where(eq(mileageRouteStops.expenseId, expenseId));
-    await tx.insert(mileageRouteStops).values(stopRows(orgId, expenseId, values.stops));
+    await tx.insert(mileageRouteStops).values(stopRows(orgId, expenseId, values));
     await tx
       .update(mileageRoutes)
       .set({
@@ -418,6 +453,7 @@ export async function changeRouteDrive(
       method: 'route',
       changes,
       remeasured,
+      ...(remeasured ? pickedPayload(values) : {}),
       ...(claim ? { ...claimPayload(claim), previousAmountMinor: found.amountMinor } : {}),
     },
   });
@@ -527,6 +563,8 @@ export async function claimMilesForRoute(
 /** What the measuring workflow needs: the stops as typed, in order, and where to look. */
 export interface RouteToMeasure {
   readonly stops: readonly string[];
+  /** The place each stop was picked at, null for one typed; left out when none was picked. */
+  readonly pins?: readonly (StopPin | null)[];
   readonly roundTrip: boolean;
   /** The organization's country, ISO 3166-1 alpha-2, to look addresses up in; null if unset. */
   readonly country: string | null;
@@ -545,8 +583,10 @@ export async function routeToMeasure(
   const route = await routeOf(tx, expenseId);
   if (route?.requestId !== requestId || route.status !== 'measuring') return undefined;
   const [org] = await tx.select({ country: organizations.country }).from(organizations);
+  const pins = pinsOf(route.stops);
   return {
     stops: route.stops.map((s) => s.address),
+    ...(pins ? { pins } : {}),
     roundTrip: route.roundTrip,
     country: org?.country ?? null,
   };
@@ -720,4 +760,66 @@ export async function recordRouteMeasurement(
   return measured
     ? { status: 'measured', miles: measured.miles }
     : { status: 'failed', problem: problem ?? '' };
+}
+
+/** A place a member has driven to, as it was found or picked, to offer for a stop again. */
+export interface RecentPlace {
+  readonly address: string;
+  readonly label: string;
+  readonly longitude: string;
+  readonly latitude: string;
+  /** The day of the latest drive that went there. */
+  readonly lastDriven: IsoDate;
+}
+
+/**
+ * The places a member's own route drives went to, newest first, once each by address and only
+ * where each was found or picked, to offer again for a stop (FR-CAP-14): at most `limit`.
+ * Another member's drives are never among them, whatever the caller's role. Call inside
+ * withOrg(), as the member.
+ */
+export async function recentPlaces(
+  tx: Transaction,
+  memberId: string,
+  limit: number,
+): Promise<RecentPlace[]> {
+  const rows = await tx
+    .select({
+      address: mileageRouteStops.address,
+      label: mileageRouteStops.label,
+      longitude: mileageRouteStops.longitude,
+      latitude: mileageRouteStops.latitude,
+      lastDriven: mileageLogs.travelDate,
+    })
+    .from(mileageRouteStops)
+    .innerJoin(
+      mileageLogs,
+      and(
+        eq(mileageLogs.orgId, mileageRouteStops.orgId),
+        eq(mileageLogs.expenseId, mileageRouteStops.expenseId),
+      ),
+    )
+    .innerJoin(
+      expenses,
+      and(eq(expenses.orgId, mileageLogs.orgId), eq(expenses.id, mileageLogs.expenseId)),
+    )
+    .where(and(eq(expenses.memberId, memberId), isNotNull(mileageRouteStops.label)))
+    .orderBy(
+      desc(mileageLogs.travelDate),
+      desc(mileageRouteStops.createdAt),
+      asc(mileageRouteStops.position),
+    )
+    .limit(limit * 5);
+  const seen = new Set<string>();
+  const places: RecentPlace[] = [];
+  for (const row of rows) {
+    const key = row.address.toLowerCase();
+    if (seen.has(key) || row.label === null || row.longitude === null || row.latitude === null) {
+      continue;
+    }
+    seen.add(key);
+    places.push({ ...row, label: row.label, longitude: row.longitude, latitude: row.latitude });
+    if (places.length === limit) break;
+  }
+  return places;
 }
