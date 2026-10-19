@@ -44,7 +44,12 @@ import { registerReimbursementRoutes } from './reimbursement-routes.ts';
 import type { ReimbursementStore } from './reimbursement.ts';
 import { registerReportRoutes } from './report-routes.ts';
 import type { ReportStore } from './reports.ts';
-import type { RouteKeyStore, RouteKeyVerifier, RouteMileageStore } from './route-mileage.ts';
+import type {
+  PlaceSuggester,
+  RouteKeyStore,
+  RouteKeyVerifier,
+  RouteMileageStore,
+} from './route-mileage.ts';
 import { registerRouteMileageRoutes } from './route-mileage-routes.ts';
 import { registerTripRoutes } from './trip-routes.ts';
 import type { TripStore } from './trips.ts';
@@ -100,6 +105,8 @@ export interface ApiOptions
   readonly routeKeys?: RouteKeyStore;
   /** Checks an OpenRouteService key with one short route as it is saved (ADR-0039). */
   readonly verifyRouteKey?: RouteKeyVerifier;
+  /** Suggests places for a drive's stop with the organization's key (ADR-0052). */
+  readonly suggestPlaces?: PlaceSuggester;
   /** What Home shows, read at once. Without it, Home answers 503. */
   readonly home?: HomeStore;
   /** Expense reports. Without it, those routes answer 503 and Needs you shows no reports. */

@@ -1,14 +1,18 @@
-import type { SavedPlace, StoredRouteKey } from '@expensewise/db';
-import { ROUTE_ATTRIBUTION } from '@expensewise/domain';
+import type { RecentPlace, SavedPlace, StoredRouteKey } from '@expensewise/db';
+import { ROUTE_ATTRIBUTION, sixPlaces, type StopPin } from '@expensewise/domain';
 import { mileageEntry } from './mileage-views.ts';
-import type { RouteDriveEntry } from './route-mileage.ts';
+import type { RouteDriveEntry, SuggestedPlace } from './route-mileage.ts';
+
+/** Seals a place so a stop can be picked at it again; null while picks can't be sealed. */
+export type PickSealer = (pin: StopPin) => string | null;
 
 /**
  * A route drive (FR-CAP-04): the drive as one logged by hand shows, and its route: each stop
  * as typed and where it was found, how it was measured, the miles claimed and why they differ,
- * and the attribution OpenRouteService's terms ask for (ADR-0039).
+ * and the attribution OpenRouteService's terms ask for (ADR-0039). A stop picked from the
+ * suggestions carries its pick, to send back with it and keep where it is measured from.
  */
-export function routeDriveView(entry: RouteDriveEntry) {
+export function routeDriveView(entry: RouteDriveEntry, sealPick: PickSealer) {
   const { route, expense, mileage } = entry;
   return {
     ...mileageEntry(entry),
@@ -16,14 +20,19 @@ export function routeDriveView(entry: RouteDriveEntry) {
       status: route.status,
       problem: route.problem,
       roundTrip: route.roundTrip,
-      stops: route.stops.map((s) => ({
-        address: s.address,
-        place:
+      stops: route.stops.map((s) => {
+        const place =
           s.label === null || s.longitude === null || s.latitude === null
             ? null
-            : { label: s.label, longitude: s.longitude, latitude: s.latitude },
-        legMetres: s.legMetres,
-      })),
+            : { label: s.label, longitude: s.longitude, latitude: s.latitude };
+        return {
+          address: s.address,
+          place,
+          pinned: s.pinned && place !== null,
+          pick: s.pinned && place ? sealPick(place) : null,
+          legMetres: s.legMetres,
+        };
+      }),
       returnMetres: route.returnMetres,
       measured:
         route.status === 'measured' &&
@@ -49,6 +58,31 @@ export function routeDriveView(entry: RouteDriveEntry) {
 }
 
 export const placeView = (p: SavedPlace) => ({ id: p.id, name: p.name, address: p.address });
+
+/** A place suggested for a stop, with its pick (FR-CAP-14). */
+export function suggestionView(place: SuggestedPlace, pick: string) {
+  return {
+    name: place.name,
+    detail: place.detail,
+    address: place.address,
+    label: place.label,
+    longitude: sixPlaces(place.longitude),
+    latitude: sixPlaces(place.latitude),
+    pick,
+  };
+}
+
+/** A place the member drove to, with its pick to measure a new stop from it (FR-CAP-14). */
+export function recentPlaceView(place: RecentPlace, sealPick: PickSealer) {
+  return {
+    address: place.address,
+    label: place.label,
+    longitude: place.longitude,
+    latitude: place.latitude,
+    lastDriven: place.lastDriven,
+    pick: sealPick(place),
+  };
+}
 
 export function routeKeyStatus(stored: StoredRouteKey | undefined) {
   return {

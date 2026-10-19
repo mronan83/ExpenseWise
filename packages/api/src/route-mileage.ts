@@ -7,6 +7,7 @@ import {
   getRouteKey,
   listSavedPlaces,
   logRouteMileage,
+  recentPlaces,
   removePlace,
   savePlace,
   saveRouteKey,
@@ -17,13 +18,21 @@ import {
   type ExpenseRecord,
   type LogRouteMileageResult,
   type MileageRecord,
+  type RecentPlace,
   type RouteKeyWrite,
   type RouteRecord,
   type SavedPlace,
   type SavePlaceResult,
   type StoredRouteKey,
 } from '@expensewise/db';
-import type { IsoDate, RouteDriveInput, RouteProvider } from '@expensewise/domain';
+import {
+  isStopPin,
+  RECENT_PLACES,
+  type IsoDate,
+  type RouteDriveInput,
+  type RouteProvider,
+  type StopPin,
+} from '@expensewise/domain';
 import { asCaller } from './caller.ts';
 import { SecretBoxError, type SecretBox } from './secret-box.ts';
 
@@ -66,6 +75,8 @@ export interface RouteMileageStore {
     today: IsoDate,
   ): Promise<ClaimRouteMilesResult>;
   places(orgId: string, memberId: string): Promise<SavedPlace[]>;
+  /** The places the member's own drives went to, newest first, once each (FR-CAP-14). */
+  recentPlaces(orgId: string, memberId: string): Promise<RecentPlace[]>;
   /** Saves a new place (placeId null) or changes one of the member's. */
   savePlace(
     orgId: string,
@@ -100,6 +111,8 @@ export function dbRouteMileageStore(db: Database): RouteMileageStore {
     claim: (orgId, memberId, expenseId, input, actor, today) =>
       inOrg(orgId, (tx) => claimMilesForRoute(tx, orgId, memberId, expenseId, input, actor, today)),
     places: (orgId, memberId) => inOrg(orgId, (tx) => listSavedPlaces(tx, memberId)),
+    recentPlaces: (orgId, memberId) =>
+      inOrg(orgId, (tx) => recentPlaces(tx, memberId, RECENT_PLACES)),
     savePlace: (orgId, memberId, placeId, input, actor) =>
       inOrg(orgId, (tx) => savePlace(tx, orgId, memberId, placeId, input, actor)),
     removePlace: (orgId, memberId, placeId, actor) =>
@@ -164,3 +177,72 @@ export type RouteKeyVerdict =
 
 /** Checks a key with one cheap call to OpenRouteService, as it is saved. Never logs the key. */
 export type RouteKeyVerifier = (key: string) => Promise<RouteKeyVerdict>;
+
+/** A place OpenRouteService suggests for a stop, as the workflows' `suggestPlaces()` gives it. */
+export interface SuggestedPlace {
+  readonly name: string;
+  readonly detail: string;
+  readonly address: string;
+  readonly label: string;
+  readonly longitude: number;
+  readonly latitude: number;
+}
+
+/** Why a stop has no suggestions from OpenRouteService. */
+export type SuggestProblem =
+  'no_key' | 'unreadable_key' | 'rejected' | 'limited' | 'unreachable' | 'refused';
+
+/**
+ * Suggests places for what is typed in a stop with the organization's own key (ADR-0052): the
+ * shape the workflows' `placeSuggester()` gives, which the server passes in. Never throws for
+ * a missing key or a failed answer; it says why.
+ */
+export type PlaceSuggester = (
+  orgId: string,
+  query: {
+    readonly text: string;
+    readonly country: string | null;
+    readonly near: { readonly longitude: number; readonly latitude: number } | null;
+  },
+) => Promise<
+  | { readonly ok: true; readonly places: readonly SuggestedPlace[] }
+  | { readonly ok: false; readonly reason: SuggestProblem }
+>;
+
+/** Binds a pick's seal to its organization: a pick made in one never opens in another. */
+export const pickSealContext = (orgId: string) => `${orgId}:route:pick`;
+
+/**
+ * Seals the place a stop can be picked at (Q53), so the stop is measured from where the server
+ * suggested, found or kept it, and never from a point a caller made up: a pick is tamper-proof
+ * and opens only for its organization.
+ */
+export const sealPick = (secrets: SecretBox, orgId: string, pin: StopPin): string =>
+  secrets.seal(
+    JSON.stringify({ label: pin.label, longitude: pin.longitude, latitude: pin.latitude }),
+    pickSealContext(orgId),
+  );
+
+/** The place a pick was sealed for, or null when it doesn't open here or isn't whole. */
+export function openPick(
+  secrets: SecretBox | undefined,
+  orgId: string,
+  pick: string,
+): StopPin | null {
+  if (!secrets) return null;
+  try {
+    const pin = JSON.parse(secrets.open(pick, pickSealContext(orgId))) as Partial<StopPin>;
+    if (
+      typeof pin.label !== 'string' ||
+      typeof pin.longitude !== 'string' ||
+      typeof pin.latitude !== 'string'
+    ) {
+      return null;
+    }
+    const opened = { label: pin.label, longitude: pin.longitude, latitude: pin.latitude };
+    return isStopPin(opened) ? opened : null;
+  } catch (error) {
+    if (error instanceof SecretBoxError || error instanceof SyntaxError) return null;
+    throw error;
+  }
+}

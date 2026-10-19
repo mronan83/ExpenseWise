@@ -492,6 +492,7 @@
           "receipts.journeys",
           "expenses.mileage",
           "expenses.route-mileage",
+          "expenses.place-suggestions",
           "reports.export",
           "reports.approval",
           "governance.audit-trail",
@@ -5534,7 +5535,18 @@
               "longitude",
               "latitude"
             ],
-            "description": "Where it was found, once measured."
+            "description": "Where it was found, once measured; or where it was picked, from the start."
+          },
+          "pinned": {
+            "type": "boolean",
+            "description": "Picked from the suggestions: measured from its place, its address never searched (Q53)."
+          },
+          "pick": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "For a pinned stop: send it back with the stop, as in PickedStop, to keep the place it was picked at. Sealed by the server; null for a stop typed."
           },
           "legMetres": {
             "type": [
@@ -5547,6 +5559,8 @@
         "required": [
           "address",
           "place",
+          "pinned",
+          "pick",
           "legMetres"
         ]
       },
@@ -5568,12 +5582,19 @@
           "stops": {
             "type": "array",
             "items": {
-              "type": "string",
-              "maxLength": 1000
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 1000
+                },
+                {
+                  "$ref": "#/components/schemas/PickedStop"
+                }
+              ]
             },
             "minItems": 1,
             "maxItems": 50,
-            "description": "The addresses in order, start first and end last: 2 to 25, each up to 200 characters, each sent as typed to be measured.",
+            "description": "The stops in order, start first and end last: 2 to 25, each an address of up to 200 characters, sent as typed to be measured, or a place picked from the suggestions, measured from where it is.",
             "example": [
               "12 Elm St, Omaha, NE",
               "Acme HQ, 1520 Harney St, Omaha",
@@ -5589,6 +5610,27 @@
           "date",
           "purpose",
           "stops"
+        ],
+        "additionalProperties": false
+      },
+      "PickedStop": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "maxLength": 1000,
+            "example": "Eppley Airfield, 4501 Abbott Drive, Omaha, NE, USA",
+            "description": "The address the suggestion gave, as shown on the stop."
+          },
+          "pick": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "The pick of a place suggested, driven to before, or already on the drive: the stop is measured from exactly there, and its address is never searched (Q53)."
+          }
+        },
+        "required": [
+          "address",
+          "pick"
         ],
         "additionalProperties": false
       },
@@ -5610,12 +5652,19 @@
           "stops": {
             "type": "array",
             "items": {
-              "type": "string",
-              "maxLength": 1000
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 1000
+                },
+                {
+                  "$ref": "#/components/schemas/PickedStop"
+                }
+              ]
             },
             "minItems": 1,
             "maxItems": 50,
-            "description": "The addresses in order, start first and end last: 2 to 25, each up to 200 characters, each sent as typed to be measured.",
+            "description": "The stops in order, start first and end last: 2 to 25, each an address of up to 200 characters, sent as typed to be measured, or a place picked from the suggestions, measured from where it is.",
             "example": [
               "12 Elm St, Omaha, NE",
               "Acme HQ, 1520 Harney St, Omaha",
@@ -5728,6 +5777,188 @@
           }
         },
         "additionalProperties": false
+      },
+      "PlaceSuggestionList": {
+        "type": "object",
+        "properties": {
+          "places": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlaceSuggestion"
+            },
+            "description": "Best first, at most 5; none for fewer than 3 characters."
+          },
+          "problem": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "no_key",
+              "unreadable_key",
+              "rejected",
+              "limited",
+              "unreachable",
+              "refused",
+              "unavailable",
+              null
+            ],
+            "description": "Why there are none to show, when OpenRouteService wasn’t asked or gave no answer: the stop is then typed, and measured as typed."
+          },
+          "attribution": {
+            "type": "string",
+            "example": "Places © openrouteservice.org by HeiGIT · Map data © OpenStreetMap contributors",
+            "description": "To show with the places."
+          }
+        },
+        "required": [
+          "places",
+          "problem",
+          "attribution"
+        ]
+      },
+      "PlaceSuggestion": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Eppley Airfield"
+          },
+          "detail": {
+            "type": "string",
+            "example": "4501 Abbott Drive, Omaha, NE, USA",
+            "description": "Where it is, under its name."
+          },
+          "address": {
+            "type": "string",
+            "example": "Eppley Airfield, 4501 Abbott Drive, Omaha, NE, USA",
+            "description": "The stop’s address once picked."
+          },
+          "label": {
+            "type": "string",
+            "example": "Eppley Airfield, Omaha, NE, USA",
+            "description": "OpenRouteService’s own name for it: the place the stop is measured from."
+          },
+          "longitude": {
+            "type": "string",
+            "example": "-95.894069",
+            "description": "Degrees, to six places."
+          },
+          "latitude": {
+            "type": "string",
+            "example": "41.303166",
+            "description": "Degrees, to six places."
+          },
+          "pick": {
+            "type": "string",
+            "description": "Send it with the stop, as in PickedStop."
+          }
+        },
+        "required": [
+          "name",
+          "detail",
+          "address",
+          "label",
+          "longitude",
+          "latitude",
+          "pick"
+        ]
+      },
+      "SuggestPlaces": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 1000,
+            "example": "eppley",
+            "description": "What is typed in the stop: from 3 characters, it is sent to OpenRouteService as typed, and nothing else of the drive (Q32)."
+          },
+          "near": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "longitude": {
+                "type": "number",
+                "minimum": -180,
+                "maximum": 180
+              },
+              "latitude": {
+                "type": "number",
+                "minimum": -90,
+                "maximum": 90
+              }
+            },
+            "required": [
+              "longitude",
+              "latitude"
+            ],
+            "description": "A place picked earlier in the drive, to rank places near it first; never the device’s own location (Q54)."
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "RecentPlaceList": {
+        "type": "object",
+        "properties": {
+          "places": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RecentPlace"
+            },
+            "description": "The caller’s own drives’ places, newest first, once each, at most 20."
+          }
+        },
+        "required": [
+          "places"
+        ]
+      },
+      "RecentPlace": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "example": "Eppley Airfield, Omaha, NE"
+          },
+          "label": {
+            "type": "string",
+            "example": "Eppley Airfield, Omaha, NE, USA"
+          },
+          "longitude": {
+            "type": "string",
+            "example": "-95.894069",
+            "description": "Degrees, to six places."
+          },
+          "latitude": {
+            "type": "string",
+            "example": "41.303166",
+            "description": "Degrees, to six places."
+          },
+          "lastDriven": {
+            "type": "string",
+            "example": "2026-10-09",
+            "description": "YYYY-MM-DD."
+          },
+          "pick": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Send it with the stop, as in PickedStop; null while picks can’t be sealed."
+          }
+        },
+        "required": [
+          "address",
+          "label",
+          "longitude",
+          "latitude",
+          "lastDriven",
+          "pick"
+        ]
       },
       "RouteKeyStatus": {
         "type": "object",
@@ -13283,6 +13514,148 @@
           },
           "404": {
             "description": "No such place of the caller’s, or route mileage is switched off for this organization (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/mileage/place-suggestions": {
+      "post": {
+        "tags": [
+          "Mileage"
+        ],
+        "summary": "Places for what is typed in a stop",
+        "description": "FR-CAP-14, ADR-0052. Landmarks, businesses and addresses from OpenRouteService, asked in the request with the organization’s own key, as the person waits: the text as typed goes in the body, so it never reaches a URL or a log, inside the organization’s country and near a place picked earlier in the drive. A missing key or a failed answer is a problem in the answer, never an error: the stop is then typed. Each place carries a pick, which a stop sends to be measured from exactly there (Q53).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SuggestPlaces"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The places, best first, or why there are none.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaceSuggestionList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Route mileage or place suggestions are switched off (feature_off).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/me/recent-places": {
+      "get": {
+        "tags": [
+          "Mileage"
+        ],
+        "summary": "The places the caller’s own drives went to",
+        "description": "FR-CAP-14. Each place a route drive of the caller’s went to, found or picked, newest first and once each, with a pick to measure a new stop from the same place. Never another member’s, whatever the caller’s role. Nothing is sent anywhere to list them.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Newest first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecentPlaceList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Route mileage or place suggestions are switched off (feature_off).",
             "content": {
               "application/problem+json": {
                 "schema": {

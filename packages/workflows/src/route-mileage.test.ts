@@ -5,8 +5,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createWorkflowClient } from './client.ts';
 import {
   openRouteService,
+  placeSuggester,
   RouteServiceError,
   routeKeyVerifier,
+  suggestedPlace,
+  suggestPlaces,
   type RoutingClient,
 } from './openrouteservice.ts';
 import {
@@ -95,6 +98,48 @@ const server = createServer((req, res) => {
           : [],
       });
     }
+    if (url.pathname === '/geocode/autocomplete') {
+      // Pelias autocomplete: a venue with its street, and an address, for anything typed.
+      return answer(200, {
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [-95.894069, 41.303166] },
+            properties: {
+              layer: 'venue',
+              name: 'Eppley Airfield',
+              housenumber: '4501',
+              street: 'Abbott Drive',
+              label: 'Eppley Airfield, Omaha, NE, USA',
+            },
+          },
+          {
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [-95.894069, 41.303166] },
+            properties: {
+              layer: 'venue',
+              name: 'Eppley Airfield',
+              label: 'Eppley Airfield, Omaha, NE, USA',
+              street: 'Abbott Drive',
+              housenumber: '4501',
+            },
+          },
+          {
+            type: 'Feature',
+            geometry: { type: 'Point', coordinates: [-95.9361172, 41.2571634] },
+            properties: {
+              layer: 'address',
+              name: '1520 Harney Street',
+              housenumber: '1520',
+              street: 'Harney Street',
+              label: '1520 Harney Street, Omaha, NE, USA',
+            },
+          },
+          { type: 'Feature', geometry: { type: 'Point' }, properties: { label: 'No point' } },
+        ],
+      });
+    }
     if (url.pathname === '/v2/directions/driving-car' && req.method === 'GET') {
       return answer(200, { type: 'FeatureCollection', features: [] });
     }
@@ -135,7 +180,12 @@ const STOPS = ['12 Elm St, Omaha, NE', 'Acme HQ, 1520 Harney St', 'Eppley Airfie
 
 /** Measuring with the stand-in, and the drive and its outcomes in memory. */
 function world(
-  drive: { stops?: string[]; roundTrip?: boolean; country?: string | null } | null = {},
+  drive: {
+    stops?: string[];
+    pins?: ({ label: string; longitude: string; latitude: string } | null)[];
+    roundTrip?: boolean;
+    country?: string | null;
+  } | null = {},
   /** key: the organization's key, or 'no_key' or 'unreadable_key' for why there is none. */
   options: { key?: string; enabled?: boolean } = {},
 ) {
@@ -147,6 +197,7 @@ function world(
           ? undefined
           : {
               stops: drive.stops ?? STOPS,
+              ...(drive.pins ? { pins: drive.pins } : {}),
               roundTrip: drive.roundTrip ?? false,
               country: drive.country ?? null,
             },
@@ -318,10 +369,97 @@ describe('measuring a route drive (FR-CAP-04)', () => {
     expect(failureProblem(undefined)).toBe(ROUTE_PROBLEMS.unreachable);
   });
 
+  it('measures a stop picked from the suggestions from exactly there, never searching it', async () => {
+    const pinned = {
+      label: 'Eppley Airfield, Omaha, NE, USA',
+      longitude: '-95.894069',
+      latitude: '41.303166',
+    };
+    const { ports } = world({
+      stops: ['12 Elm St, Omaha, NE', 'Acme HQ, 1520 Harney St', 'Picked from the list'],
+      pins: [null, null, pinned],
+    });
+    const outcome = await measureRoute(ports, request);
+    expect(outcome).toMatchObject({
+      kind: 'measured',
+      places: [{}, {}, pinned],
+      legs: [9400, 52400],
+    });
+    const searched = fake.seen
+      .filter((s) => s.url.startsWith('/geocode/search'))
+      .map((s) => new URL(s.url, 'http://x').searchParams.get('text'));
+    expect(searched).toEqual(['12 Elm St, Omaha, NE', 'Acme HQ, 1520 Harney St']);
+  });
+
   it('measures nothing for a request the drive no longer waits for', async () => {
     const w = world(null);
     expect(await measureRoute(w.ports, request)).toBe('stale');
     expect(fake.seen).toEqual([]);
+  });
+});
+
+describe('places suggested as a stop is typed (FR-CAP-14, ADR-0052)', () => {
+  it('suggests each place once, its name above its street and town, with the key in a header', async () => {
+    const places = await suggestPlaces(
+      KEY,
+      { text: 'eppley', country: 'US', near: { longitude: -95.9345021, latitude: 41.2565369 } },
+      { baseUrl: fake.url },
+    );
+    expect(places).toEqual([
+      {
+        name: 'Eppley Airfield',
+        detail: '4501 Abbott Drive, Omaha, NE, USA',
+        address: 'Eppley Airfield, 4501 Abbott Drive, Omaha, NE, USA',
+        label: 'Eppley Airfield, Omaha, NE, USA',
+        longitude: -95.894069,
+        latitude: 41.303166,
+      },
+      {
+        name: '1520 Harney Street',
+        detail: 'Omaha, NE, USA',
+        address: '1520 Harney Street, Omaha, NE, USA',
+        label: '1520 Harney Street, Omaha, NE, USA',
+        longitude: -95.9361172,
+        latitude: 41.2571634,
+      },
+    ]);
+    const [asked] = fake.seen;
+    expect(asked?.authorization).toBe(KEY);
+    expect(new URL(asked!.url, 'http://x').pathname).toBe('/geocode/autocomplete');
+    // Only what is typed, the country and the place to look near: nothing else of the drive.
+    expect(new URL(asked!.url, 'http://x').searchParams.toString()).toBe(
+      'text=eppley&boundary.country=US&focus.point.lon=-95.934502&focus.point.lat=41.256537',
+    );
+    expect(asked!.url).not.toContain(KEY);
+  });
+
+  it('reads a place with no street as its label, and one with no point as nothing', () => {
+    expect(
+      suggestedPlace({
+        geometry: { coordinates: [-87.6, 41.9] },
+        properties: { name: 'Chicago', label: 'Chicago, IL, USA' },
+      }),
+    ).toMatchObject({ name: 'Chicago', detail: 'IL, USA', address: 'Chicago, IL, USA' });
+    expect(suggestedPlace({ geometry: {}, properties: { label: 'Nowhere' } })).toBeNull();
+  });
+
+  it('says why there are none with no key, a refused key or a used-up allowance, and never throws for it', async () => {
+    const suggest = (key: string) =>
+      placeSuggester({
+        routeKey: () =>
+          Promise.resolve(key === 'no_key' || key === 'unreadable_key' ? key : { key }),
+        service: { baseUrl: fake.url },
+      })(ORG, { text: 'eppley', country: null, near: null });
+    expect(await suggest('no_key')).toEqual({ ok: false, reason: 'no_key' });
+    expect(await suggest('unreadable_key')).toEqual({ ok: false, reason: 'unreadable_key' });
+    expect(await suggest('someone-elses-key')).toEqual({ ok: false, reason: 'rejected' });
+    fake.mode = 'limited';
+    expect(await suggest(KEY)).toEqual({ ok: false, reason: 'limited' });
+    fake.mode = 'ok';
+    expect(await suggest(KEY)).toMatchObject({
+      ok: true,
+      places: [{ name: 'Eppley Airfield' }, {}],
+    });
   });
 });
 

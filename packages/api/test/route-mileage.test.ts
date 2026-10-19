@@ -17,14 +17,18 @@ import {
   quoteMileage,
   type ExportExpense,
   type MemberRole,
+  type RouteDriveValues,
 } from '@expensewise/domain';
 import { describe, expect, it } from 'vitest';
 import { createApi } from '../src/app.ts';
 import type { Identity } from '../src/auth.ts';
 import type { MileageStore } from '../src/mileage.ts';
 import type { ReportStore } from '../src/reports.ts';
+import type { OrganizationStore } from '../src/organization.ts';
 import {
   routeSealContext,
+  sealPick,
+  type PlaceSuggester,
   type RouteKeyStore,
   type RouteKeyVerdict,
   type RouteMileageStore,
@@ -72,10 +76,10 @@ function fakeRoutes() {
     orgId: ORG,
     payload: { expenseId },
   });
-  const unmeasured = (roundTrip: boolean, stops: readonly string[], requestId: string) =>
+  const unmeasured = (values: RouteDriveValues, requestId: string) =>
     ({
       status: 'measuring',
-      roundTrip,
+      roundTrip: values.roundTrip,
       requestId,
       problem: null,
       provider: null,
@@ -85,14 +89,18 @@ function fakeRoutes() {
       returnMetres: null,
       measuredMiles: null,
       milesReason: null,
-      stops: stops.map((address, position) => ({
-        position,
-        address,
-        label: null,
-        longitude: null,
-        latitude: null,
-        legMetres: null,
-      })),
+      stops: values.stops.map((address, position) => {
+        const pin = values.pins?.[position];
+        return {
+          position,
+          address,
+          label: pin?.label ?? null,
+          longitude: pin?.longitude ?? null,
+          latitude: pin?.latitude ?? null,
+          pinned: pin !== undefined && pin !== null,
+          legMetres: null,
+        };
+      }),
     }) satisfies RouteRecord;
   const store: RouteMileageStore = {
     log: (_org, memberId, input, _actor, today) => {
@@ -143,7 +151,7 @@ function fakeRoutes() {
           rate: rate!,
           amountMinor: null,
         },
-        route: unmeasured(values.roundTrip, values.stops, event.outboxId),
+        route: unmeasured(values, event.outboxId),
       });
       return Promise.resolve({ status: 'logged', expenseId, event });
     },
@@ -158,10 +166,14 @@ function fakeRoutes() {
       if (status !== 'processing' && !isExpenseEditable(status)) {
         return Promise.resolve({ status: 'not_editable', current: status });
       }
-      const current = {
+      const pins = found.route.stops.map((s) =>
+        s.pinned ? { label: s.label!, longitude: s.longitude!, latitude: s.latitude! } : null,
+      );
+      const current: RouteDriveValues = {
         date: found.mileage.date,
         purpose: found.mileage.purpose,
         stops: found.route.stops.map((s) => s.address),
+        ...(pins.some(Boolean) ? { pins } : {}),
         roundTrip: found.route.roundTrip,
       };
       const applied = applyRouteDriveInput(current, input, today);
@@ -173,7 +185,7 @@ function fakeRoutes() {
       const event = remeasured ? request(expenseId) : null;
       found.mileage = { ...found.mileage, date: values.date, purpose: values.purpose };
       if (event) {
-        found.route = unmeasured(values.roundTrip, values.stops, event.outboxId);
+        found.route = unmeasured(values, event.outboxId);
         found.expense = { ...found.expense, status: 'processing', amountMinor: null };
       }
       return Promise.resolve({ status: 'changed', changes, remeasured, event });
@@ -201,6 +213,27 @@ function fakeRoutes() {
     },
     places: (_org, memberId) =>
       Promise.resolve([...places.values()].filter((p) => p.memberId === memberId)),
+    recentPlaces: (_org, memberId) =>
+      Promise.resolve(
+        [...entries.values()]
+          .filter((e) => e.expense.memberId === memberId)
+          .reverse()
+          .flatMap((e) =>
+            e.route.stops.flatMap((s) =>
+              s.label && s.longitude && s.latitude
+                ? [
+                    {
+                      address: s.address,
+                      label: s.label,
+                      longitude: s.longitude,
+                      latitude: s.latitude,
+                      lastDriven: e.mileage.date,
+                    },
+                  ]
+                : [],
+            ),
+          ),
+      ),
     savePlace: (_org, memberId, placeId, input) => {
       const current = placeId === null ? undefined : places.get(placeId);
       if (placeId !== null && current?.memberId !== memberId) {
@@ -243,9 +276,9 @@ function fakeRoutes() {
       measuredMiles: miles,
       stops: found.route.stops.map((s, i) => ({
         ...s,
-        label: `${s.address}, USA`,
-        longitude: '-95.900000',
-        latitude: '41.250000',
+        ...(s.pinned
+          ? {}
+          : { label: `${s.address}, USA`, longitude: '-95.900000', latitude: '41.250000' }),
         legMetres: i === 0 ? null : legs[i - 1]!,
       })),
     };
@@ -293,6 +326,7 @@ function setup(
     role?: MemberRole;
     verdict?: RouteKeyVerdict;
     exported?: ExportExpense[];
+    suggest?: PlaceSuggester;
   } = {},
 ) {
   const routes = fakeRoutes();
@@ -338,6 +372,10 @@ function setup(
       checked.push(key);
       return Promise.resolve(options.verdict ?? { ok: true });
     },
+    ...(options.suggest ? { suggestPlaces: options.suggest } : {}),
+    organization: {
+      get: () => Promise.resolve({ country: 'US' }),
+    } as unknown as OrganizationStore,
     dispatch: (events) => {
       dispatched.push(...events);
       return Promise.resolve();
@@ -696,5 +734,203 @@ describe('the OpenRouteService key in Settings (Q31)', () => {
       (await admin.call('PUT', '/v1/settings/mileage/route-key', { apiKey: ORS_KEY }, 'jordan'))
         .status,
     ).toBe(200);
+  });
+});
+
+const SUGGESTIONS = `${FLAG},expenses.place-suggestions=on`;
+const OTHER_ORG = '0192f7a0-0000-7000-8000-0000000000a2';
+const EPPLEY = {
+  name: 'Eppley Airfield',
+  detail: '4501 Abbott Drive, Omaha, NE, USA',
+  address: 'Eppley Airfield, 4501 Abbott Drive, Omaha, NE, USA',
+  label: 'Eppley Airfield, Omaha, NE, USA',
+  longitude: -95.894069,
+  latitude: 41.303166,
+};
+const EPPLEY_PIN = {
+  label: EPPLEY.label,
+  longitude: '-95.894069',
+  latitude: '41.303166',
+};
+
+/** OpenRouteService's suggestions as a stand-in gives them, and what each was asked. */
+function suggester(answer: Awaited<ReturnType<PlaceSuggester>> = { ok: true, places: [EPPLEY] }) {
+  const asked: Parameters<PlaceSuggester>[] = [];
+  const suggest: PlaceSuggester = (...args) => {
+    asked.push(args);
+    return Promise.resolve(answer);
+  };
+  return { suggest, asked };
+}
+
+describe('place suggestions for a stop (FR-CAP-14, ADR-0052)', () => {
+  it.each([
+    ['POST', '/v1/mileage/place-suggestions', { text: 'eppley' }],
+    ['GET', '/v1/me/recent-places', undefined],
+  ])(
+    'answers 404 feature_off to %s %s while suggestions are off, route mileage on',
+    async (method, path, body) => {
+      const { suggest, asked } = suggester();
+      const s = setup({ suggest });
+      const res = await s.call(method, path, body);
+      expect(res.status).toBe(404);
+      expect(res.body.code).toBe('feature_off');
+      expect(asked).toEqual([]);
+    },
+  );
+
+  it('suggests places for what is typed, in the organization’s country and near the place given, each with a pick', async () => {
+    const { suggest, asked } = suggester();
+    const s = setup({ flags: SUGGESTIONS, suggest });
+    const res = await s.call('POST', '/v1/mileage/place-suggestions', {
+      text: '  eppley   air ',
+      near: { longitude: -95.934502, latitude: 41.256537 },
+    });
+    expect(res.status).toBe(200);
+    expect(asked).toEqual([
+      [
+        ORG,
+        { text: 'eppley air', country: 'US', near: { longitude: -95.934502, latitude: 41.256537 } },
+      ],
+    ]);
+    expect(res.body).toEqual({
+      places: [
+        {
+          name: 'Eppley Airfield',
+          detail: '4501 Abbott Drive, Omaha, NE, USA',
+          address: 'Eppley Airfield, 4501 Abbott Drive, Omaha, NE, USA',
+          label: 'Eppley Airfield, Omaha, NE, USA',
+          longitude: '-95.894069',
+          latitude: '41.303166',
+          pick: expect.stringMatching(/^v1\./) as unknown,
+        },
+      ],
+      problem: null,
+      attribution:
+        'Places © openrouteservice.org by HeiGIT · Map data © OpenStreetMap contributors',
+    });
+  });
+
+  it('asks OpenRouteService nothing for fewer than three characters', async () => {
+    const { suggest, asked } = suggester();
+    const s = setup({ flags: SUGGESTIONS, suggest });
+    const res = await s.call('POST', '/v1/mileage/place-suggestions', { text: ' ep ' });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ places: [], problem: null });
+    expect(asked).toEqual([]);
+  });
+
+  it('says why there are none when there is no key or OpenRouteService fails, and never logs what was typed', async () => {
+    const warned: unknown[][] = [];
+    const warn = console.warn;
+    console.warn = (...args: unknown[]) => void warned.push(args);
+    try {
+      for (const reason of ['no_key', 'limited', 'unreachable'] as const) {
+        const s = setup({ flags: SUGGESTIONS, suggest: suggester({ ok: false, reason }).suggest });
+        const res = await s.call('POST', '/v1/mileage/place-suggestions', {
+          text: '1520 Harney',
+        });
+        expect(res.status).toBe(200);
+        expect(res.body).toMatchObject({ places: [], problem: reason });
+      }
+      const unconfigured = setup({ flags: SUGGESTIONS });
+      expect(
+        (await unconfigured.call('POST', '/v1/mileage/place-suggestions', { text: 'eppley' })).body,
+      ).toMatchObject({ places: [], problem: 'unavailable' });
+    } finally {
+      console.warn = warn;
+    }
+    expect(JSON.stringify(warned)).not.toMatch(/Harney/);
+  });
+
+  it('measures a picked stop from exactly where it was picked, and keeps it when the stops come back', async () => {
+    const s = setup({ flags: SUGGESTIONS });
+    const pick = sealPick(secrets, ORG, EPPLEY_PIN);
+    const logged = await s.call('POST', '/v1/mileage/routes', {
+      ...drive,
+      stops: ['12 Elm St, Omaha, NE', { address: EPPLEY.address, pick }],
+    });
+    expect(logged.status).toBe(201);
+    const stops = logged.body.route?.stops as Record<string, unknown>[];
+    expect(stops[0]).toMatchObject({ pinned: false, pick: null, place: null });
+    expect(stops[1]).toMatchObject({
+      address: EPPLEY.address,
+      pinned: true,
+      place: EPPLEY_PIN,
+      pick: expect.stringMatching(/^v1\./) as unknown,
+    });
+    const id = logged.body.id as string;
+    s.routes.measure(id, [61800]);
+    const measured = await s.call('GET', `/v1/mileage/${id}/route`);
+    const shown = measured.body.route?.stops as { address: string; pick: string | null }[];
+    // The end keeps the place it was picked at; the start was found as typed.
+    expect(shown[1]).toMatchObject({ place: EPPLEY_PIN, pinned: true });
+    // Sent back as they came, with the pick they carry, the stops are unchanged: not measured again.
+    const again = await s.call('PATCH', `/v1/mileage/${id}/route`, {
+      stops: shown.map((stop) =>
+        stop.pick ? { address: stop.address, pick: stop.pick } : stop.address,
+      ),
+    });
+    expect(again.status).toBe(200);
+    expect(again.body.route).toMatchObject({ status: 'measured' });
+    expect(s.dispatched).toHaveLength(1);
+    // Typed over, the same stop is no longer pinned, and the drive is measured again.
+    const typed = await s.call('PATCH', `/v1/mileage/${id}/route`, {
+      stops: ['12 Elm St, Omaha, NE', EPPLEY.address],
+    });
+    expect((typed.body.route?.stops as Record<string, unknown>[])[1]).toMatchObject({
+      pinned: false,
+      place: null,
+    });
+    expect(s.dispatched).toHaveLength(2);
+  });
+
+  it('refuses a pick it didn’t seal, made up or from another organization, and logs nothing', async () => {
+    const s = setup({ flags: SUGGESTIONS });
+    for (const pick of ['v1.made-up', sealPick(secrets, OTHER_ORG, EPPLEY_PIN)]) {
+      const res = await s.call('POST', '/v1/mileage/routes', {
+        ...drive,
+        stops: ['12 Elm St, Omaha, NE', { address: EPPLEY.address, pick }],
+      });
+      expect(res.status).toBe(422);
+      expect(res.body).toMatchObject({
+        code: 'invalid_value',
+        field: 'stops',
+        stop: 1,
+        detail:
+          'The place picked for the end can’t be used here. Pick it again, or type its address.',
+      });
+    }
+    expect(s.routes.entries.size).toBe(0);
+    expect(s.dispatched).toEqual([]);
+  });
+
+  it('lists the places the caller’s own drives went to, newest first, each with a pick', async () => {
+    const s = setup({ flags: SUGGESTIONS });
+    const pick = sealPick(secrets, ORG, EPPLEY_PIN);
+    const mine = await s.call('POST', '/v1/mileage/routes', {
+      ...drive,
+      stops: ['12 Elm St, Omaha, NE', { address: EPPLEY.address, pick }],
+    });
+    s.routes.measure(mine.body.id as string, [61800]);
+    await s.call('POST', '/v1/mileage/routes', drive, 'jordan');
+    const res = await s.call('GET', '/v1/me/recent-places');
+    expect(res.status).toBe(200);
+    const places = res.body.places as Record<string, unknown>[];
+    expect(places.map((p) => p.address)).toEqual(['12 Elm St, Omaha, NE', EPPLEY.address]);
+    expect(places[1]).toMatchObject({
+      ...EPPLEY_PIN,
+      lastDriven: drive.date,
+      pick: expect.stringMatching(/^v1\./) as unknown,
+    });
+    // Its pick measures a new stop from the same place.
+    const next = await s.call('POST', '/v1/mileage/routes', {
+      ...drive,
+      stops: ['1520 Harney St', { address: EPPLEY.address, pick: places[1]!.pick }],
+    });
+    expect((next.body.route?.stops as Record<string, unknown>[])[1]).toMatchObject({
+      pinned: true,
+      place: EPPLEY_PIN,
+    });
   });
 });

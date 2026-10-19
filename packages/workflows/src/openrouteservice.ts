@@ -1,9 +1,12 @@
+import { ROUTE_ADDRESS_MAX, SUGGEST_SHOWN, SUGGEST_TIMEOUT_MS } from '@expensewise/domain';
+
 /*
  * OpenRouteService (HeiGIT, on OpenStreetMap data), which measures route drives (ADR-0039):
  * Pelias search finds each stop, and the driving-car directions measure the legs between
- * them. Its free Standard key allows 1,000 searches and 2,000 routes a day. The key goes in
- * the Authorization header, never in a URL, so it never reaches a log line; nothing here puts
- * it in an error, and an answer that echoes it has it removed.
+ * them. Pelias autocomplete suggests places as a stop is typed (ADR-0052). Its free Standard
+ * key allows 1,000 searches, 1,000 suggestions and 2,000 routes a day. The key goes in the
+ * Authorization header, never in a URL, so it never reaches a log line; nothing here puts it
+ * in an error, and an answer that echoes it has it removed.
  */
 
 /** Where OpenRouteService answers. */
@@ -212,6 +215,129 @@ export function routeKeyVerifier(options: OpenRouteServiceOptions = {}): RouteKe
         ...(error.status ? { status: error.status } : {}),
         detail: error.message,
       };
+    }
+  };
+}
+
+/** A place OpenRouteService suggests for what is typed in a stop (FR-CAP-14, ADR-0052). */
+export interface SuggestedPlace {
+  /** Its name: a landmark, a business or a street address, such as Eppley Airfield. */
+  readonly name: string;
+  /** Where it is, under its name: its street when known, and its town. */
+  readonly detail: string;
+  /** The stop's address once it is picked: its name, street and town in one line. */
+  readonly address: string;
+  /** OpenRouteService's own name for it, kept as the place the stop is measured from. */
+  readonly label: string;
+  readonly longitude: number;
+  readonly latitude: number;
+}
+
+/** What a stop's suggestions are looked up with: what is typed, and where to look first. */
+export interface SuggestQuery {
+  readonly text: string;
+  /** The organization's country, ISO 3166-1 alpha-2, to look in; null when it keeps none. */
+  readonly country: string | null;
+  /** A place picked earlier in the drive, to rank places near it first (Q54). */
+  readonly near: { readonly longitude: number; readonly latitude: number } | null;
+}
+
+const text = (value: unknown) =>
+  typeof value === 'string' && value.trim() !== '' ? value.trim() : undefined;
+
+/**
+ * A suggestion as a person reads it: its name, then its street (when the name isn't already
+ * one) and the rest of its label, its town and region, beneath. Its address is both in one
+ * line, so a picked landmark's stop says where it is.
+ */
+export function suggestedPlace(feature: {
+  geometry?: { coordinates?: unknown };
+  properties?: Record<string, unknown>;
+}): SuggestedPlace | null {
+  const [longitude, latitude] = (feature.geometry?.coordinates ?? []) as unknown[];
+  if (typeof longitude !== 'number' || typeof latitude !== 'number') return null;
+  const props = feature.properties ?? {};
+  const label = text(props.label) ?? text(props.name);
+  if (!label) return null;
+  const name = text(props.name) ?? label.split(',')[0]!.trim();
+  const rest = label.startsWith(`${name}, `)
+    ? label.slice(name.length + 2)
+    : label === name
+      ? ''
+      : label;
+  const streetName = text(props.street);
+  const number = text(props.housenumber);
+  const street = streetName && number ? `${number} ${streetName}` : streetName;
+  const showStreet = street !== undefined && !name.includes(street) && !rest.includes(street);
+  const detail = [showStreet ? street : undefined, rest].filter(Boolean).join(', ');
+  const address = [name, detail].filter(Boolean).join(', ').slice(0, ROUTE_ADDRESS_MAX).trim();
+  return { name, detail, address, label: label.slice(0, 300), longitude, latitude };
+}
+
+/**
+ * Places for what is typed in a stop, best first, at most SUGGEST_SHOWN: Pelias autocomplete,
+ * inside the organization's country when it keeps one, nearest the place given first. Only
+ * the text typed and that place are sent (Q32, Q54). One lookup is one of the key's 1,000
+ * suggestions a day; it waits SUGGEST_TIMEOUT_MS at most, as the person is waiting.
+ */
+export async function suggestPlaces(
+  key: string,
+  query: SuggestQuery,
+  options: OpenRouteServiceOptions = {},
+): Promise<SuggestedPlace[]> {
+  const call = caller(key, { timeoutMs: SUGGEST_TIMEOUT_MS, ...options });
+  const params = new URLSearchParams({ text: query.text });
+  if (query.country) params.set('boundary.country', query.country);
+  if (query.near) {
+    params.set('focus.point.lon', query.near.longitude.toFixed(6));
+    params.set('focus.point.lat', query.near.latitude.toFixed(6));
+  }
+  const found = (await call(`/geocode/autocomplete?${params.toString()}`)) as {
+    features?: { geometry?: { coordinates?: unknown }; properties?: Record<string, unknown> }[];
+  };
+  const places: SuggestedPlace[] = [];
+  const seen = new Set<string>();
+  for (const feature of found.features ?? []) {
+    const place = suggestedPlace(feature);
+    if (!place || seen.has(place.address.toLowerCase())) continue;
+    seen.add(place.address.toLowerCase());
+    places.push(place);
+    if (places.length === SUGGEST_SHOWN) break;
+  }
+  return places;
+}
+
+/** Why a stop has no suggestions: no usable key, or OpenRouteService's own answer. */
+export type SuggestProblem = 'no_key' | 'unreadable_key' | RouteServiceProblem;
+
+/** Suggestions for one organization's stop, with its own key, or why there are none. */
+export type PlaceSuggester = (
+  orgId: string,
+  query: SuggestQuery,
+) => Promise<
+  | { readonly ok: true; readonly places: readonly SuggestedPlace[] }
+  | { readonly ok: false; readonly reason: SuggestProblem }
+>;
+
+/**
+ * Suggests places with each organization's own OpenRouteService key (ADR-0052), read as the
+ * measuring workflow reads it. A missing or unreadable key, or a failed answer, is a reason,
+ * never an error: the person goes on typing the address.
+ */
+export function placeSuggester(deps: {
+  readonly routeKey: (
+    orgId: string,
+  ) => Promise<{ readonly key: string } | 'no_key' | 'unreadable_key'>;
+  readonly service?: OpenRouteServiceOptions;
+}): PlaceSuggester {
+  return async (orgId, query) => {
+    const stored = await deps.routeKey(orgId);
+    if (stored === 'no_key' || stored === 'unreadable_key') return { ok: false, reason: stored };
+    try {
+      return { ok: true, places: await suggestPlaces(stored.key, query, deps.service) };
+    } catch (error) {
+      if (error instanceof RouteServiceError) return { ok: false, reason: error.kind };
+      throw error;
     }
   };
 }

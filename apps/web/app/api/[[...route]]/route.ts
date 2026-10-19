@@ -25,15 +25,22 @@ import {
   supabaseTokenVerifier,
 } from '@expensewise/api';
 import { createReadinessProbe } from '@expensewise/db';
-import { routeKeyVerifier } from '@expensewise/workflows';
+import { placeSuggester, routeKeyVerifier } from '@expensewise/workflows';
 import { handle } from 'hono/vercel';
-import { appDatabase, dispatchEvents, receiptFiles, secretBox } from '../../../lib/server';
+import {
+  appDatabase,
+  dispatchEvents,
+  receiptFiles,
+  routeKeyReader,
+  secretBox,
+} from '../../../lib/server';
 
 // The whole versioned API lives in @expensewise/api; Next.js only hands it requests under /api.
 // One source for the project URL: it is public, so a server-only copy (such as a Sensitive
 // SUPABASE_URL, which nobody can read back) could silently point verification elsewhere.
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const db = appDatabase();
+const routeKey = routeKeyReader();
 
 const handler = handle(
   createHttpApp({
@@ -72,6 +79,9 @@ const handler = handle(
     verifyProviderKey: providerKeyVerifier(),
     // An OpenRouteService key is checked with one short route as it is saved (ADR-0039).
     verifyRouteKey: routeKeyVerifier(),
+    // Places for a drive's stop, from OpenRouteService with the organization's own key, in the
+    // request as the person types: read-only, three seconds at most, nothing stored (ADR-0052).
+    suggestPlaces: routeKey && placeSuggester({ routeKey }),
     // Features forced on or off for everyone, beating each owner's switch (the kill switch).
     flagOverrides: process.env.FLAG_OVERRIDES,
     // Unexpected errors go to error tracking, loaded only once NEXT_PUBLIC_SENTRY_DSN is set, so
