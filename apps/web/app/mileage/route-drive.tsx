@@ -6,7 +6,15 @@ import { api, ApiProblem } from '../../lib/api';
 import type { ExpenseDetail } from '../../lib/expenses';
 import { describeRate } from '../../lib/mileage';
 import { formatMoney } from '../../lib/receipts';
-import { legMiles, measuredBy, stopLabel, type RouteDrive } from '../../lib/route-mileage';
+import {
+  legMiles,
+  measuredBy,
+  sameStop,
+  stopBody,
+  stopDraft,
+  stopLabel,
+  type RouteDrive,
+} from '../../lib/route-mileage';
 import { RouteForm } from './route-form';
 
 const describeError = (error: unknown) =>
@@ -114,7 +122,7 @@ export function RouteDriveDetails({
               initial={{
                 date: drive.mileage.date,
                 purpose: drive.mileage.purpose,
-                stops: route.stops.map((s) => s.address),
+                stops: route.stops.map(stopDraft),
                 roundTrip: route.roundTrip,
               }}
               submitLabel="Save"
@@ -122,14 +130,14 @@ export function RouteDriveDetails({
               onCancel={() => setEditing(null)}
               onSubmit={async (draft) => {
                 // Only what changed: the same stops sent again would measure it again.
-                const before = route.stops.map((s) => s.address);
+                const before = route.stops.map(stopDraft);
                 const stopsChanged =
                   draft.stops.length !== before.length ||
-                  draft.stops.some((s, i) => s !== before[i]);
+                  draft.stops.some((s, i) => !sameStop(s, before[i]!));
                 const changed = {
                   ...(draft.date !== drive.mileage.date ? { date: draft.date } : {}),
                   ...(draft.purpose !== drive.mileage.purpose ? { purpose: draft.purpose } : {}),
-                  ...(stopsChanged ? { stops: draft.stops } : {}),
+                  ...(stopsChanged ? { stops: draft.stops.map(stopBody) } : {}),
                   ...(draft.roundTrip !== route.roundTrip ? { roundTrip: draft.roundTrip } : {}),
                 };
                 if (Object.keys(changed).length === 0) {
@@ -162,7 +170,11 @@ export function RouteDriveDetails({
                       {stop.legMetres !== null ? ` · ${legMiles(stop.legMetres)}` : ''}
                     </span>
                     <span className="break-words">{stop.address}</span>
-                    {stop.place && stop.place.label !== stop.address ? (
+                    {stop.pinned ? (
+                      <span className="text-xs break-words text-ink-2">
+                        Picked, so it is measured from exactly this place
+                      </span>
+                    ) : stop.place && stop.place.label !== stop.address ? (
                       <span className="text-xs break-words text-ink-2">
                         Found as {stop.place.label}
                       </span>
@@ -213,7 +225,9 @@ export function RouteDriveDetails({
                       onClick={() =>
                         void api<RouteDrive>(`/v1/mileage/${expense.id}/route`, {
                           method: 'PATCH',
-                          body: JSON.stringify({ stops: route.stops.map((s) => s.address) }),
+                          body: JSON.stringify({
+                            stops: route.stops.map((s) => stopBody(stopDraft(s))),
+                          }),
                         }).then(saved, (e: unknown) => setError(describeError(e)))
                       }
                       className="rounded-lg border border-rule px-4 py-2 text-sm font-semibold"
