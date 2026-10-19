@@ -22,11 +22,13 @@
     "inngest": "^4.21.1",
     "mailauth": "^7.1.1",
     "pdf-lib": "^1.17.1",
-    "postal-mime": "^4.0.4"
+    "postal-mime": "^4.0.4",
+    "web-push": "^3.6.7"
   },
   "devDependencies": {
     "@inngest/test": "^1.0.0",
     "@types/html-to-text": "^9.0.4",
+    "@types/web-push": "^3.6.4",
     "vitest": "^5.0.3"
   }
 }
