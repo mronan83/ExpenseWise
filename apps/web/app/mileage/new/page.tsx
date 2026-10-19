@@ -6,11 +6,11 @@ import { useEffect, useState } from 'react';
 import { api } from '../../../lib/api';
 import { loadFeatures } from '../../../lib/features';
 import { MILEAGE_FLAG, type MileageEntry } from '../../../lib/mileage';
-import { ROUTE_MILEAGE_FLAG, type RouteDrive } from '../../../lib/route-mileage';
+import { ROUTE_MILEAGE_FLAG, typedStop, type RouteDrive } from '../../../lib/route-mileage';
 import { supabase } from '../../../lib/supabase';
 import { localToday } from '../../../lib/trips';
 import { MileageForm } from '../mileage-form';
-import { RouteForm } from '../route-form';
+import { routeBody, RouteForm } from '../route-form';
 
 type Load =
   | { state: 'loading' }
@@ -111,13 +111,18 @@ export default function NewMileagePage() {
                   for the miles measured, which you can change with a reason.
                 </p>
                 <RouteForm
-                  initial={{ date: today, purpose: '', stops: ['', ''], roundTrip: false }}
+                  initial={{
+                    date: today,
+                    purpose: '',
+                    stops: [typedStop(), typedStop()],
+                    roundTrip: false,
+                  }}
                   submitLabel="Add the drive"
                   busyLabel="Adding…"
                   onSubmit={async (draft) => {
                     const drive = await api<RouteDrive>('/v1/mileage/routes', {
                       method: 'POST',
-                      body: JSON.stringify(draft),
+                      body: JSON.stringify(routeBody(draft)),
                     });
                     router.push(`/expenses/${drive.id}`);
                   }}

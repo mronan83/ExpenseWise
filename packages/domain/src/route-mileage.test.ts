@@ -3,6 +3,8 @@ import {
   applyPlaceInput,
   applyRouteDriveInput,
   checkRouteStops,
+  isStopPin,
+  PLACE_LABEL_MAX,
   claimRouteMiles,
   milesFromMetres,
   MILLIMETRES_PER_MILE,
@@ -127,6 +129,81 @@ describe('a route drive, logged and changed', () => {
     const moved = applyRouteDriveInput(current, { date: '2025-12-31' }, TODAY);
     expect(moved.ok && moved.value.remeasure).toBe(false);
     expect(moved.ok && moved.value.rate?.perUnit).toBe('0.70');
+  });
+});
+
+describe('a stop picked from the suggestions (FR-CAP-14, Q53)', () => {
+  const eppley = {
+    label: 'Eppley Airfield, Omaha, NE, USA',
+    longitude: '-95.894069',
+    latitude: '41.303166',
+  };
+  const picked = { address: 'Eppley Airfield, 4501 Abbott Drive, Omaha, NE, USA', pin: eppley };
+
+  it('keeps the place it was picked at beside its address, and none for a stop typed', () => {
+    const logged = applyRouteDriveInput(
+      null,
+      { ...drive, stops: ['12 Elm St, Omaha', picked] },
+      TODAY,
+    );
+    if (!logged.ok) throw new Error(logged.error.message);
+    expect(logged.value.values).toMatchObject({
+      stops: ['12 Elm St, Omaha', 'Eppley Airfield, 4501 Abbott Drive, Omaha, NE, USA'],
+      pins: [null, eppley],
+    });
+    const typed = applyRouteDriveInput(null, drive, TODAY);
+    expect(typed.ok && 'pins' in typed.value.values).toBe(false);
+  });
+
+  it('measures again when a stop is picked, or typed over, at the same address', () => {
+    const current: RouteDriveValues = {
+      ...drive,
+      stops: ['12 Elm St, Omaha', picked.address],
+      pins: [null, eppley],
+      roundTrip: false,
+    };
+    const same = applyRouteDriveInput(current, { stops: ['12 Elm St, Omaha', picked] }, TODAY);
+    expect(same.ok && same.value.changes).toEqual([]);
+    const typed = applyRouteDriveInput(
+      current,
+      { stops: ['12 Elm St, Omaha', picked.address] },
+      TODAY,
+    );
+    expect(typed.ok && typed.value.remeasure).toBe(true);
+    const elsewhere = applyRouteDriveInput(
+      current,
+      { stops: ['12 Elm St, Omaha', { ...picked, pin: { ...eppley, latitude: '41.300000' } }] },
+      TODAY,
+    );
+    expect(elsewhere.ok && elsewhere.value.remeasure).toBe(true);
+  });
+
+  it('refuses a picked place that isn’t whole: no name, or a point off the globe or not to six places', () => {
+    expect(isStopPin(eppley)).toBe(true);
+    for (const pin of [
+      { ...eppley, label: ' ' },
+      { ...eppley, label: 'x'.repeat(PLACE_LABEL_MAX + 1) },
+      { ...eppley, longitude: '-195.000000' },
+      { ...eppley, latitude: '91.000000' },
+      { ...eppley, latitude: '41.3' },
+      { ...eppley, longitude: 'west' },
+    ]) {
+      expect(isStopPin(pin)).toBe(false);
+    }
+    expect(
+      applyRouteDriveInput(
+        null,
+        { ...drive, stops: [{ ...picked, pin: { ...eppley, latitude: '91.000000' } }, 'Home'] },
+        TODAY,
+      ),
+    ).toEqual({
+      ok: false,
+      error: {
+        field: 'stops',
+        stop: 0,
+        message: 'The place picked for the start isn’t whole. Pick it again, or type its address.',
+      },
+    });
   });
 });
 

@@ -79,6 +79,7 @@ ExpenseWise is a receipt-first, automation-first expense, receipt, mileage and t
 | D-51 | One identity, Carbon: a receipt whose torn edge is a W on carbon blue, IBM Plex served with the app, paper-and-ink tokens with every text color at AA in light and dark, icons in the tab bar and for every platform; the name stays, as the app won't be sold | [ADR-0049](adr/0049-the-carbon-identity.md) | Accepted (decided by product owner, Oct 9) |
 | D-52 | Every AI feature reads with the organization's primary model, then its back-ups, as receipts do; card statements included, with an OpenAI reader beside Claude's; no feature names a model of its own | [ADR-0050](adr/0050-every-ai-feature-reads-with-the-organizations-models.md) | Accepted (decided by product owner, Oct 10) |
 | D-53 | A card charge pays for at most one expense, and an expense may be paid by several, such as a ride and its tip: by hand, or on their own when two alike charges make up its amount exactly and are the only two that do | [ADR-0051](adr/0051-an-expense-paid-by-several-card-charges.md) | Accepted (several charges decided by product owner, Oct 10) |
+| D-54 | A drive's stops suggest the person's saved places, the places they drove to and OpenRouteService's landmarks, businesses and addresses, asked in the request with the organization's key; a place picked is sealed and measured from exactly where it is, a stop typed is searched as typed | [ADR-0052](adr/0052-places-suggested-as-a-stop-is-typed.md) | Accepted (decided by product owner, Oct 19, Q53, Q54) |
 
 ## Visual version
 

@@ -62,6 +62,7 @@ import {
   convertOrganization,
   readStatement,
   measureRoute,
+  placeSuggester,
   readWith,
   receiptReadingPorts,
   routeMeasuringPorts,
@@ -224,6 +225,38 @@ const ROUTE_LEGS = [9400.4, 52399.5, 60000];
 const openRouteServiceFake = (input: string | URL | Request, init?: RequestInit) => {
   const url = new URL(input instanceof Request ? input.url : String(input));
   const json = (body: unknown) => Promise.resolve(Response.json(body, { status: 200 }));
+  if (url.pathname === '/geocode/autocomplete') {
+    // Suggestions for a stop (ADR-0052): Eppley Airfield for "epp…", and nothing else.
+    const typed = (url.searchParams.get('text') ?? '').toLowerCase();
+    return json({
+      type: 'FeatureCollection',
+      features: typed.startsWith('epp')
+        ? [
+            {
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: [-95.894069, 41.303166] },
+              properties: {
+                layer: 'venue',
+                name: 'Eppley Airfield',
+                housenumber: '4501',
+                street: 'Abbott Drive',
+                label: 'Eppley Airfield, Omaha, NE, USA',
+              },
+            },
+            {
+              type: 'Feature',
+              geometry: { type: 'Point', coordinates: [-95.888412, 41.300301] },
+              properties: {
+                layer: 'venue',
+                name: 'Eppley Airfield Parking',
+                street: 'Abbott Drive',
+                label: 'Eppley Airfield Parking, Omaha, NE, USA',
+              },
+            },
+          ]
+        : [],
+    });
+  }
   if (url.pathname === '/geocode/search') {
     const found = ROUTE_PLACES[url.searchParams.get('text') ?? ''];
     return json({
@@ -354,6 +387,11 @@ const app = createHttpApp({
   secrets: createSecretBox('bench-only-secret-0123456789'),
   verifyProviderKey: () => Promise.resolve({ ok: true, authScheme: 'api_key' }),
   verifyRouteKey: () => Promise.resolve({ ok: true }),
+  // The stand-in OpenRouteService takes any key: the one saved below isn't read again here.
+  suggestPlaces: placeSuggester({
+    routeKey: () => Promise.resolve({ key: 'bench' }),
+    service: { fetch: openRouteServiceFake },
+  }),
 });
 
 /** Calls the API as `user`, whom the bench signs in by name. */
@@ -915,6 +953,15 @@ await call('POST', '/v1/me/places', {
   name: 'Acme HQ',
   address: 'Acme HQ, 1200 Dodge St, Omaha, NE',
 });
+// Its end was picked from the suggestions (FR-CAP-14), so it is measured from exactly there.
+const [airport] = (
+  await call<{ places: { address: string; pick: string }[] }>(
+    'POST',
+    '/v1/mileage/place-suggestions',
+    { text: 'eppley' },
+  )
+).places;
+if (!airport) throw new Error('The bench suggested no place for the airport');
 expenses.routeMeasured = (
   await call<{ id: string }>('POST', '/v1/mileage/routes', {
     date: day(-9),
@@ -922,7 +969,7 @@ expenses.routeMeasured = (
     stops: [
       '1520 Harney St, Omaha, NE',
       'Acme HQ, 1200 Dodge St, Omaha, NE',
-      'Eppley Airfield, Omaha, NE',
+      { address: airport.address, pick: airport.pick },
     ],
     roundTrip: true,
   })

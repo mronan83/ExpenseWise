@@ -472,6 +472,20 @@ export const BACKLOG: readonly BacklogItem[] = [
     affects: ['GAP-55', 'FR-CAP-13', 'F-70'],
   },
   {
+    num: 108,
+    title: 'Places suggested as a drive’s stop is typed',
+    type: 'Feature',
+    detail:
+      'Your requirement of Oct 19 (FR-CAP-14, GAP-56): type a landmark or destination in a drive’s From, stop or To and pick it from suggestions that fill in its address. Your saved places and places driven to first, then OpenRouteService’s, asked in the request with your organization’s key (ADR-0052). A place picked is measured from its exact point (Q53); suggestions rank near the drive’s stops, never your location (Q54).',
+    priority: 'P1',
+    effort: 'M',
+    severity: 'Medium',
+    blocker: { kind: 'none' },
+    source: 'Product owner Oct 19',
+    affects: ['FR-CAP-14', 'F-71', 'GAP-56'],
+    done: { date: '2026-10-19', in: 'PR #89' },
+  },
+  {
     num: 106,
     title: 'Several card charges to one expense, such as a ride and its tip',
     type: 'Gap',

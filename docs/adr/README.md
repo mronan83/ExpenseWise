@@ -59,6 +59,7 @@ Each ADR records one decision with its context, the alternatives considered and 
 | [0049](0049-the-carbon-identity.md) | The brand is Carbon: the paperwork, settled | D-51 | Accepted (direction A, keeping the name, decided by product owner, Oct 9) | 2026-10-09 |
 | [0050](0050-every-ai-feature-reads-with-the-organizations-models.md) | Every AI feature reads with the organization's models | D-52 | Accepted (decided by product owner, Oct 10) | 2026-10-10 |
 | [0051](0051-an-expense-paid-by-several-card-charges.md) | An expense can be paid by several card charges | D-53 | Accepted (several charges decided by product owner, Oct 10; pairing on its own recommended) | 2026-10-10 |
+| [0052](0052-places-suggested-as-a-stop-is-typed.md) | Places are suggested as a stop is typed, and a place picked is measured from where it is | D-54 | Accepted (suggestions decided by product owner, Oct 19; a picked place measured from its point, Q53; ranked near the drive's stops, never the device's location, Q54; OpenRouteService in the request, sealed picks, the limits and the flag recommended) | 2026-10-19 |
 
 ## How to add an ADR
 

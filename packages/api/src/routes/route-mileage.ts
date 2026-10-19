@@ -4,12 +4,15 @@ import {
   ChangeRouteDriveSchema,
   ClaimRouteMilesSchema,
   LogRouteDriveSchema,
+  PlaceSuggestionListSchema,
+  RecentPlaceListSchema,
   RouteDriveSchema,
   RouteKeyStatusSchema,
   SavedPlaceListSchema,
   SavedPlaceSchema,
   SavePlaceSchema,
   SetRouteKeySchema,
+  SuggestPlacesSchema,
 } from '../route-mileage-schemas.ts';
 import { ProblemSchema } from '../schemas.ts';
 import { SECOND_FACTOR_REFUSAL } from '../second-factor.ts';
@@ -143,6 +146,54 @@ export const listPlacesRoute = createRoute({
     },
     ...common,
     404: problem(`${OFF}.`),
+  },
+});
+
+const SUGGESTIONS_OFF = 'Route mileage or place suggestions are switched off (feature_off)';
+
+export const suggestPlacesRoute = createRoute({
+  method: 'post',
+  path: '/v1/mileage/place-suggestions',
+  tags: ['Mileage'],
+  summary: 'Places for what is typed in a stop',
+  description:
+    'FR-CAP-14, ADR-0052. Landmarks, businesses and addresses from OpenRouteService, asked in ' +
+    'the request with the organization’s own key, as the person waits: the text as typed goes ' +
+    'in the body, so it never reaches a URL or a log, inside the organization’s country and ' +
+    'near a place picked earlier in the drive. A missing key or a failed answer is a problem ' +
+    'in the answer, never an error: the stop is then typed. Each place carries a pick, which ' +
+    'a stop sends to be measured from exactly there (Q53).',
+  ...secured,
+  request: {
+    body: { content: { 'application/json': { schema: SuggestPlacesSchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The places, best first, or why there are none.',
+      content: { 'application/json': { schema: PlaceSuggestionListSchema } },
+    },
+    ...common,
+    404: problem(`${SUGGESTIONS_OFF}.`),
+  },
+});
+
+export const recentPlacesRoute = createRoute({
+  method: 'get',
+  path: '/v1/me/recent-places',
+  tags: ['Mileage'],
+  summary: 'The places the caller’s own drives went to',
+  description:
+    'FR-CAP-14. Each place a route drive of the caller’s went to, found or picked, newest ' +
+    'first and once each, with a pick to measure a new stop from the same place. Never another ' +
+    'member’s, whatever the caller’s role. Nothing is sent anywhere to list them.',
+  ...secured,
+  responses: {
+    200: {
+      description: 'Newest first.',
+      content: { 'application/json': { schema: RecentPlaceListSchema } },
+    },
+    ...common,
+    404: problem(`${SUGGESTIONS_OFF}.`),
   },
 });
 

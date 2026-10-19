@@ -1,8 +1,11 @@
 import {
   PLACE_NAME_MAX,
+  RECENT_PLACES,
   ROUTE_ADDRESS_MAX,
   ROUTE_MAX_STOPS,
   ROUTE_REASON_MAX,
+  SUGGEST_MIN_CHARS,
+  SUGGEST_SHOWN,
 } from '@expensewise/domain';
 import { z } from '@hono/zod-openapi';
 import { MileageEntrySchema } from './schemas.ts';
@@ -26,7 +29,21 @@ export const RouteStopSchema = z
         latitude: z.string().openapi({ example: '41.256537' }),
       })
       .nullable()
-      .openapi({ description: 'Where it was found, once measured.' }),
+      .openapi({
+        description: 'Where it was found, once measured; or where it was picked, from the start.',
+      }),
+    pinned: z.boolean().openapi({
+      description:
+        'Picked from the suggestions: measured from its place, its address never searched (Q53).',
+    }),
+    pick: z
+      .string()
+      .nullable()
+      .openapi({
+        description:
+          'For a pinned stop: send it back with the stop, as in PickedStop, to keep the place it ' +
+          'was picked at. Sealed by the server; null for a stop typed.',
+      }),
     legMetres: z.number().int().nullable().openapi({
       description: 'The leg to it from the stop before, in whole metres; null for the start.',
     }),
@@ -77,12 +94,30 @@ export const RouteDriveSchema = MileageEntrySchema.extend({ route: RouteSchema }
   'RouteDrive',
 );
 
+export const PickedStopSchema = z
+  .object({
+    address: z.string().max(1000).openapi({
+      example: 'Eppley Airfield, 4501 Abbott Drive, Omaha, NE, USA',
+      description: 'The address the suggestion gave, as shown on the stop.',
+    }),
+    pick: z
+      .string()
+      .max(2000)
+      .openapi({
+        description:
+          'The pick of a place suggested, driven to before, or already on the drive: the stop is ' +
+          'measured from exactly there, and its address is never searched (Q53).',
+      }),
+  })
+  .strict()
+  .openapi('PickedStop');
+
 const stops = z
-  .array(z.string().max(1000))
+  .array(z.union([z.string().max(1000), PickedStopSchema]))
   .min(1)
   .max(ROUTE_MAX_STOPS * 2)
   .openapi({
-    description: `The addresses in order, start first and end last: 2 to ${ROUTE_MAX_STOPS}, each up to ${ROUTE_ADDRESS_MAX} characters, each sent as typed to be measured.`,
+    description: `The stops in order, start first and end last: 2 to ${ROUTE_MAX_STOPS}, each an address of up to ${ROUTE_ADDRESS_MAX} characters, sent as typed to be measured, or a place picked from the suggestions, measured from where it is.`,
     example: ['12 Elm St, Omaha, NE', 'Acme HQ, 1520 Harney St, Omaha', 'Eppley Airfield'],
   });
 
@@ -190,3 +225,101 @@ export const SetRouteKeySchema = z
   })
   .strict()
   .openapi('SetRouteKey');
+
+const point = {
+  longitude: z.string().openapi({ example: '-95.894069', description: 'Degrees, to six places.' }),
+  latitude: z.string().openapi({ example: '41.303166', description: 'Degrees, to six places.' }),
+};
+
+export const SuggestPlacesSchema = z
+  .object({
+    text: z
+      .string()
+      .max(1000)
+      .openapi({
+        example: 'eppley',
+        description: `What is typed in the stop: from ${SUGGEST_MIN_CHARS} characters, it is sent to OpenRouteService as typed, and nothing else of the drive (Q32).`,
+      }),
+    near: z
+      .object({
+        longitude: z.number().min(-180).max(180),
+        latitude: z.number().min(-90).max(90),
+      })
+      .nullable()
+      .optional()
+      .openapi({
+        description:
+          'A place picked earlier in the drive, to rank places near it first; never the ' +
+          'device’s own location (Q54).',
+      }),
+  })
+  .strict()
+  .openapi('SuggestPlaces');
+
+export const PlaceSuggestionSchema = z
+  .object({
+    name: z.string().openapi({ example: 'Eppley Airfield' }),
+    detail: z.string().openapi({
+      example: '4501 Abbott Drive, Omaha, NE, USA',
+      description: 'Where it is, under its name.',
+    }),
+    address: z.string().openapi({
+      example: 'Eppley Airfield, 4501 Abbott Drive, Omaha, NE, USA',
+      description: 'The stop’s address once picked.',
+    }),
+    label: z.string().openapi({
+      example: 'Eppley Airfield, Omaha, NE, USA',
+      description: 'OpenRouteService’s own name for it: the place the stop is measured from.',
+    }),
+    ...point,
+    pick: z.string().openapi({ description: 'Send it with the stop, as in PickedStop.' }),
+  })
+  .openapi('PlaceSuggestion');
+
+export const PlaceSuggestionListSchema = z
+  .object({
+    places: z.array(PlaceSuggestionSchema).openapi({
+      description: `Best first, at most ${SUGGEST_SHOWN}; none for fewer than ${SUGGEST_MIN_CHARS} characters.`,
+    }),
+    problem: z
+      .enum([
+        'no_key',
+        'unreadable_key',
+        'rejected',
+        'limited',
+        'unreachable',
+        'refused',
+        'unavailable',
+      ])
+      .nullable()
+      .openapi({
+        description:
+          'Why there are none to show, when OpenRouteService wasn’t asked or gave no answer: ' +
+          'the stop is then typed, and measured as typed.',
+      }),
+    attribution: z.string().openapi({
+      example: 'Places © openrouteservice.org by HeiGIT · Map data © OpenStreetMap contributors',
+      description: 'To show with the places.',
+    }),
+  })
+  .openapi('PlaceSuggestionList');
+
+export const RecentPlaceSchema = z
+  .object({
+    address: z.string().openapi({ example: 'Eppley Airfield, Omaha, NE' }),
+    label: z.string().openapi({ example: 'Eppley Airfield, Omaha, NE, USA' }),
+    ...point,
+    lastDriven: z.string().openapi({ example: '2026-10-09', description: 'YYYY-MM-DD.' }),
+    pick: z.string().nullable().openapi({
+      description: 'Send it with the stop, as in PickedStop; null while picks can’t be sealed.',
+    }),
+  })
+  .openapi('RecentPlace');
+
+export const RecentPlaceListSchema = z
+  .object({
+    places: z.array(RecentPlaceSchema).openapi({
+      description: `The caller’s own drives’ places, newest first, once each, at most ${RECENT_PLACES}.`,
+    }),
+  })
+  .openapi('RecentPlaceList');

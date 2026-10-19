@@ -93,6 +93,13 @@ export const FLAGS = {
       'organization’s own key in Settings › Mileage, with saved places and a reason for any ' +
       'change to the measured miles (FR-CAP-04, #20).',
   },
+  'expenses.place-suggestions': {
+    name: 'Place suggestions',
+    description:
+      'Suggest landmarks, businesses and addresses as a drive’s stop is typed, with your saved ' +
+      'places and places you have driven to, and measure a picked place from exactly where it ' +
+      'is. Needs Route mileage and its OpenRouteService key (FR-CAP-14, #108).',
+  },
   'reports.export': {
     name: 'Report export',
     description: 'Export a closed report as CSV or PDF (FR-SET-01, #25).',

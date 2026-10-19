@@ -4260,6 +4260,12 @@
           "type": "timestamp with time zone",
           "nullable": false,
           "default": "now()"
+        },
+        {
+          "name": "pinned",
+          "type": "boolean",
+          "nullable": false,
+          "default": "false"
         }
       ],
       "primaryKey": [
@@ -4318,6 +4324,10 @@
         {
           "name": "mileage_route_stops_leg",
           "definition": "CHECK (((leg_metres >= 0) AND ((\"position\" > 0) OR (leg_metres IS NULL))))"
+        },
+        {
+          "name": "mileage_route_stops_pin_whole",
+          "definition": "CHECK (((NOT pinned) OR (label IS NOT NULL)))"
         },
         {
           "name": "mileage_route_stops_place_whole",

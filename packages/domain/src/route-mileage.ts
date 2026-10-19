@@ -51,6 +51,28 @@ export const ROUTE_REASON_MAX = 500;
 /** Longest name of a saved place, such as Home or Office. */
 export const PLACE_NAME_MAX = 40;
 
+/** Longest name the routing service gives a place it found or suggested. */
+export const PLACE_LABEL_MAX = 300;
+
+/** Fewest characters typed in a stop before places are suggested for it (R-SUGGEST-MIN). */
+export const SUGGEST_MIN_CHARS = 3;
+
+/** How long typing pauses before places are looked up, in milliseconds (R-SUGGEST-WAIT). */
+export const SUGGEST_WAIT_MS = 300;
+
+/** Most places suggested for a stop from the routing service (R-SUGGEST-SHOWN). */
+export const SUGGEST_SHOWN = 5;
+
+/** How long a suggestion lookup may take before the stop is simply typed (R-SUGGEST-TIMEOUT). */
+export const SUGGEST_TIMEOUT_MS = 3_000;
+
+/** Most places a person has driven to that are offered again for a stop (R-RECENT-PLACES). */
+export const RECENT_PLACES = 20;
+
+/** Shown wherever suggested places are, as OpenRouteService's terms ask (ADR-0052). */
+export const SUGGEST_ATTRIBUTION =
+  'Places © openrouteservice.org by HeiGIT · Map data © OpenStreetMap contributors';
+
 /** Shown wherever a measured route is, as OpenRouteService's terms ask (ADR-0039). */
 export const ROUTE_ATTRIBUTION =
   'Route © openrouteservice.org by HeiGIT · Map data © OpenStreetMap contributors';
@@ -82,6 +104,34 @@ export function wholeMetres(distance: number): number {
   const d = parseDecimal(/e/i.test(text) ? distance.toFixed(6) : text);
   return toSafeInteger(divRound(d.units, pow10(d.scale), 'half-up'));
 }
+
+/**
+ * A place picked for a stop from the suggestions (FR-CAP-14, Q53): the drive is measured from
+ * exactly here, and the stop's address is never searched again. Degrees to six places, as text.
+ */
+export interface StopPin {
+  readonly label: string;
+  readonly longitude: string;
+  readonly latitude: string;
+}
+
+const DEGREES = /^-?\d{1,3}\.\d{6}$/;
+
+/** Whether a picked place is whole: a name, and a point on the globe to six places. */
+export function isStopPin(pin: StopPin): boolean {
+  const label = pin.label.trim();
+  if (label === '' || label.length > PLACE_LABEL_MAX) return false;
+  if (!DEGREES.test(pin.longitude) || !DEGREES.test(pin.latitude)) return false;
+  return Math.abs(Number(pin.longitude)) <= 180 && Math.abs(Number(pin.latitude)) <= 90;
+}
+
+/** Degrees to six places, about 10 cm, as a stop's point is kept. */
+export const sixPlaces = (degrees: number): string => degrees.toFixed(6);
+
+const samePin = (a: StopPin | null = null, b: StopPin | null = null) =>
+  a === null || b === null
+    ? a === b
+    : a.label === b.label && a.longitude === b.longitude && a.latitude === b.latitude;
 
 /** The points a route goes through, in order: a round trip ends back at its start. */
 export function routePoints<T>(stops: readonly T[], roundTrip: boolean): T[] {
@@ -141,17 +191,25 @@ export interface RouteDriveValues {
   readonly date: IsoDate;
   /** Why the drive was for business. It is also its expense's justification. */
   readonly purpose: string;
-  /** The addresses as typed, start first and end last. */
+  /** The addresses as typed, or as picked, start first and end last. */
   readonly stops: readonly string[];
+  /**
+   * The place picked for each stop, null for one typed, beside `stops`; left out when no stop
+   * was picked (FR-CAP-14).
+   */
+  readonly pins?: readonly (StopPin | null)[];
   /** It returns to the start after the end. */
   readonly roundTrip: boolean;
 }
+
+/** A stop as given: an address typed, or one picked from the suggestions with its place. */
+export type RouteStopInput = string | { readonly address: string; readonly pin: StopPin };
 
 /** What a person typed. A field left out stays as it is. */
 export interface RouteDriveInput {
   readonly date?: string;
   readonly purpose?: string;
-  readonly stops?: readonly string[];
+  readonly stops?: readonly RouteStopInput[];
   readonly roundTrip?: boolean;
 }
 
@@ -161,8 +219,28 @@ export interface RouteDriveChange {
   readonly to: string | boolean | readonly string[];
 }
 
-const sameStops = (a: readonly string[], b: readonly string[]) =>
-  a.length === b.length && a.every((s, i) => s === b[i]);
+const sameStops = (a: RouteDriveValues, b: RouteDriveValues) =>
+  a.stops.length === b.stops.length &&
+  a.stops.every((s, i) => s === b.stops[i] && samePin(a.pins?.[i], b.pins?.[i]));
+
+/** The stops as given, checked: each address, and the place picked for it, if any. */
+function checkStopInputs(
+  given: readonly RouteStopInput[],
+): Result<{ stops: string[]; pins: (StopPin | null)[] | null }, RouteProblem> {
+  const checked = checkRouteStops(given.map((s) => (typeof s === 'string' ? s : s.address)));
+  if (!checked.ok) return checked;
+  const pins = given.map((s) => (typeof s === 'string' ? null : s.pin));
+  for (const [i, pin] of pins.entries()) {
+    if (pin && !isStopPin(pin)) {
+      return problem(
+        'stops',
+        `The place picked for ${stopName(i, pins.length)} isn’t whole. Pick it again, or type its address.`,
+        i,
+      );
+    }
+  }
+  return ok({ stops: checked.value, pins: pins.some((p) => p !== null) ? pins : null });
+}
 
 /**
  * Applies what a person typed to a route drive, or makes a new one when there is none (a new
@@ -204,10 +282,11 @@ export function applyRouteDriveInput(
     }
   }
   let stops = current?.stops;
+  let pins = current?.pins ?? null;
   if (input.stops !== undefined) {
-    const checked = checkRouteStops(input.stops);
+    const checked = checkStopInputs(input.stops);
     if (!checked.ok) return checked;
-    stops = checked.value;
+    ({ stops, pins } = checked.value);
   }
   const roundTrip = input.roundTrip ?? current?.roundTrip ?? false;
   if (date === undefined) return problem('date', 'Enter the date.');
@@ -215,7 +294,7 @@ export function applyRouteDriveInput(
   if (stops === undefined) {
     return problem('stops', 'Enter where the drive starts and where it ends.');
   }
-  const values: RouteDriveValues = { date, purpose, stops, roundTrip };
+  const values: RouteDriveValues = { date, purpose, stops, ...(pins ? { pins } : {}), roundTrip };
 
   const changes: RouteDriveChange[] = [];
   if (current?.date !== date)
@@ -223,7 +302,7 @@ export function applyRouteDriveInput(
   if (current?.purpose !== purpose) {
     changes.push({ field: 'purpose', from: current?.purpose ?? null, to: purpose });
   }
-  if (!current || !sameStops(current.stops, stops)) {
+  if (!current || !sameStops(current, values)) {
     changes.push({ field: 'stops', from: current?.stops ?? null, to: stops });
   }
   if (current && current.roundTrip !== roundTrip) {

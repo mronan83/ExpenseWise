@@ -411,6 +411,22 @@ const SCREENS: [string, (s: Seeded) => string, Step[], (() => string)?, RegExp?]
       press('Add a stop'),
       fill('Stop 2', 'Acme HQ, 1200 Dodge St, Omaha, NE'),
       fill('End', 'Eppley Airfield, Omaha, NE'),
+      // Its places close, as the person moves on.
+      (page) => page.keyboard.press('Escape'),
+    ],
+  ],
+  [
+    'places suggested for a drive’s stop: saved, driven to before, and landmarks',
+    () => '/mileage/new',
+    [
+      press('By route'),
+      fill('End', 'epp'),
+      (page) =>
+        expect(
+          page.getByText(
+            'Places © openrouteservice.org by HeiGIT · Map data © OpenStreetMap contributors',
+          ),
+        ).toBeVisible(),
     ],
   ],
   ['a drive measured by its route', (s) => `/expenses/${s.expenses.routeMeasured}`, []],
@@ -1025,6 +1041,58 @@ test('brings in a downloaded list from the Capture menu, then shows the Card pag
     });
   await expect(page).toHaveURL(/\/card$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Card' })).toBeVisible();
+});
+
+test('fills a drive’s stops from a saved place and a landmark suggested, and sends the landmark to be measured from exactly there', async ({
+  page,
+}) => {
+  // Logging it is the API's (api/route-mileage); this is the form's part, so the bench's own
+  // drives are left as they are.
+  let sent: { stops?: unknown } | undefined;
+  await page.route('**/api/v1/mileage/routes', async (route) => {
+    sent = route.request().postDataJSON() as { stops?: unknown };
+    await route.fulfill({
+      status: 422,
+      contentType: 'application/problem+json',
+      body: JSON.stringify({ title: 'Checked by the test', status: 422, code: 'test' }),
+    });
+  });
+  await page.goto('/mileage/new', { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'By route' }).click();
+  await page.getByLabel('Business purpose', { exact: true }).fill('Flight to the Denver office');
+
+  // Before anything is typed, the start offers the person's saved places; arrows and Enter pick.
+  const start = page.getByRole('combobox', { name: 'Start' });
+  await start.focus();
+  await expect(page.getByRole('option', { name: /^Office\b/ })).toBeVisible();
+  await start.press('ArrowDown');
+  await start.press('Enter');
+  await expect(start).toHaveValue('Acme HQ, 1200 Dodge St, Omaha, NE');
+  await expect(page.getByRole('option')).toHaveCount(0);
+
+  // Typed, the end offers the place driven to before, then OpenRouteService's landmarks.
+  const end = page.getByRole('combobox', { name: 'End' });
+  await end.fill('epp');
+  await expect(page.getByRole('option', { name: /Driven before/ })).toBeVisible();
+  const parking = page.getByRole('option', { name: /^Eppley Airfield Parking/ });
+  await expect(parking).toBeVisible();
+  await parking.click();
+  await expect(end).toHaveValue('Eppley Airfield Parking, Abbott Drive, Omaha, NE, USA');
+  await expect(page.getByText('Picked, so it is measured from exactly this place.')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Add the drive' }).click();
+  await expect(page.getByText('Checked by the test')).toBeVisible();
+  expect(sent?.stops).toEqual([
+    'Acme HQ, 1200 Dodge St, Omaha, NE',
+    {
+      address: 'Eppley Airfield Parking, Abbott Drive, Omaha, NE, USA',
+      pick: expect.stringMatching(/^v1\./) as unknown,
+    },
+  ]);
+
+  // Typed over, it is a stop typed again, searched as typed when measured.
+  await end.fill('Eppley Airfield Parking');
+  await expect(page.getByText(/^Picked, so it is measured/)).toHaveCount(0);
 });
 
 test('a receipt opens its history in the audit trail, under the chain checked intact', async ({

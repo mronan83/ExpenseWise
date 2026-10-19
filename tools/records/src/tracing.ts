@@ -335,6 +335,21 @@ export const GAPS: readonly Gap[] = [
     },
   },
   {
+    id: 'GAP-56',
+    title:
+      'A stop could only be typed in full, and was measured to whichever place OpenRouteService ranked first for it, so a landmark or a chain could be routed to the wrong place.',
+    affects: ['FR-CAP-14', 'FR-CAP-04', 'F-14'],
+    severity: 'Medium',
+    evidence:
+      'Your requirement of Oct 19, to type landmarks and destinations and have the app suggest them and fill in the address. ADR-0039 named the weakness: the workflow searched each stop for its best match, so “the airport” or a coffee chain went to the first match, and the drive’s page could only show where it landed. There was no choosing among matches.',
+    fix: 'Suggest places as a stop is typed, the person’s own first, and measure a place picked from exactly where it is (FR-CAP-14, ADR-0052, #108).',
+    backlog: 108,
+    closed: {
+      date: '2026-10-19',
+      note: 'PR #89: each stop suggests your saved places, the places you drove to and OpenRouteService’s landmarks, businesses and addresses; a place picked is pinned and measured from exactly there.',
+    },
+  },
+  {
     id: 'GAP-55',
     title:
       'A line the reading got wrong can’t be corrected, removed or added on its own: the only fix is deleting the whole statement.',
@@ -1344,10 +1359,40 @@ export const QUESTIONS: readonly Question[] = [
       text: 'A: the card is in your name and billed to your employer. You use it so every charge has its receipt and expense documented, and a charge without one must be flagged (FR-INT-25, FR-INT-26, #98).',
     },
   },
+  {
+    id: 'Q53',
+    title: 'What a place picked for a stop is measured from',
+    ask: 'When you pick a suggested place for a stop, what should the drive be measured from? A: its exact point: the place you picked is pinned and routed directly, with no second search, and a stop you type without picking is still searched as typed. B: its text searched again whenever the drive is measured, as Q32 decided for every address.',
+    why: 'The top match for a name can be another place: “Starbucks” or “the airport” searched again may land elsewhere than the one you picked. A spends no search on a picked stop; B keeps Q32 as it stood.',
+    recommendation: 'A: what you saw is what is measured.',
+    affects: ['FR-CAP-14', 'FR-CAP-04', 'F-71', 'GAP-56', 'Q32'],
+    answer: {
+      date: '2026-10-19',
+      text: 'A: a place picked is measured from its exact point. A stop typed without picking is searched as typed, as Q32 says (ADR-0052).',
+    },
+  },
+  {
+    id: 'Q54',
+    title: 'Whether suggestions rank near where you are',
+    ask: 'Should places be suggested near where you are right now? A: no: near the drive’s earlier stops and inside your organization’s country; nothing new leaves the phone. B: yes: ask the iPhone for your location while you type a stop, and send it to OpenRouteService to rank places near you.',
+    why: 'B suggests a first stop away from home better, but sends where you are, a new kind of personal data, to OpenRouteService.',
+    recommendation: 'A.',
+    affects: ['FR-CAP-14', 'F-71'],
+    answer: {
+      date: '2026-10-19',
+      text: 'A: near the drive’s stops and inside your country, never your location (ADR-0052).',
+    },
+  },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-19',
+    change:
+      'Your requirement of Oct 19, built in PR #89 at your word: a drive’s start, stops and end suggest places as they are typed (FR-CAP-14, F-71, US-MILE-12, #108, ADR-0052, D-54). Your saved places and the places your drives went to come first, then OpenRouteService’s landmarks, businesses and addresses on your organization’s key, each with its address. Your answers: a place picked is measured from its exact point (Q53), and suggestions rank near the drive’s stops, never your location (Q54). Each pick is sealed, so no stop is measured from a point made up. Closes GAP-56, the best match routed for a name. Behind `expenses.place-suggestions`: switch it on in Settings › Features.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-10',
     change:

@@ -15,6 +15,7 @@ import {
   claimMilesForRoute,
   getRouteDrive,
   logRouteMileage,
+  recentPlaces,
   recordRouteMeasurement,
   ROUTE_MEASURE_REQUESTED,
   routeToMeasure,
@@ -49,16 +50,22 @@ const toClient: RouteDriveInput = {
   stops: ['12 Elm St, Omaha, NE', 'Acme HQ, 1520 Harney St, Omaha', 'Eppley Airfield, Omaha'],
 };
 
+/** Where OpenRouteService would have found `toClient`'s three stops. */
+const PLACES = [
+  { label: '12 Elm Street, Omaha, NE, USA', longitude: '-95.934502', latitude: '41.256537' },
+  { label: '1520 Harney Street, Omaha, NE, USA', longitude: '-95.936117', latitude: '41.257163' },
+  { label: 'Eppley Airfield, Omaha, NE, USA', longitude: '-95.894069', latitude: '41.303166' },
+];
+
 /** What OpenRouteService would have answered for `toClient`: three places, two legs. */
-const measured = (legs: number[] = [9_400, 52_400]): RouteOutcome => ({
+const measured = (
+  legs: number[] = [9_400, 52_400],
+  places: { label: string; longitude: string; latitude: string }[] = PLACES,
+): RouteOutcome => ({
   kind: 'measured',
   provider: 'openrouteservice',
   profile: 'driving-car',
-  places: [
-    { label: '12 Elm Street, Omaha, NE, USA', longitude: '-95.934502', latitude: '41.256537' },
-    { label: '1520 Harney Street, Omaha, NE, USA', longitude: '-95.936117', latitude: '41.257163' },
-    { label: 'Eppley Airfield, Omaha, NE, USA', longitude: '-95.894069', latitude: '41.303166' },
-  ],
+  places,
   legs,
   measuredAt: NOW,
 });
@@ -495,6 +502,87 @@ describe('the route tables’ own rules', () => {
       ),
       /mileage_route_stops_position_range/,
     );
+    await expectDbError(
+      w.inOrg((tx) =>
+        tx
+          .update(mileageRouteStops)
+          .set({ pinned: true })
+          .where(eq(mileageRouteStops.expenseId, id)),
+      ),
+      /mileage_route_stops_pin_whole/,
+    );
+  });
+});
+
+describe('a stop picked from the suggestions (FR-CAP-14, Q53)', () => {
+  const eppley = {
+    label: 'Eppley Airfield, Omaha, NE, USA',
+    longitude: '-95.894069',
+    latitude: '41.303166',
+  };
+  const picked = {
+    address: 'Eppley Airfield, 4501 Abbott Drive, Omaha, NE, USA',
+    pin: eppley,
+  };
+
+  it('keeps the place it was picked at from the start, hands it to the workflow, and records it in the trail', async () => {
+    const w = await workspace('route-picked');
+    const logged = await w.log({ stops: ['12 Elm St, Omaha, NE', picked] });
+    const shown = await w.drive(logged.expenseId);
+    expect(shown?.route.stops).toMatchObject([
+      { address: '12 Elm St, Omaha, NE', pinned: false, label: null },
+      { address: picked.address, pinned: true, ...eppley },
+    ]);
+    expect(
+      await w.inOrg((tx) => routeToMeasure(tx, logged.expenseId, logged.event.outboxId)),
+    ).toMatchObject({ stops: ['12 Elm St, Omaha, NE', picked.address], pins: [null, eppley] });
+    const [created] = await w.audit(logged.expenseId);
+    expect(created?.payload).toMatchObject({ picked: [{ stop: 1, ...eppley }] });
+
+    // Measured, the picked stop keeps its place; sent back unchanged, it isn't measured again.
+    await w.record(
+      logged.expenseId,
+      logged.event.outboxId,
+      measured([61_800], [PLACES[0]!, eppley]),
+    );
+    expect(await w.change(logged.expenseId, { stops: ['12 Elm St, Omaha, NE', picked] })).toEqual({
+      status: 'unchanged',
+    });
+    // Typed over at the same address, it is a stop like any other, searched when measured.
+    const typed = await w.change(logged.expenseId, {
+      stops: ['12 Elm St, Omaha, NE', picked.address],
+    });
+    expect(typed).toMatchObject({ status: 'changed', remeasured: true });
+    expect((await w.drive(logged.expenseId))?.route.stops[1]).toMatchObject({
+      pinned: false,
+      label: null,
+    });
+  });
+
+  it('offers the places a member’s own drives went to, newest first, once each, never a colleague’s', async () => {
+    const w = await workspace('route-recent');
+    const jordan = await w.colleague();
+    const older = await w.log({ date: '2026-09-20', stops: ['12 Elm St, Omaha, NE', picked] });
+    await w.record(older.expenseId, older.event.outboxId, measured([61_800], [PLACES[0]!, eppley]));
+    const newer = await w.log({ date: '2026-09-29' });
+    await w.record(newer.expenseId, newer.event.outboxId, measured());
+    // Not measured yet: nowhere found, so nothing to offer.
+    await w.log({ date: '2026-10-01', stops: ['1 Unmeasured Way', '2 Unmeasured Way'] });
+    const theirs = await w.log({ stops: ['Jordan’s house', 'Jordan’s office'] }, jordan);
+    await w.record(theirs.expenseId, theirs.event.outboxId, measured([5_000], PLACES.slice(0, 2)));
+
+    const recent = await w.as(w.owner, (tx) => recentPlaces(tx, w.owner.memberId, 20));
+    expect(recent.map((p) => [p.address, p.lastDriven])).toEqual([
+      ['12 Elm St, Omaha, NE', '2026-09-29'],
+      ['Acme HQ, 1520 Harney St, Omaha', '2026-09-29'],
+      ['Eppley Airfield, Omaha', '2026-09-29'],
+      [picked.address, '2026-09-20'],
+    ]);
+    expect(recent[3]).toMatchObject(eppley);
+    expect(await w.as(w.owner, (tx) => recentPlaces(tx, w.owner.memberId, 2))).toHaveLength(2);
+    expect(
+      (await w.as(jordan, (tx) => recentPlaces(tx, jordan.memberId, 20))).map((p) => p.address),
+    ).toEqual(['Jordan’s house', 'Jordan’s office']);
   });
 });
 

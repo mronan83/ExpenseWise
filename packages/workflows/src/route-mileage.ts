@@ -96,7 +96,8 @@ function refusedProblem(error: RouteServiceError, stops: readonly string[]): str
 }
 
 /**
- * Measures one route drive: finds each stop, then routes through them in order. A stop not
+ * Measures one route drive: finds each stop typed, takes each one picked from the suggestions
+ * where it was picked, then routes through them in order. A stop not
  * found, a missing, unreadable or refused key, or a route that can't be made is an outcome to
  * record; a busy or used-up service throws, so the step is tried again. Never logs or returns
  * the key or the addresses.
@@ -114,6 +115,16 @@ export async function measureRoute(
   try {
     const places = [];
     for (const [i, address] of drive.stops.entries()) {
+      // A stop picked from the suggestions is measured from exactly there (Q53).
+      const pin = drive.pins?.[i];
+      if (pin) {
+        places.push({
+          label: pin.label,
+          longitude: Number(pin.longitude),
+          latitude: Number(pin.latitude),
+        });
+        continue;
+      }
       const place = await client.find(address, drive.country);
       if (!place) {
         return failed(

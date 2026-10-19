@@ -210,7 +210,7 @@ export const TABLES: Readonly<Record<string, TableNote>> = {
   },
   mileage_route_stops: {
     about:
-      'A route drive’s stops in order, the start at 0: each address as its person typed it, which is what is sent to be measured (Q32), and once measured the place it was found at, its coordinates to six places and the leg to it from the stop before in whole metres (ADR-0039). Replaced whole when the stops change before submission; the audit trail keeps what they were.',
+      'A route drive’s stops in order, the start at 0: each address as its person typed it, which is what is sent to be measured (Q32), and once measured the place it was found at, its coordinates to six places and the leg to it from the stop before in whole metres (ADR-0039). A stop picked from the suggestions is `pinned`: its place is kept from the moment it is saved, from a pick the server sealed, and it is measured from exactly there, its address never searched (FR-CAP-14, Q53, ADR-0052). The places a member’s own drives went to are read from here, newest first, to offer again for a stop. Replaced whole when the stops change before submission; the audit trail keeps what they were, and the places picked.',
   },
   saved_places: {
     about:
@@ -643,19 +643,20 @@ export const RULES: readonly Rule[] = [
     refs: ['NFR-DAT-04', 'FR-CAP-04', 'Q33', 'ADR-0039'],
   },
   {
-    rule: 'A route drive’s stops are in order, each place once, and a found place is whole.',
+    rule: 'A route drive’s stops are in order, each place once, and a found or picked place is whole.',
     mechanism:
-      'One stop per drive and position, 0 to 24, pointing at its route by a composite key; an address of 1 to 200 characters; a label and both coordinates together or none, within the globe; no leg before the start, and none negative. How many stops a drive takes, 25, is the domain’s to check (R-ROUTE-STOPS), and the position range holds it in the database too.',
+      'One stop per drive and position, 0 to 24, pointing at its route by a composite key; an address of 1 to 200 characters; a label and both coordinates together or none, within the globe, and a pinned stop never without them; no leg before the start, and none negative. How many stops a drive takes, 25, is the domain’s to check (R-ROUTE-STOPS), and the position range holds it in the database too.',
     objects: [
       'mileage_route_stops_position_key',
       'mileage_route_stops_route_fk',
       'mileage_route_stops_position_range',
       'mileage_route_stops_address_length',
       'mileage_route_stops_place_whole',
+      'mileage_route_stops_pin_whole',
       'mileage_route_stops_coordinates_range',
       'mileage_route_stops_leg',
     ],
-    refs: ['FR-CAP-04', 'ADR-0039'],
+    refs: ['FR-CAP-04', 'FR-CAP-14', 'ADR-0039', 'ADR-0052'],
   },
   {
     rule: 'A member keeps a place by a name once, and only their own.',
