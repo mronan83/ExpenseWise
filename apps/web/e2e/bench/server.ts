@@ -953,6 +953,12 @@ await call('POST', '/v1/me/places', {
   name: 'Acme HQ',
   address: 'Acme HQ, 1200 Dodge St, Omaha, NE',
 });
+// A route Riley drives often, to log a drive from (FR-CAP-16).
+await call('POST', '/v1/me/routes', {
+  name: 'Office → Acme HQ',
+  stops: ['1520 Harney St, Omaha, NE', 'Acme HQ, 1200 Dodge St, Omaha, NE'],
+  roundTrip: true,
+});
 // Its end was picked from the suggestions (FR-CAP-14), so it is measured from exactly there.
 const [airport] = (
   await call<{ places: { address: string; pick: string }[] }>(
