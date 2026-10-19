@@ -1447,6 +1447,12 @@ export const CHANGE_LOG: readonly ChangeLogEntry[] = [
   {
     date: '2026-10-19',
     change:
+      'Built in PR #91, your answer to Q55: saved routes. Save a drive’s route from its page under a name, its stops, picked places and round trip, and start a later drive from it with all of them filled in; rename or remove saved routes in Settings › Mileage (FR-CAP-16, F-73, US-MILE-14, #110).',
+    by: 'Claude, at your direction',
+  },
+  {
+    date: '2026-10-19',
+    change:
       'Your three requirements of Oct 19 recorded, with your answers to Q55 to Q58. Built in PR #90: a drive by its route takes a name, which its expense is listed and exported by, and without one goes by its start and end, such as “Office → Eppley Airfield” (FR-CAP-15, F-72, US-MILE-13, #109); every screen refreshes by pulling down from the top or by its header’s button, since the Home Screen app has no reload (NFR-UX-08, F-74, US-UX-07, GAP-57, #111). Recorded as Planned: saved routes to reuse (FR-CAP-16, F-73, US-MILE-14, #110), and push notifications to the Home Screen app, what and where but never an amount (FR-PLT-12, F-75, US-INBOX-03, #112).',
     by: 'Claude, at your direction',
   },

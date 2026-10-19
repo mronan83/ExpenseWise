@@ -511,6 +511,7 @@ export const BACKLOG: readonly BacklogItem[] = [
     blocker: { kind: 'none' },
     source: 'Product owner Oct 19',
     affects: ['FR-CAP-16', 'F-73'],
+    done: { date: '2026-10-19', in: 'PR #91' },
   },
   {
     num: 111,

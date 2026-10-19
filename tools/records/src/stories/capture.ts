@@ -1444,7 +1444,7 @@ export const CAPTURE_STORIES: readonly Story[] = [
     soThat: 'a drive I make every week takes a tap, not its stops typed again',
     feature: 'F-73',
     requirements: ['FR-CAP-16'],
-    status: 'Planned',
+    status: 'Delivered',
     criteria: [
       {
         id: 'AC1',
@@ -1452,7 +1452,11 @@ export const CAPTURE_STORIES: readonly Story[] = [
         when: 'I save its route under a name',
         then: 'it is kept as mine: its stops, the places picked for them and whether it is a round trip',
         decided: { by: 'owner', source: 'Q55' },
-        checks: [],
+        checks: [
+          'db/mileage-routes.int › keeps a member’s routes, each name once, with their stops and picked places, the trail without addresses',
+          'api/route-mileage › saves a route with its stops, a picked one pinned, and lists only the caller’s own',
+          'e2e/signed-in › saves a drive’s route under a name, a picked stop with its pick',
+        ],
       },
       {
         id: 'AC2',
@@ -1460,7 +1464,10 @@ export const CAPTURE_STORIES: readonly Story[] = [
         when: 'I add a drive and choose it',
         then: 'its name, stops and round trip are filled in, picked places still pinned, and I can change any before adding the drive',
         decided: { by: 'owner', source: 'Q55' },
-        checks: [],
+        checks: [
+          'api/route-mileage › saves a route with its stops, a picked one pinned, and lists only the caller’s own',
+          'e2e/signed-in › fills a drive from a saved route: its name, stops and round trip',
+        ],
       },
       {
         id: 'AC3',
@@ -1468,10 +1475,14 @@ export const CAPTURE_STORIES: readonly Story[] = [
         when: 'I rename or remove one',
         then: 'it changes there only: drives already logged from it keep what they were logged with',
         decided: { by: 'claude' },
-        checks: [],
+        checks: [
+          'api/route-mileage › renames a route or changes its stops, each name once, and removes only the caller’s own',
+          'db/mileage-routes.int › shows and changes only a member’s own routes, and keeps a route’s rules in the database',
+          'e2e/signed-in › mileage settings, with the route key, saved places and saved routes',
+        ],
       },
     ],
-    note: 'Your answer to Q55, for #110.',
+    note: 'Your answer to Q55, built in PR #91 (#110). Saving from a drive’s page, and a drive logged from a route keeping its own copy, are Claude’s, for you to confirm.',
   },
   {
     id: 'US-MILE-10',
