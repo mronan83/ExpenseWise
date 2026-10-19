@@ -4478,6 +4478,12 @@
           "type": "timestamp with time zone",
           "nullable": false,
           "default": "now()"
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "nullable": true,
+          "default": null
         }
       ],
       "primaryKey": [
@@ -4531,6 +4537,10 @@
         {
           "name": "mileage_routes_measured_whole",
           "definition": "CHECK (((status = 'measured'::route_status) = ((provider IS NOT NULL) AND (profile IS NOT NULL) AND (measured_at IS NOT NULL) AND (distance_metres IS NOT NULL) AND (measured_miles IS NOT NULL))))"
+        },
+        {
+          "name": "mileage_routes_name_length",
+          "definition": "CHECK (((name IS NULL) OR ((length(name) >= 1) AND (length(name) <= 80))))"
         },
         {
           "name": "mileage_routes_problem_when_failed",

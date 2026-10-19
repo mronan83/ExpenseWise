@@ -11,7 +11,9 @@ import {
   PLACE_NAME_MAX,
   ROUTE_ADDRESS_MAX,
   ROUTE_MAX_STOPS,
+  ROUTE_NAME_MAX,
   ROUTE_REASON_MAX,
+  routeDisplayName,
   routePoints,
   stopName,
   wholeMetres,
@@ -129,6 +131,43 @@ describe('a route drive, logged and changed', () => {
     const moved = applyRouteDriveInput(current, { date: '2025-12-31' }, TODAY);
     expect(moved.ok && moved.value.remeasure).toBe(false);
     expect(moved.ok && moved.value.rate?.perUnit).toBe('0.70');
+  });
+});
+
+describe('a drive’s name (FR-CAP-15, Q55)', () => {
+  it('goes by its start and end, a saved place by its name, unless it has a name of its own', () => {
+    const stops = ['1520 Harney St, Omaha, NE', 'Acme HQ, 1200 Dodge St', 'Eppley Airfield, Omaha'];
+    expect(routeDisplayName({ stops, roundTrip: false })).toBe('1520 Harney St → Eppley Airfield');
+    expect(routeDisplayName({ stops, roundTrip: true })).toBe(
+      '1520 Harney St → Eppley Airfield and back',
+    );
+    const saved = new Map([['1520 harney st, omaha, ne', 'Office']]);
+    expect(routeDisplayName({ stops, roundTrip: false }, saved)).toBe('Office → Eppley Airfield');
+    expect(routeDisplayName({ name: 'Acme visit and the airport', stops, roundTrip: true })).toBe(
+      'Acme visit and the airport',
+    );
+  });
+
+  it('keeps a name trimmed, up to the most characters, and clears it to go back to its stops', () => {
+    const named = applyRouteDriveInput(null, { ...drive, name: '  Acme   visit ' }, TODAY);
+    expect(named.ok && named.value.values.name).toBe('Acme visit');
+    const current: RouteDriveValues = { ...drive, name: 'Acme visit', roundTrip: false };
+    const renamed = applyRouteDriveInput(current, { name: 'Acme and back' }, TODAY);
+    expect(renamed.ok && renamed.value.changes).toEqual([
+      { field: 'name', from: 'Acme visit', to: 'Acme and back' },
+    ]);
+    // A new name never measures the drive again.
+    expect(renamed.ok && renamed.value.remeasure).toBe(false);
+    for (const cleared of [null, '  ']) {
+      const result = applyRouteDriveInput(current, { name: cleared }, TODAY);
+      expect(result.ok && 'name' in result.value.values).toBe(false);
+      expect(result.ok && result.value.changes).toEqual([
+        { field: 'name', from: 'Acme visit', to: null },
+      ]);
+    }
+    expect(
+      applyRouteDriveInput(null, { ...drive, name: 'x'.repeat(ROUTE_NAME_MAX + 1) }, TODAY),
+    ).toMatchObject({ ok: false, error: { field: 'name', message: /80 characters/ } });
   });
 });
 

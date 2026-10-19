@@ -1265,6 +1265,11 @@ export const mileageRoutes = pgTable(
     expenseId: uuid('expense_id').notNull(),
     /** It returns to the start after the end. */
     roundTrip: boolean('round_trip').notNull().default(false),
+    /**
+     * The name its person gave it, which its expense is listed and exported by; without one, the
+     * expense goes by its start and end (FR-CAP-15).
+     */
+    name: text('name'),
     status: routeStatus('status').notNull(),
     /**
      * The measuring asked for last: its outbox event's id. A measurement made for an earlier
@@ -1314,6 +1319,10 @@ export const mileageRoutes = pgTable(
     check(
       'mileage_routes_reason_length',
       sql`${t.milesReason} IS NULL OR length(${t.milesReason}) BETWEEN 1 AND 500`,
+    ),
+    check(
+      'mileage_routes_name_length',
+      sql`${t.name} IS NULL OR length(${t.name}) BETWEEN 1 AND 80`,
     ),
   ],
 );

@@ -966,6 +966,7 @@ expenses.routeMeasured = (
   await call<{ id: string }>('POST', '/v1/mileage/routes', {
     date: day(-9),
     purpose: 'Client visit at Acme, then the airport',
+    name: 'Acme visit and the airport',
     stops: [
       '1520 Harney St, Omaha, NE',
       'Acme HQ, 1200 Dodge St, Omaha, NE',

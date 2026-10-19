@@ -12,6 +12,7 @@ export {
   ROUTE_MAX_STOPS,
   ROUTE_ADDRESS_MAX,
   PLACE_NAME_MAX,
+  ROUTE_NAME_MAX,
   SUGGEST_MIN_CHARS,
   SUGGEST_WAIT_MS,
 } from '@expensewise/domain';
@@ -39,6 +40,8 @@ export interface RouteStop {
 export interface Route {
   status: 'measuring' | 'measured' | 'failed';
   problem: string | null;
+  /** The name its person gave it; null when it goes by its start and end (FR-CAP-15). */
+  name: string | null;
   roundTrip: boolean;
   stops: RouteStop[];
   returnMetres: number | null;

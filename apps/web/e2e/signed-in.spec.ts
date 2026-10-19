@@ -407,6 +407,7 @@ const SCREENS: [string, (s: Seeded) => string, Step[], (() => string)?, RegExp?]
       press('By route'),
       fill('Date', day(-9)),
       fill('Business purpose', 'Client visit at Acme'),
+      fill('Name (optional)', 'Acme visit and the airport'),
       fill('Start', '1520 Harney St, Omaha, NE'),
       press('Add a stop'),
       fill('Stop 2', 'Acme HQ, 1200 Dodge St, Omaha, NE'),
@@ -429,7 +430,16 @@ const SCREENS: [string, (s: Seeded) => string, Step[], (() => string)?, RegExp?]
         ).toBeVisible(),
     ],
   ],
-  ['a drive measured by its route', (s) => `/expenses/${s.expenses.routeMeasured}`, []],
+  [
+    'a drive measured by its route, by the name its person gave it',
+    (s) => `/expenses/${s.expenses.routeMeasured}`,
+    [
+      (page) =>
+        expect(
+          page.getByRole('heading', { level: 1, name: 'Acme visit and the airport' }),
+        ).toBeVisible(),
+    ],
+  ],
   [
     'changing the miles of a measured drive',
     (s) => `/expenses/${s.expenses.routeMeasured}`,

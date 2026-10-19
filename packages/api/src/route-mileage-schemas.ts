@@ -3,6 +3,7 @@ import {
   RECENT_PLACES,
   ROUTE_ADDRESS_MAX,
   ROUTE_MAX_STOPS,
+  ROUTE_NAME_MAX,
   ROUTE_REASON_MAX,
   SUGGEST_MIN_CHARS,
   SUGGEST_SHOWN,
@@ -58,6 +59,11 @@ export const RouteSchema = z
         'for the reason in problem; fix a stop and measure it again, or claim miles by hand.',
     }),
     problem: z.string().nullable().openapi({ description: 'Why it was not measured.' }),
+    name: z.string().nullable().openapi({
+      example: 'Acme visit and the airport',
+      description:
+        'The name its person gave it, which its expense is listed by; null when it goes by its start and end, such as “Office → Eppley Airfield” (FR-CAP-15).',
+    }),
     roundTrip: z.boolean().openapi({ description: 'It returns to the start after the end.' }),
     stops: z.array(RouteStopSchema).openapi({ description: 'In order: the start first.' }),
     returnMetres: z.number().int().nullable().openapi({
@@ -131,6 +137,15 @@ export const LogRouteDriveSchema = z
       description: 'Why the drive was for business. Up to 500 characters. Never sent anywhere.',
       example: 'Client visit at Acme',
     }),
+    name: z
+      .string()
+      .max(400)
+      .nullable()
+      .optional()
+      .openapi({
+        example: 'Acme visit and the airport',
+        description: `What it is called, up to ${ROUTE_NAME_MAX} characters; empty or null, it goes by its start and end. Never sent anywhere.`,
+      }),
     stops,
     roundTrip: z.boolean().optional().openapi({ description: 'Back to the start after the end.' }),
   })

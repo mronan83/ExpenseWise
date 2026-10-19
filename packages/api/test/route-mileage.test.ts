@@ -15,6 +15,7 @@ import {
   isExpenseEditable,
   milesFromMetres,
   quoteMileage,
+  routeDisplayName,
   type ExportExpense,
   type MemberRole,
   type RouteDriveValues,
@@ -80,6 +81,7 @@ function fakeRoutes() {
     ({
       status: 'measuring',
       roundTrip: values.roundTrip,
+      name: values.name ?? null,
       requestId,
       problem: null,
       provider: null,
@@ -117,7 +119,7 @@ function fakeRoutes() {
           owner: 'riley',
           status: 'processing',
           source: 'mileage',
-          merchant: end,
+          merchant: routeDisplayName(values),
           transactionDate: values.date,
           currency: null,
           amountMinor: null,
@@ -172,6 +174,7 @@ function fakeRoutes() {
       const current: RouteDriveValues = {
         date: found.mileage.date,
         purpose: found.mileage.purpose,
+        ...(found.route.name ? { name: found.route.name } : {}),
         stops: found.route.stops.map((s) => s.address),
         ...(pins.some(Boolean) ? { pins } : {}),
         roundTrip: found.route.roundTrip,
@@ -184,6 +187,8 @@ function fakeRoutes() {
       if (changes.length === 0 && !remeasured) return Promise.resolve({ status: 'unchanged' });
       const event = remeasured ? request(expenseId) : null;
       found.mileage = { ...found.mileage, date: values.date, purpose: values.purpose };
+      found.route = { ...found.route, name: values.name ?? null };
+      found.expense = { ...found.expense, merchant: routeDisplayName(values) };
       if (event) {
         found.route = unmeasured(values, event.outboxId);
         found.expense = { ...found.expense, status: 'processing', amountMinor: null };
@@ -467,7 +472,7 @@ describe('a route drive (FR-CAP-04)', () => {
     expect(res.body).toMatchObject({
       status: 'processing',
       source: 'mileage',
-      merchant: 'Eppley Airfield',
+      merchant: '12 Elm St → Eppley Airfield',
       amount: null,
       mileage: { method: 'route', purpose: drive.purpose, rate: { perUnit: '0.725' } },
       route: {
@@ -489,6 +494,29 @@ describe('a route drive (FR-CAP-04)', () => {
     ]);
     const entry = s.routes.entries.get(res.body.id as string)!;
     expect(entry.expense.memberId).toBe(RILEY);
+  });
+
+  it('names a drive, renames it without measuring it again, and clears the name to go by its start and end', async () => {
+    const s = setup();
+    const logged = await s.call('POST', '/v1/mileage/routes', {
+      ...drive,
+      name: 'Acme visit and the airport',
+    });
+    expect(logged.body).toMatchObject({
+      merchant: 'Acme visit and the airport',
+      route: { name: 'Acme visit and the airport' },
+    });
+    const id = logged.body.id as string;
+    const renamed = await s.call('PATCH', `/v1/mileage/${id}/route`, { name: 'Acme loop' });
+    expect(renamed.body).toMatchObject({ merchant: 'Acme loop', route: { name: 'Acme loop' } });
+    expect(s.dispatched).toHaveLength(1);
+    const cleared = await s.call('PATCH', `/v1/mileage/${id}/route`, { name: null });
+    expect(cleared.body).toMatchObject({
+      merchant: '12 Elm St → Eppley Airfield',
+      route: { name: null },
+    });
+    const tooLong = await s.call('PATCH', `/v1/mileage/${id}/route`, { name: 'x'.repeat(81) });
+    expect(tooLong.body).toMatchObject({ code: 'invalid_value', field: 'name' });
   });
 
   it('names the stop that is not valid, and logs nothing', async () => {

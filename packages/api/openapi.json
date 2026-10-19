@@ -5413,6 +5413,14 @@
             ],
             "description": "Why it was not measured."
           },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "example": "Acme visit and the airport",
+            "description": "The name its person gave it, which its expense is listed by; null when it goes by its start and end, such as “Office → Eppley Airfield” (FR-CAP-15)."
+          },
           "roundTrip": {
             "type": "boolean",
             "description": "It returns to the start after the end."
@@ -5494,6 +5502,7 @@
         "required": [
           "status",
           "problem",
+          "name",
           "roundTrip",
           "stops",
           "returnMetres",
@@ -5579,6 +5588,15 @@
             "description": "Why the drive was for business. Up to 500 characters. Never sent anywhere.",
             "example": "Client visit at Acme"
           },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 400,
+            "example": "Acme visit and the airport",
+            "description": "What it is called, up to 80 characters; empty or null, it goes by its start and end. Never sent anywhere."
+          },
           "stops": {
             "type": "array",
             "items": {
@@ -5648,6 +5666,15 @@
             "maxLength": 1000,
             "description": "Why the drive was for business. Up to 500 characters. Never sent anywhere.",
             "example": "Client visit at Acme"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 400,
+            "example": "Acme visit and the airport",
+            "description": "What it is called, up to 80 characters; empty or null, it goes by its start and end. Never sent anywhere."
           },
           "stops": {
             "type": "array",
