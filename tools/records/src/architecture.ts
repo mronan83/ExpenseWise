@@ -505,6 +505,41 @@ export const FLOWS: readonly Flow[] = [
     refs: ['FR-CAP-14', 'Q32', 'Q53', 'Q54', 'ADR-0052'],
   },
   {
+    id: 'push-notifications',
+    title: 'A notification on the phone',
+    about:
+      'Nothing that changes sends a notification itself: every change is already on the audit trail, so a sweep every five minutes reads each organization’s trail past its cursor, makes each notification once and sends each person’s waiting ones as one push. A push is a call to Apple, so it is never made in a request; a test asked for goes through the outbox to the sweep at once. Apple carries it encrypted for the phone, which only the phone can read, and it says what and where, never an amount (Q57, Q58, ADR-0053).',
+    diagram: `sequenceDiagram
+  actor P as Person
+  participant W as App on the Home Screen
+  participant A as API
+  participant DB as Postgres
+  participant I as Inngest
+  participant S as push-sweep
+  participant AP as Apple's push service
+  P->>W: Settings › Notifications: Allow notifications on this device
+  W->>W: The iPhone asks once; subscribes with the server's VAPID key
+  W->>A: POST /v1/me/push-subscriptions, its address at Apple, keys and time zone
+  A->>DB: The device, its member's alone; the cursor at the end of the trail
+  Note over DB: Later: a receipt emailed in is read and filed: receipt.read on the trail
+  I->>S: Every 5 minutes, or at once for a test (notifications.push_requested)
+  S->>DB: push_work_due(): organizations with work, ids only
+  S->>DB: In each, as the system: the trail past the cursor, each change told once, kinds switched off left out; the cursor moved on
+  S->>DB: Each person's waiting notifications, as one push: "3 receipts filed"
+  S->>AP: Web Push, encrypted for the phone, signed with the VAPID key
+  alt Taken (201)
+    S->>DB: Sent
+  else Subscription ended (404, 410)
+    S->>DB: The device removed, audited by its service only
+  else Anything else, a 403 too
+    Note over S,AP: Tried at the next sweeps, three times at most
+  end
+  AP-->>W: The notification, on the lock screen
+  P->>W: Taps it
+  W->>W: The service worker opens its path in the app, never another site`,
+    refs: ['FR-PLT-12', 'Q57', 'Q58', 'ADR-0053'],
+  },
+  {
     id: 'card-statement',
     title: 'A card statement, matched to expenses',
     about:
