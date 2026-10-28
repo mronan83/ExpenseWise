@@ -22,7 +22,7 @@
     "inngest": "^4.21.1",
     "mailauth": "^7.1.1",
     "pdf-lib": "^1.17.1",
-    "postal-mime": "^4.0.4",
+    "postal-mime": "^4.1.4",
     "web-push": "^3.6.7"
   },
   "devDependencies": {
