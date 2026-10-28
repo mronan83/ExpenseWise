@@ -11,6 +11,13 @@ onlyBuiltDependencies:
   - sharp
   - unrs-resolver
 
+# A patched release of a package reached only through another that pins it (G4). It lifts
+# only the vulnerable range; drop it once the package that pins it moves on.
+overrides:
+  # mailauth 7 pins 8.11.2: redirects, TLS and content-encoding advisories (GHSA-xjj6-f33q-929c,
+  # GHSA-4w7w-5xrc-9h26, GHSA-2m5v-pch6-74hx, GHSA-qrxm-fqhp-jwvm).
+  'undici@>=8.0.0 <8.12.2': ^8.12.2
+
 # Advisories the dependency audit (G4) lets through. Each has no fixed version yet, is
 # recorded as a gap, and is checked weekly by .github/workflows/advisory-watch.yml.
 auditConfig:
