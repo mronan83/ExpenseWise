@@ -510,6 +510,18 @@ export const RULES: readonly Rule[] = [
     note: 'A card prints the day a charge was authorized or posted, a hotel the day you checked out: three days covers both without reaching the next trip. The same amount and currency are needed too, and a tie is left for you. Claude’s, yours to confirm.',
   },
   {
+    id: 'R-REFUND-DAYS',
+    name: 'How long after a purchase its refund may be dated and still be paired with it',
+    value: '180 days, from the purchase’s day; never before it',
+    decided: { by: 'claude', source: 'ADR-0054' },
+    code: {
+      file: 'packages/domain/src/refunds.ts',
+      constant: 'REFUND_DAYS',
+      literal: '180',
+    },
+    note: 'Returns are taken for 30 to 90 days, and a card dispute settles within 120: half a year covers both with room, and keeps the purchases offered for a refund few. Claude’s, yours to confirm.',
+  },
+  {
     id: 'R-PAIR-LIKENESS',
     name: 'How alike two card charges’ merchant must be to an expense for both to be matched to it',
     value: 'Half: one of the expense’s two leading merchant words found in each charge’s',

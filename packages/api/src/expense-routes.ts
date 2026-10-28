@@ -1,5 +1,6 @@
-import type { Membership } from '@expensewise/db';
+import type { ExpenseRecord, Membership, RefundLink } from '@expensewise/db';
 import {
+  REFUND_PROBLEMS,
   amountMatches,
   applyExpenseEdit,
   type DetailField,
@@ -14,6 +15,8 @@ import { receiptCheckOf } from './approval.ts';
 import { checkView } from './approval-views.ts';
 import { paidByView, readPaidBy, showCompanyPaid, type CompanyPaidStore } from './company-paid.ts';
 import { expenseSummaries, proofOf } from './expense-views.ts';
+import { amountView } from './receipt-views.ts';
+import type { RefundStore } from './refunds.ts';
 import type { ExpenseStore } from './expenses.ts';
 import { featureGate, type FeatureGate } from './features.ts';
 import type { ItemizedStore } from './itemized.ts';
@@ -27,7 +30,9 @@ import {
   editExpenseRoute,
   getExpenseRoute,
   listExpensesRoute,
+  listRefundCandidatesRoute,
   setExpenseTripRoute,
+  setRefundOfRoute,
 } from './routes/expenses.ts';
 import type { WorkspaceStore } from './workspace.ts';
 
@@ -43,11 +48,22 @@ export interface ExpenseRouteOptions {
   readonly companyPaid?: CompanyPaidStore;
   /** Card transactions; while card statements are on, an expense shows the charge that paid it. */
   readonly cards?: CardStore;
+  /** Refunds: what each is paired with, and the refunds paired with a purchase (FR-EXP-21). */
+  readonly refunds?: RefundStore;
   /** Which features are on. Built from `workspace` when not given. */
   readonly features?: FeatureGate;
 }
 
 const LIST_LIMIT = 100;
+
+/** A refund's purchase, or one of a purchase's refunds, as an expense's page shows it. */
+const refundLink = (link: RefundLink) => ({
+  id: link.id,
+  merchant: link.merchant,
+  date: link.transactionDate,
+  amount: amountView(link.amountMinor, link.currency),
+  status: link.status,
+});
 
 export function registerExpenseRoutes(
   app: OpenAPIHono<{ Variables: AuthVariables }>,
@@ -61,9 +77,15 @@ export function registerExpenseRoutes(
       : undefined;
   const auth = requireIdentity(options.verifyToken);
   const paths = new Set(
-    [listExpensesRoute, getExpenseRoute, editExpenseRoute, setExpenseTripRoute, setPaidByRoute].map(
-      (r) => r.getRoutingPath(),
-    ),
+    [
+      listExpensesRoute,
+      getExpenseRoute,
+      editExpenseRoute,
+      setExpenseTripRoute,
+      setPaidByRoute,
+      listRefundCandidatesRoute,
+      setRefundOfRoute,
+    ].map((r) => r.getRoutingPath()),
   );
   for (const path of paths) app.use(path, auth);
 
@@ -129,6 +151,27 @@ export function registerExpenseRoutes(
   });
 
   const sections = itemizedSections(options.itemized, features);
+  /** A refund's purchase, or a purchase's refunds (FR-EXP-21); nothing for any other expense. */
+  const refundSection = async (orgId: string, expense: ExpenseRecord) => {
+    if (!options.refunds) return {};
+    const links = await options.refunds.links(orgId, expense.id);
+    const refund = expense.amountMinor !== null && expense.amountMinor < 0;
+    if (!refund && links.refunds.length === 0) return {};
+    return {
+      refund: { of: links.of && refundLink(links.of), refunds: links.refunds.map(refundLink) },
+    };
+  };
+  const refundStore = () => {
+    if (!options.refunds) {
+      throw new ProblemError(
+        503,
+        'database-not-configured',
+        'The database is not configured on this server',
+        { code: 'database_not_configured' },
+      );
+    }
+    return options.refunds;
+  };
   const cardCharge = cardChargeSection(options.cards, features);
   /**
    * One expense as its page shows it: its category and type, lines and split included while
@@ -157,6 +200,7 @@ export function registerExpenseRoutes(
         ? paidByView(found.expense)
         : {}),
       ...(await cardCharge(orgId, found.expense.id)),
+      ...(await refundSection(orgId, found.expense)),
     };
     return (await features.isOn(orgId, 'receipts.journeys')) ? withTravel(shown, found) : shown;
   };
@@ -321,10 +365,63 @@ export function registerExpenseRoutes(
             code: 'mileage',
             detail: 'It is paid at miles × its rate to whoever drove.',
           })
-        : new ProblemError(409, 'not-editable', 'Who paid this expense can’t change now', {
-            code: 'locked',
-            detail: 'It is submitted or later, so it stays as it went in.',
-          });
+        : result.problem === 'refund'
+          ? new ProblemError(409, 'not-editable', 'A refund goes with its purchase', {
+              code: 'refund',
+              detail: 'It is the company’s when the purchase it refunds is: set it there.',
+            })
+          : new ProblemError(409, 'not-editable', 'Who paid this expense can’t change now', {
+              code: 'locked',
+              detail: 'It is submitted or later, so it stays as it went in.',
+            });
+    }
+    const found = await stores().expenses.get(who.orgId, expenseId);
+    if (!found) throw notFound();
+    return c.json(await detail(who.orgId, found), 200);
+  });
+
+  app.openapi(listRefundCandidatesRoute, async (c) => {
+    const who = await member(c.var.identity.userId);
+    const { expenseId } = c.req.valid('param');
+    const found = await refundStore().candidates(who.orgId, expenseId);
+    if (!found) throw notFound();
+    return c.json(
+      {
+        candidates: found.map((p) => ({
+          ...refundLink(p),
+          left: amountView((p.amountMinor ?? 0) + p.refundedMinor, p.currency),
+        })),
+      },
+      200,
+    );
+  });
+
+  app.openapi(setRefundOfRoute, async (c) => {
+    const caller = c.var.identity;
+    const who = await member(caller.userId);
+    const { expenseId } = c.req.valid('param');
+    const { purchaseId } = c.req.valid('json');
+    const refunds = refundStore();
+    const result =
+      purchaseId === null
+        ? await refunds.unpair(who.orgId, expenseId, caller.userId)
+        : await refunds.pair(who.orgId, expenseId, purchaseId, caller.userId);
+    if (result.status === 'missing') throw notFound();
+    if (result.status === 'not_editable') {
+      throw new ProblemError(409, 'not-editable', 'This refund’s pairing can’t change now', {
+        code: result.current === 'processing' ? 'being_read' : 'locked',
+        detail:
+          result.current === 'processing'
+            ? 'Its receipt is being read. Try again in a few seconds.'
+            : 'It is submitted or later, so it stays as it went in.',
+      });
+    }
+    if (result.status === 'invalid') {
+      throw new ProblemError(422, 'invalid-refund', 'That purchase can’t take this refund', {
+        code: result.problem,
+        detail: REFUND_PROBLEMS[result.problem],
+        field: 'purchaseId',
+      });
     }
     const found = await stores().expenses.get(who.orgId, expenseId);
     if (!found) throw notFound();
@@ -342,6 +439,12 @@ export function registerExpenseRoutes(
       throw new ProblemError(409, 'not-movable', 'This expense can’t move to another trip now', {
         code: 'locked',
         detail: 'It is submitted or later, so it stays with its report.',
+      });
+    }
+    if (result.status === 'refund') {
+      throw new ProblemError(409, 'not-movable', 'A refund goes with its purchase', {
+        code: 'refund',
+        detail: 'Pair it with the purchase it refunds, and it goes on that purchase’s trip.',
       });
     }
     if (result.status === 'trip_submitted') {

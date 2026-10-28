@@ -1,5 +1,6 @@
 import {
   cleanJustification,
+  isRefund,
   lastDayToJoin,
   localExpenseReady,
   planAutoClose,
@@ -35,6 +36,7 @@ import { CONVERSION_FLAG, getReimbursementCurrency, requestConversions } from '.
 import { listReportExpenses, type ReportExpenseRecord } from './expenses.ts';
 import { organizationTimeZone } from './organizations.ts';
 import type { ReportAmount } from './report-amounts.ts';
+import { followPurchases } from './refunds.ts';
 import { reopenChangedReports, reportsOfExpenses } from './report-touch.ts';
 import {
   approvalSteps,
@@ -268,7 +270,7 @@ async function openReport(
 }
 
 /** The member's newest open report other than `except`, opening one if there is none. */
-async function openReportOf(
+export async function openReportOf(
   tx: Transaction,
   orgId: string,
   memberId: string,
@@ -370,6 +372,8 @@ export async function joinDueItems(
         isNull(expenses.reportId),
         isNotNull(expenses.transactionDate),
         inArray(expenses.status, ['needs_review', 'ready']),
+        // A refund goes with its purchase, or nowhere until it is paired (FR-EXP-21).
+        sql`coalesce(${expenses.amountMinor} >= 0, true)`,
         // By the day it files by: a fare bought ahead waits for the month it flies (#94).
         sql`coalesce(${expenses.departsOn}, ${expenses.transactionDate}) <= ${lastDay}`,
       ),
@@ -393,6 +397,12 @@ export async function joinDueItems(
     const reportId = await reportFor(expense.memberId);
     await addLocalExpense(tx, orgId, expense.id, reportId, actor, 'local');
   }
+  await followPurchases(
+    tx,
+    orgId,
+    dueLocals.map((e) => e.id),
+    actor,
+  );
   return { trips: dueTrips.length, expenses: dueLocals.length, opened };
 }
 
@@ -423,6 +433,13 @@ async function moveItems(
       payload: { [tripIds.has(id) ? 'tripId' : 'expenseId']: id, to, reason },
     });
   }
+  // A refund paired with a local expense that moved goes with it (FR-EXP-21).
+  await followPurchases(
+    tx,
+    orgId,
+    ids.filter((id) => !tripIds.has(id)),
+    actor,
+  );
 }
 
 /** Whether a report has been through approval (#24): then it is kept, as its history. */
@@ -631,6 +648,8 @@ export type MoveToReportResult =
   | { readonly status: 'missing' }
   /** Not a local expense: one on a trip goes with its trip. */
   | { readonly status: 'not_local' }
+  /** A refund on its own: it goes on a report once it is paired (FR-EXP-21). */
+  | { readonly status: 'refund' }
   /** The report it is on, or the one chosen, is closed or submitted: reopen it first. */
   | { readonly status: 'not_open' }
   | { readonly status: 'no_such_report' }
@@ -668,11 +687,14 @@ export async function moveToReport(
         tripId: expenses.tripId,
         status: expenses.status,
         date: expenses.transactionDate,
+        amountMinor: expenses.amountMinor,
+        refundOfId: expenses.refundOfId,
       })
       .from(expenses)
       .where(eq(expenses.id, item.expenseId))
       .for('update');
     if (!expense) return { status: 'missing' };
+    if (isRefund(expense) && expense.refundOfId === null) return { status: 'refund' };
     if (expense.tripId !== null || expense.date === null) return { status: 'not_local' };
     if (expense.status !== 'needs_review' && expense.status !== 'ready') {
       return { status: 'not_open' };
@@ -717,6 +739,8 @@ export async function moveToReport(
     action: 'report.item_moved',
     payload: { ...item, from, to, reason: 'person' },
   });
+  // A refund paired with a local expense that moved goes with it (FR-EXP-21).
+  if ('expenseId' in item) await followPurchases(tx, orgId, [item.expenseId], actor);
   let dropped: string | null = null;
   if (from) {
     const left = await getReport(tx, from);

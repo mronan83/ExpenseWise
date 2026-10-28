@@ -375,7 +375,9 @@ export const ReceiptReadingSchema = z
         'day after the upload. old_date: dated more than a year before it. summary: a purchase ' +
         'summary, which shows what was ordered, not what was charged (Q10). stay: a folio’s ' +
         `check-out is before its check-in, or its stay is longer than ${STAY_MAX_NIGHTS} nights, ` +
-        'so its nights aren’t sure (FR-INT-21); only where receipts.journeys is on.',
+        'so its nights aren’t sure (FR-INT-21); only where receipts.journeys is on. refund: ' +
+        'its total is below zero, money given back, which counts only once paired with the ' +
+        'purchase it refunds (FR-EXP-21).',
     }),
   })
   .openapi('ReceiptReading');
@@ -732,8 +734,9 @@ export const ExpenseStatusSchema = z
   .openapi({
     description:
       'processing while its receipt is read; ready when its receipt is Ready and merchant, ' +
-      'date, currency and amount are filled in; needs_review otherwise. Submitted, approved ' +
-      'and settled follow its report; approved is locked (FR-EXP-03).',
+      'date, currency and amount are filled in, and a refund is paired with its purchase ' +
+      '(FR-EXP-21); needs_review otherwise. Submitted, approved and settled follow its ' +
+      'report; approved is locked (FR-EXP-03).',
   });
 
 export const ExpenseAmountSchema = z
@@ -891,6 +894,30 @@ const StaySchema = z
 
 const TravelFieldSchema = z.enum(TRAVEL_FIELDS);
 
+/** An expense a refund is paired with, or a refund paired with a purchase (FR-EXP-21). */
+const RefundLinkSchema = z
+  .object({
+    id: z.string().uuid(),
+    merchant: z.string().nullable(),
+    date: z.string().nullable(),
+    amount: ExpenseAmountSchema,
+    status: ExpenseStatusSchema,
+  })
+  .openapi('RefundLink');
+
+export const ExpenseRefundSchema = z
+  .object({
+    of: RefundLinkSchema.nullable().openapi({
+      description:
+        'For a refund, an expense below zero: the purchase it is paired with, or null while ' +
+        'it waits to be paired and counts in no claim (FR-EXP-21).',
+    }),
+    refunds: z.array(RefundLinkSchema).openapi({
+      description: 'For a purchase: the refunds paired with it, which net it down.',
+    }),
+  })
+  .openapi('ExpenseRefund');
+
 export const ExpenseDetailSchema = ExpenseSummarySchema.extend({
   editable: z
     .boolean()
@@ -963,6 +990,11 @@ export const ExpenseDetailSchema = ExpenseSummarySchema.extend({
   cardCharges: z.array(ExpenseCardChargeSchema).min(1).optional().openapi({
     description:
       'The card charges that paid for it, while card statements are on: one, or several, such as a ride and its tip charged apart (ADR-0051).',
+  }),
+  refund: ExpenseRefundSchema.optional().openapi({
+    description:
+      'For a refund, what it is paired with; for a purchase, the refunds paired with it. Only ' +
+      'on a refund, or a purchase with one (FR-EXP-21).',
   }),
   // Only while approval is switched on (FR-EXP-10, FR-GOV-13).
   claim: z
@@ -1099,6 +1131,27 @@ export const SetExpenseTripSchema = z
       .strict(),
   ])
   .openapi('SetExpenseTrip');
+
+export const RefundCandidatesSchema = z
+  .object({
+    candidates: z.array(
+      RefundLinkSchema.extend({
+        left: ExpenseAmountSchema.openapi({
+          description: 'What is left of it to give back, after the other refunds paired with it.',
+        }),
+      }),
+    ),
+  })
+  .openapi('RefundCandidates');
+
+export const SetRefundOfSchema = z
+  .object({
+    purchaseId: z.string().uuid().nullable().openapi({
+      description: 'The purchase this refund gives money back on, or null to unpair it.',
+    }),
+  })
+  .strict()
+  .openapi('SetRefundOf');
 
 // Mileage (FR-CAP-03, NFR-DAT-04, ADR-0038)
 
@@ -1610,11 +1663,13 @@ const ExpenseInboxItemSchema = z
       receiptId: z.string().uuid().nullable(),
     }),
     reason: z.object({
-      code: z.enum(['justification', 'uncoded', 'rejected']).openapi({
+      code: z.enum(['justification', 'uncoded', 'rejected', 'refund']).openapi({
         description:
           'justification: a local expense says nothing yet of why (FR-EXP-14). uncoded: it ' +
           'has no category and type yet, while categories are on (FR-EXP-11, Q27). rejected: ' +
-          'its report came back with it rejected, while approval is on (FR-GOV-12).',
+          'its report came back with it rejected, while approval is on (FR-GOV-12). refund: ' +
+          'a refund waits to be paired with the purchase it refunds, and counts in no claim ' +
+          'until it is (FR-EXP-21).',
       }),
       why: z
         .string()

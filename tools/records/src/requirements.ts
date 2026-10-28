@@ -1049,6 +1049,24 @@ export const FUNCTIONAL: readonly Requirement[] = [
     ],
     note: 'Your answer to Q49: one expense, each purchase a group of lines that can be left out, such as a seat upgrade you paid for yourself, as Personal (FR-EXP-16’s reasons). Built in PR #66 behind `receipts.purchases` with itemized lines on (#96): the expense lists its purchases, and Leave out takes off the purchase with its own taxes and fees, as one change in the audit trail; Include it again puts it back before submission. A reviewer sees it under Left out, and the export lists its lines with what each took off and why.',
   },
+  {
+    id: 'FR-EXP-21',
+    text: 'A refund, money a merchant gave back, is filed as an expense below zero and counts only once its owner pairs it with the purchase it refunds. On its own it is in no claim and waits in Needs you. Paired, it nets the purchase down on the same claim, or is paid back on the open report when the purchase was claimed already, and is the company’s when its purchase is. Partial refunds net down, never past what the purchase cost.',
+    sources: ['owner 2026-10-27'],
+    priority: 'Must',
+    phase: 'P1',
+    status: 'Partial',
+    features: ['F-76'],
+    checks: [
+      'extraction/confirm › confirms a refund, its total below zero, with its tax given back too (FR-EXP-21)',
+      'extraction/checks › holds a refund, a total below zero, for a person to pair (FR-EXP-21)',
+      'domain/refunds',
+      'db/refunds.int',
+      'api/refunds.int',
+    ],
+    shortfalls: ['GAP-60'],
+    note: 'Your report of Oct 27: a refund receipt for an order refunded in full, read below zero, couldn’t be confirmed (“zero or more”). Your answers: the order was brought into ExpenseWise (Q59), and yes to the design (Q60). Built in PR #94 (#114, ADR-0054): Looks right takes a refund; on its own it is on no trip or report and never Ready, which the database holds every writer to; its page offers the purchases it fits, likeliest first, to pair with one tap; paired, it goes where its purchase goes, or on your open report as money paid back. A company-card purchase makes its refund the company’s, so it is kept out of the claim; matching the card’s credit line to the refund is still to come (GAP-60, #115).',
+  },
 
   // Governance
   {

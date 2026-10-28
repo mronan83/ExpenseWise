@@ -66,6 +66,21 @@ export function uncodedItem(expense: ExpenseRecord, category: ExpenseCategory) {
   };
 }
 
+/** A refund waiting to be paired with the purchase it refunds (FR-EXP-21). */
+function refundItem(expense: ExpenseRecord) {
+  return {
+    kind: 'expense' as const,
+    expense: {
+      id: expense.id,
+      merchant: expense.merchant,
+      date: expense.transactionDate,
+      amount: amountView(expense.amountMinor, expense.currency),
+      receiptId: expense.receiptId,
+    },
+    reason: { code: 'refund' as const },
+  };
+}
+
 /** Each expense with no category and type, oldest first, with what is suggested for it. */
 function uncodedItems(uncoded: UncodedNeedingYou | undefined) {
   if (!uncoded) return [];
@@ -129,7 +144,8 @@ function toApproveItem(
  * Everything in Needs you, in the order to do it (FR-EXP-02): a report that is overdue or in
  * its last week with something left; while approval is on, each report that came back with
  * its rejected expenses (FR-GOV-12), then reports waiting for the person's decision; then
- * receipts that need a look, newest first, then, while they are on, emails that filed
+ * receipts that need a look, newest first, then refunds waiting to be paired with their
+ * purchases, oldest first (FR-EXP-21), then, while they are on, emails that filed
  * nothing, newest first (#59), then, while card statements are on, statements waiting for a
  * look (AC14) and card charges with no expense, oldest first (US-CAP-07 AC3), then local expenses that need a justification, oldest first,
  * then, while categories are on, expenses with no category and type, oldest first (Q27), then
@@ -162,6 +178,7 @@ export function needsYouItems(
     ]),
     ...(reports.toApprove ?? []).map((r) => toApproveItem(r, now, converting, companyPaid)),
     ...receiptItems,
+    ...(reports.refunds ?? []).map(refundItem),
     ...(reports.emails ?? []).map(unfiledEmailItem),
     ...(reports.cardStatements ?? []).map(cardStatementItem),
     ...(reports.cardCharges ?? []).map(cardChargeItem),

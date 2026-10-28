@@ -595,11 +595,20 @@ export const expenses = pgTable(
     /** Corrections to approved expenses are a reversal plus a new version. */
     version: integer('version').notNull().default(1),
     reversalOfId: uuid('reversal_of_id'),
+    /**
+     * The purchase this refund gives money back on (FR-EXP-21, ADR-0054): one of its member's
+     * own expenses, set by a person, only on an expense below zero. Paired, a refund goes where
+     * its purchase goes, or on the open report when that was claimed already; unpaired, it is on
+     * no trip and no report, so it takes nothing off a claim on its own.
+     */
+    refundOfId: uuid('refund_of_id'),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
     unique('expenses_org_id_id_key').on(t.orgId, t.id),
+    // What points at an expense names its member too, so a refund pairs only with its own.
+    unique('expenses_org_member_id_key').on(t.orgId, t.memberId, t.id),
     foreignKey({
       name: 'expenses_member_fk',
       columns: [t.orgId, t.memberId],
@@ -645,6 +654,22 @@ export const expenses = pgTable(
       columns: [t.orgId, t.reversalOfId],
       foreignColumns: [t.orgId, t.id],
     }),
+    foreignKey({
+      name: 'expenses_refund_of_fk',
+      columns: [t.orgId, t.memberId, t.refundOfId],
+      foreignColumns: [t.orgId, t.memberId, t.id],
+    }),
+    // Only a refund, money given back, pairs with a purchase, and never with itself.
+    check(
+      'expenses_refund_below_zero',
+      sql`${t.refundOfId} IS NULL OR (${t.amountMinor} < 0 AND ${t.refundOfId} <> ${t.id})`,
+    ),
+    // A refund on its own takes nothing off a claim: until it is paired it is on no trip and no
+    // report, and never Ready. One submitted before refunds were held is left as it went in.
+    check(
+      'expenses_refund_unpaired_held',
+      sql`${t.amountMinor} IS NULL OR ${t.amountMinor} >= 0 OR ${t.refundOfId} IS NOT NULL OR ${t.status} IN ('submitted', 'approved', 'settled') OR (${t.status} <> 'ready' AND ${t.tripId} IS NULL AND ${t.reportId} IS NULL)`,
+    ),
     check('expenses_currency_iso', sql`${t.currency} IS NULL OR ${isoCurrency(t.currency)}`),
     // A drive is paid at miles × its rate to the person who drove: never by the company (#95).
     check('expenses_drive_not_company_paid', sql`${t.source} <> 'mileage' OR NOT ${t.companyPaid}`),
@@ -667,6 +692,7 @@ export const expenses = pgTable(
     index('expenses_report_idx').on(t.orgId, t.reportId),
     index('expenses_status_idx').on(t.orgId, t.status),
     index('expenses_member_classified_idx').on(t.orgId, t.memberId, t.classifiedAt),
+    index('expenses_refund_of_idx').on(t.orgId, t.refundOfId),
   ],
 );
 
@@ -1096,8 +1122,9 @@ export const receiptReviews = pgTable(
     }),
     check('receipt_reviews_currency_code', sql`${t.currency} ~ '^[A-Z]{3}$'`),
     check(
-      'receipt_reviews_amounts_not_negative',
-      sql`${t.totalMinor} >= 0 AND coalesce(${t.taxMinor}, 0) >= 0 AND coalesce(${t.tipMinor}, 0) >= 0`,
+      // A purchase's amounts are zero or more; a refund's, money given back, zero or less (FR-EXP-21).
+      'receipt_reviews_amounts_one_sign',
+      sql`(${t.totalMinor} >= 0 AND coalesce(${t.taxMinor}, 0) >= 0 AND coalesce(${t.tipMinor}, 0) >= 0) OR (${t.totalMinor} < 0 AND coalesce(${t.taxMinor}, 0) <= 0 AND coalesce(${t.tipMinor}, 0) <= 0)`,
     ),
     index('receipt_reviews_receipt_idx').on(t.orgId, t.receiptId),
   ],

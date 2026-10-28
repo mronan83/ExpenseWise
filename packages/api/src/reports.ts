@@ -8,6 +8,7 @@ import {
   listReports,
   listUnfiledEmails,
   listUnjustifiedExpenses,
+  listUnpairedRefunds,
   moveToReport,
   reopenReport,
   reportForExport,
@@ -50,6 +51,8 @@ export interface ReturnedNeedingYou {
 export interface ReportsNeedingYou {
   readonly reports: ReportContents[];
   readonly unjustified: ExpenseRecord[];
+  /** The member's refunds waiting to be paired with their purchases (FR-EXP-21). */
+  readonly refunds?: ExpenseRecord[];
   /** While approval is on and asked for: the reports waiting for the member's decision. */
   readonly toApprove?: ReportContents[];
   /** While approval is on and asked for: the member's reports that came back (FR-GOV-12). */
@@ -166,6 +169,7 @@ export async function reportsNeedingYou(
     // With each amount's conversion, shown while it is on (FR-EXP-13).
     reports: await withReportAmounts(tx, reports),
     unjustified: await listUnjustifiedExpenses(tx, memberId, limit),
+    refunds: await listUnpairedRefunds(tx, memberId, limit),
     ...(options.uncoded ? { uncoded: await uncodedNeedingYou(tx, memberId, limit) } : {}),
     ...(options.unfiledSince
       ? { emails: await listUnfiledEmails(tx, memberId, options.unfiledSince, limit) }

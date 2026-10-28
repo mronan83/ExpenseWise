@@ -6,6 +6,7 @@ import {
   isCurrencyCode,
   isIsoDate,
   isNegative,
+  isZero,
   ok,
   toDecimal,
   zero,
@@ -64,7 +65,8 @@ const MERCHANT_MAX = 200;
  * is only filed with a merchant, date, currency and total, so any of those the reading lacks
  * must be entered. A tax or tip the receipt doesn't print counts as zero, as it is shown
  * (FR-INT-14). A corrected currency keeps the amounts as printed: "12.50" EUR becomes
- * "12.50" USD, never a conversion.
+ * "12.50" USD, never a conversion. A total below zero is a refund's, which is filed as one:
+ * Needs review until it is paired with its purchase (FR-EXP-21).
  */
 export function confirmReading(
   reading: NormalizedExtraction | null,
@@ -100,9 +102,7 @@ export function confirmReading(
       return ok(field !== 'total' && assumed.includes(field) ? zero(currency) : null);
     }
     try {
-      const value = fromDecimal(source, currency);
-      if (isNegative(value)) return invalid(field, 'Enter an amount of zero or more.');
-      return ok(value);
+      return ok(fromDecimal(source, currency));
     } catch (error) {
       if (!(error instanceof DomainError)) throw error;
       return typed === undefined
@@ -116,6 +116,21 @@ export function confirmReading(
   if (!taxTotal.ok) return taxTotal;
   const tip = amount('tip');
   if (!tip.ok) return tip;
+  // A refund gives its tax and tip back with it: below zero as its total is, or none (FR-EXP-21).
+  const refund = total.value !== null && isNegative(total.value);
+  for (const [field, value] of [
+    ['taxTotal', taxTotal.value],
+    ['tip', tip.value],
+  ] as const) {
+    if (value && !isZero(value) && isNegative(value) !== refund) {
+      return invalid(
+        field,
+        refund
+          ? 'A refund gives its tax and tip back too: enter them below zero, as its total is.'
+          : 'Enter an amount of zero or more.',
+      );
+    }
+  }
 
   const finalMerchant = merchant ?? reading?.merchant?.value ?? null;
   const finalDate = date ?? reading?.date?.value ?? null;

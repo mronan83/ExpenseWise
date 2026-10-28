@@ -117,6 +117,25 @@ describe('confirmReading', () => {
     expect(fixed.ok && fixed.value.confirmed.total).toEqual(money(650, 'JPY'));
   });
 
+  it('confirms a refund, its total below zero, with its tax given back too (FR-EXP-21)', () => {
+    const refund = n({
+      total: { value: '-54.20', confidence: 'high' },
+      taxes: [{ label: 'Tax', value: '-4.20', confidence: 'high' }],
+    });
+    const result = confirmReading(refund);
+    expect(result.ok && result.value.confirmed).toMatchObject({
+      total: money(-5420, 'USD'),
+      taxTotal: money(-420, 'USD'),
+      tip: money(0, 'USD'),
+    });
+    expect(confirmReading(refund, { taxTotal: '4.20' })).toMatchObject({
+      ok: false,
+      error: { kind: 'invalid', field: 'taxTotal' },
+    });
+    const typed = confirmReading(n(), { total: '-6.50' });
+    expect(typed.ok && typed.value.confirmed.total).toEqual(money(-650, 'USD'));
+  });
+
   it.each([
     [{ merchant: '   ' }, 'merchant'],
     [{ date: '2026-02-30' }, 'date'],

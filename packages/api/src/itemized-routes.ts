@@ -198,6 +198,12 @@ export function registerItemizedRoutes(
           'A drive isn’t split',
           'It is paid at miles × its rate, and changed as mileage.',
         );
+      case 'refund':
+        throw conflict(
+          'refund',
+          'A refund isn’t split',
+          'It gives money back on its purchase as a whole; split the purchase instead.',
+        );
       case 'split_by_amount':
         throw conflict(
           'split_by_amount',

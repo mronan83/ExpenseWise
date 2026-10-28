@@ -41,7 +41,8 @@ export function followPolicy(current: PaidByState, policy: boolean): PaidByState
 }
 
 /** Why who paid an expense can't change now, or null when it can. */
-export type PaidByProblem = 'mileage' | 'locked';
+/** refund: a refund is the company's when its purchase is, so it is set on the purchase. */
+export type PaidByProblem = 'mileage' | 'locked' | 'refund';
 
 /**
  * Whether who paid an expense can change: never for a drive, which is paid at miles × its rate

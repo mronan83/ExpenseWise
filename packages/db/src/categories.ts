@@ -15,6 +15,7 @@ import { and, asc, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm';
 import { appendAuditEvent, lockOrgWrites } from './audit.ts';
 import type { Transaction } from './client.ts';
 import { paidByCardCharge } from './company-paid.ts';
+import { followPurchases, refundPayer } from './refunds.ts';
 import { reopenChangedReports, reportsOfExpenses } from './report-touch.ts';
 import {
   categories,
@@ -499,9 +500,11 @@ export async function classifyExpense(
   if (!checked.ok) return { status: 'invalid', problem: checked.error };
   // One not set by hand follows the policy for its new type (Q46); a drive never does.
   // A card charge that paid for it keeps it the company's whatever its type (FR-INT-25).
+  // A paired refund is the company's when its purchase is, whatever its type (FR-EXP-21).
   const policy =
-    (catalog.types.find((t) => t.id === checked.value.typeId)?.companyPays ?? false) ||
-    (await paidByCardCharge(tx, expenseId));
+    (await refundPayer(tx, expenseId)) ??
+    ((catalog.types.find((t) => t.id === checked.value.typeId)?.companyPays ?? false) ||
+      (await paidByCardCharge(tx, expenseId)));
   const paid =
     expense.source === 'mileage'
       ? expense
@@ -536,5 +539,6 @@ export async function classifyExpense(
     actor,
     'an expense on it was given a category',
   );
+  await followPurchases(tx, orgId, [expenseId], actor);
   return { status: 'classified' };
 }

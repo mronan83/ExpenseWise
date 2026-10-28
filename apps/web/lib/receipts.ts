@@ -50,7 +50,7 @@ export const underSettings = (readings: readonly Pick<Reading, 'role'>[]) =>
  * A check a reading fails, which keeps it from being Ready: its sums or date (FR-INT-04), that
  * it is a purchase summary (Q10), or a folio's stay whose nights aren't sure (FR-INT-21).
  */
-export type ReadingCheck = 'sums' | 'future_date' | 'old_date' | 'summary' | 'stay';
+export type ReadingCheck = 'sums' | 'future_date' | 'old_date' | 'summary' | 'stay' | 'refund';
 
 export interface Reading {
   model: string;
@@ -248,7 +248,8 @@ export interface ReportInboxItem {
 /**
  * An expense that needs the person: a local one that says nothing yet of why it was for
  * business (FR-EXP-14); while categories are on, one with no category and type (Q27); while
- * approval is on, one its report came back with rejected (FR-GOV-12).
+ * approval is on, one its report came back with rejected (FR-GOV-12); a refund waiting to be
+ * paired with its purchase (FR-EXP-21).
  */
 export interface ExpenseInboxItem {
   kind: 'expense';
@@ -260,7 +261,7 @@ export interface ExpenseInboxItem {
     receiptId: string | null;
   };
   reason: {
-    code: 'justification' | 'uncoded' | 'rejected';
+    code: 'justification' | 'uncoded' | 'rejected' | 'refund';
     /** rejected: why, and whether the review rejected it on its own (FR-GOV-12). */
     why?: string;
     automatic?: boolean;
@@ -297,6 +298,7 @@ const CHECK_REASONS: Record<ReadingCheck, string> = {
   old_date: 'It’s dated more than a year before it was uploaded.',
   summary: 'It’s a purchase summary: check what was charged.',
   stay: 'Its stay’s dates can’t be right: check the nights.',
+  refund: 'It’s a refund: confirm it, then pair it with its purchase.',
 };
 const KEY_ERRORS = ['no_key', 'unreadable_key', 'key_rejected'];
 
@@ -432,6 +434,10 @@ export function describeChecks(readings: readonly Reading[]): string[] {
           checkOut: f.checkOut?.value ?? null,
         });
         said.add(`${stay ?? 'Its stay’s nights aren’t sure'}. Check the dates.`);
+      } else if (check === 'refund') {
+        said.add(
+          'It’s a refund, money given back. Once it’s confirmed, pair it with the purchase it refunds; until then it counts in no claim.',
+        );
       }
     }
   }

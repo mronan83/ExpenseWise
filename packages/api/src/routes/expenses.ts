@@ -5,7 +5,9 @@ import {
   ExpenseListSchema,
   ExpenseSearchSchema,
   ProblemSchema,
+  RefundCandidatesSchema,
   SetExpenseTripSchema,
+  SetRefundOfSchema,
 } from '../schemas.ts';
 
 const problem = (description: string) => ({
@@ -121,5 +123,56 @@ export const setExpenseTripRoute = createRoute({
         'submitted or later, which takes no more expenses (trip_submitted).',
     ),
     422: problem('No such trip, or the trip is another member’s.'),
+  },
+});
+
+export const listRefundCandidatesRoute = createRoute({
+  method: 'get',
+  path: '/v1/expenses/{expenseId}/refund-candidates',
+  tags: ['Expenses'],
+  summary: 'The purchases a refund can be paired with',
+  description:
+    'FR-EXP-21, R-REFUND-DAYS. For a refund, an expense below zero: its owner’s purchases in ' +
+    'its currency, dated on or up to 180 days before it, with enough left of them to give ' +
+    'back, the likeliest first. Empty for an expense that isn’t a refund.',
+  ...secured,
+  request: { params: expenseParam },
+  responses: {
+    200: {
+      description: 'The purchases it fits.',
+      content: { 'application/json': { schema: RefundCandidatesSchema } },
+    },
+    ...common,
+    404: problem('No such expense in this organization.'),
+  },
+});
+
+export const setRefundOfRoute = createRoute({
+  method: 'put',
+  path: '/v1/expenses/{expenseId}/refund-of',
+  tags: ['Expenses'],
+  summary: 'Pair a refund with the purchase it refunds',
+  description:
+    'FR-EXP-21, ADR-0054. A refund counts only once it is paired: then it goes where its ' +
+    'purchase goes, so the two net down on one claim, or on its owner’s open report when the ' +
+    'purchase was claimed already. {"purchaseId": null} unpairs it, and it counts in no claim ' +
+    'again.',
+  ...secured,
+  request: {
+    params: expenseParam,
+    body: { content: { 'application/json': { schema: SetRefundOfSchema } }, required: true },
+  },
+  responses: {
+    200: {
+      description: 'The refund as it is now.',
+      content: { 'application/json': { schema: ExpenseDetailSchema } },
+    },
+    ...common,
+    404: problem('No such expense, or no such purchase of the same person’s.'),
+    409: problem('It is being read, or submitted or later, so its pairing can’t change.'),
+    422: problem(
+      'It isn’t a refund, or the purchase can’t take it: another currency, dated after it or ' +
+        'more than 180 days before, or it would give back more than is left of the purchase.',
+    ),
   },
 });

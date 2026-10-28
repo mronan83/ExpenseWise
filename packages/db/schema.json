@@ -2803,6 +2803,12 @@
           "type": "boolean",
           "nullable": false,
           "default": "false"
+        },
+        {
+          "name": "refund_of_id",
+          "type": "uuid",
+          "nullable": true,
+          "default": null
         }
       ],
       "primaryKey": [
@@ -2840,6 +2846,20 @@
           ],
           "table": "organizations",
           "references": [
+            "id"
+          ]
+        },
+        {
+          "name": "expenses_refund_of_fk",
+          "columns": [
+            "org_id",
+            "member_id",
+            "refund_of_id"
+          ],
+          "table": "expenses",
+          "references": [
+            "org_id",
+            "member_id",
             "id"
           ]
         },
@@ -2901,6 +2921,14 @@
             "org_id",
             "id"
           ]
+        },
+        {
+          "name": "expenses_org_member_id_key",
+          "columns": [
+            "org_id",
+            "member_id",
+            "id"
+          ]
         }
       ],
       "checks": [
@@ -2933,6 +2961,14 @@
           "definition": "CHECK ((((fx_rate IS NULL) AND (fx_rate_date IS NULL) AND (fx_source IS NULL)) OR ((fx_rate IS NOT NULL) AND (fx_rate_date IS NOT NULL) AND (fx_source IS NOT NULL) AND (home_amount_minor IS NOT NULL))))"
         },
         {
+          "name": "expenses_refund_below_zero",
+          "definition": "CHECK (((refund_of_id IS NULL) OR ((amount_minor < 0) AND (refund_of_id <> id))))"
+        },
+        {
+          "name": "expenses_refund_unpaired_held",
+          "definition": "CHECK (((amount_minor IS NULL) OR (amount_minor >= 0) OR (refund_of_id IS NOT NULL) OR (status = ANY (ARRAY['submitted'::expense_status, 'approved'::expense_status, 'settled'::expense_status])) OR ((status <> 'ready'::expense_status) AND (trip_id IS NULL) AND (report_id IS NULL))))"
+        },
+        {
           "name": "expenses_report_only_when_local",
           "definition": "CHECK (((report_id IS NULL) OR (trip_id IS NULL)))"
         },
@@ -2949,6 +2985,10 @@
         {
           "name": "expenses_member_date_idx",
           "definition": "CREATE INDEX expenses_member_date_idx ON public.expenses USING btree (org_id, member_id, transaction_date)"
+        },
+        {
+          "name": "expenses_refund_of_idx",
+          "definition": "CREATE INDEX expenses_refund_of_idx ON public.expenses USING btree (org_id, refund_of_id)"
         },
         {
           "name": "expenses_report_idx",
@@ -6135,8 +6175,8 @@
       ],
       "checks": [
         {
-          "name": "receipt_reviews_amounts_not_negative",
-          "definition": "CHECK (((total_minor >= 0) AND (COALESCE(tax_minor, (0)::bigint) >= 0) AND (COALESCE(tip_minor, (0)::bigint) >= 0)))"
+          "name": "receipt_reviews_amounts_one_sign",
+          "definition": "CHECK ((((total_minor >= 0) AND (COALESCE(tax_minor, (0)::bigint) >= 0) AND (COALESCE(tip_minor, (0)::bigint) >= 0)) OR ((total_minor < 0) AND (COALESCE(tax_minor, (0)::bigint) <= 0) AND (COALESCE(tip_minor, (0)::bigint) <= 0))))"
         },
         {
           "name": "receipt_reviews_currency_code",

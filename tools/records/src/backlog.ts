@@ -555,6 +555,33 @@ export const BACKLOG: readonly BacklogItem[] = [
     affects: ['FR-PLT-12', 'GAP-58'],
   },
   {
+    num: 114,
+    title: 'Refunds: confirm one, and pair it with the purchase it refunds',
+    type: 'Gap',
+    detail:
+      'Your report of Oct 27 (GAP-59) and your answers to Q59 and Q60 (FR-EXP-21, ADR-0054): a refund read below zero couldn’t be confirmed, and a refund read with confidence went straight to Ready and took itself off a claim. Looks right and Edit a field take an amount below zero; a refund on its own counts in no claim and waits in Needs you; paired with a purchase of the same person’s, in its currency, dated on or up to 180 days before it, with enough left (R-REFUND-DAYS), it goes where its purchase goes, or on the open report once the purchase was claimed, and is the company’s when its purchase is. Refunds filed before are taken out of their claims on release.',
+    priority: 'P1',
+    effort: 'L',
+    severity: 'High',
+    blocker: { kind: 'none' },
+    source: 'Product owner Oct 27',
+    affects: ['FR-EXP-21', 'F-76', 'GAP-59'],
+    done: { date: '2026-10-27', in: 'PR #94' },
+  },
+  {
+    num: 115,
+    title: 'Match a card’s credit to the refund it paid back',
+    type: 'Gap',
+    detail:
+      'GAP-60, from your Q60 design: a credit on a card statement is matched to nothing, by the rule or by hand, so a refund to a company card has no line of the statement as its evidence. The money is right already: a company-card purchase makes its refund the company’s. Match a credit to a refund as a charge is matched to a purchase: the same amount and currency within three days (R-MATCH-DAYS), a tie left for the person, and by hand from the charge’s page.',
+    priority: 'P2',
+    effort: 'M',
+    severity: 'Low',
+    blocker: { kind: 'none' },
+    source: 'Claude Oct 27',
+    affects: ['FR-EXP-21', 'FR-INT-24', 'GAP-60'],
+  },
+  {
     num: 106,
     title: 'Several card charges to one expense, such as a ride and its tip',
     type: 'Gap',

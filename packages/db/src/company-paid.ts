@@ -7,11 +7,12 @@ import {
   type PaidByChoice,
   type PaidByProblem,
 } from '@expensewise/domain';
-import { and, eq, inArray, ne, not, or, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, ne, not, or, sql } from 'drizzle-orm';
 import { appendAuditEvent, lockOrgWrites, type AuditEntry } from './audit.ts';
 import type { Transaction } from './client.ts';
 import { heldAsDuplicate } from './duplicates.ts';
 import { expenseColumns, type ReportExpenseRecord } from './expenses.ts';
+import { followPurchases, refundPayer } from './refunds.ts';
 import { reopenChangedReports, reportsOfExpenses } from './report-touch.ts';
 import { cardTransactions, expenses, expenseTypes, members, receipts, trips } from './schema.ts';
 import { safeMinor } from './trips.ts';
@@ -53,13 +54,17 @@ export async function paidByCardCharge(tx: Transaction, expenseId: string): Prom
 
 /**
  * Who the organization says paid an expense not set by hand: the company when its type is one
- * the company pays (FR-EXP-18), or a card charge paid for it (FR-INT-25). Call inside withOrg().
+ * the company pays (FR-EXP-18), or a card charge paid for it (FR-INT-25); for a paired refund,
+ * whoever paid its purchase (FR-EXP-21). Call inside withOrg().
  */
 export async function policyPays(
   tx: Transaction,
   expenseId: string,
   typeId: string | null,
 ): Promise<boolean> {
+  // A paired refund is the company's when its purchase is, whatever its type (FR-EXP-21).
+  const purchase = await refundPayer(tx, expenseId);
+  if (purchase !== null) return purchase;
   return (await companyPaysType(tx, typeId)) || (await paidByCardCharge(tx, expenseId));
 }
 
@@ -100,12 +105,13 @@ export async function setExpensePaidBy(
       typeId: expenses.typeId,
       companyPaid: expenses.companyPaid,
       pinned: expenses.companyPaidPinned,
+      refundOfId: expenses.refundOfId,
     })
     .from(expenses)
     .where(eq(expenses.id, expenseId))
     .for('update');
   if (!expense) return { status: 'missing' };
-  const problem = paidByProblem(expense);
+  const problem = paidByProblem(expense) ?? (expense.refundOfId ? 'refund' : null);
   if (problem) return { status: 'not_changeable', problem, current: expense.status };
 
   const next = choosePaidBy(choice, await policyPays(tx, expenseId, expense.typeId));
@@ -136,6 +142,7 @@ export async function setExpensePaidBy(
       actor,
       'who paid an expense on it changed',
     );
+    await followPurchases(tx, orgId, [expenseId], actor);
   }
   return { status: 'set', ...next };
 }
@@ -199,6 +206,7 @@ export async function followCardCharges(
     actor,
     'a card charge changed who paid an expense on it',
   );
+  await followPurchases(tx, orgId, switched, actor);
   return switched;
 }
 
@@ -255,6 +263,8 @@ export async function setTypeCompanyPays(
       and(
         eq(expenses.typeId, typeId),
         eq(expenses.companyPaidPinned, false),
+        // A paired refund follows its purchase instead (FR-EXP-21).
+        isNull(expenses.refundOfId),
         ne(expenses.companyPaid, companyPays),
         // Submitted or later never changes (Q48); an approved one is locked besides.
         inArray(expenses.status, ['processing', 'needs_review', 'ready']),
@@ -288,6 +298,7 @@ export async function setTypeCompanyPays(
     by,
     'the company’s policy on what it pays changed',
   );
+  await followPurchases(tx, orgId, switched, by);
   return { status: 'saved', switched };
 }
 
