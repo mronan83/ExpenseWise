@@ -108,6 +108,11 @@ describe('readingChecks', () => {
     expect(readingChecks(dated('2016-09-30'), UPLOADED)).toEqual(['old_date']);
   });
 
+  it('holds a refund, a total below zero, for a person to pair (FR-EXP-21)', () => {
+    const refund = read({ total: amount('-45.50'), subtotal: null, taxes: [], tip: null });
+    expect(readingChecks(refund, UPLOADED)).toEqual(['refund']);
+  });
+
   it('reports every check that fails', () => {
     const both = read({
       total: amount('60.43'),

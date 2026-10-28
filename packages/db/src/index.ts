@@ -32,6 +32,7 @@ export * from './report-touch.ts';
 export * from './reports.ts';
 export * from './receipt-corrections.ts';
 export * from './receipts.ts';
+export * from './refunds.ts';
 export * from './saved-places.ts';
 export * from './saved-routes.ts';
 export * from './notifications.ts';

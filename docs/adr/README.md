@@ -61,6 +61,7 @@ Each ADR records one decision with its context, the alternatives considered and 
 | [0051](0051-an-expense-paid-by-several-card-charges.md) | An expense can be paid by several card charges | D-53 | Accepted (several charges decided by product owner, Oct 10; pairing on its own recommended) | 2026-10-10 |
 | [0052](0052-places-suggested-as-a-stop-is-typed.md) | Places are suggested as a stop is typed, and a place picked is measured from where it is | D-54 | Accepted (suggestions decided by product owner, Oct 19; a picked place measured from its point, Q53; ranked near the drive's stops, never the device's location, Q54; OpenRouteService in the request, sealed picks, the limits and the flag recommended) | 2026-10-19 |
 | [0053](0053-push-notifications-to-the-home-screen-app.md) | Push notifications to the app on the Home Screen, made by a sweep of the audit trail | D-55 | Accepted (notifications decided by product owner, Oct 19; web push now, Q57; what and where, never an amount, Q58; the other kinds, the sweep, batching, the reminder, the keys and the limits recommended) | 2026-10-19 |
+| [0054](0054-a-refund-counts-once-paired-with-its-purchase.md) | A refund counts only once it is paired with its purchase: on its own it is in no claim and waits in Needs you; paired, it goes where its purchase goes, or on the open report as money paid back | D-56 | Accepted (refunds handled, decided by product owner, Oct 27, Q60; pairing by hand, R-REFUND-DAYS, the database check and card credits later recommended) | 2026-10-27 |
 
 ## How to add an ADR
 

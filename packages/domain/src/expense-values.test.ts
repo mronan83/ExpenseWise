@@ -32,6 +32,13 @@ describe('receiptExpenseStatus', () => {
     expect(receiptExpenseStatus(null, 'failed', coffee)).toBe('needs_review');
   });
 
+  it('keeps a refund in Needs review until it is paired with its purchase', () => {
+    const refund = { ...coffee, amountMinor: -650 };
+    expect(receiptExpenseStatus('processing', 'extracted', refund)).toBe('needs_review');
+    expect(receiptExpenseStatus('needs_review', 'extracted', refund, true)).toBe('ready');
+    expect(receiptExpenseStatus('ready', 'extracted', refund, false)).toBe('needs_review');
+  });
+
   it('is processing while the receipt is read, whatever it was', () => {
     expect(receiptExpenseStatus(null, 'processing', NO_VALUES)).toBe('processing');
     expect(receiptExpenseStatus('ready', 'processing', coffee)).toBe('processing');
@@ -113,6 +120,14 @@ describe('applyExpenseEdit', () => {
     expect(fixed.ok && fixed.value.values.amountMinor).toBe(650);
   });
 
+  it('takes an amount below zero as a refund, money given back', () => {
+    const result = applyExpenseEdit(coffee, { amount: '-6.50' });
+    expect(result.ok && result.value.values.amountMinor).toBe(-650);
+    expect(result.ok && result.value.changes).toEqual([
+      { field: 'amount', from: '6.50', to: '-6.50' },
+    ]);
+  });
+
   it('needs a currency before an amount', () => {
     expect(applyExpenseEdit(NO_VALUES, { amount: '4.20' })).toMatchObject({
       ok: false,
@@ -128,7 +143,6 @@ describe('applyExpenseEdit', () => {
     [{ currency: '' }, 'currency'],
     [{ amount: '6.505' }, 'amount'],
     [{ amount: '1,000' }, 'amount'],
-    [{ amount: '-1.00' }, 'amount'],
   ] as const)('refuses %o as a value for %s', (edit, field) => {
     expect(applyExpenseEdit(coffee, edit)).toMatchObject({ ok: false, error: { field } });
   });

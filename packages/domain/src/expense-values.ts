@@ -2,7 +2,8 @@ import { isCurrencyCode } from './currency.ts';
 import { isIsoDate } from './dates.ts';
 import { DomainError } from './errors.ts';
 import { isExpenseEditable, type ExpenseStatus } from './lifecycle/expense.ts';
-import { fromDecimal, isNegative, money, toDecimal } from './money.ts';
+import { fromDecimal, money, toDecimal } from './money.ts';
+import { isRefund } from './refunds.ts';
 import { err, ok, type Result } from './result.ts';
 
 /**
@@ -50,10 +51,14 @@ export function receiptExpenseStatus(
   current: ExpenseStatus | null,
   proof: ProofStatus,
   values: ExpenseValues,
+  /** It is a refund paired with its purchase; a refund on its own is never Ready (FR-EXP-21). */
+  refundPaired = false,
 ): ExpenseStatus | null {
   if (current !== null && current !== 'processing' && !isExpenseEditable(current)) return null;
   if (proof === 'processing') return 'processing';
-  return proof === 'extracted' && isComplete(values) ? 'ready' : 'needs_review';
+  return proof === 'extracted' && isComplete(values) && (refundPaired || !isRefund(values))
+    ? 'ready'
+    : 'needs_review';
 }
 
 /**
@@ -127,9 +132,8 @@ export function applyExpenseEdit(
   if (source !== null && source !== undefined) {
     if (currency === null) return invalid('currency', 'Choose the currency first.');
     try {
-      const value = fromDecimal(source, currency);
-      if (isNegative(value)) return invalid('amount', 'Enter an amount of zero or more.');
-      amountMinor = value.amountMinor;
+      // Below zero is a refund: money given back, paired with its purchase (FR-EXP-21).
+      amountMinor = fromDecimal(source, currency).amountMinor;
     } catch (error) {
       if (!(error instanceof DomainError)) throw error;
       return typed === undefined

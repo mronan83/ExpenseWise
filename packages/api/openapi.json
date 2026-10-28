@@ -1219,7 +1219,8 @@
                 "future_date",
                 "old_date",
                 "summary",
-                "stay"
+                "stay",
+                "refund"
               ]
             },
             "description": "checks: the checks the readings fail."
@@ -1620,9 +1621,10 @@
                 "enum": [
                   "justification",
                   "uncoded",
-                  "rejected"
+                  "rejected",
+                  "refund"
                 ],
-                "description": "justification: a local expense says nothing yet of why (FR-EXP-14). uncoded: it has no category and type yet, while categories are on (FR-EXP-11, Q27). rejected: its report came back with it rejected, while approval is on (FR-GOV-12)."
+                "description": "justification: a local expense says nothing yet of why (FR-EXP-14). uncoded: it has no category and type yet, while categories are on (FR-EXP-11, Q27). rejected: its report came back with it rejected, while approval is on (FR-GOV-12). refund: a refund waits to be paired with the purchase it refunds, and counts in no claim until it is (FR-EXP-21)."
               },
               "why": {
                 "type": "string",
@@ -2587,10 +2589,11 @@
                 "future_date",
                 "old_date",
                 "summary",
-                "stay"
+                "stay",
+                "refund"
               ]
             },
-            "description": "Checks this reading fails (FR-INT-04). sums: the subtotal, taxes and tip don’t make the total, allowing a minor unit per tax or tip line. future_date: dated more than a day after the upload. old_date: dated more than a year before it. summary: a purchase summary, which shows what was ordered, not what was charged (Q10). stay: a folio’s check-out is before its check-in, or its stay is longer than 31 nights, so its nights aren’t sure (FR-INT-21); only where receipts.journeys is on."
+            "description": "Checks this reading fails (FR-INT-04). sums: the subtotal, taxes and tip don’t make the total, allowing a minor unit per tax or tip line. future_date: dated more than a day after the upload. old_date: dated more than a year before it. summary: a purchase summary, which shows what was ordered, not what was charged (Q10). stay: a folio’s check-out is before its check-in, or its stay is longer than 31 nights, so its nights aren’t sure (FR-INT-21); only where receipts.journeys is on. refund: its total is below zero, money given back, which counts only once paired with the purchase it refunds (FR-EXP-21)."
           }
         },
         "required": [
@@ -3362,7 +3365,7 @@
               "approved",
               "settled"
             ],
-            "description": "processing while its receipt is read; ready when its receipt is Ready and merchant, date, currency and amount are filled in; needs_review otherwise. Submitted, approved and settled follow its report; approved is locked (FR-EXP-03)."
+            "description": "processing while its receipt is read; ready when its receipt is Ready and merchant, date, currency and amount are filled in, and a refund is paired with its purchase (FR-EXP-21); needs_review otherwise. Submitted, approved and settled follow its report; approved is locked (FR-EXP-03)."
           },
           "source": {
             "type": "string",
@@ -3842,6 +3845,9 @@
                 },
                 "minItems": 1,
                 "description": "The card charges that paid for it, while card statements are on: one, or several, such as a ride and its tip charged apart (ADR-0051)."
+              },
+              "refund": {
+                "$ref": "#/components/schemas/ExpenseRefund"
               },
               "claim": {
                 "type": "object",
@@ -4481,6 +4487,96 @@
           "matchedBy"
         ]
       },
+      "ExpenseRefund": {
+        "type": "object",
+        "properties": {
+          "of": {
+            "$ref": "#/components/schemas/RefundLink"
+          },
+          "refunds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RefundLink"
+            },
+            "description": "For a purchase: the refunds paired with it, which net it down."
+          }
+        },
+        "required": [
+          "of",
+          "refunds"
+        ],
+        "description": "For a refund, what it is paired with; for a purchase, the refunds paired with it. Only on a refund, or a purchase with one (FR-EXP-21)."
+      },
+      "RefundLink": {
+        "type": [
+          "object",
+          "null"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "merchant": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "date": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "amount": {
+            "type": [
+              "object",
+              "null"
+            ],
+            "properties": {
+              "amountMinor": {
+                "type": "integer",
+                "description": "Integer minor units, e.g. cents."
+              },
+              "currency": {
+                "type": "string",
+                "example": "USD"
+              },
+              "decimal": {
+                "type": "string",
+                "example": "6.50",
+                "description": "The same amount, for display."
+              }
+            },
+            "required": [
+              "amountMinor",
+              "currency",
+              "decimal"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "processing",
+              "needs_review",
+              "ready",
+              "submitted",
+              "approved",
+              "settled"
+            ],
+            "description": "processing while its receipt is read; ready when its receipt is Ready and merchant, date, currency and amount are filled in, and a refund is paired with its purchase (FR-EXP-21); needs_review otherwise. Submitted, approved and settled follow its report; approved is locked (FR-EXP-03)."
+          }
+        },
+        "required": [
+          "id",
+          "merchant",
+          "date",
+          "amount",
+          "status"
+        ],
+        "description": "For a refund, an expense below zero: the purchase it is paired with, or null while it waits to be paired and counts in no claim (FR-EXP-21)."
+      },
       "ReceiptCheck": {
         "type": "object",
         "properties": {
@@ -4676,6 +4772,76 @@
             "additionalProperties": false
           }
         ]
+      },
+      "RefundCandidates": {
+        "type": "object",
+        "properties": {
+          "candidates": {
+            "type": "array",
+            "items": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/RefundLink"
+                },
+                {
+                  "type": "object",
+                  "properties": {
+                    "left": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "amountMinor": {
+                          "type": "integer",
+                          "description": "Integer minor units, e.g. cents."
+                        },
+                        "currency": {
+                          "type": "string",
+                          "example": "USD"
+                        },
+                        "decimal": {
+                          "type": "string",
+                          "example": "6.50",
+                          "description": "The same amount, for display."
+                        }
+                      },
+                      "required": [
+                        "amountMinor",
+                        "currency",
+                        "decimal"
+                      ],
+                      "description": "What is left of it to give back, after the other refunds paired with it."
+                    }
+                  },
+                  "required": [
+                    "left"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        "required": [
+          "candidates"
+        ]
+      },
+      "SetRefundOf": {
+        "type": "object",
+        "properties": {
+          "purchaseId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid",
+            "description": "The purchase this refund gives money back on, or null to unpair it."
+          }
+        },
+        "required": [
+          "purchaseId"
+        ],
+        "additionalProperties": false
       },
       "SetExpenseTrip": {
         "anyOf": [
@@ -6487,7 +6653,7 @@
                         "approved",
                         "settled"
                       ],
-                      "description": "processing while its receipt is read; ready when its receipt is Ready and merchant, date, currency and amount are filled in; needs_review otherwise. Submitted, approved and settled follow its report; approved is locked (FR-EXP-03)."
+                      "description": "processing while its receipt is read; ready when its receipt is Ready and merchant, date, currency and amount are filled in, and a refund is paired with its purchase (FR-EXP-21); needs_review otherwise. Submitted, approved and settled follow its report; approved is locked (FR-EXP-03)."
                     },
                     "merchant": {
                       "type": [
@@ -6669,7 +6835,7 @@
                             "approved",
                             "settled"
                           ],
-                          "description": "processing while its receipt is read; ready when its receipt is Ready and merchant, date, currency and amount are filled in; needs_review otherwise. Submitted, approved and settled follow its report; approved is locked (FR-EXP-03)."
+                          "description": "processing while its receipt is read; ready when its receipt is Ready and merchant, date, currency and amount are filled in, and a refund is paired with its purchase (FR-EXP-21); needs_review otherwise. Submitted, approved and settled follow its report; approved is locked (FR-EXP-03)."
                         },
                         "merchant": {
                           "type": [
@@ -12070,6 +12236,190 @@
           },
           "409": {
             "description": "It is submitted or later, so who paid it stays as it went in (locked); or it is a drive, paid at miles × its rate to whoever drove, never by the company (mileage).",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/expenses/{expenseId}/refund-candidates": {
+      "get": {
+        "tags": [
+          "Expenses"
+        ],
+        "summary": "The purchases a refund can be paired with",
+        "description": "FR-EXP-21, R-REFUND-DAYS. For a refund, an expense below zero: its owner’s purchases in its currency, dated on or up to 180 days before it, with enough left of them to give back, the likeliest first. Empty for an expense that isn’t a refund.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The purchases it fits.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RefundCandidates"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such expense in this organization.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Sign-in or the database is not configured on this server.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/expenses/{expenseId}/refund-of": {
+      "put": {
+        "tags": [
+          "Expenses"
+        ],
+        "summary": "Pair a refund with the purchase it refunds",
+        "description": "FR-EXP-21, ADR-0054. A refund counts only once it is paired: then it goes where its purchase goes, so the two net down on one claim, or on its owner’s open report when the purchase was claimed already. {\"purchaseId\": null} unpairs it, and it counts in no claim again.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "expenseId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetRefundOf"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The refund as it is now.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenseDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Sign in required.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller has no organization yet: call POST /v1/me/organization first.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such expense, or no such purchase of the same person’s.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "It is being read, or submitted or later, so its pairing can’t change.",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "It isn’t a refund, or the purchase can’t take it: another currency, dated after it or more than 180 days before, or it would give back more than is left of the purchase.",
             "content": {
               "application/problem+json": {
                 "schema": {

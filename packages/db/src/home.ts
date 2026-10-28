@@ -2,6 +2,7 @@ import type { ExpenseStatus } from '@expensewise/domain';
 import { and, asc, count, desc, eq, gt, gte, isNull, lt, lte, ne, not, or, sql } from 'drizzle-orm';
 import type { Transaction } from './client.ts';
 import { heldAsDuplicate } from './duplicates.ts';
+import { unpairedRefund } from './refunds.ts';
 import { expenses, mileageLogs, mileageRoutes, receipts, trips } from './schema.ts';
 import { safeMinor, tallyTrips, tripsWithOwner, type TripRecord, type TripTally } from './trips.ts';
 
@@ -99,6 +100,8 @@ export async function homeSnapshot(
         gte(expenses.transactionDate, month.from),
         lt(expenses.transactionDate, month.until),
         not(heldAsDuplicate(expenses.id)),
+        // A refund counts once it is paired with its purchase (FR-EXP-21).
+        not(unpairedRefund),
       ),
     )
     .groupBy(expenses.status, expenses.currency, sql`${expenses.tripId} is not null`);

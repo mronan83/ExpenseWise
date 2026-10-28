@@ -1,5 +1,6 @@
 import {
   duplicateKind,
+  isRefund,
   mergeExpenses,
   money,
   toDecimal,
@@ -14,6 +15,7 @@ import type { Transaction } from './client.ts';
 import { fileReceiptExpense } from './expenses.ts';
 import { releaseLines } from './itemized.ts';
 import { duplicateWindowFor } from './organizations.ts';
+import { releaseRefunds, settleRefundValues } from './refunds.ts';
 import { reopenChangedReports, reportsOfExpenses } from './report-touch.ts';
 import type { ReceiptStatus } from './receipts.ts';
 import { expenses, receiptDuplicates, receipts, trips } from './schema.ts';
@@ -336,6 +338,10 @@ export async function deleteDuplicateReceipt(
     actor,
     merge ? 'a duplicate was merged into an expense on it' : 'a duplicate on it was deleted',
   );
+  // A refund paired with its expense waits in Needs you again (FR-EXP-21).
+  if (doomed.expenseId) {
+    await releaseRefunds(tx, orgId, doomed.expenseId, actor, 'its purchase was deleted', true);
+  }
   const { rows } = await tx.execute<{ storage_key: string }>(
     sql`select storage_key from delete_receipt(${deleteId})`,
   );
@@ -422,6 +428,10 @@ export async function deleteReceipt(
     actor,
     'a receipt on it was deleted',
   );
+  // A refund paired with its expense waits in Needs you again (FR-EXP-21).
+  if (doomed.expenseId) {
+    await releaseRefunds(tx, orgId, doomed.expenseId, actor, 'its purchase was deleted', true);
+  }
   const { rows } = await tx.execute<{ storage_key: string }>(
     sql`select storage_key from delete_receipt(${receiptId})`,
   );
@@ -467,6 +477,9 @@ export async function mergeDuplicateReceipt(
   const actor = { type: 'user' as const, id: actorUserId };
   if (taken.length > 0) {
     const now = new Date();
+    // A refund goes where its purchase goes, or nowhere until it is paired (FR-EXP-21).
+    const refund = isRefund(merged);
+    await settleRefundValues(tx, orgId, primary.expenseId, merged, actor);
     await tx
       .update(expenses)
       .set({
@@ -475,8 +488,8 @@ export async function mergeDuplicateReceipt(
         currency: merged.currency,
         amountMinor: merged.amountMinor,
         notes: merged.notes,
-        tripId: merged.tripId,
-        ...(taken.includes('trip') ? { tripPinned: true } : {}),
+        ...(refund ? {} : { tripId: merged.tripId }),
+        ...(taken.includes('trip') && !refund ? { tripPinned: true } : {}),
         editedAt: now,
         updatedAt: now,
       })
@@ -508,6 +521,10 @@ export async function mergeDuplicateReceipt(
       },
     }); // An amount taken from the copy is no longer made of the primary's lines (ADR-0041).
     if (taken.includes('amount')) await releaseLines(tx, orgId, primary.expenseId, actor);
+    // A purchase keeps only the refunds its merged values still fit (FR-EXP-21).
+    if (!refund) {
+      await releaseRefunds(tx, orgId, primary.expenseId, actor, 'its purchase was merged');
+    }
   }
   const deleted = await deleteDuplicateReceipt(tx, orgId, duplicateId, primaryId, actorUserId, {
     taken,

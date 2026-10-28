@@ -335,6 +335,32 @@ export const GAPS: readonly Gap[] = [
     },
   },
   {
+    id: 'GAP-60',
+    title:
+      'A card’s credit is matched to nothing, so a refund to a company card has no statement line as its evidence.',
+    affects: ['FR-EXP-21', 'FR-INT-24', 'F-76'],
+    severity: 'Low',
+    evidence:
+      'Found building your refund design of Oct 27 (Q60). Matching takes only charges above zero, by the rule and by hand. The money is right already: a refund of a company-card purchase is the company’s, so it is kept out of the claim.',
+    fix: 'Match a credit to a refund as a charge is matched to a purchase (#115).',
+    backlog: 115,
+  },
+  {
+    id: 'GAP-59',
+    title:
+      'A refund couldn’t be confirmed, and one read with confidence took itself off a claim with no purchase behind it.',
+    affects: ['FR-EXP-21', 'F-76'],
+    severity: 'High',
+    evidence:
+      'Your report of Oct 27: Looks right on a refund receipt said “Enter an amount of zero or more”, and the database refused a confirmed amount below zero too. Nothing checked a reading’s sign, so a confident refund was Ready, filed to a trip or report, and every total took it off.',
+    fix: 'Refunds as FR-EXP-21 sets out: confirmed and edited below zero, held out of every claim until paired with their purchase (#114).',
+    backlog: 114,
+    closed: {
+      date: '2026-10-27',
+      note: 'PR #94: a refund is confirmed, held out of every claim on its own, by a database check too, and counts once paired with its purchase (ADR-0054).',
+    },
+  },
+  {
     id: 'GAP-58',
     title:
       'Nobody is told when the organization’s AI or OpenRouteService key stops working, so receipts and drives can wait unread with no one knowing why.',
@@ -1451,10 +1477,47 @@ export const QUESTIONS: readonly Question[] = [
       text: 'A: what and where, never an amount.',
     },
   },
+  {
+    id: 'Q59',
+    title: 'Was the refunded order brought into ExpenseWise?',
+    ask: 'The refund receipt you photographed: was its original order brought in too, and paid how?',
+    why: 'A refund counts only against a purchase that was claimed. If the order was never claimed here, the refund has nothing to take off.',
+    affects: ['FR-EXP-21', 'F-76'],
+    answer: {
+      date: '2026-10-27',
+      text: 'Yes, the original order was brought in. How it was paid wasn’t said.',
+    },
+  },
+  {
+    id: 'Q60',
+    title: 'How refunds are handled',
+    ask: 'Build refund handling as designed: recognise a refund, never Ready on its own; pair it with its purchase (same merchant and currency, no more than it cost, dated on or after it); never reduce a claim on its own, an unpaired one waiting in Needs you; follow who paid; net partial refunds down?',
+    why: 'Confirming a refund was refused, and a refund read with confidence would take itself off a claim with no purchase behind it.',
+    recommendation: 'Yes.',
+    affects: ['FR-EXP-21', 'F-76', 'GAP-59', 'GAP-60'],
+    answer: {
+      date: '2026-10-27',
+      text: 'Yes. “Some will 100% need to handle refunds.”',
+    },
+  },
+  {
+    id: 'Q61',
+    title: 'A refund of a purchase claimed before ExpenseWise',
+    ask: 'A: delete it; the claim it belongs to was settled elsewhere. B: let it count on its own, as money paid back, with a reason the approver sees. C: a finance admin records it against the old claim.',
+    why: 'A refund of a purchase claimed outside ExpenseWise has nothing to pair with, so today it can only be deleted, and the money given back may be owed to the company.',
+    recommendation: 'A until a refund like this happens, then B.',
+    affects: ['FR-EXP-21', 'F-76'],
+  },
 ];
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-10-27',
+    change:
+      'Your report of Oct 27, a refund receipt that couldn’t be confirmed (“zero or more”), and your answers: the order was in ExpenseWise (Q59), and yes to the design (Q60). Built in PR #94 (FR-EXP-21, F-76, US-EXP-11, GAP-59, #114, ADR-0054, D-56). Looks right and Edit a field take a refund, an amount below zero. On its own it counts in no claim, on no trip or report and never Ready, held so by the database too, and waits in Needs you. Its page offers the purchases it fits, likeliest first: yours, in its currency, dated on or up to 180 days before it, with enough left (R-REFUND-DAYS). Pair puts it where the purchase is, so the two net down on one claim, or on your open report as money paid back once the purchase was claimed. Partial refunds net down; it is the company’s when its purchase is. A refund filed before today is taken out of its claim on release. Still to come: matching a card’s credit to its refund (GAP-60, #115). Asked: a refund of a purchase claimed before ExpenseWise (Q61).',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-19',
     change:

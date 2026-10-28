@@ -30,6 +30,7 @@ import { registerOrganizationRoutes } from './organization-routes.ts';
 import type { ModelSettingsStore } from './model-settings.ts';
 import { registerModelSettingsRoutes } from './model-settings-routes.ts';
 import type { ExpenseStore } from './expenses.ts';
+import type { RefundStore } from './refunds.ts';
 import type { ItemizedStore } from './itemized.ts';
 import { registerItemizedRoutes } from './itemized-routes.ts';
 import type { MileageStore } from './mileage.ts';
@@ -139,6 +140,8 @@ export interface ApiOptions
    * FR-EXP-18). Without it, those routes answer 503.
    */
   readonly companyPaid?: CompanyPaidStore;
+  /** Refunds and the purchases they are paired with (FR-EXP-21). Without it, those answer 503. */
+  readonly refunds?: RefundStore;
   /** Which AI models read receipts (FR-INT-16). Without it, Settings › AI models answers 503. */
   readonly modelSettings?: ModelSettingsStore;
   /** The currency each person is reimbursed in. Without it, those routes answer 503. */

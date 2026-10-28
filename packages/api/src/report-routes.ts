@@ -155,6 +155,11 @@ export function registerReportRoutes(
           code: 'not_local',
           detail: 'An expense on a trip goes with its trip.',
         });
+      case 'refund':
+        throw new ProblemError(422, 'not-local', 'A refund goes on a report once it is paired', {
+          code: 'refund',
+          detail: 'Pair it with the purchase it refunds, and it goes where that purchase is.',
+        });
       case 'not_open':
         throw conflict('not_open', 'That report is not open', {
           detail: 'Reopen it first; a submitted report is locked.',

@@ -92,6 +92,25 @@ export interface ExpenseDetail extends ExpenseSummary {
   /** The card charge that paid for it, while card statements are on (FR-INT-24). */
   /** One, or several, such as a ride and its tip charged apart (ADR-0051). */
   cardCharges?: ExpenseCardCharge[];
+  /**
+   * On a refund, below zero: the purchase it is paired with, or null while it waits. On a
+   * purchase with refunds: those refunds (FR-EXP-21). Missing on any other expense.
+   */
+  refund?: { of: RefundLink | null; refunds: RefundLink[] };
+}
+
+/** A refund's purchase, or one of a purchase's refunds (FR-EXP-21). */
+export interface RefundLink {
+  id: string;
+  merchant: string | null;
+  date: string | null;
+  amount: ExpenseAmount | null;
+  status: ExpenseSummary['status'];
+}
+
+/** A purchase a refund fits, with what is left of it to give back. */
+export interface RefundCandidate extends RefundLink {
+  left: ExpenseAmount | null;
 }
 
 export interface Journey {

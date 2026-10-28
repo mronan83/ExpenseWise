@@ -24,6 +24,7 @@ export * from './notifications.ts';
 export * from './organization.ts';
 export * from './report-export.ts';
 export * from './reference-rates.ts';
+export * from './refunds.ts';
 export * from './reimbursement.ts';
 export * from './people.ts';
 export * from './receipt-check.ts';

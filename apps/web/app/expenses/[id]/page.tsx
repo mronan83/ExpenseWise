@@ -48,6 +48,7 @@ import { HistoryLink } from '../../history-link';
 import { MileageForm } from '../../mileage/mileage-form';
 import { RouteDriveDetails } from '../../mileage/route-drive';
 import { ItemizedLines, SplitParts } from './itemized';
+import { Refund } from './refund';
 import { WhoPaid } from './who-paid';
 import { RefreshButton } from '../../refresh';
 
@@ -90,6 +91,8 @@ export default function ExpensePage() {
   const featureOn = useFeatures();
   // A drive is changed as mileage, which shows its purpose too (ADR-0038).
   const mileageShown = expense?.source === 'mileage' && featureOn(MILEAGE_FLAG);
+  /** Money given back, below zero (FR-EXP-21). */
+  const refund = (expense?.amount?.amountMinor ?? 0) < 0;
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-1 flex-col px-4 pt-[max(1rem,env(safe-area-inset-top))]">
@@ -135,6 +138,11 @@ export default function ExpensePage() {
                 onSaved={(next) => setLoad({ state: 'ready', expense: next })}
               />
             )}
+            {/* A refund and its purchase, or a purchase's refunds (FR-EXP-21). */}
+            <Refund
+              expense={expense}
+              onSaved={(next) => setLoad({ state: 'ready', expense: next })}
+            />
             {/* Sent only while approval is switched on for the organization (FR-EXP-10). */}
             {expense.claim && featureOn(APPROVAL_FLAG) ? (
               <ClaimLess
@@ -145,10 +153,13 @@ export default function ExpensePage() {
               />
             ) : null}
             {/* Sent only while each is switched on for the organization (FR-INT-22, FR-EXP-15). */}
-            <ItemizedLines
-              expense={expense}
-              onSaved={(next) => setLoad({ state: 'ready', expense: next })}
-            />
+            {/* A refund gives back on its purchase as a whole, so it isn't split (FR-EXP-21). */}
+            {refund ? null : (
+              <ItemizedLines
+                expense={expense}
+                onSaved={(next) => setLoad({ state: 'ready', expense: next })}
+              />
+            )}
             {/* Sent only while categories are switched on for the organization. */}
             {expense.category ? (
               <CategoryChoice
@@ -158,13 +169,19 @@ export default function ExpensePage() {
                 onSaved={(next) => setLoad({ state: 'ready', expense: next })}
               />
             ) : null}
-            <SplitParts
-              key={`split-${expense.updatedAt}`}
-              expense={expense}
-              onSaved={(next) => setLoad({ state: 'ready', expense: next })}
-            />
-            {/* Sent only while Paid by the company is on; a drive is never paid by it. */}
-            {expense.paidBy && expense.source !== 'mileage' && featureOn(COMPANY_PAID_FLAG) ? (
+            {refund ? null : (
+              <SplitParts
+                key={`split-${expense.updatedAt}`}
+                expense={expense}
+                onSaved={(next) => setLoad({ state: 'ready', expense: next })}
+              />
+            )}
+            {/* Sent only while Paid by the company is on; a drive is never paid by it. A refund
+                is the company's when its purchase is, as its panel says. */}
+            {expense.paidBy &&
+            expense.source !== 'mileage' &&
+            !refund &&
+            featureOn(COMPANY_PAID_FLAG) ? (
               <WhoPaid
                 expense={expense}
                 paidBy={expense.paidBy}
@@ -172,11 +189,14 @@ export default function ExpensePage() {
                 onSaved={(next) => setLoad({ state: 'ready', expense: next })}
               />
             ) : null}
-            <TripChoice
-              expense={expense}
-              onSaved={(next) => setLoad({ state: 'ready', expense: next })}
-            />
-            {expense.local && !mileageShown ? (
+            {/* A refund goes with its purchase, not on a trip of its own. */}
+            {refund ? null : (
+              <TripChoice
+                expense={expense}
+                onSaved={(next) => setLoad({ state: 'ready', expense: next })}
+              />
+            )}
+            {expense.local && !mileageShown && !(refund && !expense.refund?.of) ? (
               <Justification
                 key={`${expense.id}-${expense.justification ?? ''}`}
                 expense={expense}
@@ -212,6 +232,9 @@ function Verdict({ expense }: { expense: ExpenseDetail }) {
     text = 'No model could read its receipt. Enter the details there, then this expense is Ready.';
   } else if (expense.status === 'needs_review' && proof && proof.status !== 'extracted') {
     text = 'Its receipt still needs a look. Confirm it there, then this expense is Ready.';
+  } else if (expense.status === 'needs_review' && expense.refund && !expense.refund.of) {
+    label = 'Refund';
+    text = 'Pair it with the purchase it refunds, below. It counts in no claim until then.';
   } else if (expense.status === 'needs_review') {
     text = 'Fill in the merchant, date, currency and amount to make it Ready.';
   } else if (expense.status === 'ready') {

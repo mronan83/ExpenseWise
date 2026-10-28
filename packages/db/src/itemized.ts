@@ -31,6 +31,7 @@ import type { Transaction } from './client.ts';
 import { listCatalog } from './categories.ts';
 import { conversionRecord, onItsReport, recordColumns, tripOf } from './conversions.ts';
 import { heldAsDuplicate } from './duplicates.ts';
+import { releaseRefunds } from './refunds.ts';
 import { reopenChangedReports, reportsOfExpenses } from './report-touch.ts';
 import {
   shownCategoryName,
@@ -366,6 +367,8 @@ export type LineChangeResult =
   | { readonly status: 'no_claim' }
   /** A drive: its amount is miles × its rate, changed as mileage, so it isn't split (ADR-0038). */
   | { readonly status: 'mileage' }
+  /** A refund gives back on its purchase as a whole, so it isn't split or itemized (FR-EXP-21). */
+  | { readonly status: 'refund' }
   /** Split by amount: its lines can't change what it claims until that split goes. */
   | { readonly status: 'split_by_amount' }
   | {
@@ -412,6 +415,7 @@ async function open(
   if (!expense) return { status: 'missing' };
   if (!isExpenseEditable(expense.status))
     return { status: 'not_editable', current: expense.status };
+  if (expense.amountMinor !== null && expense.amountMinor < 0) return { status: 'refund' };
   let [lines] = await itemizationsOf(tx, [expenseId]);
   if (!lines && seed) {
     await copyReadLines(tx, orgId, expenseId, seed, { type: 'user', id: actorUserId });
@@ -468,14 +472,11 @@ async function claim(
     .update(expenses)
     .set({ amountMinor, editedAt: now, updatedAt: now })
     .where(eq(expenses.id, expenseId));
+  const actor = { type: 'user', id: actorUserId } as const;
   // A new amount converts again at the rate it was converted at (ADR-0034).
-  await reopenChangedReports(
-    tx,
-    orgId,
-    await reportsOfExpenses(tx, [expenseId]),
-    { type: 'user', id: actorUserId },
-    reason,
-  );
+  await reopenChangedReports(tx, orgId, await reportsOfExpenses(tx, [expenseId]), actor, reason);
+  // A purchase claiming less keeps only the refunds it still fits (FR-EXP-21).
+  await releaseRefunds(tx, orgId, expenseId, actor, 'its purchase claims less');
 }
 
 /** What is left out or included again: one item line, or every item of one purchase. */

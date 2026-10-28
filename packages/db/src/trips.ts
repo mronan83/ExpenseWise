@@ -13,6 +13,7 @@ import { and, desc, eq, exists, gte, inArray, lte, not, or, sql, type SQL } from
 import { appendAuditEvent, lockOrgWrites, type AuditEntry } from './audit.ts';
 import type { Transaction } from './client.ts';
 import { heldAsDuplicate } from './duplicates.ts';
+import { followPurchases } from './refunds.ts';
 import { reopenChangedReports, reportsOfExpenses, reportsOfTrips } from './report-touch.ts';
 import { expenses, members, trips } from './schema.ts';
 
@@ -154,6 +155,8 @@ interface Fileable {
   readonly status: ExpenseStatus;
   /** The day it files by (`filingDate`): the day a ticket departs, else the day it was charged. */
   readonly filedOn: string | null;
+  /** A refund, below zero: it goes with its purchase, never by its own date (FR-EXP-21). */
+  readonly refund: boolean;
 }
 
 /**
@@ -170,6 +173,7 @@ const fileableColumns = {
   tripPinned: expenses.tripPinned,
   status: expenses.status,
   filedOn,
+  refund: sql<boolean>`coalesce(${expenses.amountMinor} < 0, false)`,
 };
 
 /**
@@ -217,9 +221,9 @@ async function fileByDate(
   windows: readonly TripWindow[],
   actor: AuditEntry['actor'],
 ): Promise<number> {
-  let moved = 0;
+  const movedIds: string[] = [];
   for (const expense of candidates) {
-    if (expense.tripPinned || !isTripMovable(expense.status)) continue;
+    if (expense.refund || expense.tripPinned || !isTripMovable(expense.status)) continue;
     const tripId = tripFor(expense.filedOn, windows)?.id ?? null;
     if (tripId === expense.tripId) continue;
     // The reports it leaves and joins change: a closed one reopens (ADR-0029).
@@ -240,9 +244,11 @@ async function fileByDate(
       action: 'expense.trip_filed',
       payload: { tripId, previous: expense.tripId, date: expense.filedOn },
     });
-    moved++;
+    movedIds.push(expense.id);
   }
-  return moved;
+  // A refund paired with a purchase that moved goes with it.
+  await followPurchases(tx, orgId, movedIds, actor);
+  return movedIds.length;
 }
 
 /**
@@ -505,7 +511,9 @@ export type SetExpenseTripResult =
   /** The trip is another member's. */
   | { readonly status: 'other_member' }
   /** The trip is on a report submitted or later, which takes no more expenses (#24). */
-  | { readonly status: 'trip_submitted' };
+  | { readonly status: 'trip_submitted' }
+  /** A refund goes with the purchase it refunds, or nowhere until paired (FR-EXP-21). */
+  | { readonly status: 'refund' };
 
 /**
  * A person puts an expense on a trip, or on none, and filing by date leaves it there from then
@@ -526,6 +534,7 @@ export async function setExpenseTrip(
     .for('update');
   if (!expense) return { status: 'missing' };
   if (!isTripMovable(expense.status)) return { status: 'not_movable', current: expense.status };
+  if (expense.refund) return { status: 'refund' };
 
   let tripId: string | null;
   let pinned: boolean;
@@ -576,5 +585,6 @@ export async function setExpenseTrip(
     action: 'expense.trip_set',
     payload: { tripId, previous: expense.tripId, byDate: !pinned },
   });
+  await followPurchases(tx, orgId, [expenseId], { type: 'user', id: actorUserId });
   return { status: 'set', tripId, pinned };
 }

@@ -152,6 +152,19 @@ export function inboxCard(item: InboxItem): InboxCard {
     case 'expense': {
       const { expense } = item;
       if (item.reason.code === 'uncoded') return uncodedCard(expense, item.category);
+      if (item.reason.code === 'refund') {
+        return {
+          key: `refund-${expense.id}`,
+          title: expense.merchant ?? 'A refund',
+          amount: expense.amount ? formatMoney(expense.amount) : null,
+          when: expense.date ? showDate(expense.date) : '',
+          status: { label: 'Refund', tone: 'text-warn' },
+          text: 'Money given back, counted in no claim yet. Pair it with the purchase it refunds, or delete it if that purchase was never claimed here.',
+          action: 'Pair it',
+          href: `/expenses/${expense.id}#refund`,
+          edge: 'warn',
+        };
+      }
       if (item.reason.code === 'rejected') {
         return {
           key: `rejected-${expense.id}`,

@@ -3,6 +3,7 @@ import {
   applyExpenseEdit,
   applyTravelEdit,
   isComplete,
+  isRefund,
   NO_DETAILS,
   NO_VALUES,
   sameDetails,
@@ -43,6 +44,7 @@ import { appendAuditEvent, lockOrgWrites, type AuditEntry } from './audit.ts';
 import type { Transaction } from './client.ts';
 import { heldAsDuplicate } from './duplicates.ts';
 import { claimFromLines, copyReadLines } from './itemized.ts';
+import { releaseRefunds, settleRefundValues } from './refunds.ts';
 import { reopenChangedReports, reportsOfExpenses } from './report-touch.ts';
 import { expenses, members, receipts, trips } from './schema.ts';
 import { containing, fileExpenseToTrip } from './trips.ts';
@@ -83,6 +85,12 @@ export interface ExpenseRecord extends ExpenseValues, ExpenseDetails, Partial<Ex
    */
   readonly companyPaid?: boolean;
   readonly companyPaidPinned?: boolean;
+  /**
+   * The purchase a refund is paired with (FR-EXP-21); null for a refund on its own, and for any
+   * other expense. Read from the database; a record made elsewhere, such as a test's, may leave
+   * it out.
+   */
+  readonly refundOfId?: string | null;
   readonly editedAt: Date | null;
   readonly createdAt: Date;
   readonly updatedAt: Date;
@@ -123,6 +131,7 @@ export const expenseColumns = {
       and l.excluded_reason is not null)`,
   companyPaid: expenses.companyPaid,
   companyPaidPinned: expenses.companyPaidPinned,
+  refundOfId: expenses.refundOfId,
   editedAt: expenses.editedAt,
   createdAt: expenses.createdAt,
   updatedAt: expenses.updatedAt,
@@ -236,6 +245,30 @@ export function listUnjustifiedExpenses(
         isNotNull(expenses.transactionDate),
         eq(expenses.status, 'ready'),
         isNull(expenses.justification),
+      ),
+    )
+    .orderBy(expenses.transactionDate, expenses.id)
+    .limit(limit);
+}
+
+/**
+ * A member's refunds waiting to be paired with the purchase each refunds, oldest first
+ * (FR-EXP-21). One whose receipt still needs a look is in Needs you for that already, so it
+ * isn't asked for twice. Call inside withOrg().
+ */
+export function listUnpairedRefunds(
+  tx: Transaction,
+  memberId: string,
+  limit: number,
+): Promise<ExpenseRecord[]> {
+  return withProof(tx)
+    .where(
+      and(
+        eq(expenses.memberId, memberId),
+        sql`${expenses.amountMinor} < 0`,
+        isNull(expenses.refundOfId),
+        inArray(expenses.status, ['needs_review', 'ready']),
+        sql`(${receipts.id} is null or ${receipts.status} = 'extracted')`,
       ),
     )
     .orderBy(expenses.transactionDate, expenses.id)
@@ -428,6 +461,7 @@ export async function fileReceiptExpense(
       transactionDate: expenses.transactionDate,
       currency: expenses.currency,
       amountMinor: expenses.amountMinor,
+      refundOfId: expenses.refundOfId,
       ...detailSelection,
       ...travelSelection,
     })
@@ -444,8 +478,14 @@ export async function fileReceiptExpense(
   // The journey and stay follow the same rule: a reading asked for them, until an edit.
   const currentTravel = travelOf(expense);
   const travel = fresh && offered.travel ? offered.travel : currentTravel;
-  const status = receiptExpenseStatus(expense.status, receipt.status, values);
-  if (status === null) return;
+  if (receiptExpenseStatus(expense.status, receipt.status, values) === null) return;
+  // A refund read anew stays paired only while it still fits its purchase (FR-EXP-21).
+  const paired =
+    isRefund(values) || expense.refundOfId !== null
+      ? await settleRefundValues(tx, orgId, receipt.expenseId, values, actor)
+      : false;
+  const status =
+    receiptExpenseStatus(expense.status, receipt.status, values, paired) ?? 'needs_review';
   // Its lines follow the receipt as its values do, until a person edits it (ADR-0041).
   if (fresh && offered.lines !== undefined) {
     await copyReadLines(tx, orgId, receipt.expenseId, offered.lines, actor);
@@ -488,6 +528,10 @@ export async function fileReceiptExpense(
   // A new date, or a ticket's new departure, may mean another trip (FR-EXP-19).
   if (refreshed || travel.departsOn !== currentTravel.departsOn) {
     await fileExpenseToTrip(tx, orgId, receipt.expenseId, actor);
+  }
+  // A purchase read anew keeps only the refunds it still fits (FR-EXP-21).
+  if (refreshed && !isRefund(values)) {
+    await releaseRefunds(tx, orgId, receipt.expenseId, actor, 'its purchase was read again');
   }
 }
 
@@ -537,6 +581,7 @@ export async function editExpense(
       transactionDate: expenses.transactionDate,
       currency: expenses.currency,
       amountMinor: expenses.amountMinor,
+      refundOfId: expenses.refundOfId,
       ...detailSelection,
       ...travelSelection,
     })
@@ -570,13 +615,21 @@ export async function editExpense(
   // Recorded only when the journey or stay changed, so other edits record what they always did.
   const travelRecord = travelChanges.length > 0 ? { travelChanges } : {};
 
+  const actor = { type: 'user', id: actorUserId } as const;
+  // Below zero it is a refund: it stays paired while it fits its purchase, and on its own is
+  // taken out of any claim before it takes the new values (FR-EXP-21).
+  const wasRefund = isRefund(expense);
+  const paired =
+    isRefund(values) || expense.refundOfId !== null
+      ? await settleRefundValues(tx, orgId, expenseId, values, actor)
+      : false;
   const [proof] = await tx
     .select({ id: receipts.id, status: receipts.status })
     .from(receipts)
     .where(eq(receipts.expenseId, expenseId));
   const status = proof
-    ? (receiptExpenseStatus(expense.status, proof.status, values) ?? expense.status)
-    : isComplete(values)
+    ? (receiptExpenseStatus(expense.status, proof.status, values, paired) ?? expense.status)
+    : isComplete(values) && (paired || !isRefund(values))
       ? 'ready'
       : 'needs_review';
   const now = new Date();
@@ -592,7 +645,7 @@ export async function editExpense(
     })
     .where(eq(expenses.id, expenseId));
   await appendAuditEvent(tx, orgId, {
-    actor: { type: 'user', id: actorUserId },
+    actor,
     entityType: 'expense',
     entityId: expenseId,
     action: 'expense.edited',
@@ -602,14 +655,19 @@ export async function editExpense(
     tx,
     orgId,
     await reportsOfExpenses(tx, [expenseId]),
-    { type: 'user', id: actorUserId },
+    actor,
     'an expense on it was edited',
   );
   if (
     changes.some((c) => c.field === 'date') ||
-    travelChanges.some((c) => c.field === 'departsOn')
+    travelChanges.some((c) => c.field === 'departsOn') ||
+    (wasRefund && !isRefund(values))
   ) {
-    await fileExpenseToTrip(tx, orgId, expenseId, { type: 'user', id: actorUserId });
+    await fileExpenseToTrip(tx, orgId, expenseId, actor);
+  }
+  // A purchase keeps only the refunds its new values still fit (FR-EXP-21).
+  if (!isRefund(values) && changes.some((c) => c.field !== 'merchant')) {
+    await releaseRefunds(tx, orgId, expenseId, actor, 'its purchase was edited');
   }
   return { status: 'edited', changes, detailChanges, ...travelRecord };
 }
