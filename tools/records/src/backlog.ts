@@ -569,6 +569,20 @@ export const BACKLOG: readonly BacklogItem[] = [
     done: { date: '2026-10-27', in: 'PR #94' },
   },
   {
+    num: 116,
+    title: 'Say “no credit” when OpenAI has none, not “didn’t answer”',
+    type: 'Gap',
+    detail:
+      'Your report of Nov 9 (GAP-61): OpenAI now reports an empty balance as 429 `credit_balance_exhausted`, which was retried as a rate limit and shown as “didn’t answer after several tries”. Both no-credit codes are now stored at once with OpenAI’s own message (US-READ-15 AC4), and Settings › AI keys says a key test checks the key, not its credit.',
+    priority: 'P1',
+    effort: 'S',
+    severity: 'High',
+    blocker: { kind: 'none' },
+    source: 'Product owner Nov 9',
+    affects: ['NFR-ARC-02', 'F-06', 'GAP-61'],
+    done: { date: '2026-11-09', in: 'PR #99' },
+  },
+  {
     num: 115,
     title: 'Match a card’s credit to the refund it paid back',
     type: 'Gap',
