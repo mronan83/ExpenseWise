@@ -335,6 +335,21 @@ export const GAPS: readonly Gap[] = [
     },
   },
   {
+    id: 'GAP-61',
+    title:
+      'An OpenAI account with no credit was read as busy: each receipt was tried four times, then said OpenAI “didn’t answer”, and the key test said the key works.',
+    affects: ['NFR-ARC-02', 'F-06', 'FR-INT-16'],
+    severity: 'High',
+    evidence:
+      'Your report of Nov 9: GPT-5.6 Luna read no receipts though the key tested fine. OpenAI answered 429 “You have no credits remaining” with a new code, `credit_balance_exhausted`; only `insufficient_quota` was known as no credit, so it was retried as a rate limit (US-READ-15 AC4). The key test lists models, which costs nothing, so it passes with no credit.',
+    fix: 'Both codes are no credit: stored at once with OpenAI’s own words, never retried; the key test says it checks the key, not its credit (#116).',
+    backlog: 116,
+    closed: {
+      date: '2026-11-09',
+      note: 'PR #99: a reading OpenAI refuses for no credit says so, in OpenAI’s words, and isn’t retried.',
+    },
+  },
+  {
     id: 'GAP-60',
     title:
       'A card’s credit is matched to nothing, so a refund to a company card has no statement line as its evidence.',
@@ -1512,6 +1527,12 @@ export const QUESTIONS: readonly Question[] = [
 
 /** What changed in these records, newest first. */
 export const CHANGE_LOG: readonly ChangeLogEntry[] = [
+  {
+    date: '2026-11-09',
+    change:
+      'Your report of Nov 9, GPT-5.6 Luna reading no receipts though its key tested fine (GAP-61, #116): the OpenAI account has no credit left. OpenAI now says so with a new code that was taken for “busy”, so each receipt was tried four times and then said OpenAI “didn’t answer”. Fixed in PR #99: a receipt OpenAI refuses for no credit says so at once, in OpenAI’s words, and isn’t retried (US-READ-15 AC4); the key test now says it checks the key, not its credit. Add credit with OpenAI, then read the receipts again.',
+    by: 'Claude, at your direction',
+  },
   {
     date: '2026-10-27',
     change:

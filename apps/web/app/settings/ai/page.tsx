@@ -194,7 +194,10 @@ function ProviderCard({
       const answered = result.detail ? ` ${result.detail}.` : '';
       setMessage(
         result.valid
-          ? { tone: 'ok', text: 'The key works.' }
+          ? {
+              tone: 'ok',
+              text: 'The key works. Its credit isn’t checked here: a receipt it can’t read says if the account has none left.',
+            }
           : {
               tone: 'warn',
               text:

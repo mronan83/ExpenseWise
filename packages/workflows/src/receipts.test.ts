@@ -472,6 +472,14 @@ describe('permanentFailure', () => {
       'request_rejected: Quota exceeded.',
     ],
     [
+      new ProviderHttpError(
+        429,
+        'You have no credits remaining. Add credits to continue using the API.',
+        'credit_balance_exhausted',
+      ),
+      'request_rejected: You have no credits remaining. Add credits to continue using the API.',
+    ],
+    [
       new ProviderHttpError(400, undefined, undefined),
       'request_rejected: The provider answered 400',
     ],

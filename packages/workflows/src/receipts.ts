@@ -119,14 +119,23 @@ export async function checkFile(
 }
 
 /**
+ * How OpenAI says an account has no credit: a 429, but one that waiting won't fix. It said
+ * `insufficient_quota`, and since Nov 2026 `credit_balance_exhausted` (GAP-61).
+ */
+const NO_CREDIT_CODES = new Set(['insufficient_quota', 'credit_balance_exhausted']);
+
+/**
  * A provider error that retrying won't fix: a rejected key, no credit, a refused file.
- * OpenAI reports an empty balance as 429 `insufficient_quota`, which waiting won't fix
+ * OpenAI reports an empty balance as a 429 with a no-credit code, which waiting won't fix
  * either; any other 429 is a rate limit and is retried.
  */
 export function permanentFailure(error: unknown): string | undefined {
   const status = (error as { status?: unknown }).status;
   if (typeof status !== 'number') return undefined;
-  const noCredit = error instanceof ProviderHttpError && error.code === 'insufficient_quota';
+  const noCredit =
+    error instanceof ProviderHttpError &&
+    error.code !== undefined &&
+    NO_CREDIT_CODES.has(error.code);
   if (!noCredit && (status === 408 || status === 409 || status === 429 || status >= 500)) {
     return undefined;
   }
