@@ -11,12 +11,16 @@ onlyBuiltDependencies:
   - sharp
   - unrs-resolver
 
-# A patched release of a package reached only through another that pins it (G4). It lifts
+# Patched releases of packages reached only through another that pins them (G4). Each lifts
 # only the vulnerable range; drop it once the package that pins it moves on.
 overrides:
   # mailauth 7 pins 8.11.2: redirects, TLS and content-encoding advisories (GHSA-xjj6-f33q-929c,
   # GHSA-4w7w-5xrc-9h26, GHSA-2m5v-pch6-74hx, GHSA-qrxm-fqhp-jwvm).
   'undici@>=8.0.0 <8.12.2': ^8.12.2
+  # mailauth pins 18.2.9 (18.3.0 in mailauth 8): quadratic email splitting (GHSA-4528-x5fx-h6hg).
+  'joi@>=18.0.0 <18.3.1': ^18.3.1
+  # Inngest's OpenTelemetry host metrics: Windows command injection (GHSA-3f7j-7jwc-fxfj).
+  'systeminformation@<5.33.16': ^5.33.16
 
 # Advisories the dependency audit (G4) lets through. Each has no fixed version yet, is
 # recorded as a gap, and is checked weekly by .github/workflows/advisory-watch.yml.
