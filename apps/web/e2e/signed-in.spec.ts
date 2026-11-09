@@ -985,6 +985,13 @@ test.beforeEach(async ({ context }) => {
   );
 });
 
+// A screen may still be loading through the bench when its test ends, such as the Card page
+// the Capture menu opens; its answer can't change the test any more, so it is let go rather
+// than failing whichever test runs next.
+test.afterEach(async ({ context }) => {
+  await context.unrouteAll({ behavior: 'ignoreErrors' });
+});
+
 /**
  * Counts the page's requests in flight. `settled()` waits until there have been none for a
  * moment. Next.js loads linked screens in the background as their links scroll into view;
