@@ -36,7 +36,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # The same CLI version as the nightly backup, so the dump and the restore agree. If the
       # restore names an auth or storage column, raise it here and in backup.yml.
-      - uses: supabase/setup-cli@v1
+      - uses: supabase/setup-cli@v3
         with:
           version: 2.119.0
       - name: Restore and check
