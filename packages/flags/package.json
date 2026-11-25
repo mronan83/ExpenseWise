@@ -15,6 +15,6 @@
     "posthog-node": "^5.55.0"
   },
   "devDependencies": {
-    "vitest": "^5.0.3"
+    "vitest": "^5.1.1"
   }
 }
